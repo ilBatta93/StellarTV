@@ -1,0 +1,115 @@
+workflows:
+  android-apk:
+    name: ilBattaTV Android (APK)
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      vars:
+        PACKAGE_NAME: "com.iptv.iptv_player"
+    triggering:
+      events: []
+    scripts:
+      - name: Install Flutter packages
+        script: |
+          set -e
+          # Stale generated registrants committed by accident would keep the
+          # build using an old plugin list (e.g. without the VLC player).
+          rm -f android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+          rm -f ios/Runner/GeneratedPluginRegistrant.h ios/Runner/GeneratedPluginRegistrant.m
+          flutter pub get
+      - name: Build APK
+        script: |
+          flutter build apk --release \
+            --build-number=$BUILD_NUMBER
+    artifacts:
+      - build/**/outputs/**/*.apk
+
+  ios-unsigned:
+    name: ilBattaTV iOS (Unsigned - Sideloadly)
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events: []
+    scripts:
+      # Runs before Xcode: every Dart error appears here in a short,
+      # readable list instead of buried in Xcode's output.
+      - name: Static analysis of Dart code
+        script: |
+          set -e
+          # Stale generated registrants committed by accident would keep the
+          # build using an old plugin list (e.g. without the VLC player).
+          rm -f ios/Runner/GeneratedPluginRegistrant.h ios/Runner/GeneratedPluginRegistrant.m
+          flutter pub get
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Install CocoaPods dependencies
+        script: |
+          set -e
+          flutter --version
+          # Delete machine-specific generated files: if they were committed
+          # with a foreign FLUTTER_ROOT, podhelper cannot be found.
+          rm -f ios/Flutter/Generated.xcconfig ios/Flutter/flutter_export_environment.sh
+          rm -rf ios/Flutter/ephemeral
+          # Regenerate them with THIS machine's Flutter path.
+          flutter pub get
+          test "$(grep -o 'FLUTTER_ROOT=.*' ios/Flutter/Generated.xcconfig)" != "FLUTTER_ROOT=/tmp/flutter-sdk" || {
+            echo "FATAL: Generated.xcconfig still points to /tmp/flutter-sdk"
+            exit 1
+          }
+          # Keep the iOS minimum in lockstep with what the current Flutter
+          # stable release requires (Flutter 3.47+ needs iOS 15).
+          sed -i '' "s/platform :ios, '[0-9]*'/platform :ios, '15.0'/" ios/Podfile
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*/IPHONEOS_DEPLOYMENT_TARGET = 15.0/g' ios/Runner.xcodeproj/project.pbxproj
+          cd ios
+          pod install --repo-update
+
+      - name: Build iOS app with Xcode (signing disabled)
+        script: |
+          set -e
+          set -o pipefail
+          # Explicit command-line overrides beat every project-level setting.
+          xcodebuild -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/ios \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee xcodebuild.log | tail -25
+
+      - name: Validate app bundle
+        script: |
+          set -e
+          APP=build/ios/Build/Products/Release-iphoneos/Runner.app
+          du -sh $APP
+          # A healthy Runner.app is tens of MB; if it is tiny the build is broken.
+          SIZE=$(du -sk $APP | cut -f1)
+          if [ "$SIZE" -lt 10000 ]; then
+            echo "Runner.app is only ${SIZE}KB - build is incomplete"
+            ls -laR $APP | head -50
+            tail -80 xcodebuild.log
+            exit 1
+          fi
+          test -f $APP/Runner
+          test -d $APP/Frameworks
+
+      - name: Generate unsigned IPA
+        script: |
+          set -e
+          APP=build/ios/Build/Products/Release-iphoneos/Runner.app
+          test -d $APP
+          rm -rf build/ios/ipa
+          mkdir -p build/ios/ipa/Payload
+          cp -R $APP build/ios/ipa/Payload/Runner.app
+          cd build/ios/ipa
+          zip -r -q ilBattaTV-unsigned.ipa Payload
+          ls -lh ilBattaTV-unsigned.ipa
+    artifacts:
+      - build/ios/ipa/*.ipa
