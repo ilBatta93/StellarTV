@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/history_entry.dart';
 import '../navigation/app_routes.dart';
