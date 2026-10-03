@@ -46,42 +46,25 @@ class VlcEngine extends PlaybackEngine {
         HardwareDecoding.disabled => HwAcc.disabled,
       };
 
-  static String _flag(String name, bool on) => on ? '--$name' : '--no-$name';
-
   static VlcPlayerOptions _options(PlayerSettings s) {
     final ua = s.userAgent.trim();
     return VlcPlayerOptions(
       advanced: VlcAdvancedOptions([
-        '--network-caching=${s.networkCachingMs}',
-        '--live-caching=${s.liveCachingMs}',
-        '--clock-jitter=0',
-        '--clock-synchro=0',
-        '--audio-language=${s.preferredAudioLanguage}',
-        '--sub-language=${s.preferredSubtitleLanguage}',
+        VlcAdvancedOptions.networkCaching(s.networkCachingMs),
+        VlcAdvancedOptions.liveCaching(s.liveCachingMs),
       ]),
       http: VlcHttpOptions([
-        _flag('http-reconnect', s.httpReconnect),
-        if (ua.isNotEmpty) '--http-user-agent=$ua',
+        if (s.httpReconnect) VlcHttpOptions.httpReconnect(true),
+        if (ua.isNotEmpty) VlcHttpOptions.httpUserAgent(ua),
       ]),
       video: VlcVideoOptions([
-        _flag('drop-late-frames', s.dropLateFrames),
-        _flag('skip-frames', s.skipFrames),
+        VlcVideoOptions.dropLateFrames(s.dropLateFrames),
       ]),
       audio: VlcAudioOptions([
-        _flag('audio-time-stretch', s.audioTimeStretch),
+        VlcAudioOptions.audioTimeStretch(s.audioTimeStretch),
         // SPDIF passthrough makes VLC fail with unsupported-format errors on
         // many iOS streams, so it is only enabled when explicitly requested.
         if (s.audioPassthrough) '--spdif',
-      ]),
-      subtitle: VlcSubtitleOptions([
-        '--freetype-rel-fontsize=${s.subtitleSize.vlcRelativeSize}',
-        '--freetype-color=${s.subtitleColor.rgb}',
-        '--freetype-outline-thickness=4',
-        if (s.subtitleBold) '--freetype-bold',
-        if (s.subtitleBackground) ...[
-          '--freetype-background-opacity=150',
-          '--freetype-background-color=0',
-        ],
       ]),
     );
   }
@@ -113,9 +96,14 @@ class VlcEngine extends PlaybackEngine {
     _controller.addListener(_sync);
     _ready = Completer<void>();
     _ready.future.ignore();
+    try {
+      await old.stopRendererScanning();
+    } catch (_) {}
     await old.dispose();
     if (!_disposed) {
-      await _controller.initialize();
+      if (!_controller.value.isInitialized) {
+        await _controller.initialize();
+      }
       if (!_disposed) await _controller.play();
     }
   }
@@ -153,7 +141,9 @@ class VlcEngine extends PlaybackEngine {
     if (_started) return;
     _started = true;
     try {
-      await _controller.initialize();
+      if (!_controller.value.isInitialized) {
+        await _controller.initialize();
+      }
       if (!_disposed) await _controller.play();
     } catch (e) {
       _fail('$e');
@@ -229,8 +219,17 @@ class VlcEngine extends PlaybackEngine {
       VideoFitMode.ratio4x3 => 4 / 3,
       VideoFitMode.ratio21x9 => 21 / 9,
     };
-    await _controller.setVideoAspectRatio('${(ratio * 1000).round()}:1000');
+    await _controller.setVideoAspectRatio(_ratioLabel(ratio));
   }
+
+  static String _ratioLabel(double ratio) {
+    // VLC rejects ratios with more than 3 decimals; round to a clean x:1000.
+    final n = (ratio * 1000).round();
+    final gcd = _gcd(n, 1000);
+    return '${n ~/ gcd}:${1000 ~/ gcd}';
+  }
+
+  static int _gcd(int a, int b) => b == 0 ? a : _gcd(b, a % b);
 
   Future<List<MediaTrack>> _tracks(
     Future<Map<int, String>> Function() list,
@@ -280,14 +279,17 @@ class VlcEngine extends PlaybackEngine {
       _controller.setAudioDelay(delay.inMilliseconds);
 
   @override
-  void dispose() {
+  Future<void> dispose() async {
     _disposed = true;
     _controller.removeListener(_sync);
     if (!_ready.isCompleted) {
       _ready.completeError(const PlaybackException('Riproduzione annullata'));
       _ready.future.ignore();
     }
-    _controller.dispose();
+    try {
+      await _controller.stopRendererScanning();
+    } catch (_) {}
+    await _controller.dispose();
     super.dispose();
   }
 }

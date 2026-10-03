@@ -4,11 +4,9 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
-import '../providers/ui_settings.dart';
+import '../services/catalog_builder.dart';
 import '../theme/app_theme.dart';
-import '../widgets/category_tab.dart';
 import '../widgets/channel_card.dart';
-import '../widgets/section_row.dart';
 import 'settings_screen.dart';
 
 SliverGridDelegate channelGridDelegate(ContentType type, {double maxExtent = 140}) {
@@ -21,8 +19,131 @@ SliverGridDelegate channelGridDelegate(ContentType type, {double maxExtent = 140
   );
 }
 
-enum CatalogSort { newest, az, za }
+/// A grid item backed by a deduplicated catalog entry: tapping a title with
+/// multiple quality variants asks which copy to play.
+class CatalogEntryCard extends StatelessWidget {
+  final CatalogEntry entry;
+  final bool isFavorite;
+  final VoidCallback onTap;
+  final VoidCallback onFavoriteTap;
 
+  const CatalogEntryCard({
+    super.key,
+    required this.entry,
+    required this.isFavorite,
+    required this.onTap,
+    required this.onFavoriteTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = entry.primary;
+    final quality = CatalogBuilder.qualityLabel(primary.name);
+    final card = ChannelCard(
+      channel: primary,
+      isFavorite: isFavorite,
+      onTap: onTap,
+      onFavoriteTap: onFavoriteTap,
+    );
+    if (quality == null) return card;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        card,
+        Positioned(
+          top: 6,
+          left: 6,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              quality,
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Asks which copy of a title to play when it exists in several qualities.
+Future<Channel?> pickVariant(BuildContext context, CatalogEntry entry) async {
+  if (entry.variants.length == 1) return entry.primary;
+  return showModalBottomSheet<Channel>(
+    context: context,
+    backgroundColor: AppColors.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Text(
+              'Scegli la versione',
+              style: Theme.of(ctx).textTheme.titleMedium,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text(
+              entry.primary.displaySeriesName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 13),
+            ),
+          ),
+          for (final v in entry.variants)
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.card,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  CatalogBuilder.qualityLabel(v.name) ?? 'STD',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              title: Text(
+                v.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14),
+              ),
+              subtitle: v.group != entry.primary.group
+                  ? Text(v.group,
+                      style: const TextStyle(
+                          color: AppColors.textMuted, fontSize: 11))
+                  : null,
+              onTap: () => Navigator.pop(ctx, v),
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+}
+
+/// A plain channel grid, used by search and favorites.
 class ChannelGrid extends StatelessWidget {
   final List<Channel> channels;
   final ContentType type;
@@ -38,10 +159,9 @@ class ChannelGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    final ui = context.watch<UiSettings>();
     return GridView.builder(
       padding: padding,
-      gridDelegate: channelGridDelegate(type, maxExtent: ui.gridMaxExtent),
+      gridDelegate: channelGridDelegate(type),
       itemCount: channels.length,
       itemBuilder: (context, i) {
         final c = channels[i];
@@ -67,8 +187,6 @@ class CatalogPage extends StatefulWidget {
 
 class _CatalogPageState extends State<CatalogPage> {
   String _query = '';
-  String? _group;
-  CatalogSort _sort = CatalogSort.newest;
 
   String get _noun => switch (widget.type) {
         ContentType.live => 'canali',
@@ -76,22 +194,6 @@ class _CatalogPageState extends State<CatalogPage> {
         ContentType.series => 'serie',
         ContentType.anime => 'anime',
       };
-
-  List<Channel> _applySort(List<Channel> items) {
-    switch (_sort) {
-      case CatalogSort.newest:
-        // Playlist order reversed: most recently added first.
-        return items.reversed.toList();
-      case CatalogSort.az:
-        final sorted = [...items]..sort(
-            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-        return sorted;
-      case CatalogSort.za:
-        final sorted = [...items]..sort(
-            (a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()));
-        return sorted;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -114,8 +216,8 @@ class _CatalogPageState extends State<CatalogPage> {
       );
     }
 
-    final all = app.catalogOf(widget.type);
-    if (all.isEmpty) {
+    final groups = app.groupedCatalog(widget.type);
+    if (groups.isEmpty) {
       return EmptyState(
         icon: Icons.playlist_add_rounded,
         title: 'Nessun contenuto',
@@ -129,73 +231,112 @@ class _CatalogPageState extends State<CatalogPage> {
       );
     }
 
-    final groups = app.groupsOf(widget.type);
     final q = _query.toLowerCase();
-    final filtered = all
-        .where((c) =>
-            (_group == null || c.group == _group) &&
-            (q.isEmpty || c.name.toLowerCase().contains(q)))
-        .toList();
-    final visible = _applySort(filtered);
+    final filtered = q.isEmpty
+        ? groups
+        : [
+            for (final g in groups)
+              CatalogGroup(
+                label: g.label,
+                entries: [
+                  for (final e in g.entries)
+                    if (e.primary.name.toLowerCase().contains(q)) e,
+                ],
+              ),
+          ].where((g) => g.entries.isNotEmpty).toList();
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  onChanged: (v) => setState(() => _query = v),
-                  decoration: InputDecoration(
-                    hintText: 'Cerca tra ${all.length} $_noun',
-                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              PopupMenuButton<CatalogSort>(
-                tooltip: 'Ordina',
-                icon: const Icon(Icons.sort_rounded,
-                    color: AppColors.textSecondary),
-                onSelected: (s) => setState(() => _sort = s),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: CatalogSort.newest,
-                    child: Text('Ultimi aggiunti'),
-                  ),
-                  const PopupMenuItem(
-                    value: CatalogSort.az,
-                    child: Text('Nome A-Z'),
-                  ),
-                  const PopupMenuItem(
-                    value: CatalogSort.za,
-                    child: Text('Nome Z-A'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        if (groups.length > 1)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: CategoryTab(
-              categories: groups,
-              selected: _group,
-              onSelected: (g) => setState(() => _group = g),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: TextField(
+            onChanged: (v) => setState(() => _query = v),
+            decoration: InputDecoration(
+              hintText: 'Cerca tra $_noun',
+              prefixIcon: const Icon(Icons.search_rounded, size: 20),
             ),
           ),
+        ),
         Expanded(
-          child: visible.isEmpty
+          child: filtered.isEmpty
               ? EmptyState(
                   icon: Icons.search_off_rounded,
                   title: 'Nessun risultato',
                   message: 'Prova con un altro titolo o categoria.',
                 )
-              : ChannelGrid(channels: visible, type: widget.type),
+              : ListView.builder(
+                  padding: const EdgeInsets.only(top: 8, bottom: 24),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, gi) {
+                    final group = filtered[gi];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 4,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  group.label,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium,
+                                ),
+                              ),
+                              Text(
+                                '${group.entries.length}',
+                                style: const TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: channelGridDelegate(
+                                widget.type,
+                                maxExtent: 140),
+                            itemCount: group.entries.length,
+                            itemBuilder: (context, i) {
+                              final entry = group.entries[i];
+                              return CatalogEntryCard(
+                                entry: entry,
+                                isFavorite: app.favoriteIds
+                                    .contains(entry.primary.id),
+                                onTap: () => _openEntry(context, entry),
+                                onFavoriteTap: () =>
+                                    app.toggleFavorite(entry.primary),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
         ),
       ],
     );
+  }
+
+  Future<void> _openEntry(
+      BuildContext context, CatalogEntry entry) async {
+    final channel = await pickVariant(context, entry);
+    if (channel == null || !context.mounted) return;
+    openChannel(context, channel);
   }
 }

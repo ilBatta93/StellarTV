@@ -3,6 +3,7 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/series_details.dart';
 import '../models/tmdb_item.dart';
+import '../services/catalog_builder.dart';
 import '../services/playlist_refresh_service.dart';
 import '../services/xtream_service.dart';
 import '../services/favorites_service.dart';
@@ -78,6 +79,31 @@ class AppProvider extends ChangeNotifier {
       .toSet()
       .toList()
     ..sort();
+
+  /// Category labels in the playlist's own order (not alphabetical).
+  List<String> categoryOrderOf(ContentType type) =>
+      channelsOf(type).map((c) => c.group).toSet().toList();
+
+  /// Catalog grouped by category, preserving the playlist's category order,
+  /// with duplicate titles removed across categories (quality variants kept).
+  List<CatalogGroup> groupedCatalog(ContentType type) =>
+      CatalogBuilder.groupsOf(channelsOf(type), categoryOrderOf(type));
+
+  /// All playlist copies of a title (other qualities/categories). Used by the
+  /// detail screen to offer quality selection before playback.
+  List<Channel> variantsFor(Channel channel) {
+    final base = CatalogBuilder.normalize(
+        CatalogBuilder.stripQuality(channel.displaySeriesName));
+    if (base.isEmpty) return [channel];
+    final sameType = channelsOf(channel.type);
+    return [
+      for (final c in sameType)
+        if (CatalogBuilder.normalize(
+                CatalogBuilder.stripQuality(c.displaySeriesName)) ==
+            base)
+          c,
+    ];
+  }
 
   List<Channel> get favorites =>
       _allChannels.where((c) => _favoriteIds.contains(c.id)).toList();

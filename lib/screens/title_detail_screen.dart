@@ -7,7 +7,9 @@ import '../models/tmdb_person.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/discover_provider.dart';
+import '../services/catalog_builder.dart';
 import '../theme/app_theme.dart';
+import '../screens/catalog_page.dart' show pickVariant;
 import '../screens/person_detail_screen.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
@@ -27,6 +29,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
   TmdbItem? _item;
   List<TmdbItem> _similar = [];
   List<TmdbPerson> _cast = [];
+  List<Channel> _variants = [];
   bool _loading = true;
   String? _error;
 
@@ -77,6 +80,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
     final item = _item;
     final playable =
         widget.channel ?? (item == null ? null : app.findChannelFor(item));
+    final variants = _findVariants(app, item);
     final title = item?.title ?? widget.channel!.name;
     final image = item?.backdropUrl ?? widget.channel?.logo;
 
@@ -136,7 +140,10 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                   const SizedBox(height: 8),
                   _Meta(item: item, channel: widget.channel),
                   const SizedBox(height: 16),
-                  _Actions(item: item, playable: playable),
+                  _Actions(
+                      item: item,
+                      playable: playable,
+                      variants: variants),
                   if (item != null && item.overview.isNotEmpty) ...[
                     const SizedBox(height: 24),
                     Text('Trama',
@@ -155,6 +162,17 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
         ],
       ),
     );
+  }
+
+  /// All playlist copies of this title (different qualities/categories).
+  List<Channel> _findVariants(AppProvider app, TmdbItem? item) {
+    if (item != null) {
+      final found = app.findChannelFor(item);
+      if (found != null) return app.variantsFor(found);
+    }
+    final channel = widget.channel;
+    if (channel != null) return app.variantsFor(channel);
+    return const [];
   }
 
   Widget _buildCast() {
@@ -320,8 +338,13 @@ class _Chip extends StatelessWidget {
 class _Actions extends StatelessWidget {
   final TmdbItem? item;
   final Channel? playable;
+  final List<Channel> variants;
 
-  const _Actions({required this.item, required this.playable});
+  const _Actions({
+    required this.item,
+    required this.playable,
+    required this.variants,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -334,7 +357,7 @@ class _Actions extends StatelessWidget {
           ElevatedButton.icon(
             icon: const Icon(Icons.play_arrow_rounded),
             label: const Text('Guarda ora'),
-            onPressed: () => openChannel(context, playable!),
+            onPressed: () => _play(context),
           )
         else
           Container(
@@ -358,6 +381,29 @@ class _Actions extends StatelessWidget {
               ],
             ),
           ),
+        if (variants.length > 1) ...[
+          const SizedBox(height: 8),
+          const Text('Versioni disponibili',
+              style: TextStyle(
+                  color: AppColors.textSecondary, fontSize: 12,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final v in variants)
+                ActionChip(
+                  label: Text(
+                    CatalogBuilder.qualityLabel(v.name) ??
+                        (v.group != playable!.group ? v.group : 'STD'),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  onPressed: () => openChannel(context, v),
+                ),
+            ],
+          ),
+        ],
         if (item != null) ...[
           const SizedBox(height: 8),
           OutlinedButton.icon(
@@ -396,5 +442,15 @@ class _Actions extends StatelessWidget {
         ],
       ],
     );
+  }
+
+  Future<void> _play(BuildContext context) async {
+    if (playable == null) return;
+    final entry = CatalogEntry(
+        primary: playable!,
+        variants: variants.isEmpty ? [playable!] : variants);
+    final channel = await pickVariant(context, entry);
+    if (channel == null || !context.mounted) return;
+    openChannel(context, channel);
   }
 }
