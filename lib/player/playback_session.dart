@@ -5,8 +5,8 @@ import 'package:flutter/foundation.dart';
 
 import '../models/player_settings.dart';
 import 'exo_engine.dart';
+import 'mediakit_engine.dart';
 import 'playback_engine.dart';
-import 'vlc_engine.dart';
 
 enum SessionStatus { connecting, playing, switching, failed }
 
@@ -69,7 +69,8 @@ class PlaybackSession extends ChangeNotifier {
 
   PlaybackEngine _create(PlayerEngineType type) => switch (type) {
         PlayerEngineType.exo => ExoEngine(url: url, settings: settings),
-        PlayerEngineType.vlc => VlcEngine(url: url, settings: settings),
+        PlayerEngineType.mediakit =>
+          MediaKitEngine(url: url, settings: settings),
       };
 
   Future<void> _open(PlayerEngineType type, {Duration? resumeAt}) async {

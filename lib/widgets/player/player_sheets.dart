@@ -103,10 +103,10 @@ class _Unsupported extends StatelessWidget {
             const SizedBox(height: 16),
             OutlinedButton.icon(
               icon: const Icon(Icons.swap_horiz_rounded),
-              label: const Text('Passa a VLC'),
+              label: const Text('Passa a mpv'),
               onPressed: () {
                 Navigator.pop(context);
-                session.switchEngine(PlayerEngineType.vlc);
+                session.switchEngine(PlayerEngineType.mediakit);
               },
             ),
           ],
@@ -213,7 +213,7 @@ Future<void> showSubtitleSheet(BuildContext context, PlaybackSession session) {
     if (engine == null || !engine.supportsSubtitleTracks) {
       return _Unsupported(
         message:
-            'ExoPlayer non mostra i sottotitoli incorporati nei flussi IPTV. Passa a VLC per vederli.',
+            'ExoPlayer non mostra i sottotitoli incorporati nei flussi IPTV. Passa a mpv per vederli.',
         session: session,
       );
     }
@@ -235,8 +235,8 @@ Future<void> showQualitySheet(BuildContext context, PlaybackSession session) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
         child: Text(
-          engine?.type == PlayerEngineType.vlc
-              ? 'Con VLC la qualità viene adattata automaticamente alla connessione.'
+          engine?.type == PlayerEngineType.mediakit
+              ? 'Con mpv la qualità viene adattata automaticamente alla connessione.'
               : 'La scelta della qualità non è disponibile su questo dispositivo.',
           style: Theme.of(ctx).textTheme.bodyMedium,
         ),
@@ -315,7 +315,7 @@ Future<void> showSyncSheet(BuildContext context, PlaybackSession session) {
   return _showSheet(context, 'Sincronizzazione', (ctx) {
     if (session.engine?.supportsDelays != true) {
       return _Unsupported(
-        message: 'La regolazione del ritardo di audio e sottotitoli è disponibile con VLC.',
+        message: 'La regolazione del ritardo di audio e sottotitoli è disponibile con mpv.',
         session: session,
       );
     }

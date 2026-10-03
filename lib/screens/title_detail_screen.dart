@@ -7,6 +7,7 @@ import '../models/tmdb_person.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/discover_provider.dart';
+import '../providers/history_provider.dart';
 import '../services/catalog_builder.dart';
 import '../theme/app_theme.dart';
 import '../screens/catalog_page.dart' show pickVariant;
@@ -450,6 +451,12 @@ class _Actions extends StatelessWidget {
         variants: variants.isEmpty ? [playable!] : variants);
     final channel = await pickVariant(context, entry);
     if (channel == null || !context.mounted) return;
-    openChannel(context, channel);
+    // Movies play directly; re-opening the detail screen here would loop.
+    playChannel(context, channel, startAt: _resumeFor(channel));
+  }
+
+  Duration? _resumeFor(Channel channel) {
+    final entry = context.read<HistoryProvider>().entryFor(channel.id);
+    return entry?.resumePosition;
   }
 }

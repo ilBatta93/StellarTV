@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsService {
@@ -60,5 +62,28 @@ class SettingsService {
     await prefs.remove(_xtreamServerKey);
     await prefs.remove(_xtreamUserKey);
     await prefs.remove(_xtreamPassKey);
+  }
+
+  static const _hiddenCategoriesKey = 'hidden_categories';
+
+  /// Category labels the user chose to hide from catalogs, keyed per
+  /// content type ("live", "movie", "series", "anime").
+  Future<Map<String, List<String>>> getHiddenCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_hiddenCategoriesKey);
+    if (raw == null) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return {};
+      return decoded.map((k, v) =>
+          MapEntry(k, (v as List?)?.cast<String>() ?? <String>[]));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> setHiddenCategories(Map<String, List<String>> map) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_hiddenCategoriesKey, jsonEncode(map));
   }
 }

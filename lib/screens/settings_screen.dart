@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/settings_tiles.dart';
 import 'login_screen.dart';
 import 'history_settings_screen.dart';
+import 'hidden_categories_screen.dart';
 import 'player_settings_screen.dart';
 import 'sync_settings_screen.dart';
 
@@ -204,6 +205,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: 'Gestisci i contenuti visti e le posizioni di ripresa',
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => const HistorySettingsScreen())),
+              ),
+              SettingsValueTile(
+                icon: Icons.visibility_off_outlined,
+                title: 'Categorie nascoste',
+                subtitle: 'Nascondi le categorie che non ti interessano',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const HiddenCategoriesScreen())),
               ),
             ],
           ),

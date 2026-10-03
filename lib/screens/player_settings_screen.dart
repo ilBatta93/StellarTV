@@ -201,7 +201,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               icon: Icons.surround_sound_outlined,
               title: 'Passthrough Dolby / DTS',
               subtitle: 'Invia l\'audio originale a soundbar o ricevitore compatibili tramite HDMI',
-              badge: 'VLC',
+              badge: 'mpv',
               value: s.audioPassthrough,
               onChanged: (v) => _update((s) => s.audioPassthrough = v),
             ),
@@ -209,14 +209,14 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               icon: Icons.graphic_eq_rounded,
               title: 'Mantieni il tono a velocità diverse',
               subtitle: 'Evita voci troppo acute o gravi quando cambi velocità',
-              badge: 'VLC',
+              badge: 'mpv',
               value: s.audioTimeStretch,
               onChanged: (v) => _update((s) => s.audioTimeStretch = v),
             ),
             SettingsSliderTile(
               icon: Icons.sync_rounded,
               title: 'Ritardo audio predefinito',
-              badge: 'VLC',
+              badge: 'mpv',
               value: s.audioDelayMs.toDouble(),
               min: -2000,
               max: 2000,
@@ -232,7 +232,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
         SettingsSection(
           title: 'Sottotitoli',
           description:
-              'I sottotitoli incorporati nei flussi IPTV vengono mostrati con VLC.',
+              'I sottotitoli incorporati nei flussi IPTV vengono mostrati con il motore mpv.',
           children: [
             _SubtitlePreview(settings: s),
             SettingsSwitchTile(
@@ -279,7 +279,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             SettingsSliderTile(
               icon: Icons.av_timer_rounded,
               title: 'Ritardo sottotitoli predefinito',
-              badge: 'VLC',
+              badge: 'mpv',
               value: s.subtitleDelayMs.toDouble(),
               min: -5000,
               max: 5000,
@@ -300,7 +300,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             SettingsValueTile(
               icon: Icons.developer_board_rounded,
               title: 'Decodifica hardware',
-              badge: 'VLC',
+              badge: 'mpv',
               value: s.hardwareDecoding.label,
               onTap: () => _pick('Decodifica hardware', HardwareDecoding.values,
                   s.hardwareDecoding, (v) => v.label, (s, v) => s.hardwareDecoding = v,
@@ -315,7 +315,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               icon: Icons.slow_motion_video_rounded,
               title: 'Scarta fotogrammi in ritardo',
               subtitle: 'Mantiene audio e video sincronizzati su dispositivi lenti',
-              badge: 'VLC',
+              badge: 'mpv',
               value: s.dropLateFrames,
               onChanged: (v) => _update((s) => s.dropLateFrames = v),
             ),
@@ -323,7 +323,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               icon: Icons.skip_next_outlined,
               title: 'Salta fotogrammi',
               subtitle: 'Riduce gli scatti con flussi pesanti (4K, HEVC)',
-              badge: 'VLC',
+              badge: 'mpv',
               value: s.skipFrames,
               onChanged: (v) => _update((s) => s.skipFrames = v),
             ),
@@ -340,7 +340,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             SettingsSliderTile(
               icon: Icons.cloud_download_outlined,
               title: 'Buffer film e serie',
-              badge: 'VLC',
+              badge: 'mpv',
               value: s.networkCachingMs.toDouble(),
               min: 300,
               max: 10000,
@@ -352,7 +352,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             SettingsSliderTile(
               icon: Icons.live_tv_rounded,
               title: 'Buffer dirette',
-              badge: 'VLC',
+              badge: 'mpv',
               value: s.liveCachingMs.toDouble(),
               min: 300,
               max: 10000,
@@ -377,7 +377,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               icon: Icons.wifi_protected_setup_rounded,
               title: 'Riconnessione automatica',
               subtitle: 'Riprova da solo se il flusso si interrompe',
-              badge: 'VLC',
+              badge: 'mpv',
               value: s.httpReconnect,
               onChanged: (v) => _update((s) => s.httpReconnect = v),
             ),

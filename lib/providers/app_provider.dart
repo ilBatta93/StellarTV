@@ -23,6 +23,7 @@ class AppProvider extends ChangeNotifier {
   Map<String, Channel>? _channelIndex;
   Set<String> _favoriteIds = {};
   List<TmdbItem> _tmdbFavorites = [];
+  Map<String, List<String>> _hiddenCategories = {};
   bool _isLoading = false;
   bool _initialized = false;
   String? _error;
@@ -42,6 +43,15 @@ class AppProvider extends ChangeNotifier {
 
   List<Channel> channelsOf(ContentType type) =>
       _allChannels.where((c) => c.type == type).toList();
+
+  /// Channels of a type whose category is not hidden by the user.
+  List<Channel> _visibleChannels(ContentType type) {
+    final hidden = hiddenCategoriesOf(type).toSet();
+    if (hidden.isEmpty) return channelsOf(type);
+    return channelsOf(type)
+        .where((c) => !hidden.contains(c.group))
+        .toList();
+  }
 
   List<Channel> catalogOf(ContentType type) {
     if (type == ContentType.series || type == ContentType.anime) {
@@ -84,15 +94,35 @@ class AppProvider extends ChangeNotifier {
   List<String> categoryOrderOf(ContentType type) =>
       channelsOf(type).map((c) => c.group).toSet().toList();
 
+  /// Categories the user hid per type (key: content type name).
+  Map<String, List<String>> get hiddenCategories => _hiddenCategories;
+
+  List<String> hiddenCategoriesOf(ContentType type) =>
+      _hiddenCategories[type.name] ?? const [];
+
+  Future<void> setHiddenCategories(ContentType type, List<String> hidden) async {
+    _hiddenCategories = {
+      ..._hiddenCategories,
+      type.name: hidden,
+    };
+    notifyListeners();
+    await _settingsService.setHiddenCategories(_hiddenCategories);
+  }
+
   /// Catalog grouped by category, preserving the playlist's category order,
-  /// with duplicate titles removed across categories (quality variants kept).
+  /// with duplicates removed and hidden categories excluded.
   List<CatalogGroup> groupedCatalog(ContentType type) =>
-      CatalogBuilder.groupsOf(channelsOf(type), categoryOrderOf(type));
+      CatalogBuilder.groupsOf(
+        _visibleChannels(type),
+        categoryOrderOf(type)
+            .where((g) => !hiddenCategoriesOf(type).contains(g))
+            .toList(),
+      );
 
   /// Recently added items of a type, in the playlist's own order (the
   /// provider lists newest entries last, so newest-first means reversed).
   List<CatalogEntry> recentEntries(ContentType type, {int limit = 60}) {
-    final channels = channelsOf(type).reversed;
+    final channels = _visibleChannels(type).reversed;
     final entries = <CatalogEntry>[];
     final seen = <String>{};
     for (final c in channels) {
@@ -286,6 +316,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> init() async {
     _favoriteIds = await _favoritesService.getFavoriteIds();
     _tmdbFavorites = await _favoritesService.getTmdbFavorites();
+    _hiddenCategories = await _settingsService.getHiddenCategories();
     final methodStr = await _settingsService.getAuthMethod();
     _authMethod = switch (methodStr) {
       'xtream' => AuthMethod.xtream,

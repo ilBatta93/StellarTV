@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../providers/history_provider.dart';
+import '../providers/sync_provider.dart';
+import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
 import 'home_screen.dart';
 
@@ -144,8 +147,78 @@ class _LoginScreenState extends State<LoginScreen> {
             onPressed: _isLoading ? null : _handleXtreamLogin,
           ),
         ),
+        const SizedBox(height: 12),
+        Center(
+          child: TextButton.icon(
+            icon: const Icon(Icons.cloud_sync_outlined, size: 18),
+            label: const Text('Ho un codice di sincronizzazione'),
+            style: TextButton.styleFrom(
+                foregroundColor: AppColors.textSecondary, fontSize: 13),
+            onPressed: _isLoading ? null : _showSyncCodeDialog,
+          ),
+        ),
       ],
     );
+  }
+
+  /// First-run cloud restore: pairs this device to an existing sync code and
+  /// pulls history, favorites and playlist credentials before connecting.
+  Future<void> _showSyncCodeDialog() async {
+    final codeController = TextEditingController();
+    final sync = context.read<SyncProvider>();
+    final history = context.read<HistoryProvider>();
+    final app = context.read<AppProvider>();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Ripristina dal cloud'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Inserisci il codice a 8 caratteri che usi sugli altri dispositivi: '
+              'verranno recuperati cronologia, preferiti e dati di accesso.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: codeController,
+              autofocus: true,
+              maxLength: 8,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                hintText: 'Es. AB12CD34',
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annulla')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Ripristina')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _isLoading = true);
+    await sync.useExistingCode(codeController.text.toUpperCase().trim());
+    final restored = await history.pullFromCloud();
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    if (restored) {
+      _navigateHome();
+    } else {
+      _showError(
+          'Ripristino non riuscito: codice non valido o nessun dato nel cloud. '
+          'Puoi comunque connettere il tuo account.');
+    }
   }
 
   Widget _buildFieldLabel(String label) {

@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 
 enum PlayerEngineType {
   exo('ExoPlayer', 'Motore nativo Android, ottimo per HLS e HDR'),
-  vlc('VLC', 'Massima compatibilità con formati e flussi TS');
+  mediakit('mpv (media-kit)', 'Massima compatibilità, sottotitoli e tracce audio completi');
 
   final String label;
   final String description;
   const PlayerEngineType(this.label, this.description);
 
   PlayerEngineType get other =>
-      this == PlayerEngineType.exo ? PlayerEngineType.vlc : PlayerEngineType.exo;
+      this == PlayerEngineType.exo ? PlayerEngineType.mediakit : PlayerEngineType.exo;
 }
 
 enum VideoFitMode {
@@ -35,16 +35,14 @@ enum HardwareDecoding {
 }
 
 enum SubtitleSize {
-  small('Piccolo', 14, 20),
-  medium('Medio', 18, 16),
-  large('Grande', 22, 12),
-  extraLarge('Molto grande', 28, 9);
+  small('Piccolo', 14),
+  medium('Medio', 18),
+  large('Grande', 22),
+  extraLarge('Molto grande', 28);
 
   final String label;
   final double fontSize;
-  // libVLC relative font size: lower value means bigger text.
-  final int vlcRelativeSize;
-  const SubtitleSize(this.label, this.fontSize, this.vlcRelativeSize);
+  const SubtitleSize(this.label, this.fontSize);
 }
 
 enum SubtitleColor {
