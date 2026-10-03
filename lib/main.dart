@@ -5,9 +5,11 @@ import 'config/supabase_config.dart';
 import 'providers/app_provider.dart';
 import 'providers/discover_provider.dart';
 import 'providers/history_provider.dart';
+import 'providers/profile_provider.dart';
 import 'providers/sync_provider.dart';
 import 'providers/ui_settings.dart';
 import 'screens/splash_screen.dart';
+import 'services/profile_service.dart';
 import 'services/sync_service.dart';
 import 'services/tmdb_service.dart';
 import 'theme/app_theme.dart';
@@ -32,15 +34,18 @@ class _IlBattaTvAppState extends State<IlBattaTvApp> {
   late final AppProvider _appProvider;
   late final SyncProvider _syncProvider;
   late final HistoryProvider _historyProvider;
+  late final ProfileProvider _profileProvider;
 
   @override
   void initState() {
     super.initState();
     final syncService = SyncService(Supabase.instance.client);
+    final profileService = ProfileService(Supabase.instance.client);
     _appProvider = AppProvider()..init();
     _syncProvider = SyncProvider(syncService);
     _historyProvider =
         HistoryProvider(syncService, _appProvider, _syncProvider);
+    _profileProvider = ProfileProvider(profileService, syncService);
     // The sync needs favorites from the app state and must reload the app
     // when credentials arrive from another device.
     _syncProvider.snapshotSource = () async => SnapshotPart(
@@ -63,6 +68,7 @@ class _IlBattaTvAppState extends State<IlBattaTvApp> {
     _appProvider.dispose();
     _historyProvider.dispose();
     _syncProvider.dispose();
+    _profileProvider.dispose();
     super.dispose();
   }
 
@@ -73,6 +79,7 @@ class _IlBattaTvAppState extends State<IlBattaTvApp> {
         ChangeNotifierProvider.value(value: _appProvider),
         ChangeNotifierProvider.value(value: _syncProvider),
         ChangeNotifierProvider.value(value: _historyProvider),
+        ChangeNotifierProvider.value(value: _profileProvider),
         ChangeNotifierProvider(create: (_) => DiscoverProvider(TmdbService())),
         ChangeNotifierProvider(create: (_) => UiSettings()..load()),
       ],

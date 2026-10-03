@@ -19,8 +19,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _urlController = TextEditingController();
-  bool _isSaving = false;
   int? _refreshMinutes;
   int _loadedRefreshMinutes = 0;
   DateTime? _lastRefresh;
@@ -29,10 +27,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    final provider = context.read<AppProvider>();
-    if (provider.playlistUrl != null) {
-      _urlController.text = provider.playlistUrl!;
-    }
     _loadRefreshState();
   }
 
@@ -59,7 +53,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    _urlController.dispose();
     super.dispose();
   }
 
@@ -145,7 +138,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _connectionLabel(AppProvider provider) =>
       switch (provider.authMethod.name) {
         'xtream' => 'Xtream Codes',
-        'm3u' => 'M3U / M3U8',
         _ => 'Non connesso',
       };
 
@@ -156,7 +148,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return SettingsSection(
       title: 'Aggiornamento playlist',
       description:
-          'Ricarica automaticamente canali, film e serie dalla tua lista Xtream o M3U.',
+          'Ricarica automaticamente canali, film e serie dal tuo account Xtream.',
       children: [
         SettingsValueTile(
           icon: Icons.update_rounded,
@@ -231,47 +223,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildUiCustomization(context),
           _buildPlaylistRefresh(context, provider),
           SettingsSection(
-            title: 'Playlist',
-            description: 'Inserisci l\'indirizzo di una playlist M3U per ricaricare i canali.',
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: _urlController,
-                      maxLines: 2,
-                      minLines: 1,
-                      keyboardType: TextInputType.url,
-                      decoration: const InputDecoration(
-                        labelText: 'URL playlist M3U',
-                        hintText: 'https://esempio.com/playlist.m3u',
-                        prefixIcon: Icon(Icons.link_rounded),
-                        fillColor: AppColors.card,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        icon: _isSaving
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Icons.download_rounded),
-                        label: Text(_isSaving ? 'Caricamento...' : 'Carica playlist'),
-                        onPressed: _isSaving ? null : () => _loadPlaylist(provider),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          SettingsSection(
             title: 'Account',
             children: [
               SettingsValueTile(
@@ -342,26 +293,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         MaterialPageRoute(builder: (_) => const LoginScreen()),
         (_) => false,
       );
-    }
-  }
-
-  Future<void> _loadPlaylist(AppProvider provider) async {
-    final url = _urlController.text.trim();
-    if (url.isEmpty) {
-      _showSnackBar('Inserisci l\'indirizzo della playlist');
-      return;
-    }
-
-    setState(() => _isSaving = true);
-    await provider.loadPlaylist(url);
-    if (!mounted) return;
-    setState(() => _isSaving = false);
-
-    if (provider.error != null) {
-      _showSnackBar('Caricamento non riuscito: ${provider.error}');
-    } else {
-      _showSnackBar('${provider.allChannels.length} contenuti caricati');
-      Navigator.pop(context);
     }
   }
 

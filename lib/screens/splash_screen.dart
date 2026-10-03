@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
+import 'profile_picker_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -64,10 +65,19 @@ class _SplashScreenState extends State<SplashScreen>
       }
     }
 
-    final Widget target = app.isAuthenticated
-        ? const HomeScreen()
-        : const LoginScreen();
+    if (!app.isAuthenticated) {
+      _navigate(const LoginScreen());
+      return;
+    }
 
+    // Authenticated: show the profile picker only when profiles exist and
+    // none has been chosen on this device yet; otherwise go straight home.
+    final needsProfile = await context.read<ProfileProvider>().needsSelection();
+    if (!mounted) return;
+    _navigate(needsProfile ? const ProfilePickerScreen() : const HomeScreen());
+  }
+
+  void _navigate(Widget target) {
     _navigated = true;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(

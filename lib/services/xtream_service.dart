@@ -20,11 +20,6 @@ class XtreamService {
     return '$base/player_api.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}';
   }
 
-  String _buildM3uUrl(String server, String username, String password) {
-    final base = _normalizeServerUrl(server);
-    return '$base/get.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}&type=m3u_plus';
-  }
-
   Future<bool> authenticate({
     required String server,
     required String username,
@@ -38,10 +33,6 @@ class XtreamService {
     if (userInfo == null) return false;
     final status = userInfo['auth'] ?? 0;
     return status == 1;
-  }
-
-  String getM3uUrl(String server, String username, String password) {
-    return _buildM3uUrl(server, username, password);
   }
 
   Future<List<Channel>> getLiveChannels({

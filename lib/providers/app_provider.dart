@@ -3,17 +3,15 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/series_details.dart';
 import '../models/tmdb_item.dart';
-import '../services/m3u_parser_service.dart';
 import '../services/playlist_refresh_service.dart';
 import '../services/xtream_service.dart';
 import '../services/favorites_service.dart';
 import '../services/settings_service.dart';
 import '../services/series_grouping.dart';
 
-enum AuthMethod { none, xtream, m3u }
+enum AuthMethod { none, xtream }
 
 class AppProvider extends ChangeNotifier {
-  final _m3uParser = M3uParserService();
   final _xtreamService = XtreamService();
   final _favoritesService = FavoritesService();
   final _settingsService = SettingsService();
@@ -27,7 +25,6 @@ class AppProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _initialized = false;
   String? _error;
-  String? _playlistUrl;
   AuthMethod _authMethod = AuthMethod.none;
   Map<String, String>? _xtreamCredentials;
   bool _isAuthenticated = false;
@@ -38,7 +35,6 @@ class AppProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isInitialized => _initialized;
   String? get error => _error;
-  String? get playlistUrl => _playlistUrl;
   AuthMethod get authMethod => _authMethod;
   Map<String, String>? get xtreamCredentials => _xtreamCredentials;
   bool get isAuthenticated => _isAuthenticated;
@@ -240,24 +236,22 @@ class AppProvider extends ChangeNotifier {
         username: _xtreamCredentials!['username']!,
         password: _xtreamCredentials!['password']!,
       );
-    } else if (_authMethod == AuthMethod.m3u &&
-        _playlistUrl != null &&
-        _playlistUrl!.isNotEmpty) {
-      await loadPlaylist(_playlistUrl!);
     }
   }
 
   Future<void> init() async {
-    _playlistUrl = await _settingsService.getPlaylistUrl();
     _favoriteIds = await _favoritesService.getFavoriteIds();
     _tmdbFavorites = await _favoritesService.getTmdbFavorites();
     final methodStr = await _settingsService.getAuthMethod();
     _authMethod = switch (methodStr) {
       'xtream' => AuthMethod.xtream,
-      'm3u' => AuthMethod.m3u,
       _ => AuthMethod.none,
     };
     _xtreamCredentials = await _settingsService.getXtreamCredentials();
+    // Mark authenticated as soon as stored credentials exist, so the splash
+    // routes to Home while the playlist is still loading in the background.
+    _isAuthenticated =
+        _authMethod == AuthMethod.xtream && _xtreamCredentials != null;
     _initialized = true;
     notifyListeners();
 
@@ -267,10 +261,6 @@ class AppProvider extends ChangeNotifier {
         username: _xtreamCredentials!['username']!,
         password: _xtreamCredentials!['password']!,
       );
-    } else if (_authMethod == AuthMethod.m3u &&
-        _playlistUrl != null &&
-        _playlistUrl!.isNotEmpty) {
-      await loadPlaylist(_playlistUrl!);
     } else {
       _isLoading = false;
       notifyListeners();
@@ -361,53 +351,11 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> loginWithM3u(String url) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      _setChannels(await _m3uParser.parseFromUrl(url));
-      await _settingsService.setPlaylistUrl(url);
-      await _settingsService.setAuthMethod('m3u');
-      _playlistUrl = url;
-      _authMethod = AuthMethod.m3u;
-      _isAuthenticated = true;
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _error = e.toString();
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
-  }
-
-  Future<void> loadPlaylist(String url) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      _setChannels(await _m3uParser.parseFromUrl(url));
-      await _settingsService.setPlaylistUrl(url);
-      _playlistUrl = url;
-      _isAuthenticated = true;
-    } catch (e) {
-      _error = e.toString();
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
   Future<void> logout() async {
     await _settingsService.clearCredentials();
     _setChannels([]);
     _authMethod = AuthMethod.none;
     _xtreamCredentials = null;
-    _playlistUrl = null;
     _isAuthenticated = false;
     notifyListeners();
   }

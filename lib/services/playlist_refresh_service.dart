@@ -18,7 +18,7 @@ enum PlaylistRefreshInterval {
       values.where((v) => v.minutes == (minutes ?? 0)).firstOrNull ?? off;
 }
 
-/// Reloads the Xtream/M3U playlist at a user-chosen interval while the app
+/// Reloads the Xtream playlist at a user-chosen interval while the app
 /// is running. The last refresh time is persisted so the check also fires
 /// shortly after each app start when the interval has already elapsed.
 class PlaylistRefreshService {
