@@ -19,7 +19,6 @@ class SyncProvider extends ChangeNotifier {
   String? _message;
   bool _success = false;
   Timer? _debounce;
-  bool _disposed = false;
 
   /// Set by main.dart: pushes the full snapshot (favorites included).
   Future<SnapshotPart> Function()? snapshotSource;
@@ -182,7 +181,6 @@ class SyncProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _disposed = true;
     _debounce?.cancel();
     super.dispose();
   }

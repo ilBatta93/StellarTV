@@ -12,11 +12,11 @@ import '../providers/app_provider.dart';
 import '../providers/discover_provider.dart';
 import '../providers/history_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/poster_card.dart';
+import '../widgets/section_row.dart';
 
 /// A watch-history entry paired with the channel it belongs to.
 typedef ResumeItem = (HistoryEntry, Channel);
-import '../widgets/poster_card.dart';
-import '../widgets/section_row.dart';
 
 class DiscoverPage extends StatefulWidget {
   const DiscoverPage({super.key});

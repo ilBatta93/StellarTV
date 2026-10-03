@@ -111,11 +111,6 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _pushToCloud() async {
-    if (_disposed) return;
-    await _syncProvider?.pushNow(silent: true);
-  }
-
   /// Pulls cloud state and merges it into local (newer `watched` wins for
   /// history; settings and credentials are filled in when missing locally).
   Future<bool> pullFromCloud() async {
