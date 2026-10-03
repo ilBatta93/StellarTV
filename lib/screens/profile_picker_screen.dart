@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/user_profile.dart';
 import '../providers/profile_provider.dart';
+import '../services/profile_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
 import 'home_screen.dart';
@@ -170,8 +171,7 @@ class _ProfileAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = Color(ProfileAvatars.colors[profile.avatarColor] ??
         ProfileAvatars.colors['arancio']!);
-    final iconCode =
-        ProfileAvatars.entries[profile.avatarKey] ?? ProfileAvatars.entries['rocket']!;
+    final icon = ProfileAvatars.iconOf(profile.avatarKey);
     return InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -197,7 +197,7 @@ class _ProfileAvatar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
-                  IconData(iconCode, fontFamily: 'MaterialIcons'),
+                  icon,
                   color: color,
                   size: 40,
                 ),
@@ -329,8 +329,9 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
             children: [
               for (final entry in ProfileAvatars.entries.entries)
                 _IconOption(
-                  iconCode: entry.value,
-                  colorKey: _avatarColor,
+                  icon: ProfileAvatars.iconOf(entry.key),
+                  color: Color(ProfileAvatars.colors[_avatarColor] ??
+                      ProfileAvatars.colors['arancio']!),
                   selected: entry.key == _avatarKey,
                   onTap: () => setState(() => _avatarKey = entry.key),
                 ),
@@ -397,22 +398,20 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
 }
 
 class _IconOption extends StatelessWidget {
-  final int iconCode;
-  final String colorKey;
+  final IconData icon;
+  final Color color;
   final bool selected;
   final VoidCallback onTap;
 
   const _IconOption({
-    required this.iconCode,
-    required this.colorKey,
+    required this.icon,
+    required this.color,
     required this.selected,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = Color(
-        ProfileAvatars.colors[colorKey] ?? ProfileAvatars.colors['arancio']!);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
@@ -427,8 +426,7 @@ class _IconOption extends StatelessWidget {
             width: 2,
           ),
         ),
-        child: Icon(IconData(iconCode, fontFamily: 'MaterialIcons'),
-            color: color, size: 24),
+        child: Icon(icon, color: color, size: 24),
       ),
     );
   }

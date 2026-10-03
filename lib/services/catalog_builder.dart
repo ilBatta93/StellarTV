@@ -1,5 +1,4 @@
 import '../models/channel.dart';
-import '../models/content_type.dart';
 
 /// One deduplicated catalog entry: a title plus all the alternative copies
 /// (different qualities, e.g. 1080p and 4K) found across categories.

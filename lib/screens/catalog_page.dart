@@ -7,6 +7,7 @@ import '../providers/app_provider.dart';
 import '../services/catalog_builder.dart';
 import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
+import '../widgets/section_row.dart';
 import 'settings_screen.dart';
 
 SliverGridDelegate channelGridDelegate(ContentType type, {double maxExtent = 140}) {

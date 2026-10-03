@@ -29,7 +29,6 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
   TmdbItem? _item;
   List<TmdbItem> _similar = [];
   List<TmdbPerson> _cast = [];
-  List<Channel> _variants = [];
   bool _loading = true;
   String? _error;
 

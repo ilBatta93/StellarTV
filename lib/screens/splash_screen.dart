@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../providers/history_provider.dart';
+import '../providers/profile_provider.dart';
 import '../providers/sync_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
@@ -43,7 +44,7 @@ class _SplashScreenState extends State<SplashScreen>
     Future.delayed(const Duration(milliseconds: 2200), _tryNavigate);
   }
 
-  void _tryNavigate() {
+  Future<void> _tryNavigate() async {
     if (_navigated || !mounted) return;
     final app = context.read<AppProvider>();
     final sync = context.read<SyncProvider>();

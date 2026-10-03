@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_profile.dart';
@@ -5,15 +6,15 @@ import '../models/user_profile.dart';
 /// Built-in avatar catalog: a fixed set of icons and colors the user can
 /// pick from. Keys are stored in the `user_profiles` table columns.
 class ProfileAvatars {
-  static const entries = <String, int>{
-    'rocket': 0xe9b1,
-    'popcorn': 0xe7aa,
-    'sports': 0xe1c5,
-    'music': 0xe043,
-    'star': 0xe062,
-    'bolt': 0xe0e7,
-    'ghost': 0xe2c3,
-    'paw': 0xe52c,
+  static const entries = <String, IconData>{
+    'rocket': Icons.rocket_launch_outlined,
+    'popcorn': Icons.local_movies_outlined,
+    'sports': Icons.sports_soccer_outlined,
+    'music': Icons.music_note_outlined,
+    'star': Icons.star_border_rounded,
+    'bolt': Icons.bolt_outlined,
+    'ghost': Icons.face_outlined,
+    'paw': Icons.pets_outlined,
   };
 
   static const colors = <String, int>{
@@ -28,6 +29,9 @@ class ProfileAvatars {
 
   static bool exists(String key) => entries.containsKey(key);
   static bool colorExists(String key) => colors.containsKey(key);
+
+  static IconData iconOf(String key) =>
+      entries[key] ?? entries['rocket']!;
 }
 
 /// CRUD for user profiles against the `user_profiles` table. Access is keyed
