@@ -52,13 +52,21 @@ class VlcEngine extends PlaybackEngine {
       advanced: VlcAdvancedOptions([
         VlcAdvancedOptions.networkCaching(s.networkCachingMs),
         VlcAdvancedOptions.liveCaching(s.liveCachingMs),
+        // IPTV servers often stall mid-stream: disable the input clock
+        // synchronization so VLC resyncs instead of failing the media.
+        VlcAdvancedOptions.clockJitter(0),
+        VlcAdvancedOptions.clockSynchronization(0),
       ]),
       http: VlcHttpOptions([
-        if (s.httpReconnect) VlcHttpOptions.httpReconnect(true),
+        // Keep retrying IPTV sources that drop the connection mid-stream.
+        VlcHttpOptions.httpReconnect(true),
+        VlcHttpOptions.httpContinuous(true),
+        VlcHttpOptions.httpForwardCookies(true),
         if (ua.isNotEmpty) VlcHttpOptions.httpUserAgent(ua),
       ]),
       video: VlcVideoOptions([
         VlcVideoOptions.dropLateFrames(s.dropLateFrames),
+        VlcVideoOptions.skipFrames(s.skipFrames),
       ]),
       audio: VlcAudioOptions([
         VlcAudioOptions.audioTimeStretch(s.audioTimeStretch),

@@ -7,6 +7,7 @@ class HistoryEntry {
     required this.title,
     required this.posterUrl,
     required this.group,
+    this.url = '',
     required this.position,
     required this.duration,
     required this.lastWatchedAt,
@@ -17,6 +18,7 @@ class HistoryEntry {
   final String title;
   final String posterUrl;
   final String group;
+  final String url;
   final Duration position;
   final Duration duration;
   final DateTime lastWatchedAt;
@@ -41,6 +43,7 @@ class HistoryEntry {
   }
 
   HistoryEntry copyWith({
+    String? url,
     Duration? position,
     Duration? duration,
     DateTime? lastWatchedAt,
@@ -51,6 +54,7 @@ class HistoryEntry {
       title: title,
       posterUrl: posterUrl,
       group: group,
+      url: url ?? this.url,
       position: position ?? this.position,
       duration: duration ?? this.duration,
       lastWatchedAt: lastWatchedAt ?? this.lastWatchedAt,
@@ -71,6 +75,7 @@ class HistoryEntry {
       title: row['title'] as String? ?? '',
       posterUrl: row['poster_url'] as String? ?? '',
       group: row['group_name'] as String? ?? '',
+      url: row['url'] as String? ?? '',
       position: Duration(seconds: (row['position_seconds'] as num?)?.toInt() ?? 0),
       duration: Duration(seconds: (row['duration_seconds'] as num?)?.toInt() ?? 0),
       lastWatchedAt: watched.toLocal(),

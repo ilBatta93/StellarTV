@@ -190,7 +190,20 @@ class _HistoryTile extends StatelessWidget {
   }
 
   void _open(BuildContext context) {
-    final channel = context.read<AppProvider>().channelById(entry.contentId);
+    final app = context.read<AppProvider>();
+    var channel = app.channelById(entry.contentId);
+    if (channel == null && entry.url.isNotEmpty) {
+      // Rebuilt from the stored stream URL when the playlist has changed
+      // and the channel is no longer present in it.
+      channel = Channel(
+        id: entry.contentId,
+        name: entry.title,
+        url: entry.url,
+        logo: entry.posterUrl,
+        group: entry.group,
+        type: entry.type,
+      );
+    }
     if (channel == null) {
       _showMessage(context, 'Contenuto non disponibile nella playlist attuale');
       return;
@@ -198,7 +211,7 @@ class _HistoryTile extends StatelessWidget {
     if (channel.type == ContentType.series || channel.type == ContentType.anime) {
       openChannel(context, channel);
     } else {
-      playChannel(context, channel);
+      playChannel(context, channel, startAt: entry.resumePosition);
     }
   }
 

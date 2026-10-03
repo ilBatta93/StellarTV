@@ -89,6 +89,24 @@ class AppProvider extends ChangeNotifier {
   List<CatalogGroup> groupedCatalog(ContentType type) =>
       CatalogBuilder.groupsOf(channelsOf(type), categoryOrderOf(type));
 
+  /// Recently added items of a type, in the playlist's own order (the
+  /// provider lists newest entries last, so newest-first means reversed).
+  List<CatalogEntry> recentEntries(ContentType type, {int limit = 60}) {
+    final channels = channelsOf(type).reversed;
+    final entries = <CatalogEntry>[];
+    final seen = <String>{};
+    for (final c in channels) {
+      final base = CatalogBuilder.normalize(
+          CatalogBuilder.stripQuality(c.displaySeriesName));
+      if (base.isEmpty || seen.contains(base)) continue;
+      seen.add(base);
+      entries.add(CatalogEntry(
+          primary: c, variants: type == ContentType.live ? [c] : variantsFor(c)));
+      if (entries.length >= limit) break;
+    }
+    return entries;
+  }
+
   /// All playlist copies of a title (other qualities/categories). Used by the
   /// detail screen to offer quality selection before playback.
   List<Channel> variantsFor(Channel channel) {

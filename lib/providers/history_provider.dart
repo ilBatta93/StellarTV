@@ -16,13 +16,14 @@ import '../services/sync_service.dart';
 class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   HistoryProvider(this._sync, [this._favorites, this._syncProvider]) {
     WidgetsBinding.instance.addObserver(this);
-    _loadLocal();
+    _loadFuture = _loadLocal();
   }
 
   final SyncService _sync;
   final AppProvider? _favorites;
   final SyncProvider? _syncProvider;
   final SettingsService _settingsService = SettingsService();
+  Future<void>? _loadFuture;
 
   /// Reloads the app after credentials were restored from the cloud.
   Future<void> Function()? onCredentialsRestored;
@@ -79,6 +80,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       title: title,
       posterUrl: map['poster'] as String? ?? '',
       group: map['group'] as String? ?? '',
+      url: map['url'] as String? ?? '',
       position: Duration(seconds: (map['pos'] as num?)?.toInt() ?? 0),
       duration: Duration(seconds: (map['dur'] as num?)?.toInt() ?? 0),
       lastWatchedAt: watched,
@@ -93,6 +95,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
             'title': e.title,
             'poster': e.posterUrl,
             'group': e.group,
+            'url': e.url,
             'pos': e.position.inSeconds,
             'dur': e.duration.inSeconds,
             'watched': e.lastWatchedAt.toIso8601String(),
@@ -114,6 +117,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Pulls cloud state and merges it into local (newer `watched` wins for
   /// history; settings and credentials are filled in when missing locally).
   Future<bool> pullFromCloud() async {
+    // The local load is async and started in the constructor: never merge
+    // against an empty in-memory list or this would overwrite the local
+    // history with a stale cloud copy on every app start.
+    await _loadFuture;
     _loading = true;
     _error = null;
     _notify();
@@ -193,6 +200,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> recordStart(Channel channel) async {
+    await _loadFuture;
     final now = DateTime.now();
     final previous = entryFor(channel.id);
     final entry = HistoryEntry(
@@ -201,6 +209,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       title: channel.name,
       posterUrl: channel.logo,
       group: channel.group,
+      url: channel.url,
       position: previous?.position ?? Duration.zero,
       duration: previous?.duration ?? Duration.zero,
       lastWatchedAt: now,
@@ -213,6 +222,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> updatePosition(
       String contentId, Duration position, Duration duration) async {
     if (duration <= Duration.zero) return;
+    await _loadFuture;
     final index = _entries.indexWhere((e) => e.contentId == contentId);
     if (index < 0) return;
     final current = _entries[index];

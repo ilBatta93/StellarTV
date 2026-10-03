@@ -188,6 +188,8 @@ class CatalogPage extends StatefulWidget {
 
 class _CatalogPageState extends State<CatalogPage> {
   String _query = '';
+  String? _selectedCategory;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   String get _noun => switch (widget.type) {
         ContentType.live => 'canali',
@@ -232,105 +234,122 @@ class _CatalogPageState extends State<CatalogPage> {
       );
     }
 
-    final q = _query.toLowerCase();
-    final filtered = q.isEmpty
-        ? groups
-        : [
-            for (final g in groups)
-              CatalogGroup(
-                label: g.label,
-                entries: [
-                  for (final e in g.entries)
-                    if (e.primary.name.toLowerCase().contains(q)) e,
-                ],
-              ),
-          ].where((g) => g.entries.isNotEmpty).toList();
+    final selected = _selectedCategory;
+    final visibleGroup = selected == null
+        ? null
+        : groups.where((g) => g.label == selected).firstOrNull;
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: TextField(
-            onChanged: (v) => setState(() => _query = v),
-            decoration: InputDecoration(
-              hintText: 'Cerca tra $_noun',
-              prefixIcon: const Icon(Icons.search_rounded, size: 20),
+    return Scaffold(
+      key: _scaffoldKey,
+      drawerEnableOpenDragGesture: true,
+      drawerEdgeDragWidth: 48,
+      drawer: _CategoryDrawer(
+        categories: ['Ultimi aggiunti', ...groups.map((g) => g.label)],
+        selected: _selectedCategory,
+        onSelected: (category) {
+          setState(() => _selectedCategory =
+              category == 'Ultimi aggiunti' ? null : category);
+        },
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    onChanged: (v) => setState(() => _query = v),
+                    decoration: InputDecoration(
+                      hintText: 'Cerca tra $_noun',
+                      prefixIcon:
+                          const Icon(Icons.search_rounded, size: 20),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Categorie',
+                  icon: const Icon(Icons.category_outlined),
+                  onPressed: () =>
+                      _scaffoldKey.currentState?.openDrawer(),
+                ),
+              ],
             ),
           ),
-        ),
-        Expanded(
-          child: filtered.isEmpty
-              ? EmptyState(
-                  icon: Icons.search_off_rounded,
-                  title: 'Nessun risultato',
-                  message: 'Prova con un altro titolo o categoria.',
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.only(top: 8, bottom: 24),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, gi) {
-                    final group = filtered[gi];
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 4,
-                                height: 18,
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary,
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  group.label,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium,
-                                ),
-                              ),
-                              Text(
-                                '${group.entries.length}',
-                                style: const TextStyle(
-                                    color: AppColors.textMuted,
-                                    fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate: channelGridDelegate(
-                                widget.type,
-                                maxExtent: 140),
-                            itemCount: group.entries.length,
-                            itemBuilder: (context, i) {
-                              final entry = group.entries[i];
-                              return CatalogEntryCard(
-                                entry: entry,
-                                isFavorite: app.favoriteIds
-                                    .contains(entry.primary.id),
-                                onTap: () => _openEntry(context, entry),
-                                onFavoriteTap: () =>
-                                    app.toggleFavorite(entry.primary),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-        ),
-      ],
+          Expanded(
+            child: _query.isNotEmpty
+                ? _buildSearchResults(app)
+                : visibleGroup != null
+                    ? _buildGroupGrid(app, visibleGroup)
+                    : _buildRecentGrid(app),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentGrid(AppProvider app) {
+    final entries = app.recentEntries(widget.type);
+    if (entries.isEmpty) {
+      return EmptyState(
+        icon: Icons.search_off_rounded,
+        title: 'Nessun risultato',
+        message: 'Prova con un altro titolo o categoria.',
+      );
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      gridDelegate: channelGridDelegate(widget.type, maxExtent: 140),
+      itemCount: entries.length,
+      itemBuilder: (context, i) =>
+          _entryCard(app, entries[i]),
+    );
+  }
+
+  Widget _buildGroupGrid(AppProvider app, CatalogGroup group) {
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      gridDelegate: channelGridDelegate(widget.type, maxExtent: 140),
+      itemCount: group.entries.length,
+      itemBuilder: (context, i) => _entryCard(app, group.entries[i]),
+    );
+  }
+
+  Widget _buildSearchResults(AppProvider app) {
+    final q = _query.toLowerCase();
+    final matches = <CatalogEntry>[];
+    final seen = <String>{};
+    for (final g in app.groupedCatalog(widget.type)) {
+      for (final e in g.entries) {
+        if (!e.primary.name.toLowerCase().contains(q)) continue;
+        final key = e.primary.id;
+        if (seen.contains(key)) continue;
+        seen.add(key);
+        matches.add(e);
+      }
+    }
+    if (matches.isEmpty) {
+      return EmptyState(
+        icon: Icons.search_off_rounded,
+        title: 'Nessun risultato',
+        message: 'Prova con un altro titolo o categoria.',
+      );
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      gridDelegate: channelGridDelegate(widget.type, maxExtent: 140),
+      itemCount: matches.length,
+      itemBuilder: (context, i) => _entryCard(app, matches[i]),
+    );
+  }
+
+  Widget _entryCard(AppProvider app, CatalogEntry entry) {
+    return CatalogEntryCard(
+      entry: entry,
+      isFavorite: app.favoriteIds.contains(entry.primary.id),
+      onTap: () => _openEntry(context, entry),
+      onFavoriteTap: () => app.toggleFavorite(entry.primary),
     );
   }
 
@@ -339,5 +358,73 @@ class _CatalogPageState extends State<CatalogPage> {
     final channel = await pickVariant(context, entry);
     if (channel == null || !context.mounted) return;
     openChannel(context, channel);
+  }
+}
+
+/// Left-side category panel. Opens with a swipe from the left edge (also on
+/// touch devices) or the categories button; on TV remotes, pressing left on
+/// the first grid column reaches the edge and opens the drawer.
+class _CategoryDrawer extends StatelessWidget {
+  final List<String> categories;
+  final String? selected;
+  final ValueChanged<String> onSelected;
+
+  const _CategoryDrawer({
+    required this.categories,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      backgroundColor: AppColors.surface,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text('Categorie',
+                  style: Theme.of(context).textTheme.titleMedium),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                children: [
+                  for (final c in categories)
+                    ListTile(
+                      selected: (selected ?? 'Ultimi aggiunti') == c,
+                      selectedTileColor:
+                          AppColors.primary.withValues(alpha: 0.15),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      title: Text(
+                        c,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: (selected ?? 'Ultimi aggiunti') == c
+                              ? AppColors.primary
+                              : AppColors.textPrimary,
+                          fontWeight:
+                              (selected ?? 'Ultimi aggiunti') == c
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                        ),
+                      ),
+                      onTap: () {
+                        onSelected(c);
+                        Navigator.pop(context);
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
