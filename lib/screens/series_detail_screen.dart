@@ -126,7 +126,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
             ),
           ),
           if (_loading)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               child: Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
               ),
@@ -281,7 +281,7 @@ class _EpisodeTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Icon(Icons.play_circle_fill_rounded,
+                Icon(Icons.play_circle_fill_rounded,
                     color: AppColors.primary, size: 32),
               ],
             ),

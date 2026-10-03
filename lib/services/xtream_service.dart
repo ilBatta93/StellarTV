@@ -49,10 +49,10 @@ class XtreamService {
     final categories = await _getCategories(base, username, password, 'live');
     return data.map((item) {
       final catId = item['category_id']?.toString() ?? '';
-      final groupName = categories[catId] ?? 'Uncategorized';
+      final groupName = categories[catId] ?? 'Senza categoria';
       return Channel(
         id: 'live_${item['stream_id']}',
-        name: item['name']?.toString() ?? 'Unknown',
+        name: item['name']?.toString() ?? 'Sconosciuto',
         url:
             '$base/${Uri.encodeComponent(username)}/${Uri.encodeComponent(password)}/${item['stream_id']}.m3u8',
         logo: item['stream_icon']?.toString() ?? '',
@@ -77,10 +77,10 @@ class XtreamService {
     final categories = await _getCategories(base, username, password, 'vod');
     return data.map((item) {
       final catId = item['category_id']?.toString() ?? '';
-      final groupName = categories[catId] ?? 'Uncategorized';
+      final groupName = categories[catId] ?? 'Senza categoria';
       return Channel(
         id: 'movie_${item['stream_id']}',
-        name: item['name']?.toString() ?? 'Unknown',
+        name: item['name']?.toString() ?? 'Sconosciuto',
         url:
             '$base/movie/${Uri.encodeComponent(username)}/${Uri.encodeComponent(password)}/${item['stream_id']}.${item['container_extension'] ?? 'mp4'}',
         logo: item['stream_icon']?.toString() ?? '',
@@ -105,11 +105,11 @@ class XtreamService {
         await _getCategories(base, username, password, 'series');
     return data.map((item) {
       final catId = item['category_id']?.toString() ?? '';
-      final groupName = categories[catId] ?? 'Uncategorized';
+      final groupName = categories[catId] ?? 'Senza categoria';
       final seriesId = item['series_id']?.toString() ?? '';
       return Channel(
         id: 'series_$seriesId',
-        name: item['name']?.toString() ?? 'Unknown',
+        name: item['name']?.toString() ?? 'Sconosciuto',
         url: '',
         logo: (item['cover'] ?? item['stream_icon'])?.toString() ?? '',
         group: groupName,
@@ -291,7 +291,7 @@ class XtreamService {
       final map = <String, String>{};
       for (final cat in data) {
         map[cat['category_id']?.toString() ?? ''] =
-            cat['category_name']?.toString() ?? 'Uncategorized';
+            cat['category_name']?.toString() ?? 'Senza categoria';
       }
       return map;
     } catch (_) {

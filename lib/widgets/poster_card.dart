@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/tmdb_item.dart';
+import '../providers/ui_settings.dart';
 import '../theme/app_theme.dart';
 
 class PosterImage extends StatelessWidget {
@@ -22,6 +24,9 @@ class PosterImage extends StatelessWidget {
       alignment: Alignment.center,
       child: Icon(fallbackIcon, color: AppColors.textMuted, size: 28),
     );
+    // The "Mostra anteprime" setting: when off, all poster images become a
+    // neutral placeholder tile.
+    if (!context.watch<UiSettings>().showPosters) return fallback;
     if (url == null || url!.isEmpty) return fallback;
     return CachedNetworkImage(
       imageUrl: url!,
@@ -54,15 +59,18 @@ class _PressableState extends State<Pressable> {
 
   @override
   Widget build(BuildContext context) {
+    final animations = context.watch<UiSettings>().animations;
     return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
+      onTapDown: animations ? (_) => setState(() => _pressed = true) : null,
+      onTapCancel: animations ? () => setState(() => _pressed = false) : null,
+      onTapUp: animations ? (_) => setState(() => _pressed = false) : null,
       onTap: widget.onTap,
       onLongPress: widget.onLongPress,
       child: AnimatedScale(
-        scale: _pressed ? 0.95 : 1,
-        duration: const Duration(milliseconds: 140),
+        scale: animations && _pressed ? 0.95 : 1,
+        duration: animations
+            ? const Duration(milliseconds: 140)
+            : Duration.zero,
         curve: Curves.easeOut,
         child: widget.child,
       ),

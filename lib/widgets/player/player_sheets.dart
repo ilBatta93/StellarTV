@@ -76,7 +76,7 @@ class _Option extends StatelessWidget {
           : Text(detail!,
               style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
       trailing: selected
-          ? const Icon(Icons.check_rounded, color: AppColors.primary)
+          ? Icon(Icons.check_rounded, color: AppColors.primary)
           : null,
       onTap: onTap,
     );
@@ -135,7 +135,7 @@ class _TrackList extends StatelessWidget {
       future: tracks,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Padding(
+          return Padding(
             padding: EdgeInsets.all(32),
             child: Center(
                 child: CircularProgressIndicator(color: AppColors.primary)),
@@ -372,7 +372,7 @@ class _DelayControl extends StatelessWidget {
                 child: Text(label,
                     style: const TextStyle(color: AppColors.textPrimary))),
             Text(formatDelay(value),
-                style: const TextStyle(
+                style: TextStyle(
                     color: AppColors.primary, fontWeight: FontWeight.w600)),
           ],
         ),

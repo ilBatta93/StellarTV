@@ -152,7 +152,7 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
             ),
           ),
           if (_loading)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               child: Center(
                 child: CircularProgressIndicator(color: AppColors.primary),
               ),

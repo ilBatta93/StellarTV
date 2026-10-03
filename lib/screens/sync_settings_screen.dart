@@ -94,7 +94,7 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
                             onTap: () => _copyCode(context, sync.code!),
                             child: Text(
                               sync.code!,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 28,
                                 letterSpacing: 6,
                                 fontWeight: FontWeight.w700,

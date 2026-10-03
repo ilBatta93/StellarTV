@@ -359,7 +359,7 @@ class AppProvider extends ChangeNotifier {
         password: password,
       );
       if (!ok) {
-        _error = 'Authentication failed. Check your credentials.';
+        _error = 'Autenticazione non riuscita. Controlla le credenziali.';
         _isLoading = false;
         notifyListeners();
         return false;

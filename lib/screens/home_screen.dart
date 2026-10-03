@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/content_type.dart';
+import '../providers/profile_provider.dart';
+import '../services/profile_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
 import 'catalog_page.dart';
 import 'discover_page.dart';
 import 'favorites_page.dart';
+import 'profile_picker_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
 
@@ -41,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.search_rounded),
             onPressed: () => _push(const SearchScreen()),
           ),
+          const _ProfileButton(),
           IconButton(
             tooltip: 'Impostazioni',
             icon: const Icon(Icons.settings_outlined),
@@ -79,6 +84,44 @@ class _HomeScreenState extends State<HomeScreen> {
                 selectedIcon: Icon(Icons.favorite_rounded),
                 label: 'Preferiti'),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Avatar of the currently selected profile in the top bar; tapping it opens
+/// the profile picker. Hidden when no profile is selected.
+class _ProfileButton extends StatelessWidget {
+  const _ProfileButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final profiles = context.watch<ProfileProvider>();
+    final profile = profiles.selected;
+    if (profile == null) return const SizedBox.shrink();
+    final color = Color(ProfileAvatars.colors[profile.avatarColor] ??
+        ProfileAvatars.colors['arancio']!);
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: IconButton(
+        tooltip: 'Cambia profilo',
+        onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ProfilePickerScreen())),
+        icon: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(9),
+            border:
+                Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
+          ),
+          child: Icon(
+            ProfileAvatars.iconOf(profile.avatarKey),
+            color: color,
+            size: 18,
+          ),
         ),
       ),
     );

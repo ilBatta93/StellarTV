@@ -10,6 +10,7 @@ import 'login_screen.dart';
 import 'history_settings_screen.dart';
 import 'hidden_categories_screen.dart';
 import 'player_settings_screen.dart';
+import 'profile_picker_screen.dart';
 import 'sync_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -225,6 +226,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: 'Codice a 8 caratteri, nessun account richiesto',
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => const SyncSettingsScreen())),
+              ),
+            ],
+          ),
+          SettingsSection(
+            title: 'Profili',
+            description:
+                'Un profilo per ogni persona che usa l\'app. Il profilo scelto resta attivo al prossimo avvio.',
+            children: [
+              SettingsValueTile(
+                icon: Icons.people_outline_rounded,
+                title: 'Gestisci profili',
+                subtitle: 'Cambia profilo, creane uno nuovo o imposta il predefinito',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const ProfilePickerScreen())),
               ),
             ],
           ),

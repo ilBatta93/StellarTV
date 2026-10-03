@@ -135,7 +135,7 @@ class _SearchScreenState extends State<SearchScreen> {
         const SectionHeader(
             title: 'Dal catalogo', subtitle: 'Film e serie da TMDB'),
         if (_searchingTmdb)
-          const Padding(
+          Padding(
             padding: EdgeInsets.all(24),
             child: Center(
                 child: CircularProgressIndicator(

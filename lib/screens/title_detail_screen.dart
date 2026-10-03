@@ -254,7 +254,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
 
   Widget _buildSimilar() {
     if (_loading) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.all(32),
         child: Center(
             child: CircularProgressIndicator(

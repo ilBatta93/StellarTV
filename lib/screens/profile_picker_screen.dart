@@ -33,7 +33,7 @@ class _ProfilePickerScreenState extends State<ProfilePickerScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: profiles.isLoading && profiles.items.isEmpty
-            ? const Center(
+            ? Center(
                 child: CircularProgressIndicator(color: AppColors.primary))
             : SingleChildScrollView(
                 child: Column(

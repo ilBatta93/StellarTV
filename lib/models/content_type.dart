@@ -4,11 +4,11 @@ extension ContentTypeExtension on ContentType {
   String get label {
     switch (this) {
       case ContentType.live:
-        return 'Live TV';
+        return 'Diretta';
       case ContentType.movie:
-        return 'Movies';
+        return 'Film';
       case ContentType.series:
-        return 'Series';
+        return 'Serie TV';
       case ContentType.anime:
         return 'Anime';
     }

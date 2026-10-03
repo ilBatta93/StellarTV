@@ -84,7 +84,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             _Top10Banner(items: discover.topMovies.take(10).toList()),
           ] else if (discover.featured != null) _Hero(item: discover.featured!),
           if (startedMovies.isNotEmpty) ...[
-            const SectionHeader(
+            SectionHeader(
               title: 'Film che stai guardando',
               leading: Icon(Icons.movie_outlined,
                   color: AppColors.primary, size: 20),
@@ -128,7 +128,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
               _RankedRow(items: discover.platformTop(p)),
             ],
           if (discover.isLoading)
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(24),
               child: Center(
                 child: SizedBox(
@@ -478,7 +478,7 @@ class _HistoryCard extends StatelessWidget {
                         value: progress,
                         minHeight: 3,
                         backgroundColor: Colors.black45,
-                        valueColor: const AlwaysStoppedAnimation(
+                        valueColor: AlwaysStoppedAnimation(
                             AppColors.primary),
                       ),
                     ),

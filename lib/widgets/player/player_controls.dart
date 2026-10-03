@@ -172,7 +172,7 @@ class PlayerControls extends StatelessWidget {
           ),
         const SizedBox(width: 32),
         v.isBuffering && !v.isPlaying
-            ? const SizedBox(
+            ? SizedBox(
                 width: 72,
                 height: 72,
                 child: Padding(

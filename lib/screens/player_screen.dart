@@ -243,7 +243,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       body: session == null || settings == null
-          ? const Center(
+          ? Center(
               child: CircularProgressIndicator(color: AppColors.primary))
           : Stack(
               fit: StackFit.expand,
@@ -324,7 +324,7 @@ class _ConnectingView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(
+            SizedBox(
               width: 44,
               height: 44,
               child: CircularProgressIndicator(

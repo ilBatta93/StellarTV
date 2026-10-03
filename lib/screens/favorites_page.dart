@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/content_type.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
+import '../providers/ui_settings.dart';
 import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
@@ -84,9 +85,11 @@ class _MyList extends StatelessWidget {
             'Aggiungi film e serie dalle classifiche e dai consigli per ritrovarli qui.',
       );
     }
+    final ui = context.watch<UiSettings>();
     return GridView.builder(
       padding: const EdgeInsets.all(16),
-      gridDelegate: channelGridDelegate(ContentType.movie),
+      gridDelegate: channelGridDelegate(ContentType.movie,
+          maxExtent: ui.gridMaxExtent, compact: ui.compact),
       itemCount: items.length,
       itemBuilder: (context, i) => TmdbPosterCard(
         item: items[i],

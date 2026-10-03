@@ -65,7 +65,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Player video')),
       body: s == null
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? Center(child: CircularProgressIndicator(color: AppColors.primary))
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               children: [

@@ -5,7 +5,7 @@ import '../providers/history_provider.dart';
 import '../providers/sync_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
-import 'home_screen.dart';
+import 'profile_picker_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -262,8 +262,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _navigateHome() {
+    // After the first login (or cloud restore) always pass through the
+    // profile picker: if no profile exists yet the user creates one there.
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      MaterialPageRoute(builder: (_) => const ProfilePickerScreen()),
       (_) => false,
     );
   }

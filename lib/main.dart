@@ -48,6 +48,9 @@ class _IlBattaTvAppState extends State<IlBattaTvApp> {
     _historyProvider =
         HistoryProvider(syncService, _appProvider, _syncProvider);
     _profileProvider = ProfileProvider(profileService, syncService);
+    // Load profiles at startup so the top-bar avatar and the splash routing
+    // know which profile is active on this device.
+    _profileProvider.load();
     // The sync needs favorites from the app state and must reload the app
     // when credentials arrive from another device.
     _syncProvider.snapshotSource = () async => SnapshotPart(

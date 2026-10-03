@@ -24,7 +24,7 @@ class SettingsSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
             child: Text(title.toUpperCase(),
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.primary,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -214,7 +214,7 @@ class SettingsSliderTile extends StatelessWidget {
               const SizedBox(width: 16),
               Expanded(child: _title(title, badge)),
               Text(format(value),
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: AppColors.primary, fontWeight: FontWeight.w600)),
             ],
           ),
@@ -284,7 +284,7 @@ Future<T?> pickOption<T>(
                           )),
                       subtitle: _subtitle(detail?.call(o)),
                       trailing: o == current
-                          ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                          ? Icon(Icons.check_rounded, color: AppColors.primary)
                           : null,
                       onTap: () => Navigator.pop(ctx, o),
                     ),

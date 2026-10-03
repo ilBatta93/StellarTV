@@ -6,7 +6,10 @@ class AppColors {
   static const card = Color(0xFF1C1C25);
   static const border = Color(0xFF2A2A36);
 
-  static const primary = Color(0xFFFF5A1F);
+  /// The accent currently chosen in settings. Updated by UiSettings; widgets
+  /// that paint with `AppColors.primary` follow the user's color choice.
+  static Color primary = const Color(0xFFFF5A1F);
+  static const Color primaryDefault = Color(0xFFFF5A1F);
   static const primaryDark = Color(0xFFD9420B);
   static const primaryLight = Color(0xFFFF8A57);
   static const secondary = Color(0xFFFFB627);
@@ -19,7 +22,7 @@ class AppColors {
   static const textSecondary = Color(0xFFA1A1AE);
   static const textMuted = Color(0xFF6B6B7A);
 
-  static const brandGradient = LinearGradient(
+  static LinearGradient get brandGradient => LinearGradient(
     colors: [primary, secondary],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,

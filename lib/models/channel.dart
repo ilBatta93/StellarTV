@@ -49,10 +49,10 @@ class Channel {
   factory Channel.fromMap(Map<String, dynamic> map) {
     return Channel(
       id: map['id'] as String? ?? '',
-      name: map['name'] as String? ?? 'Unknown',
+      name: map['name'] as String? ?? 'Sconosciuto',
       url: map['url'] as String? ?? '',
       logo: map['logo'] as String? ?? '',
-      group: map['group'] as String? ?? 'Uncategorized',
+      group: map['group'] as String? ?? 'Senza categoria',
       type: ContentType.values.firstWhere(
         (e) => e.name == (map['type'] as String? ?? 'live'),
         orElse: () => ContentType.live,

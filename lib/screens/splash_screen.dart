@@ -4,6 +4,7 @@ import '../providers/app_provider.dart';
 import '../providers/history_provider.dart';
 import '../providers/profile_provider.dart';
 import '../providers/sync_provider.dart';
+import '../providers/ui_settings.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
 import 'home_screen.dart';
@@ -84,6 +85,7 @@ class _SplashScreenState extends State<SplashScreen>
       PageRouteBuilder(
         pageBuilder: (_, _, _) => target,
         transitionsBuilder: (_, anim, _, child) {
+          if (!context.read<UiSettings>().animations) return child;
           return FadeTransition(opacity: anim, child: child);
         },
       ),

@@ -4,19 +4,21 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
+import '../providers/ui_settings.dart';
 import '../services/catalog_builder.dart';
 import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
 import '../widgets/section_row.dart';
 import 'settings_screen.dart';
 
-SliverGridDelegate channelGridDelegate(ContentType type, {double maxExtent = 140}) {
+SliverGridDelegate channelGridDelegate(ContentType type,
+    {double maxExtent = 140, bool compact = false}) {
   final isLive = type == ContentType.live;
   return SliverGridDelegateWithMaxCrossAxisExtent(
-    maxCrossAxisExtent: isLive ? 150 : maxExtent,
-    childAspectRatio: isLive ? 0.9 : 0.58,
-    crossAxisSpacing: 12,
-    mainAxisSpacing: 16,
+    maxCrossAxisExtent: isLive ? 150 : (compact ? maxExtent * 0.86 : maxExtent),
+    childAspectRatio: isLive ? 0.9 : (compact ? 0.62 : 0.58),
+    crossAxisSpacing: compact ? 8 : 12,
+    mainAxisSpacing: compact ? 10 : 16,
   );
 }
 
@@ -62,7 +64,7 @@ class CatalogEntryCard extends StatelessWidget {
             ),
             child: Text(
               quality,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.primary,
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
@@ -117,7 +119,7 @@ Future<Channel?> pickVariant(BuildContext context, CatalogEntry entry) async {
                 ),
                 child: Text(
                   CatalogBuilder.qualityLabel(v.name) ?? 'STD',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.primary,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -160,9 +162,11 @@ class ChannelGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+    final ui = context.watch<UiSettings>();
     return GridView.builder(
       padding: padding,
-      gridDelegate: channelGridDelegate(type),
+      gridDelegate: channelGridDelegate(type,
+          maxExtent: ui.gridMaxExtent, compact: ui.compact),
       itemCount: channels.length,
       itemBuilder: (context, i) {
         final c = channels[i];
@@ -203,7 +207,7 @@ class _CatalogPageState extends State<CatalogPage> {
     final app = context.watch<AppProvider>();
 
     if (app.isLoading) {
-      return const Center(
+      return Center(
           child: CircularProgressIndicator(color: AppColors.primary));
     }
     if (app.error != null && app.allChannels.isEmpty) {
@@ -298,9 +302,11 @@ class _CatalogPageState extends State<CatalogPage> {
         message: 'Prova con un altro titolo o categoria.',
       );
     }
+    final ui = context.watch<UiSettings>();
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      gridDelegate: channelGridDelegate(widget.type, maxExtent: 140),
+      gridDelegate: channelGridDelegate(widget.type,
+          maxExtent: ui.gridMaxExtent, compact: ui.compact),
       itemCount: entries.length,
       itemBuilder: (context, i) =>
           _entryCard(app, entries[i]),
@@ -308,9 +314,11 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 
   Widget _buildGroupGrid(AppProvider app, CatalogGroup group) {
+    final ui = context.watch<UiSettings>();
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      gridDelegate: channelGridDelegate(widget.type, maxExtent: 140),
+      gridDelegate: channelGridDelegate(widget.type,
+          maxExtent: ui.gridMaxExtent, compact: ui.compact),
       itemCount: group.entries.length,
       itemBuilder: (context, i) => _entryCard(app, group.entries[i]),
     );
@@ -336,9 +344,11 @@ class _CatalogPageState extends State<CatalogPage> {
         message: 'Prova con un altro titolo o categoria.',
       );
     }
+    final ui = context.watch<UiSettings>();
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      gridDelegate: channelGridDelegate(widget.type, maxExtent: 140),
+      gridDelegate: channelGridDelegate(widget.type,
+          maxExtent: ui.gridMaxExtent, compact: ui.compact),
       itemCount: matches.length,
       itemBuilder: (context, i) => _entryCard(app, matches[i]),
     );

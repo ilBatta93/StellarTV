@@ -43,6 +43,7 @@ class UiSettings extends ChangeNotifier {
     _showPosters = prefs.getBool(_postersKey) ?? true;
     _animations = prefs.getBool(_animationsKey) ?? true;
     _compact = prefs.getBool(_compactKey) ?? false;
+    AppColors.primary = _accent;
     notifyListeners();
   }
 
@@ -55,6 +56,7 @@ class UiSettings extends ChangeNotifier {
   Future<void> setAccent(String name) async {
     if (!accents.containsKey(name)) return;
     _accent = accents[name]!;
+    AppColors.primary = _accent;
     await _save(_accentKey, name);
     notifyListeners();
   }
