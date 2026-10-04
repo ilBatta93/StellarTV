@@ -73,14 +73,14 @@ class AppProvider extends ChangeNotifier {
   // Derived lists are cached: rebuilding them on every notify (e.g. when a
   // favorite changes) froze the UI with large playlists.
   final Map<ContentType, List<Channel>> _byType = {};
-  final Map<ContentType, List<Channel>> _catalogCache = {};
+  final Map<ContentType, List<Channel>> _seriesCatalogCache = {};
   final Map<ContentType, List<CatalogGroup>> _groupedCache = {};
   final Map<ContentType, List<CatalogEntry>> _recentCache = {};
   List<Channel>? _favoritesCache;
 
   void _invalidateCaches() {
     _byType.clear();
-    _catalogCache.clear();
+    _seriesCatalogCache.clear();
     _groupedCache.clear();
     _allCache.clear();
     _recentCache.clear();
@@ -107,7 +107,7 @@ class AppProvider extends ChangeNotifier {
 
   List<Channel> catalogOf(ContentType type) {
     if (type == ContentType.series || type == ContentType.anime) {
-      return _catalogCache[type] ??= SeriesGrouping.catalog(channelsOf(type));
+      return _seriesCatalogCache[type] ??= SeriesGrouping.catalog(channelsOf(type));
     }
     return channelsOf(type);
   }
