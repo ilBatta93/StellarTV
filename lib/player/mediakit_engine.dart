@@ -188,7 +188,7 @@ class MediaKitEngine extends PlaybackEngine {
             language: t.language,
             detail: describeAudio(
                 codec: t.codec, channels: t.channelscount, bitrate: null),
-            selected: t.id == selected?.id,
+            selected: t.id == selected.id,
           ),
     ];
   }
@@ -208,16 +208,18 @@ class MediaKitEngine extends PlaybackEngine {
             id: t.id,
             label: _trackLabel(t, 'Sottotitolo ${i + 1}'),
             language: t.language,
-            selected: t.id == selected?.id,
+            selected: t.id == selected.id,
           ),
     ];
   }
 
   @override
-  Future<void> selectSubtitleTrack(MediaTrack? track) => _player.setSubtitleTrack(
-      track == null
-          ? const SubtitleTrack.no()
-          : SubtitleTrack(track.id, track.label, track.language));
+  Future<void> selectSubtitleTrack(MediaTrack? track) =>
+      _player.setSubtitleTrack(
+        track == null
+            ? SubtitleTrack.no()
+            : SubtitleTrack(track.id, track.label, track.language),
+      );
 
   @override
   Future<List<MediaTrack>> getQualityTracks() async => const [];
@@ -226,12 +228,18 @@ class MediaKitEngine extends PlaybackEngine {
   Future<void> selectQualityTrack(MediaTrack? track) async {}
 
   @override
-  Future<void> setSubtitleDelay(Duration delay) =>
-      _player.platform.setSubtitleDelay(delay);
+  Future<void> setSubtitleDelay(Duration delay) async {
+    final platform = _player.platform;
+    if (platform == null) return;
+    await platform.setSubtitleDelay(delay);
+  }
 
   @override
-  Future<void> setAudioDelay(Duration delay) =>
-      _player.platform.setAudioDelay(delay);
+  Future<void> setAudioDelay(Duration delay) async {
+    final platform = _player.platform;
+    if (platform == null) return;
+    await platform.setAudioDelay(delay);
+  }
 
   @override
   Future<void> dispose() async {

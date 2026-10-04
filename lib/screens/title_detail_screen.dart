@@ -452,10 +452,10 @@ class _Actions extends StatelessWidget {
     final channel = await pickVariant(context, entry);
     if (channel == null || !context.mounted) return;
     // Movies play directly; re-opening the detail screen here would loop.
-    playChannel(context, channel, startAt: _resumeFor(channel));
+    playChannel(context, channel, startAt: _resumeFor(context, channel));
   }
 
-  Duration? _resumeFor(Channel channel) {
+  Duration? _resumeFor(BuildContext context, Channel channel) {
     final entry = context.read<HistoryProvider>().entryFor(channel.id);
     return entry?.resumePosition;
   }

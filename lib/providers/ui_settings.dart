@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../theme/app_theme.dart';
+
 class UiSettings extends ChangeNotifier {
   static const _accentKey = 'ui_accent';
   static const _gridSizeKey = 'ui_grid_size';

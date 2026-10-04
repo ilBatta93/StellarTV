@@ -30,7 +30,7 @@ class AppColors {
 }
 
 class AppTheme {
-  static ThemeData darkTheme({Color accent = AppColors.primary}) {
+  static ThemeData darkTheme({Color accent = primaryDefault}) {
     final onAccent =
         accent.computeLuminance() > 0.5 ? Colors.black : Colors.white;
     return ThemeData(

@@ -4,7 +4,6 @@ import '../models/content_type.dart';
 import '../providers/app_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/section_row.dart';
-import '../widgets/settings_tiles.dart';
 
 /// Per-type category visibility editor: switch a category off and it
 /// disappears from the catalog pages and the categories drawer.
@@ -40,7 +39,6 @@ class _HiddenCategoriesScreenState extends State<HiddenCategoriesScreen>
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Categorie nascoste'),

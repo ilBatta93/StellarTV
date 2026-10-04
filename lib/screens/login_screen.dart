@@ -153,7 +153,9 @@ class _LoginScreenState extends State<LoginScreen> {
             icon: const Icon(Icons.cloud_sync_outlined, size: 18),
             label: const Text('Ho un codice di sincronizzazione'),
             style: TextButton.styleFrom(
-                foregroundColor: AppColors.textSecondary, fontSize: 13),
+              foregroundColor: AppColors.textSecondary,
+              textStyle: const TextStyle(fontSize: 13),
+            ),
             onPressed: _isLoading ? null : _showSyncCodeDialog,
           ),
         ),
@@ -167,7 +169,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final codeController = TextEditingController();
     final sync = context.read<SyncProvider>();
     final history = context.read<HistoryProvider>();
-    final app = context.read<AppProvider>();
 
     final ok = await showDialog<bool>(
       context: context,
