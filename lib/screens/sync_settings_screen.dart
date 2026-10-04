@@ -36,7 +36,7 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
           SettingsSection(
             title: 'Come funziona',
             description:
-                'Tutto è legato al tuo account ilBattaTV: playlist, profili, '
+                'Tutto è legato al tuo account StellarTV: playlist, profili, '
                 'cronologia di ogni profilo, preferiti e impostazioni. Accedi '
                 'con la stessa email e password su ogni dispositivo (telefono, '
                 'tablet, Fire TV, Google TV) e i dati si aggiornano da soli.',

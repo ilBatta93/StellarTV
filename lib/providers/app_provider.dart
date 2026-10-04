@@ -173,8 +173,8 @@ class AppProvider extends ChangeNotifier {
   void _onKidsVerdicts() {
     _kidsRefresh?.cancel();
     if (!_kidsMode) {
-      // New TMDB genres for the catalog genre filter: refresh, but rarely.
-      _kidsRefresh = Timer(const Duration(seconds: 5), notifyListeners);
+      // Refresh Film/Serie as soon as the TMDB genres arrive.
+      _kidsRefresh = Timer(const Duration(milliseconds: 250), notifyListeners);
       return;
     }
     _kidsRefresh = Timer(const Duration(seconds: 2), () {

@@ -9,7 +9,7 @@ import '../widgets/brand_logo.dart';
 import 'login_screen.dart';
 import 'profile_picker_screen.dart';
 
-/// First screen for a signed-out device: sign in or create an ilBattaTV
+/// First screen for a signed-out device: sign in or create a StellarTV
 /// account (email + password). The account carries playlist, profiles,
 /// histories, favorites and settings across every device.
 class AccountScreen extends StatefulWidget {

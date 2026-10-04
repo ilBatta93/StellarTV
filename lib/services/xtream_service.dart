@@ -6,6 +6,10 @@ import '../models/content_type.dart';
 import '../models/series_details.dart';
 
 class XtreamService {
+  static const _headers = {
+    'Connection': 'close',
+    'User-Agent': 'StellarTV/1.0',
+  };
   /// Scarica e decodifica una risposta JSON in modo robusto:
   /// - riprova fino a 3 volte se la risposta arriva troncata o la rete cade
   ///   (succede con liste film molto grandi, specie riaprendo l'app);
@@ -15,7 +19,7 @@ class XtreamService {
     for (var attempt = 0; attempt < 3; attempt++) {
       try {
         final response = await http
-            .get(Uri.parse(url), headers: const {'Connection': 'close'})
+            .get(Uri.parse(url), headers: _headers)
             .timeout(const Duration(seconds: 120));
         if (response.statusCode != 200) {
           if (throwOnHttpError) {
@@ -64,7 +68,7 @@ class XtreamService {
     required String password,
   }) async {
     final apiUrl = _buildApiUrl(server, username, password);
-    final response = await http.get(Uri.parse(apiUrl));
+    final response = await http.get(Uri.parse(apiUrl), headers: _headers);
     if (response.statusCode != 200) return false;
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final userInfo = data['user_info'] as Map<String, dynamic>?;

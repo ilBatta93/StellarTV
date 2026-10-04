@@ -1,11 +1,11 @@
 workflows:
   android-apk:
-    name: ilBattaTV Android (APK)
+    name: StellarTV Android (APK)
     max_build_duration: 60
     environment:
       flutter: stable
       vars:
-        PACKAGE_NAME: "com.iptv.iptv_player"
+        PACKAGE_NAME: "tv.stellar.app"
     triggering:
       events: []
     scripts:
@@ -25,7 +25,7 @@ workflows:
       - build/**/outputs/**/*.apk
 
   ios-unsigned:
-    name: ilBattaTV iOS (Unsigned - Sideloadly)
+    name: StellarTV iOS (Unsigned - Sideloadly)
     instance_type: mac_mini_m2
     max_build_duration: 120
     environment:
@@ -109,7 +109,7 @@ workflows:
           mkdir -p build/ios/ipa/Payload
           cp -R $APP build/ios/ipa/Payload/Runner.app
           cd build/ios/ipa
-          zip -r -q ilBattaTV-unsigned.ipa Payload
-          ls -lh ilBattaTV-unsigned.ipa
+          zip -r -q StellarTV-unsigned.ipa Payload
+          ls -lh StellarTV-unsigned.ipa
     artifacts:
       - build/ios/ipa/*.ipa

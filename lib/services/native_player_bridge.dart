@@ -27,7 +27,7 @@ class NativePlayerBridge {
 
   static final instance = NativePlayerBridge._();
 
-  static const _channel = MethodChannel('ilbattatv/player');
+  static const _channel = MethodChannel('stellartv/player');
   final _pipController = StreamController<bool>.broadcast();
 
   Stream<bool> get pipChanges => _pipController.stream;

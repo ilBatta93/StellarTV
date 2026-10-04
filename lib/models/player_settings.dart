@@ -131,7 +131,7 @@ class PlayerSettings {
     this.skipFrames = true,
     this.audioPassthrough = false,
     this.audioTimeStretch = true,
-    this.userAgent = '',
+    this.userAgent = 'StellarTV/1.0',
     this.preferredAudioLanguage = 'it',
     this.preferredSubtitleLanguage = 'it',
     this.subtitlesEnabled = false,

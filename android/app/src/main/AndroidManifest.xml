@@ -8,7 +8,7 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
     <application
-        android:label="ilBattaTV"
+        android:label="StellarTV"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/banner"
@@ -37,7 +37,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="io.ilbattatv" android:host="login-callback" />
+                <data android:scheme="tv.stellar" android:host="login-callback" />
             </intent-filter>
         </activity>
         <meta-data

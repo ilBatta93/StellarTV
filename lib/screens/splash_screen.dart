@@ -65,7 +65,7 @@ class _SplashScreenState extends State<SplashScreen>
     // If a sync code is configured, restore cloud data on startup: this is
     // what carries history, favorites and playlist credentials over to a new
     // device. Run once per launch, then continue navigating.
-    // Every device needs an ilBattaTV account: it is what syncs the data.
+    // Every device needs a StellarTV account: it is what syncs the data.
     if (!sync.isSignedIn) {
       _navigate(const AccountScreen());
       return;

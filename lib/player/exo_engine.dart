@@ -6,18 +6,20 @@ import 'playback_engine.dart';
 
 class ExoEngine extends PlaybackEngine {
   ExoEngine({required String url, required PlayerSettings settings})
-      : _controller = VideoPlayerController.networkUrl(
-          Uri.parse(url),
-          formatHint: _formatHint(url),
-          httpHeaders: settings.userAgent.trim().isEmpty
-              ? const <String, String>{}
-              : {'User-Agent': settings.userAgent.trim()},
-          videoPlayerOptions: VideoPlayerOptions(
-            allowBackgroundPlayback: settings.backgroundAudio,
-            preventsDisplaySleepDuringVideoPlayback: settings.keepScreenOn,
-            backBufferDurationMs: settings.backBufferSeconds * 1000,
-          ),
-        );
+    : _controller = VideoPlayerController.networkUrl(
+        Uri.parse(url),
+        formatHint: _formatHint(url),
+          httpHeaders: {
+            'User-Agent': settings.userAgent.trim().isEmpty
+                ? 'StellarTV/1.0'
+                : settings.userAgent.trim(),
+          },
+        videoPlayerOptions: VideoPlayerOptions(
+          allowBackgroundPlayback: settings.backgroundAudio,
+          preventsDisplaySleepDuringVideoPlayback: settings.keepScreenOn,
+          backBufferDurationMs: settings.backBufferSeconds * 1000,
+        ),
+      );
 
   final VideoPlayerController _controller;
   final Map<String, VideoTrack> _videoTracks = {};
@@ -26,7 +28,8 @@ class ExoEngine extends PlaybackEngine {
 
   static VideoFormat? _formatHint(String url) {
     final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
-    if (path.endsWith('.m3u8') || path.contains('.m3u8')) return VideoFormat.hls;
+    if (path.endsWith('.m3u8') || path.contains('.m3u8'))
+      return VideoFormat.hls;
     if (path.endsWith('.mpd')) return VideoFormat.dash;
     if (path.contains('.ism')) return VideoFormat.ss;
     return null;
@@ -81,7 +84,8 @@ class ExoEngine extends PlaybackEngine {
     }
     if (_controller.value.hasError) {
       throw PlaybackException(
-          _controller.value.errorDescription ?? 'Errore di inizializzazione');
+        _controller.value.errorDescription ?? 'Errore di inizializzazione',
+      );
     }
     try {
       await _controller.play();
@@ -138,7 +142,10 @@ class ExoEngine extends PlaybackEngine {
               : languageName(t.language),
           language: t.language,
           detail: describeAudio(
-              codec: t.codec, channels: t.channelCount, bitrate: t.bitrate),
+            codec: t.codec,
+            channels: t.channelCount,
+            bitrate: t.bitrate,
+          ),
           selected: t.isSelected,
         ),
     ];
@@ -170,18 +177,21 @@ class ExoEngine extends PlaybackEngine {
           label: t.height != null
               ? '${t.height}p'
               : (t.label?.isNotEmpty ?? false)
-                  ? t.label!
-                  : 'Traccia ${t.id}',
+              ? t.label!
+              : 'Traccia ${t.id}',
           detail: describeVideo(
-              codec: t.codec, bitrate: t.bitrate, frameRate: t.frameRate),
+            codec: t.codec,
+            bitrate: t.bitrate,
+            frameRate: t.frameRate,
+          ),
           selected: t.isSelected,
         ),
     ];
   }
 
   @override
-  Future<void> selectQualityTrack(MediaTrack? track) =>
-      _controller.selectVideoTrack(track == null ? null : _videoTracks[track.id]);
+  Future<void> selectQualityTrack(MediaTrack? track) => _controller
+      .selectVideoTrack(track == null ? null : _videoTracks[track.id]);
 
   @override
   Future<void> setSubtitleDelay(Duration delay) async {}

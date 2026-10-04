@@ -54,6 +54,7 @@ class PlaybackSession extends ChangeNotifier {
   int _generation = 0;
   bool _disposed = false;
   final Map<PlayerEngineType, int> _openCount = {};
+  int _serverRefusalRetries = 0;
 
   double speed;
   double volume = 1.0;
@@ -74,6 +75,7 @@ class PlaybackSession extends ChangeNotifier {
 
   Future<void> retry() {
     _openCount.clear();
+    _serverRefusalRetries = 0;
     _urlIndex = 0;
     return _open(settings.primaryEngine, resumeAt: _resumePoint());
   }
@@ -218,6 +220,33 @@ class PlaybackSession extends ChangeNotifier {
 
   Future<void> _handleFailure(
       PlayerEngineType failed, String reason, Duration? resumeAt) async {
+    final lower = reason.toLowerCase();
+    final serverRefused = lower.contains('458') ||
+        lower.contains('-16845') ||
+        lower.contains('http 403') ||
+        lower.contains('forbidden');
+    if (serverRefused) {
+      final engine = _engine;
+      _engine = null;
+      _retire(engine);
+      if (_serverRefusalRetries < 2) {
+        _serverRefusalRetries++;
+        _status = SessionStatus.switching;
+        _notice = 'Il server sta liberando la connessione. Riprovo tra poco...';
+        _notify();
+        await Future<void>.delayed(
+          Duration(seconds: _serverRefusalRetries == 1 ? 2 : 5),
+        );
+        if (_disposed) return;
+        await _open(failed, resumeAt: resumeAt);
+        return;
+      }
+      _status = SessionStatus.failed;
+      _error = 'Il server TV ha rifiutato la connessione. Verifica che non ci '
+          'siano altri dispositivi collegati con lo stesso abbonamento e riprova.';
+      _notify();
+      return;
+    }
     final next = failed.other;
     final otherReady = _openCount[next] ?? 0;
     final canRetrySelf = _openCount[failed] != null && _openCount[failed]! < 2;
@@ -226,6 +255,8 @@ class PlaybackSession extends ChangeNotifier {
       _notice =
           '${failed.label} non riesce a riprodurre questo flusso. Passo a ${next.label}...';
       _notify();
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      if (_disposed) return;
       await _open(next, resumeAt: resumeAt);
       return;
     }
@@ -233,6 +264,8 @@ class PlaybackSession extends ChangeNotifier {
       _status = SessionStatus.switching;
       _notice = 'Nuovo tentativo con ${failed.label}...';
       _notify();
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (_disposed) return;
       await _open(failed, resumeAt: resumeAt);
       return;
     }
@@ -242,6 +275,8 @@ class PlaybackSession extends ChangeNotifier {
       _status = SessionStatus.switching;
       _notice = 'Provo un formato alternativo del canale...';
       _notify();
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (_disposed) return;
       await _open(settings.primaryEngine, resumeAt: resumeAt);
       return;
     }

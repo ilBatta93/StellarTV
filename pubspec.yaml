@@ -1,5 +1,5 @@
-name: iptv_player
-description: "Cross-platform IPTV media player for iOS and Android."
+name: stellar_tv
+description: "StellarTV cross-platform TV, film and series player."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -28,3 +28,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/stellartv-logo.png
+    - assets/stellartv-name-logo.png

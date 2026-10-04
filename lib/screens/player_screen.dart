@@ -268,9 +268,17 @@ class _PlayerScreenState extends State<PlayerScreen>
     return channels[target];
   }
 
-  void _playLiveChannel(Channel? channel) {
+  Future<void> _playLiveChannel(Channel? channel) async {
     if (channel == null || _advancing) return;
     _advancing = true;
+    // Close the current provider connection before opening the next channel.
+    // Many Xtream plans allow only one active stream and otherwise return 458.
+    final previous = _session;
+    previous?.removeListener(_onSessionChanged);
+    _session = null;
+    previous?.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (!mounted) return;
     playChannel(context, channel, replace: true);
   }
 

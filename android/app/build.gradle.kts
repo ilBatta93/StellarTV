@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.iptv.iptv_player"
+    namespace = "tv.stellar.app"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -15,7 +15,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.iptv.iptv_player"
+        applicationId = "tv.stellar.app"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode

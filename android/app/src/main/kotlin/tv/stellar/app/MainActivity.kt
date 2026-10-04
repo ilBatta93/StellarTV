@@ -1,4 +1,4 @@
-package com.iptv.iptv_player
+package tv.stellar.app
 
 import android.app.PictureInPictureParams
 import android.content.pm.ActivityInfo
@@ -22,7 +22,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ilbattatv/player")
+        val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "stellartv/player")
         ch.setMethodCallHandler { call, result ->
             when (call.method) {
                 "isPipSupported" -> result.success(pipSupported())

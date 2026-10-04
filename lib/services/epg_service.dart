@@ -93,7 +93,7 @@ class EpgService {
       .setString(_lastRunKey, DateTime.now().toIso8601String());
 
   File get _cacheFile =>
-      File('${Directory.systemTemp.path}/ilbattatv_epg_cache_v1.json');
+      File('${Directory.systemTemp.path}/stellartv_epg_cache_v1.json');
 
   Future<EpgData> loadCache() async {
     try {

@@ -1,15 +1,15 @@
-# ilBattaTV
+# StellarTV
 
-Lettore IPTV per iPhone, iPad e Android, realizzato con Flutter, con cronologia sincronizzata nel cloud (Supabase).
+Lettore TV, film e serie per iPhone, iPad e Android, realizzato con Flutter, con dati sincronizzati tramite account email e password.
 
 ## Funzionalità
 
 - Caricamento di playlist M3U e account Xtream Codes
 - Canali TV in diretta, film e serie TV, con categorie, ricerca e preferiti
 - Pagina "Scopri" con Top 10 settimanali e consigli personalizzati (dati TMDB)
-- Cronologia di visione salvata nel cloud e sincronizzata tra dispositivi con un codice a 8 caratteri
+- Playlist, profili, cronologie, preferiti e impostazioni sincronizzati tra dispositivi tramite account email e password
 - Carosello "Continua a guardare" con ripresa esatta dal punto interrotto
-- Player con due motori (ExoPlayer / AVPlayer e VLC), gesti, tracce audio/sottotitoli e statistiche
+- Player con due motori (ExoPlayer / AVPlayer e mpv), gesti, tracce audio/sottotitoli e statistiche
 
 ---
 
@@ -50,8 +50,8 @@ codemagic.yaml   Configurazione della compilazione automatica iOS
 
 | Piattaforma | Identificativo         |
 |-------------|------------------------|
-| iOS         | `io.ilbattatv.app`     |
-| Android     | `com.iptv.iptv_player` |
+| iOS         | `tv.stellar.app` |
+| Android     | `tv.stellar.app` |
 
 ---
 
@@ -60,7 +60,7 @@ codemagic.yaml   Configurazione della compilazione automatica iOS
 ### Opzione A — dal browser (senza installare nulla)
 
 1. Scarica il progetto come archivio ZIP ed estrailo sul computer.
-2. Vai su <https://github.com/new>, scegli un nome (es. `ilbattatv`), seleziona **Private** e premi **Create repository**.
+2. Vai su <https://github.com/new>, scegli un nome (es. `stellartv`), seleziona **Private** e premi **Create repository**.
    Non aggiungere README, .gitignore o licenza: sono già inclusi.
 3. Nella pagina del repository vuoto clicca **uploading an existing file**.
 4. Trascina **il contenuto** della cartella estratta (non la cartella stessa).
@@ -71,12 +71,12 @@ codemagic.yaml   Configurazione della compilazione automatica iOS
 ### Opzione B — da terminale
 
 ```bash
-cd ilbattatv
+cd stellartv
 git init
 git add .
-git commit -m "Prima versione di ilBattaTV"
+git commit -m "Prima versione di StellarTV"
 git branch -M main
-git remote add origin https://github.com/TUO-UTENTE/ilbattatv.git
+git remote add origin https://github.com/TUO-UTENTE/stellartv.git
 git push -u origin main
 ```
 
@@ -110,13 +110,13 @@ Il database, le tabelle e le funzioni server sono **già creati e attivi**: non 
 ### 4.1 Registrare l'app su Apple
 
 1. <https://developer.apple.com/account/resources/identifiers> → **+** → **App IDs** → **App**.
-2. Bundle ID **Explicit**: `io.ilbattatv.app`, descrizione `ilBattaTV`. Salva.
+2. Bundle ID **Explicit**: `tv.stellar.app`, descrizione `StellarTV`. Salva.
 3. <https://appstoreconnect.apple.com> → **App** → **+** → **Nuova app**:
    - Piattaforma: iOS
-   - Nome: `ilBattaTV` (se occupato, aggiungi una variante)
+   - Nome: `StellarTV` (se occupato, aggiungi una variante)
    - Lingua: Italiano
-   - Bundle ID: `io.ilbattatv.app`
-   - SKU: `ilbattatv`
+   - Bundle ID: `tv.stellar.app`
+   - SKU: `stellartv`
 
 ### 4.2 Creare la chiave API per Codemagic
 
@@ -126,19 +126,19 @@ Il database, le tabelle e le funzioni server sono **già creati e attivi**: non 
 
 ### 4.3 Configurare Codemagic
 
-1. Accedi a Codemagic con GitHub e aggiungi il repository `ilbattatv` (tipo progetto: **Flutter App**, configurazione: **codemagic.yaml**).
+1. Accedi a Codemagic con GitHub e aggiungi il repository `StellarTV` (tipo progetto: **Flutter App**, configurazione: **codemagic.yaml**).
 2. **Team settings → Integrations → Developer Portal → Manage keys → Add key**:
-   - Nome chiave: **`ilBattaTV`** (deve essere identico, è usato in `codemagic.yaml`)
+   - Nome chiave: **`StellarTV`**.
    - Inserisci Issuer ID, Key ID e carica il file `.p8`.
 3. **Team settings → codemagic.yaml settings → Code signing identities**:
-   - Scheda **iOS certificates** → **Generate certificate** → tipo *Apple Distribution*, usando la chiave `ilBattaTV`.
-   - Scheda **iOS provisioning profiles** → **Fetch profiles** → seleziona il profilo *App Store* per `io.ilbattatv.app`
+   - Scheda **iOS certificates** → **Generate certificate** → tipo *Apple Distribution*, usando la chiave `StellarTV`.
+   - Scheda **iOS provisioning profiles** → **Fetch profiles** → seleziona il profilo *App Store* per `tv.stellar.app`
      (se non esiste, crealo su developer.apple.com → Profiles → **+** → *App Store Connect*, poi ripeti il fetch).
 
 ### 4.4 Avviare la compilazione
 
 1. Nel progetto Codemagic premi **Start new build**.
-2. Scegli il ramo `main` e il workflow **ilBattaTV iOS (TestFlight)**.
+2. Scegli il ramo `main` e il workflow **StellarTV iOS (Unsigned - Sideloadly)**.
 3. Al termine (circa 15–25 minuti):
    - il file `.ipa` è scaricabile nella sezione **Artifacts**;
    - la build viene inviata automaticamente a **TestFlight**.
@@ -159,7 +159,7 @@ In Codemagic puoi creare una build Android senza firma per provarla direttamente
 
 ```yaml
   android-apk:
-    name: ilBattaTV Android (APK di prova)
+    name: StellarTV Android (APK di prova)
     instance_type: linux_x2
     environment:
       flutter: stable
@@ -193,8 +193,8 @@ Su Mac, per provare gratis sul proprio iPhone senza Developer Program: apri `ios
 
 | Problema | Soluzione |
 |----------|-----------|
-| Codemagic: "No matching profiles found" | Controlla che il Bundle ID sia `io.ilbattatv.app` e ripeti **Fetch profiles** (sezione 4.3). |
-| Codemagic: integrazione non trovata | Il nome della chiave API in Codemagic deve essere esattamente `ilBattaTV`. |
+| Codemagic: "No matching profiles found" | Controlla che il Bundle ID sia `tv.stellar.app` e ripeti **Fetch profiles** (sezione 4.3). |
+| Codemagic: integrazione non trovata | Verifica la chiave API Apple configurata in Codemagic. |
 | TestFlight: build "Mancante conformità" | Già gestito nell'app (nessuna crittografia speciale dichiarata). |
-| La cronologia non si aggiorna su un altro dispositivo | Assicurati di aver attivato la sincronizzazione con lo stesso codice a 8 caratteri; apri Impostazioni → Sincronizzazione → Scarica dal cloud. |
+| La cronologia non si aggiorna su un altro dispositivo | Accedi con la stessa email e password; poi apri Impostazioni → Account e sincronizzazione → Scarica dal cloud. |
 | Un canale non parte | Cambia motore di riproduzione dal player o da Impostazioni → Player. |

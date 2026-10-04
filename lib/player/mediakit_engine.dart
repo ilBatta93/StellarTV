@@ -11,17 +11,18 @@ import 'playback_engine.dart';
 /// support for IPTV streams, far more tolerant than the old VLC engine.
 class MediaKitEngine extends PlaybackEngine {
   MediaKitEngine({required this.url, required PlayerSettings settings})
-      : _settings = settings,
-        _player = Player(
-          configuration: PlayerConfiguration(
-            bufferSize: settings.networkCachingMs * 1024,
-            logLevel: MPVLogLevel.warn,
-          ),
-        ) {
+    : _settings = settings,
+      _player = Player(
+        configuration: PlayerConfiguration(
+          bufferSize: settings.networkCachingMs * 1024,
+          logLevel: MPVLogLevel.warn,
+        ),
+      ) {
     _videoController = VideoController(
       _player,
       configuration: VideoControllerConfiguration(
-        enableHardwareAcceleration: settings.hardwareDecoding != HardwareDecoding.disabled,
+        enableHardwareAcceleration:
+            settings.hardwareDecoding != HardwareDecoding.disabled,
         vo: null,
       ),
     );
@@ -116,11 +117,12 @@ class MediaKitEngine extends PlaybackEngine {
   Future<void> open() async {
     _playing = Completer<void>();
     try {
-      final ua = _settings.userAgent.trim();
+      final configured = _settings.userAgent.trim();
+      final ua = configured.isEmpty ? 'StellarTV/1.0' : configured;
       await _player.open(
         Media(
           _urlWithUserAgent(ua),
-          httpHeaders: ua.isEmpty ? const {} : {'User-Agent': ua},
+          httpHeaders: {'User-Agent': ua},
         ),
         play: true,
       );
@@ -130,8 +132,8 @@ class MediaKitEngine extends PlaybackEngine {
     await _player.setRate(_settings.defaultSpeed);
     await _playing!.future.timeout(
       Duration(seconds: _settings.startTimeoutSeconds + 5),
-      onTimeout: () => throw const PlaybackException(
-          'Il flusso non risponde (timeout)'),
+      onTimeout: () =>
+          throw const PlaybackException('Il flusso non risponde (timeout)'),
     );
   }
 
@@ -139,10 +141,10 @@ class MediaKitEngine extends PlaybackEngine {
 
   @override
   Widget buildView(double boxRatio) => Video(
-        controller: _videoController,
-        controls: NoVideoControls,
-        fit: BoxFit.contain,
-      );
+    controller: _videoController,
+    controls: NoVideoControls,
+    fit: BoxFit.contain,
+  );
 
   @override
   Future<void> play() => _player.play();
@@ -186,7 +188,10 @@ class MediaKitEngine extends PlaybackEngine {
             label: _trackLabel(t, 'Traccia audio ${i + 1}'),
             language: t.language,
             detail: describeAudio(
-                codec: t.codec, channels: t.channelscount, bitrate: null),
+              codec: t.codec,
+              channels: t.channelscount,
+              bitrate: null,
+            ),
             selected: t.id == selected.id,
           ),
     ];
@@ -242,8 +247,10 @@ class MediaKitEngine extends PlaybackEngine {
     final platform = _player.platform;
     if (platform is! NativePlayer) return;
     try {
-      await platform
-          .setProperty(name, (delay.inMicroseconds / 1e6).toStringAsFixed(3));
+      await platform.setProperty(
+        name,
+        (delay.inMicroseconds / 1e6).toStringAsFixed(3),
+      );
     } catch (_) {}
   }
 

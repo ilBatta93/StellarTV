@@ -26,7 +26,7 @@ Future<void> main() async {
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.anonKey,
   );
-  runApp(const IlBattaTvApp());
+  runApp(const StellarTvApp());
 }
 
 /// Shown in place of a widget that fails to build, so a crash never presents
@@ -67,14 +67,14 @@ class _StartupErrorView extends StatelessWidget {
   }
 }
 
-class IlBattaTvApp extends StatefulWidget {
-  const IlBattaTvApp({super.key});
+class StellarTvApp extends StatefulWidget {
+  const StellarTvApp({super.key});
 
   @override
-  State<IlBattaTvApp> createState() => _IlBattaTvAppState();
+  State<StellarTvApp> createState() => _StellarTvAppState();
 }
 
-class _IlBattaTvAppState extends State<IlBattaTvApp> {
+class _StellarTvAppState extends State<StellarTvApp> {
   late final AppProvider _appProvider;
   late final SyncProvider _syncProvider;
   late final HistoryProvider _historyProvider;
@@ -164,7 +164,7 @@ class _IlBattaTvAppState extends State<IlBattaTvApp> {
         builder: (context) {
           final ui = context.watch<UiSettings>();
           return MaterialApp(
-            title: 'ilBattaTV',
+            title: 'StellarTV',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.darkTheme(accent: ui.accent),
             darkTheme: AppTheme.darkTheme(accent: ui.accent),

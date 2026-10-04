@@ -313,11 +313,12 @@ class _CatalogPageState extends State<CatalogPage> {
       drawerEnableOpenDragGesture: true,
       drawerEdgeDragWidth: 48,
       drawer: _CategoryDrawer(
-        categories: [
-          _recentLabel,
-          _allLabel,
-          ...groups.map((g) => g.label).where((l) => l != _allLabel),
-        ],
+        categories: {
+          _recentLabel: app.recentEntries(widget.type).length,
+          _allLabel: app.allEntries(widget.type).length,
+          for (final g in groups)
+            if (g.label != _allLabel) g.label: g.entries.length,
+        },
         selected: _selectedCategory,
         onSelected: (category) {
           setState(
@@ -564,7 +565,7 @@ class _CatalogPageState extends State<CatalogPage> {
 /// touch devices) or the categories button; on TV remotes, pressing left on
 /// the first grid column reaches the edge and opens the drawer.
 class _CategoryDrawer extends StatelessWidget {
-  final List<String> categories;
+  final Map<String, int> categories;
   final String? selected;
   final ValueChanged<String> onSelected;
 
@@ -593,9 +594,9 @@ class _CategoryDrawer extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 children: [
-                  for (final c in categories)
+                  for (final entry in categories.entries)
                     ListTile(
-                      selected: (selected ?? 'Ultimi Aggiunti') == c,
+                      selected: (selected ?? 'Ultimi Aggiunti') == entry.key,
                       selectedTileColor: AppColors.primary.withValues(
                         alpha: 0.15,
                       ),
@@ -603,21 +604,28 @@ class _CategoryDrawer extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       title: Text(
-                        c,
+                        entry.key,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 14,
-                          color: (selected ?? 'Ultimi Aggiunti') == c
+                          color: (selected ?? 'Ultimi Aggiunti') == entry.key
                               ? AppColors.primary
                               : AppColors.textPrimary,
-                          fontWeight: (selected ?? 'Ultimi Aggiunti') == c
+                          fontWeight: (selected ?? 'Ultimi Aggiunti') == entry.key
                               ? FontWeight.w600
                               : FontWeight.w400,
                         ),
                       ),
+                      trailing: Text(
+                        '(${entry.value})',
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 13,
+                        ),
+                      ),
                       onTap: () {
-                        onSelected(c);
+                        onSelected(entry.key);
                         Navigator.pop(context);
                       },
                     ),
