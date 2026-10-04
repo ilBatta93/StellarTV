@@ -32,29 +32,56 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: MediaQuery.of(context).size.height -
-                  MediaQuery.of(context).padding.top -
-                  MediaQuery.of(context).padding.bottom,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 32),
-                _buildLogo(),
-                const SizedBox(height: 32),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: _buildCard(),
+      body: Stack(
+        children: [
+          // Soft brand glow behind the header.
+          Positioned(
+            top: -120,
+            left: -80,
+            right: -80,
+            child: Container(
+              height: 320,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.primary.withValues(alpha: 0.28),
+                    Colors.transparent,
+                  ],
+                  radius: 0.9,
                 ),
-                const SizedBox(height: 24),
-              ],
+              ),
             ),
           ),
-        ),
+          SafeArea(
+            child: SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: MediaQuery.of(context).size.height -
+                      MediaQuery.of(context).padding.top -
+                      MediaQuery.of(context).padding.bottom,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 40),
+                    _buildLogo(),
+                    const SizedBox(height: 36),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: _buildCard(),
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: _buildRestoreCard(),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -62,13 +89,28 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLogo() {
     return Column(
       children: [
-        const BrandMark(size: 72),
-        const SizedBox(height: 16),
-        const BrandWordmark(fontSize: 28),
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.surface,
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.25),
+                blurRadius: 32,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: const BrandMark(size: 56),
+        ),
+        const SizedBox(height: 20),
+        const BrandWordmark(fontSize: 30),
         const SizedBox(height: 8),
         const Text(
           'Collega il tuo account Xtream per iniziare a guardare',
-          style: TextStyle(color: Color(0xFFA1A1AE), fontSize: 13),
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
       ],
     );
@@ -77,12 +119,79 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildCard() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF13131A),
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(22),
         child: _buildXtreamForm(),
+      ),
+    );
+  }
+
+  Widget _buildRestoreCard() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary.withValues(alpha: 0.14),
+            AppColors.secondary.withValues(alpha: 0.08),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: _isLoading ? null : _showSyncCodeDialog,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.primary.withValues(alpha: 0.18),
+                  ),
+                  child: Icon(Icons.cloud_sync_outlined,
+                      size: 22, color: AppColors.primary),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Hai già usato ilBattaTV?',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Ripristina dal cloud con il tuo codice a 8 caratteri',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.arrow_forward_ios,
+                    size: 14, color: AppColors.primary.withValues(alpha: 0.8)),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -124,7 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
               icon: Icon(
                 _obscurePassword ? Icons.visibility_off : Icons.visibility,
                 size: 20,
-                color: const Color(0xFFA1A1AE),
+                color: AppColors.textSecondary,
               ),
               onPressed: () =>
                   setState(() => _obscurePassword = !_obscurePassword),
@@ -145,18 +254,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 : const Icon(Icons.login),
             label: Text(_isLoading ? 'Connessione...' : 'Connetti'),
             onPressed: _isLoading ? null : _handleXtreamLogin,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Center(
-          child: TextButton.icon(
-            icon: const Icon(Icons.cloud_sync_outlined, size: 18),
-            label: const Text('Ho un codice di sincronizzazione'),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.textSecondary,
-              textStyle: const TextStyle(fontSize: 13),
-            ),
-            onPressed: _isLoading ? null : _showSyncCodeDialog,
           ),
         ),
       ],
@@ -226,7 +323,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Text(
       label,
       style: const TextStyle(
-        color: Color(0xFFA1A1AE),
+        color: AppColors.textSecondary,
         fontSize: 13,
         fontWeight: FontWeight.w500,
       ),
@@ -275,7 +372,7 @@ class _LoginScreenState extends State<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red,
+        backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
       ),
     );
