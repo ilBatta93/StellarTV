@@ -12,6 +12,13 @@ class TmdbException implements Exception {
   String toString() => message;
 }
 
+class PlatformTops {
+  final List<TmdbItem> movies;
+  final List<TmdbItem> series;
+  const PlatformTops({this.movies = const [], this.series = const []});
+  bool get isEmpty => movies.isEmpty && series.isEmpty;
+}
+
 class TmdbService {
   static const _fallbackRegion = 'US';
 
@@ -51,35 +58,52 @@ class TmdbService {
         .toList();
   }
 
+  /// Trending titles (two pages): the Home keeps only those that are in the
+  /// playlist, so it fetches more than ten candidates.
   Future<List<TmdbItem>> trending(String mediaType) async {
-    final body = await _get('trending/$mediaType/week');
-    return _parseResults(body, type: mediaType).take(10).toList();
-  }
-
-  Future<List<TmdbItem>> platformTop(StreamingPlatform platform) async {
-    var items = await _platformTopForRegion(platform, platform.region);
-    if (items.isEmpty && platform.region != _fallbackRegion) {
-      items = await _platformTopForRegion(platform, _fallbackRegion);
-    }
-    return items;
-  }
-
-  Future<List<TmdbItem>> _platformTopForRegion(
-      StreamingPlatform platform, String region) async {
-    final params = {
-      'with_watch_providers': platform.providerIds,
-      'watch_region': region,
-      'sort_by': 'popularity.desc',
-    };
-    final results = await Future.wait([
-      _get('discover/movie', params),
-      _get('discover/tv', params),
+    final pages = await Future.wait([
+      _get('trending/$mediaType/week', {'page': '1'}),
+      _get('trending/$mediaType/week', {'page': '2'})
+          .catchError((_) => <String, dynamic>{}),
     ]);
-    final merged = [
-      ..._parseResults(results[0], type: 'movie'),
-      ..._parseResults(results[1], type: 'tv'),
-    ]..sort((a, b) => b.popularity.compareTo(a.popularity));
-    return merged.take(10).toList();
+    return _dedupe([
+      for (final p in pages) ..._parseResults(p, type: mediaType),
+    ]);
+  }
+
+  /// Most popular films and series of a streaming platform, kept separate.
+  Future<PlatformTops> platformTop(StreamingPlatform platform) async {
+    var tops = await _platformTopForRegion(platform, platform.region);
+    if (tops.isEmpty && platform.region != _fallbackRegion) {
+      tops = await _platformTopForRegion(platform, _fallbackRegion);
+    }
+    return tops;
+  }
+
+  Future<PlatformTops> _platformTopForRegion(
+      StreamingPlatform platform, String region) async {
+    Future<List<TmdbItem>> fetch(String type) async {
+      final pages = await Future.wait([
+        for (final page in ['1', '2'])
+          _get('discover/$type', {
+            'with_watch_providers': platform.providerIds,
+            'watch_region': region,
+            'sort_by': 'popularity.desc',
+            'page': page,
+          }).catchError((_) => <String, dynamic>{}),
+      ]);
+      return _dedupe([
+        for (final p in pages) ..._parseResults(p, type: type),
+      ]);
+    }
+
+    final results = await Future.wait([fetch('movie'), fetch('tv')]);
+    return PlatformTops(movies: results[0], series: results[1]);
+  }
+
+  static List<TmdbItem> _dedupe(List<TmdbItem> items) {
+    final seen = <String>{};
+    return [for (final i in items) if (seen.add(i.key)) i];
   }
 
   Future<List<TmdbItem>> recommendations(TmdbItem item) async {

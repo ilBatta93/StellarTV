@@ -116,7 +116,7 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> _applyInitialState(
       PlaybackEngine engine, Duration? resumeAt, int gen) async {
     if (resumeAt != null && resumeAt > Duration.zero) {
-      await engine.seekTo(resumeAt);
+      await _seekWhenReady(engine, resumeAt, gen);
     }
     if (speed != 1.0) await engine.setSpeed(speed);
     await engine.setVolume(muted ? 0 : volume);
@@ -130,6 +130,25 @@ class PlaybackSession extends ChangeNotifier {
     await Future<void>.delayed(const Duration(milliseconds: 1500));
     if (gen != _generation || _disposed) return;
     await _applyTrackPreferences(engine);
+  }
+
+  /// Seeks to the resume point once the stream is seekable. mpv and
+  /// ExoPlayer ignore a seek issued before the duration is known, which made
+  /// "Continua a guardare" restart from the beginning; retry until it lands.
+  Future<void> _seekWhenReady(
+      PlaybackEngine engine, Duration target, int gen) async {
+    for (var i = 0; i < 40; i++) {
+      if (gen != _generation || _disposed) return;
+      if (engine.value.duration > Duration.zero) break;
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+    for (var attempt = 0; attempt < 4; attempt++) {
+      if (gen != _generation || _disposed) return;
+      await engine.seekTo(target);
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      final pos = engine.value.position;
+      if (pos >= target - const Duration(seconds: 10)) return;
+    }
   }
 
   Future<void> _applyTrackPreferences(PlaybackEngine engine) async {

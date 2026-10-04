@@ -9,6 +9,7 @@ import '../widgets/settings_tiles.dart';
 import 'login_screen.dart';
 import 'history_settings_screen.dart';
 import 'hidden_categories_screen.dart';
+import 'epg_settings_screen.dart';
 import 'player_settings_screen.dart';
 import 'profile_picker_screen.dart';
 import 'sync_settings_screen.dart';
@@ -252,6 +253,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           _buildUiCustomization(context),
           _buildPlaylistRefresh(context, provider),
+          SettingsSection(
+            title: 'Guida TV',
+            children: [
+              SettingsValueTile(
+                icon: Icons.calendar_view_day_rounded,
+                title: 'Guida TV (EPG)',
+                subtitle: 'Fonti, aggiornamento automatico (ogni 12 ore di base)',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const EpgSettingsScreen())),
+              ),
+            ],
+          ),
           SettingsSection(
             title: 'Account',
             children: [

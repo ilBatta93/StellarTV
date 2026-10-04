@@ -7,6 +7,9 @@ import 'package:provider/provider.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/player_settings.dart';
+import '../navigation/app_routes.dart';
+import '../providers/app_provider.dart';
+import '../providers/epg_provider.dart';
 import '../player/playback_session.dart';
 import '../providers/history_provider.dart';
 import '../services/native_player_bridge.dart';
@@ -22,7 +25,11 @@ class PlayerScreen extends StatefulWidget {
   final Channel channel;
   final Duration? startAt;
 
-  const PlayerScreen({super.key, required this.channel, this.startAt});
+  /// Ordered episodes of the series being watched (null for films/live).
+  final List<Channel>? queue;
+
+  const PlayerScreen(
+      {super.key, required this.channel, this.startAt, this.queue});
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -48,6 +55,15 @@ class _PlayerScreenState extends State<PlayerScreen>
   bool _orientationApplied = false;
   Size _pipSize = Size.zero;
 
+  /// Resume point not yet reached: progress is not saved until the seek
+  /// lands, so a slow start never overwrites the saved position with 0.
+  Duration? _pendingResume;
+  DateTime _openedAt = DateTime.now();
+  List<Channel>? _queue;
+  Channel? _next;
+  bool _nextDismissed = false;
+  bool _advancing = false;
+
   bool get _isLive => widget.channel.type == ContentType.live;
 
   @override
@@ -64,6 +80,57 @@ class _PlayerScreenState extends State<PlayerScreen>
       });
     });
     _init();
+    _resolveQueue();
+  }
+
+  bool get _isEpisode =>
+      widget.channel.type == ContentType.series ||
+      widget.channel.type == ContentType.anime;
+
+  /// Finds the next episode: from the list passed by the series page, or by
+  /// loading the series (e.g. when resuming from "Continua a guardare").
+  Future<void> _resolveQueue() async {
+    if (!_isEpisode) return;
+    List<Channel> queue = widget.queue ?? const [];
+    if (queue.isEmpty) {
+      final key = widget.channel.seriesKey;
+      if (key == null || key.isEmpty) return;
+      final app = context.read<AppProvider>();
+      final folder = app.seriesFolderFor(key) ??
+          Channel(
+            id: key,
+            name: widget.channel.seriesName ?? widget.channel.name,
+            url: '',
+            logo: '',
+            group: widget.channel.group,
+            type: widget.channel.type,
+            seriesKey: key,
+            seriesName: widget.channel.seriesName,
+            isSeriesFolder: true,
+          );
+      try {
+        final details = await app.loadSeriesDetails(folder);
+        queue = [for (final e in details.allEpisodes) e.channel];
+      } catch (_) {
+        return;
+      }
+    }
+    final index = queue.indexWhere((c) => c.id == widget.channel.id);
+    if (!mounted) return;
+    setState(() {
+      _queue = queue;
+      _next = index >= 0 && index + 1 < queue.length ? queue[index + 1] : null;
+    });
+  }
+
+  void _playNext() {
+    final next = _next;
+    if (next == null || _advancing) return;
+    _advancing = true;
+    _saveResume();
+    final entry = _history.entryFor(next.id);
+    playChannel(context, next,
+        startAt: entry?.resumePosition, queue: _queue, replace: true);
   }
 
   Future<void> _init() async {
@@ -75,6 +142,8 @@ class _PlayerScreenState extends State<PlayerScreen>
           await _settingsService.getResumePosition(widget.channel.url);
     }
     if (!mounted) return;
+    if (startAt != null && startAt > Duration.zero) _pendingResume = startAt;
+    _openedAt = DateTime.now();
 
     _applyOrientation(settings);
     if (settings.keepScreenOn) _bridge.setKeepScreenOn(true);
@@ -136,6 +205,13 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
     }
 
+    // Netflix-style: at the end of an episode go straight to the next one.
+    if (v.isEnded && _next != null && !_nextDismissed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _playNext();
+      });
+    }
+
     if (session.notice != null && _noticeTimer == null) {
       _noticeTimer = Timer(const Duration(seconds: 4), () {
         _noticeTimer = null;
@@ -163,6 +239,14 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (session == null || _isLive) return;
     final v = session.value;
     if (v.duration <= Duration.zero) return;
+    final pending = _pendingResume;
+    if (pending != null) {
+      final landed = v.position >= pending - const Duration(seconds: 10);
+      final gaveUp =
+          DateTime.now().difference(_openedAt) > const Duration(seconds: 40);
+      if (!landed && !gaveUp) return;
+      _pendingResume = null;
+    }
     _history.updatePosition(widget.channel.id, v.position, v.duration);
     if (_settings?.resumePlayback != true) return;
     final remaining = v.duration - v.position;
@@ -280,7 +364,10 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: PlayerControls(
             session: session,
             title: widget.channel.name,
-            subtitle: widget.channel.group,
+            subtitle: _isLive
+                ? (context.watch<EpgProvider>().nowFor(widget.channel)?.title ??
+                    widget.channel.group)
+                : widget.channel.group,
             locked: _locked,
             pipSupported: _pipSupported,
             seekStepSeconds: settings.seekStepSeconds,
@@ -295,6 +382,8 @@ class _PlayerScreenState extends State<PlayerScreen>
           ),
         ),
       ),
+      if (_next != null && status == SessionStatus.playing && !_inPip)
+        _buildNextOverlay(session),
       if (_statsVisible)
         Positioned(
           top: 72,
@@ -309,6 +398,90 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: SafeArea(child: Center(child: _NoticeBanner(text: session.notice!))),
         ),
     ];
+  }
+
+  /// "Episodio successivo": a small button while the controls are visible,
+  /// and a countdown card in the last 25 seconds (end credits).
+  Widget _buildNextOverlay(PlaybackSession session) {
+    final v = session.value;
+    final remaining = v.duration - v.position;
+    final nearEnd = v.duration > const Duration(minutes: 3) &&
+        remaining <= const Duration(seconds: 25) &&
+        remaining > Duration.zero;
+    final showCard = nearEnd && !_nextDismissed;
+    if (!showCard && (!_controlsVisible || _locked)) {
+      return const SizedBox.shrink();
+    }
+    final next = _next!;
+    final label = next.season != null && next.episode != null
+        ? 'S${next.season} E${next.episode}'
+        : 'Episodio successivo';
+    return Positioned(
+      right: 16,
+      bottom: showCard ? 96 : 84,
+      child: SafeArea(
+        child: showCard
+            ? Container(
+                width: 260,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.card.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text('PROSSIMO EPISODIO',
+                              style: TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.8)),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _nextDismissed = true),
+                          child: const Icon(Icons.close_rounded,
+                              color: AppColors.textSecondary, size: 18),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text('$label · ${next.name}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.skip_next_rounded),
+                        label: Text('Avvio tra ${remaining.inSeconds}s'),
+                        onPressed: _playNext,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black.withValues(alpha: 0.55),
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white24),
+                ),
+                icon: const Icon(Icons.skip_next_rounded),
+                label: Text('Episodio successivo · $label'),
+                onPressed: _playNext,
+              ),
+      ),
+    );
   }
 }
 

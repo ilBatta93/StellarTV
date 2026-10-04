@@ -11,6 +11,9 @@ class HistoryEntry {
     required this.position,
     required this.duration,
     required this.lastWatchedAt,
+    this.seriesKey = '',
+    this.seriesName = '',
+    this.seriesPoster = '',
   });
 
   final String contentId;
@@ -22,6 +25,12 @@ class HistoryEntry {
   final Duration position;
   final Duration duration;
   final DateTime lastWatchedAt;
+
+  /// Series info for episodes, so Home can show the series poster and the
+  /// player can find the next episode even after an app restart.
+  final String seriesKey;
+  final String seriesName;
+  final String seriesPoster;
 
   bool get isLive => type == ContentType.live;
 
@@ -69,6 +78,9 @@ class HistoryEntry {
       position: position ?? this.position,
       duration: duration ?? this.duration,
       lastWatchedAt: lastWatchedAt ?? this.lastWatchedAt,
+      seriesKey: seriesKey,
+      seriesName: seriesName,
+      seriesPoster: seriesPoster,
     );
   }
 

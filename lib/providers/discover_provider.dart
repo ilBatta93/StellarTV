@@ -14,7 +14,7 @@ class DiscoverProvider extends ChangeNotifier {
   String? _error;
   List<TmdbItem> _topMovies = [];
   List<TmdbItem> _topSeries = [];
-  final Map<String, List<TmdbItem>> _platformTops = {};
+  final Map<String, PlatformTops> _platformTops = {};
   List<TmdbItem> _forYou = [];
   String? _forYouSource;
   String _forYouSignature = '';
@@ -23,7 +23,8 @@ class DiscoverProvider extends ChangeNotifier {
   String? get error => _error;
   List<TmdbItem> get topMovies => _topMovies;
   List<TmdbItem> get topSeries => _topSeries;
-  List<TmdbItem> platformTop(StreamingPlatform p) => _platformTops[p.name] ?? [];
+  PlatformTops platformTop(StreamingPlatform p) =>
+      _platformTops[p.name] ?? const PlatformTops();
   List<TmdbItem> get forYou => _forYou;
   String? get forYouSource => _forYouSource;
   bool get hasData => _topMovies.isNotEmpty || _topSeries.isNotEmpty;
@@ -53,7 +54,7 @@ class DiscoverProvider extends ChangeNotifier {
         try {
           _platformTops[p.name] = await tmdb.platformTop(p);
         } catch (_) {
-          _platformTops[p.name] = [];
+          _platformTops[p.name] = const PlatformTops();
         }
       }));
     } catch (e) {

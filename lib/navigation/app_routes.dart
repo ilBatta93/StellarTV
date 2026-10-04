@@ -9,13 +9,23 @@ import '../screens/player_screen.dart';
 import '../screens/series_detail_screen.dart';
 import '../screens/title_detail_screen.dart';
 
-void playChannel(BuildContext context, Channel channel, {Duration? startAt}) {
+/// Plays a channel. For series episodes [queue] is the ordered episode list
+/// used by "Episodio successivo"; when omitted the player loads it itself.
+void playChannel(BuildContext context, Channel channel,
+    {Duration? startAt, List<Channel>? queue, bool replace = false}) {
+  if (channel.isSeriesFolder) {
+    openChannel(context, channel);
+    return;
+  }
   context.read<HistoryProvider>().recordStart(channel);
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-        builder: (_) => PlayerScreen(channel: channel, startAt: startAt)),
-  );
+  final route = MaterialPageRoute(
+      builder: (_) =>
+          PlayerScreen(channel: channel, startAt: startAt, queue: queue));
+  if (replace) {
+    Navigator.pushReplacement(context, route);
+  } else {
+    Navigator.push(context, route);
+  }
 }
 
 /// Opens the combined series page (plot, cast and seasons/episodes).

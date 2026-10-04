@@ -59,6 +59,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
                         logo: e.posterUrl,
                         group: e.group,
                         type: e.type,
+                        seriesKey: e.seriesKey.isEmpty ? null : e.seriesKey,
+                        seriesName:
+                            e.seriesName.isEmpty ? null : e.seriesName,
                       ))
             case final c?)
           (e, c),
@@ -91,15 +94,20 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
     if (!discover.hasData) return const _DiscoverSkeleton();
 
+    // Only titles that can actually be watched with the playlist.
+    List<TmdbItem> available(List<TmdbItem> items) =>
+        items.where(app.isAvailable).take(10).toList();
+    final topMovies = available(discover.topMovies);
+    final topSeries = available(discover.topSeries);
+    final banner = [...topMovies.take(6), ...topSeries.take(4)];
+
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: discover.load,
       child: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
-          if (discover.topMovies.isNotEmpty) ...[
-            _Top10Banner(items: discover.topMovies.take(10).toList()),
-          ] else if (discover.featured != null) _Hero(item: discover.featured!),
+          if (banner.isNotEmpty) _Top10Banner(items: banner),
           if (startedMovies.isNotEmpty) ...[
             SectionHeader(
               title: 'Film che stai guardando',
@@ -116,34 +124,29 @@ class _DiscoverPageState extends State<DiscoverPage> {
             ),
             _HistoryRow(items: startedSeries),
           ],
-          if (discover.forYou.isNotEmpty) ...[
+          if (discover.forYou.where(app.isAvailable).isNotEmpty) ...[
             SectionHeader(
               title: 'Consigliati per te',
               subtitle: 'Perché hai guardato ${discover.forYouSource}',
               leading: const Icon(Icons.auto_awesome_rounded,
                   color: AppColors.secondary, size: 20),
             ),
-            _PosterRow(items: discover.forYou),
+            _PosterRow(items: discover.forYou.where(app.isAvailable).toList()),
           ],
-          const SectionHeader(title: 'Top 10 Film', subtitle: 'I più visti questa settimana'),
-          _RankedRow(items: discover.topMovies),
-          const SectionHeader(title: 'Top 10 Serie TV', subtitle: 'Le più viste questa settimana'),
-          _RankedRow(items: discover.topSeries),
+          _TopSection(
+            title: 'Top 10 della settimana',
+            subtitle: 'In tendenza e disponibili nella tua playlist',
+            color: AppColors.primary,
+            movies: topMovies,
+            series: topSeries,
+          ),
           for (final p in StreamingPlatform.all)
-            if (discover.platformTop(p).isNotEmpty) ...[
-              SectionHeader(
-                title: 'Top 10 su ${p.name}',
-                leading: Container(
-                  width: 4,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: p.color,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              _RankedRow(items: discover.platformTop(p)),
-            ],
+            _TopSection(
+              title: 'Top 10 su ${p.name}',
+              color: p.color,
+              movies: available(discover.platformTop(p).movies),
+              series: available(discover.platformTop(p).series),
+            ),
           if (discover.isLoading)
             Padding(
               padding: EdgeInsets.all(24),
@@ -162,101 +165,135 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }
 }
 
-class _Hero extends StatelessWidget {
-  final TmdbItem item;
+/// A Top 10 block with a Film / Serie TV switch. Hidden when none of its
+/// titles is in the playlist; the switch only shows the kinds available.
+class _TopSection extends StatefulWidget {
+  final String title;
+  final String? subtitle;
+  final Color color;
+  final List<TmdbItem> movies;
+  final List<TmdbItem> series;
 
-  const _Hero({required this.item});
+  const _TopSection({
+    required this.title,
+    this.subtitle,
+    required this.color,
+    required this.movies,
+    required this.series,
+  });
+
+  @override
+  State<_TopSection> createState() => _TopSectionState();
+}
+
+class _TopSectionState extends State<_TopSection> {
+  bool _showSeries = false;
 
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    final match = app.findChannelFor(item);
-    return Pressable(
-      onTap: () => openTmdbItem(context, item),
-      child: AspectRatio(
-        aspectRatio: 4 / 3.4,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            PosterImage(url: item.backdropUrl),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Color(0xCC09090D), AppColors.background],
-                  stops: [0.35, 0.75, 1],
+    final hasMovies = widget.movies.isNotEmpty;
+    final hasSeries = widget.series.isNotEmpty;
+    if (!hasMovies && !hasSeries) return const SizedBox.shrink();
+    final showSeries = hasSeries && (_showSeries || !hasMovies);
+    final items = showSeries ? widget.series : widget.movies;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: widget.color,
+                    borderRadius: BorderRadius.circular(2),
+                    boxShadow: [
+                      BoxShadow(
+                          color: widget.color.withValues(alpha: 0.5),
+                          blurRadius: 10),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.title,
+                          style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2)),
+                      if (widget.subtitle != null)
+                        Text(widget.subtitle!,
+                            style: const TextStyle(
+                                color: AppColors.textMuted, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (hasMovies && hasSeries)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _segment('Film', !showSeries,
+                        () => setState(() => _showSeries = false)),
+                    _segment('Serie TV', showSeries,
+                        () => setState(() => _showSeries = true)),
+                  ],
                 ),
               ),
             ),
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 16,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      gradient: AppColors.brandGradient,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      item.isMovie ? 'FILM N.1 IN TENDENZA' : 'SERIE N.1 IN TENDENZA',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    item.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    item.overview,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      if (match != null) ...[
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.play_arrow_rounded),
-                          label: const Text('Guarda'),
-                          onPressed: () => playChannel(context, match),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.info_outline_rounded),
-                        label: const Text('Dettagli'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.textPrimary,
-                          side: const BorderSide(color: AppColors.border),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () => openTmdbItem(context, item),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
+          const SizedBox(height: 12),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: _RankedRow(
+                key: ValueKey('${widget.title}_$showSeries'), items: items),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _segment(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? widget.color : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected
+                ? (widget.color.computeLuminance() > 0.6
+                    ? Colors.black
+                    : Colors.white)
+                : AppColors.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );
@@ -381,7 +418,7 @@ class _BannerSlide extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    'FILM N.$rank IN TENDENZA',
+                    item.isMovie ? 'FILM IN TENDENZA' : 'SERIE IN TENDENZA',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
@@ -411,7 +448,9 @@ class _BannerSlide extends StatelessWidget {
                       ElevatedButton.icon(
                         icon: const Icon(Icons.play_arrow_rounded),
                         label: const Text('Guarda'),
-                        onPressed: () => playChannel(context, match),
+                        onPressed: () => match.isSeriesFolder
+                            ? openSeries(context, match, item: item)
+                            : playChannel(context, match),
                       ),
                       const SizedBox(width: 8),
                     ],
@@ -465,9 +504,35 @@ class _HistoryCard extends StatelessWidget {
     final progress = entry.duration > Duration.zero
         ? (entry.position.inSeconds / entry.duration.inSeconds).clamp(0.0, 1.0)
         : 0.0;
+    final isEpisode = entry.type != ContentType.movie;
+    final app = context.read<AppProvider>();
+    final seriesKey =
+        channel.seriesKey ?? (entry.seriesKey.isEmpty ? null : entry.seriesKey);
+    final folder = isEpisode && seriesKey != null
+        ? app.seriesFolderFor(seriesKey)
+        : null;
+    // Series show the standard series poster, not the episode still.
+    final poster = [
+      if (isEpisode) folder?.logo ?? '',
+      if (isEpisode) entry.seriesPoster,
+      channel.logo,
+      entry.posterUrl,
+    ].firstWhere((u) => u.isNotEmpty, orElse: () => '');
+    final seriesName = folder?.displaySeriesName ??
+        (entry.seriesName.isNotEmpty ? entry.seriesName : null);
+    final code = channel.season != null && channel.episode != null
+        ? ' · S${channel.season} E${channel.episode}'
+        : '';
+    final title = isEpisode && seriesName != null
+        ? '$seriesName$code'
+        : channel.name;
+    final playable = seriesKey != null && channel.seriesKey == null
+        ? channel.copyWith(seriesKey: seriesKey)
+        : channel;
     // Resume the exact movie/episode from where it was left.
     return Pressable(
-      onTap: () => playChannel(context, channel, startAt: entry.position),
+      onTap: () =>
+          playChannel(context, playable, startAt: entry.resumePosition ?? entry.position),
       child: SizedBox(
         width: 120,
         child: Column(
@@ -479,11 +544,7 @@ class _HistoryCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    PosterImage(
-                      url: channel.logo.isNotEmpty
-                          ? channel.logo
-                          : entry.posterUrl,
-                    ),
+                    PosterImage(url: poster),
                     Positioned(
                       left: 0,
                       right: 0,
@@ -502,7 +563,7 @@ class _HistoryCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              channel.name,
+              title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -540,7 +601,7 @@ class _PosterRow extends StatelessWidget {
 class _RankedRow extends StatelessWidget {
   final List<TmdbItem> items;
 
-  const _RankedRow({required this.items});
+  const _RankedRow({super.key, required this.items});
 
   @override
   Widget build(BuildContext context) {

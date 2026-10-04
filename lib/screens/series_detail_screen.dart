@@ -268,6 +268,10 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                     }
                   },
                   onTap: () => playChannel(context, ep.channel,
+                      queue: [
+                        for (final e in _details?.allEpisodes ?? const [])
+                          e.channel
+                      ],
                       startAt: context
                           .read<HistoryProvider>()
                           .entryFor(ep.channel.id)

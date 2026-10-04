@@ -9,6 +9,7 @@ import '../models/series_details.dart';
 import '../models/tmdb_item.dart';
 import '../services/catalog_builder.dart';
 import '../services/playlist_refresh_service.dart';
+import '../services/tmdb_service.dart';
 import '../services/xtream_service.dart';
 import '../services/cloud_favorites_service.dart';
 import '../services/favorites_service.dart';
@@ -76,6 +77,8 @@ class AppProvider extends ChangeNotifier {
     _groupedCache.clear();
     _recentCache.clear();
     _favoritesCache = null;
+    _titleIndex = null;
+    _matchCache.clear();
   }
 
   List<Channel> channelsOf(ContentType type) => _byType[type] ??=
@@ -258,43 +261,89 @@ class AppProvider extends ChangeNotifier {
         .toList();
   }
 
-  Channel? findChannelFor(TmdbItem item) {
-    final target = _normalize(item.title);
-    if (target.isEmpty) return null;
-    Channel? loose;
-    Channel? folder;
-    for (final c in _allChannels) {
-      if (c.type != item.contentType) continue;
-      final name = _normalize(c.name);
-      final seriesName = c.seriesName == null ? '' : _normalize(c.seriesName!);
-      if (c.isSeriesFolder && (name == target || seriesName == target)) {
-        return c;
-      }
-      if (name == target || seriesName == target) {
-        if (c.isSeriesFolder) return c;
-        folder ??= catalogOf(c.type)
-            .where((s) => s.seriesKey == c.seriesKey)
-            .firstOrNull;
-        if (folder != null) return folder;
-        return c;
-      }
-      if (loose == null &&
-          item.contentType != ContentType.movie &&
-          target.length >= 4 &&
-          name.contains(target)) {
-        loose = c;
+  /// Normalized title -> playlist movies / series folders, built once per
+  /// playlist so the Top lists can check availability instantly.
+  Map<String, List<Channel>>? _titleIndex;
+  final Map<String, Channel?> _matchCache = {};
+
+  Map<String, List<Channel>> _buildTitleIndex() {
+    final index = <String, List<Channel>>{};
+    void add(String key, Channel c) {
+      if (key.isEmpty) return;
+      (index[key] ??= []).add(c);
+    }
+
+    for (final c in catalogOf(ContentType.movie)) {
+      add(_titleKey(c.name), c);
+    }
+    for (final type in [ContentType.series, ContentType.anime]) {
+      for (final c in catalogOf(type)) {
+        add(_titleKey(c.name), c);
+        if (c.seriesName != null) add(_titleKey(c.seriesName!), c);
       }
     }
-    if ((item.contentType == ContentType.series ||
-            item.contentType == ContentType.anime) &&
-        loose != null) {
-      return catalogOf(item.contentType)
-              .where((s) => s.seriesKey == loose!.seriesKey || s.id == loose.seriesKey)
-              .firstOrNull ??
-          loose;
-    }
-    return item.contentType == ContentType.movie ? null : loose;
+    return index;
   }
+
+  /// Series folder for an episode's series key.
+  Channel? seriesFolderFor(String seriesKey) {
+    for (final type in [ContentType.series, ContentType.anime]) {
+      for (final c in catalogOf(type)) {
+        if (c.seriesKey == seriesKey || c.id == seriesKey) return c;
+      }
+    }
+    return null;
+  }
+
+  /// True when the TMDB title can actually be watched with the playlist.
+  bool isAvailable(TmdbItem item) => findChannelFor(item) != null;
+
+  /// Finds the playlist title for a TMDB item. Movies need an exact title
+  /// match and, when both sides have a year, the same year: this avoids
+  /// opening a different film with the same name (remakes, sequels).
+  Channel? findChannelFor(TmdbItem item) {
+    if (_matchCache.containsKey(item.key)) return _matchCache[item.key];
+    final result = _findChannelFor(item);
+    _matchCache[item.key] = result;
+    return result;
+  }
+
+  Channel? _findChannelFor(TmdbItem item) {
+    final index = _titleIndex ??= _buildTitleIndex();
+    final target = _titleKey(item.title);
+    if (target.isEmpty) return null;
+    final isMovie = item.contentType == ContentType.movie;
+    final candidates = (index[target] ?? const <Channel>[])
+        .where((c) => isMovie
+            ? c.type == ContentType.movie
+            : c.type != ContentType.movie)
+        .toList();
+    if (candidates.isEmpty) return null;
+    final year = item.year;
+    if (year.isNotEmpty) {
+      Channel? sameYear;
+      final noYear = <Channel>[];
+      for (final c in candidates) {
+        final y = _yearOf(c.name);
+        if (y == year) {
+          sameYear ??= c;
+        } else if (y == null) {
+          noYear.add(c);
+        }
+      }
+      if (sameYear != null) return sameYear;
+      // A different explicit year means a different title: skip it.
+      return noYear.firstOrNull;
+    }
+    return candidates.first;
+  }
+
+  static String? _yearOf(String name) =>
+      RegExp(r'\b(19|20)\d{2}\b').firstMatch(name)?.group(0);
+
+  /// Title key without language prefix, brackets, quality tags and year.
+  static String _titleKey(String raw) =>
+      _normalize(TmdbService.cleanTitle(raw));
 
   void indexEpisodes(List<Channel> episodes) {
     if (episodes.isEmpty) return;

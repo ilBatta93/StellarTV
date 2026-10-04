@@ -67,6 +67,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       position: total,
       duration: total,
       lastWatchedAt: DateTime.now(),
+      seriesKey: channel.seriesKey ?? previous?.seriesKey ?? '',
+      seriesName: channel.seriesName ?? previous?.seriesName ?? '',
+      seriesPoster: _seriesPosterFor(channel) ?? previous?.seriesPoster ?? '',
     );
     _entries = [entry, ..._entries.where((e) => e.contentId != channel.id)];
     _notify();
@@ -75,6 +78,16 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Clears the watched mark and the resume point.
   Future<void> markUnwatched(String contentId) => remove(contentId);
+
+  /// Poster of the series folder an episode belongs to (not the episode
+  /// still), so "Continua a guardare" shows the standard series artwork.
+  String? _seriesPosterFor(Channel channel) {
+    final key = channel.seriesKey;
+    if (key == null || key.isEmpty || channel.isSeriesFolder) return null;
+    final folder = _favorites?.seriesFolderFor(key);
+    final logo = folder?.logo ?? '';
+    return logo.isEmpty ? null : logo;
+  }
 
   HistoryEntry? entryFor(String contentId) {
     for (final e in _entries) {
@@ -116,6 +129,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       position: Duration(seconds: (map['pos'] as num?)?.toInt() ?? 0),
       duration: Duration(seconds: (map['dur'] as num?)?.toInt() ?? 0),
       lastWatchedAt: watched,
+      seriesKey: map['skey'] as String? ?? '',
+      seriesName: map['sname'] as String? ?? '',
+      seriesPoster: map['sposter'] as String? ?? '',
     );
   }
 
@@ -131,6 +147,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
             'pos': e.position.inSeconds,
             'dur': e.duration.inSeconds,
             'watched': e.lastWatchedAt.toIso8601String(),
+            if (e.seriesKey.isNotEmpty) 'skey': e.seriesKey,
+            if (e.seriesName.isNotEmpty) 'sname': e.seriesName,
+            if (e.seriesPoster.isNotEmpty) 'sposter': e.seriesPoster,
           }
       };
 
@@ -245,6 +264,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       position: previous?.position ?? Duration.zero,
       duration: previous?.duration ?? Duration.zero,
       lastWatchedAt: now,
+      seriesKey: channel.seriesKey ?? previous?.seriesKey ?? '',
+      seriesName: channel.seriesName ?? previous?.seriesName ?? '',
+      seriesPoster: _seriesPosterFor(channel) ?? previous?.seriesPoster ?? '',
     );
     _entries = [entry, ..._entries.where((e) => e.contentId != channel.id)];
     _notify();

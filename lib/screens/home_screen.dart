@@ -8,6 +8,7 @@ import '../widgets/brand_logo.dart';
 import 'catalog_page.dart';
 import 'discover_page.dart';
 import 'favorites_page.dart';
+import 'live_page.dart';
 import 'profile_picker_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
@@ -27,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static const _pages = [
     DiscoverPage(),
-    CatalogPage(type: ContentType.live),
+    LivePage(),
     CatalogPage(type: ContentType.movie),
     CatalogPage(type: ContentType.series),
     FavoritesPage(),

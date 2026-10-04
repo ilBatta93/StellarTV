@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
 import 'providers/app_provider.dart';
 import 'providers/discover_provider.dart';
+import 'providers/epg_provider.dart';
 import 'providers/history_provider.dart';
 import 'providers/profile_provider.dart';
 import 'providers/sync_provider.dart';
@@ -131,6 +132,7 @@ class _IlBattaTvAppState extends State<IlBattaTvApp> {
         ChangeNotifierProvider.value(value: _historyProvider),
         ChangeNotifierProvider.value(value: _profileProvider),
         ChangeNotifierProvider(create: (_) => DiscoverProvider(TmdbService())),
+        ChangeNotifierProvider(create: (_) => EpgProvider(_appProvider)),
         ChangeNotifierProvider(create: (_) => UiSettings()..load()),
       ],
       child: Builder(
