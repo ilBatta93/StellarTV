@@ -71,10 +71,8 @@ class ProfileProvider extends ChangeNotifier {
     required String avatarKey,
     required String avatarColor,
   }) async {
-    final code = await _sync.getStoredCode();
-    if (code == null) {
-      throw Exception('Nessun codice di sincronizzazione configurato.');
-    }
+    // Genera il codice al primo uso, cosi la creazione non fallisce.
+    final code = await _sync.ensureCode();
     final profile = await _service.createProfile(
       syncCode: code,
       name: name,
