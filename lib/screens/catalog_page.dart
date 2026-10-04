@@ -264,7 +264,7 @@ class _CatalogPageState extends State<CatalogPage> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
 
-    if (app.isLoading) {
+    if (app.isLoading && app.allChannels.isEmpty) {
       return Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
     if (app.error != null && app.allChannels.isEmpty) {

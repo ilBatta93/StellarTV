@@ -20,6 +20,7 @@ dependencies:
   shared_preferences: ^2.3.3
   cached_network_image: ^3.4.1
   intl: ^0.20.2
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:
@@ -29,5 +30,12 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/stellartv-logo.png
-    - assets/stellartv-name-logo.png
+    - assets/fonts/Sora.ttf
+    - assets/fonts/Manrope.ttf
+  fonts:
+    - family: Sora
+      fonts:
+        - asset: assets/fonts/Sora.ttf
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope.ttf

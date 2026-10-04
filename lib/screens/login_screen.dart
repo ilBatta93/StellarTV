@@ -32,17 +32,18 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Soft brand glow behind the header.
+          // A restrained projection glow gives the mark depth without
+          // turning the sign-in screen into a logo panel.
           Positioned(
             top: -120,
             left: -80,
             right: -80,
             child: Container(
-              height: 320,
+              height: 260,
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   colors: [
-                    AppColors.primary.withValues(alpha: 0.28),
+                    AppColors.primary.withValues(alpha: 0.14),
                     Colors.transparent,
                   ],
                   radius: 0.9,
@@ -54,7 +55,8 @@ class _LoginScreenState extends State<LoginScreen> {
             child: SingleChildScrollView(
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  minHeight: MediaQuery.of(context).size.height -
+                  minHeight:
+                      MediaQuery.of(context).size.height -
                       MediaQuery.of(context).padding.top -
                       MediaQuery.of(context).padding.bottom,
                 ),
@@ -82,24 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLogo() {
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.surface,
-            border: Border.all(color: AppColors.border),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.25),
-                blurRadius: 32,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: const BrandMark(size: 56),
-        ),
-        const SizedBox(height: 20),
-        const BrandWordmark(fontSize: 30),
+        const BrandLogo(size: 52),
         const SizedBox(height: 8),
         const Text(
           'Collega il tuo account Xtream per iniziare a guardare',
@@ -113,7 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
       child: Padding(
@@ -176,7 +161,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Icon(Icons.login),
             label: Text(_isLoading ? 'Connessione...' : 'Connetti'),

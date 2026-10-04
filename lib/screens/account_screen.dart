@@ -127,9 +127,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Center(child: BrandMark(size: 76)),
-                      const SizedBox(height: 16),
-                      const Center(child: BrandWordmark(fontSize: 28)),
+                      const Center(child: BrandLogo(size: 52)),
                       const SizedBox(height: 28),
                       Text(
                         _register ? 'Crea il tuo account' : 'Accedi',

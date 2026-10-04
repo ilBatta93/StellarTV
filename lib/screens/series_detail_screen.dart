@@ -32,6 +32,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   int _selectedSeason = 0;
   TmdbItem? _item;
   List<TmdbPerson> _cast = [];
+  List<TmdbItem> _similar = [];
 
   @override
   void initState() {
@@ -45,15 +46,24 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   Future<void> _loadInfo() async {
     try {
       final tmdb = context.read<DiscoverProvider>().tmdb;
-      final item = _item ??
-          await tmdb.findByTitle(widget.series.displaySeriesName,
-              isMovie: false);
+      final item =
+          _item ??
+          await tmdb.findByTitle(
+            widget.series.displaySeriesName,
+            isMovie: false,
+          );
       if (item == null) return;
       final cast = await tmdb.cast(item);
+      final recommendations = await tmdb.recommendations(item);
       if (!mounted) return;
+      final app = context.read<AppProvider>();
       setState(() {
         _item = item;
         _cast = cast.take(20).toList();
+        _similar = recommendations
+            .where((candidate) => app.findChannelFor(candidate) != null)
+            .take(20)
+            .toList();
       });
     } catch (_) {
       // Info is optional: seasons and episodes still work without it.
@@ -66,8 +76,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       _error = null;
     });
     try {
-      final details =
-          await context.read<AppProvider>().loadSeriesDetails(widget.series);
+      final details = await context.read<AppProvider>().loadSeriesDetails(
+        widget.series,
+      );
       if (!mounted) return;
       setState(() {
         _details = details;
@@ -94,10 +105,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         : (item?.overview ?? '');
     final image = item?.backdropUrl ?? series.logo;
     final seasons = _details?.seasons ?? const [];
-    final currentSeason =
-        seasons.isNotEmpty && _selectedSeason < seasons.length
-            ? seasons[_selectedSeason]
-            : null;
+    final currentSeason = seasons.isNotEmpty && _selectedSeason < seasons.length
+        ? seasons[_selectedSeason]
+        : null;
 
     return Scaffold(
       body: CustomScrollView(
@@ -132,7 +142,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                         colors: [
                           Color(0x8009090D),
                           Colors.transparent,
-                          AppColors.background
+                          AppColors.background,
                         ],
                         stops: [0, 0.4, 1],
                       ),
@@ -148,8 +158,10 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(series.displaySeriesName,
-                      style: Theme.of(context).textTheme.headlineMedium),
+                  Text(
+                    series.displaySeriesName,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -165,10 +177,12 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                   ),
                   const SizedBox(height: 16),
                   if (plot.trim().isNotEmpty) ...[
-                    Text('Trama', style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Trama',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 8),
-                    Text(plot,
-                        style: Theme.of(context).textTheme.bodyMedium),
+                    Text(plot, style: Theme.of(context).textTheme.bodyMedium),
                     const SizedBox(height: 8),
                   ],
                 ],
@@ -179,11 +193,14 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: Text('Stagioni ed episodi',
-                  style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700)),
+              child: Text(
+                'Stagioni ed episodi',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
           if (_loading)
@@ -235,14 +252,15 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                         color: selected
                             ? Colors.white
                             : AppColors.textSecondary,
-                        fontWeight:
-                            selected ? FontWeight.w600 : FontWeight.w400,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                       ),
                       selectedColor: AppColors.primary,
                       backgroundColor: AppColors.surface,
                       side: BorderSide(
-                          color:
-                              selected ? AppColors.primary : AppColors.border),
+                        color: selected ? AppColors.primary : AppColors.border,
+                      ),
                       showCheckmark: false,
                     );
                   },
@@ -267,22 +285,50 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                       h.markWatched(ep.channel, duration: ep.duration);
                     }
                   },
-                  onTap: () => playChannel(context, ep.channel,
-                      queue: [
-                        for (final e in _details?.allEpisodes ?? const [])
-                          e.channel
-                      ],
-                      startAt: context
-                          .read<HistoryProvider>()
-                          .entryFor(ep.channel.id)
-                          ?.resumePosition),
+                  onTap: () => playChannel(
+                    context,
+                    ep.channel,
+                    queue: [
+                      for (final e in _details?.allEpisodes ?? const [])
+                        e.channel,
+                    ],
+                    startAt: context
+                        .read<HistoryProvider>()
+                        .entryFor(ep.channel.id)
+                        ?.resumePosition,
+                  ),
                 );
               },
             ),
           ],
+          if (_similar.isNotEmpty)
+            SliverToBoxAdapter(child: _buildSimilar(context)),
           const SliverToBoxAdapter(child: SizedBox(height: 32)),
         ],
       ),
+    );
+  }
+
+  Widget _buildSimilar(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(
+          title: 'Titoli simili',
+          subtitle: 'Disponibili nella tua playlist',
+        ),
+        HorizontalRow(
+          height: 210,
+          itemCount: _similar.length,
+          itemBuilder: (context, index) {
+            final item = _similar[index];
+            return TmdbPosterCard(
+              item: item,
+              onTap: () => openTmdbItem(context, item),
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -337,8 +383,11 @@ class _EpisodeTile extends StatelessWidget {
                           Container(
                             color: Colors.black.withValues(alpha: 0.45),
                             alignment: Alignment.center,
-                            child: const Icon(Icons.check_circle_rounded,
-                                color: Colors.white, size: 28),
+                            child: const Icon(
+                              Icons.check_circle_rounded,
+                              color: Colors.white,
+                              size: 28,
+                            ),
                           ),
                         if (progress != null && progress! > 0)
                           Positioned(
@@ -348,10 +397,12 @@ class _EpisodeTile extends StatelessWidget {
                             child: LinearProgressIndicator(
                               value: progress,
                               minHeight: 4,
-                              backgroundColor:
-                                  Colors.white.withValues(alpha: 0.25),
+                              backgroundColor: Colors.white.withValues(
+                                alpha: 0.25,
+                              ),
                               valueColor: AlwaysStoppedAnimation(
-                                  AppColors.primary),
+                                AppColors.primary,
+                              ),
                             ),
                           ),
                       ],
@@ -402,7 +453,9 @@ class _EpisodeTile extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  tooltip: watched ? 'Segna come non visto' : 'Segna come visto',
+                  tooltip: watched
+                      ? 'Segna come non visto'
+                      : 'Segna come visto',
                   onPressed: onToggleWatched,
                   icon: Icon(
                     watched
@@ -421,10 +474,13 @@ class _EpisodeTile extends StatelessWidget {
   }
 
   Widget _placeholder() => Container(
-        color: AppColors.surface,
-        child: const Icon(Icons.movie_outlined,
-            color: AppColors.textMuted, size: 28),
-      );
+    color: AppColors.surface,
+    child: const Icon(
+      Icons.movie_outlined,
+      color: AppColors.textMuted,
+      size: 28,
+    ),
+  );
 
   String _formatDuration(Duration d) {
     final h = d.inHours;
@@ -446,8 +502,10 @@ class _Chip extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(label,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+      child: Text(
+        label,
+        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+      ),
     );
   }
 }

@@ -17,6 +17,7 @@ import '../services/settings_service.dart';
 import '../services/sync_service.dart';
 import '../services/series_grouping.dart';
 import '../services/kids_content_service.dart';
+import '../services/catalog_cache_service.dart';
 
 enum AuthMethod { none, xtream }
 
@@ -24,6 +25,7 @@ class AppProvider extends ChangeNotifier {
   final _xtreamService = XtreamService();
   final _favoritesService = FavoritesService();
   final _settingsService = SettingsService();
+  final _catalogCache = CatalogCacheService();
   CloudFavoritesService? _cloudFavorites;
   String? _syncCode;
 
@@ -615,6 +617,9 @@ class AppProvider extends ChangeNotifier {
   /// Reloads credentials and playlist from local storage. Called after the
   /// account sync restores cloud data into local storage.
   Future<void> reloadFromStorage() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
     _initialized = false;
     await init();
     await _refreshService.schedule();
@@ -678,6 +683,10 @@ class AppProvider extends ChangeNotifier {
     // routes to Home while the playlist is still loading in the background.
     _isAuthenticated =
         _authMethod == AuthMethod.xtream && _xtreamCredentials != null;
+    if (_xtreamCredentials case final credentials?) {
+      final cached = await _catalogCache.read(_cacheKey(credentials));
+      if (cached.isNotEmpty && _rawChannels.isEmpty) _setChannels(cached);
+    }
     _initialized = true;
     notifyListeners();
 
@@ -767,7 +776,14 @@ class AppProvider extends ChangeNotifier {
         username: username,
         password: password,
       );
-      _setChannels([...live, ...vod, ...series]);
+      final channels = [...live, ...vod, ...series];
+      _setChannels(channels);
+      unawaited(
+        _catalogCache.write(
+          _cacheKey({'server': server, 'username': username}),
+          channels,
+        ),
+      );
       _isAuthenticated = true;
     } catch (e) {
       _error = e.toString();
@@ -776,6 +792,9 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  String _cacheKey(Map<String, String> credentials) =>
+      '${credentials['server'] ?? ''}|${credentials['username'] ?? ''}';
 
   Future<void> logout() async {
     await _settingsService.clearCredentials();

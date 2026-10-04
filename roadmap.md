@@ -6,4 +6,8 @@
 - [x] Correggere i filtri per genere nel tab Serie TV
 - [x] Rendere più robusta la riproduzione live per l’errore HTTP 458
 - [x] Formattare e verificare le modifiche (analisi completa demandata alla build Flutter/Codemagic)
+- [x] Ridisegnare marchio e wordmark in codice e integrarli nell’interfaccia
+- [x] Applicare la nuova palette e i font Sora/Manrope
+- [x] Mostrare subito il catalogo salvato durante l’aggiornamento all’avvio
+- [x] Aggiungere i titoli simili disponibili nella scheda delle serie
 - [x] Salvare le modifiche nella repository GitHub

@@ -44,7 +44,7 @@ class _ProfilePickerScreenState extends State<ProfilePickerScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 40),
-                    const BrandMark(size: 64),
+                    const Center(child: BrandLogo(size: 46)),
                     const SizedBox(height: 12),
                     Text(
                       'Chi sta guardando?',

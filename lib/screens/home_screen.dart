@@ -41,8 +41,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 16,
-        title: const BrandLogo(size: 30),
+        toolbarHeight: 68,
+        titleSpacing: 20,
+        title: const BrandLogo(size: 28),
         actions: [
           IconButton(
             tooltip: 'Cerca',
@@ -77,25 +78,30 @@ class _HomeScreenState extends State<HomeScreen> {
           }),
           destinations: const [
             NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home_rounded),
-                label: 'Home'),
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'Home',
+            ),
             NavigationDestination(
-                icon: Icon(Icons.live_tv_outlined),
-                selectedIcon: Icon(Icons.live_tv_rounded),
-                label: 'Diretta'),
+              icon: Icon(Icons.live_tv_outlined),
+              selectedIcon: Icon(Icons.live_tv_rounded),
+              label: 'Diretta',
+            ),
             NavigationDestination(
-                icon: Icon(Icons.movie_outlined),
-                selectedIcon: Icon(Icons.movie_rounded),
-                label: 'Film'),
+              icon: Icon(Icons.movie_outlined),
+              selectedIcon: Icon(Icons.movie_rounded),
+              label: 'Film',
+            ),
             NavigationDestination(
-                icon: Icon(Icons.video_library_outlined),
-                selectedIcon: Icon(Icons.video_library_rounded),
-                label: 'Serie TV'),
+              icon: Icon(Icons.video_library_outlined),
+              selectedIcon: Icon(Icons.video_library_rounded),
+              label: 'Serie TV',
+            ),
             NavigationDestination(
-                icon: Icon(Icons.favorite_border_rounded),
-                selectedIcon: Icon(Icons.favorite_rounded),
-                label: 'Preferiti'),
+              icon: Icon(Icons.favorite_border_rounded),
+              selectedIcon: Icon(Icons.favorite_rounded),
+              label: 'Preferiti',
+            ),
           ],
         ),
       ),
@@ -113,22 +119,24 @@ class _ProfileButton extends StatelessWidget {
     final profiles = context.watch<ProfileProvider>();
     final profile = profiles.selected;
     if (profile == null) return const SizedBox.shrink();
-    final color = Color(ProfileAvatars.colors[profile.avatarColor] ??
-        ProfileAvatars.colors['arancio']!);
+    final color = Color(
+      ProfileAvatars.colors[profile.avatarColor] ??
+          ProfileAvatars.colors['arancio']!,
+    );
     return Padding(
       padding: const EdgeInsets.only(right: 4),
       child: IconButton(
         tooltip: 'Cambia profilo',
-        onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const ProfilePickerScreen())),
+        onPressed: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const ProfilePickerScreen())),
         icon: Container(
           width: 32,
           height: 32,
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(9),
-            border:
-                Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
+            border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
           ),
           child: Icon(
             ProfileAvatars.iconOf(profile.avatarKey),
