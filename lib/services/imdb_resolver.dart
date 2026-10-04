@@ -18,8 +18,8 @@ class ImdbResolver {
     try {
       final uri = Uri.parse('${SupabaseConfig.apiBase}/imdb').replace(
         queryParameters: {
-          if (tmdbId != null) 'tmdb_id': '$tmdbId',
-          if (title != null) 'title': title,
+          'tmdb_id': ?tmdbId?.toString(),
+          'title': ?title,
         },
       );
       final res = await http.get(uri).timeout(const Duration(seconds: 10));

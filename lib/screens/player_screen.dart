@@ -525,7 +525,7 @@ class _PlayerScreenState extends State<PlayerScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Prossimo episodio tra $_outroCountdown...',
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: AppColors.primary,
                       fontSize: 12,
                       fontWeight: FontWeight.w700)),
