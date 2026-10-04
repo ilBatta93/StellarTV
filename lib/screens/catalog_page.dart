@@ -11,8 +11,11 @@ import '../widgets/channel_card.dart';
 import '../widgets/section_row.dart';
 import 'settings_screen.dart';
 
-SliverGridDelegate channelGridDelegate(ContentType type,
-    {double maxExtent = 140, bool compact = false}) {
+SliverGridDelegate channelGridDelegate(
+  ContentType type, {
+  double maxExtent = 140,
+  bool compact = false,
+}) {
   final isLive = type == ContentType.live;
   return SliverGridDelegateWithMaxCrossAxisExtent(
     maxCrossAxisExtent: isLive ? 150 : (compact ? maxExtent * 0.86 : maxExtent),
@@ -106,7 +109,9 @@ Future<Channel?> pickVariant(BuildContext context, CatalogEntry entry) async {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 13),
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
             ),
           ),
           for (final v in entry.variants)
@@ -133,9 +138,13 @@ Future<Channel?> pickVariant(BuildContext context, CatalogEntry entry) async {
                 style: const TextStyle(fontSize: 14),
               ),
               subtitle: v.group != entry.primary.group
-                  ? Text(v.group,
+                  ? Text(
+                      v.group,
                       style: const TextStyle(
-                          color: AppColors.textMuted, fontSize: 11))
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                      ),
+                    )
                   : null,
               onTap: () => Navigator.pop(ctx, v),
             ),
@@ -165,8 +174,11 @@ class ChannelGrid extends StatelessWidget {
     final ui = context.watch<UiSettings>();
     return GridView.builder(
       padding: padding,
-      gridDelegate: channelGridDelegate(type,
-          maxExtent: ui.gridMaxExtent, compact: ui.compact),
+      gridDelegate: channelGridDelegate(
+        type,
+        maxExtent: ui.gridMaxExtent,
+        compact: ui.compact,
+      ),
       itemCount: channels.length,
       itemBuilder: (context, i) {
         final c = channels[i];
@@ -181,6 +193,46 @@ class ChannelGrid extends StatelessWidget {
   }
 }
 
+/// TMDB genres (Italian labels). Movie and TV ids differ for a few genres.
+const _movieGenres = <int, String>{
+  28: 'Azione',
+  12: 'Avventura',
+  16: 'Animazione',
+  35: 'Commedia',
+  80: 'Crime',
+  99: 'Documentario',
+  18: 'Dramma',
+  10751: 'Famiglia',
+  14: 'Fantasy',
+  36: 'Storia',
+  27: 'Horror',
+  10402: 'Musica',
+  9648: 'Mistero',
+  10749: 'Romance',
+  878: 'Fantascienza',
+  53: 'Thriller',
+  10752: 'Guerra',
+  37: 'Western',
+};
+const _tvGenres = <int, String>{
+  10759: 'Azione e Avventura',
+  16: 'Animazione',
+  35: 'Commedia',
+  80: 'Crime',
+  99: 'Documentario',
+  18: 'Dramma',
+  10751: 'Famiglia',
+  10762: 'Bambini',
+  9648: 'Mistero',
+  10763: 'News',
+  10764: 'Reality',
+  10765: 'Sci-Fi e Fantasy',
+  10766: 'Soap',
+  10767: 'Talk show',
+  10768: 'Guerra e Politica',
+  37: 'Western',
+};
+
 class CatalogPage extends StatefulWidget {
   final ContentType type;
 
@@ -193,22 +245,22 @@ class CatalogPage extends StatefulWidget {
 class _CatalogPageState extends State<CatalogPage> {
   String _query = '';
   String? _selectedCategory;
+  int? _genreId;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   String get _noun => switch (widget.type) {
-        ContentType.live => 'canali',
-        ContentType.movie => 'film',
-        ContentType.series => 'serie',
-        ContentType.anime => 'anime',
-      };
+    ContentType.live => 'canali',
+    ContentType.movie => 'film',
+    ContentType.series => 'serie',
+    ContentType.anime => 'anime',
+  };
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
 
     if (app.isLoading) {
-      return Center(
-          child: CircularProgressIndicator(color: AppColors.primary));
+      return Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
     if (app.error != null && app.allChannels.isEmpty) {
       return EmptyState(
@@ -232,8 +284,10 @@ class _CatalogPageState extends State<CatalogPage> {
         action: ElevatedButton.icon(
           icon: const Icon(Icons.settings_rounded),
           label: const Text('Apri impostazioni'),
-          onPressed: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen())),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          ),
         ),
       );
     }
@@ -251,8 +305,11 @@ class _CatalogPageState extends State<CatalogPage> {
         categories: ['Ultimi Aggiunti', ...groups.map((g) => g.label)],
         selected: _selectedCategory,
         onSelected: (category) {
-          setState(() => _selectedCategory =
-              category == 'Ultimi Aggiunti' ? null : category);
+          setState(
+            () => _selectedCategory = category == 'Ultimi Aggiunti'
+                ? null
+                : category,
+          );
         },
       ),
       body: Column(
@@ -266,8 +323,7 @@ class _CatalogPageState extends State<CatalogPage> {
                     onChanged: (v) => setState(() => _query = v),
                     decoration: InputDecoration(
                       hintText: 'Cerca tra $_noun',
-                      prefixIcon:
-                          const Icon(Icons.search_rounded, size: 20),
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
                     ),
                   ),
                 ),
@@ -275,26 +331,104 @@ class _CatalogPageState extends State<CatalogPage> {
                 IconButton(
                   tooltip: 'Categorie',
                   icon: const Icon(Icons.category_outlined),
-                  onPressed: () =>
-                      _scaffoldKey.currentState?.openDrawer(),
+                  onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                 ),
               ],
             ),
           ),
+          _buildGenreBar(app, groups),
           Expanded(
             child: _query.isNotEmpty
                 ? _buildSearchResults(app)
                 : visibleGroup != null
-                    ? _buildGroupGrid(app, visibleGroup)
-                    : _buildRecentGrid(app),
+                ? _buildGroupGrid(app, visibleGroup)
+                : _buildRecentGrid(app),
           ),
         ],
       ),
     );
   }
 
+  Map<int, String> get _genreNames =>
+      widget.type == ContentType.movie ? _movieGenres : _tvGenres;
+
+  bool _matchesGenre(AppProvider app, CatalogEntry e) {
+    final id = _genreId;
+    if (id == null) return true;
+    return app.genresOf(e.primary)?.contains(id) ?? false;
+  }
+
+  /// One-genre chip bar; only genres that exist in the playlist are shown.
+  Widget _buildGenreBar(AppProvider app, List<CatalogGroup> groups) {
+    final names = _genreNames;
+    final counts = <int, int>{};
+    for (final g in groups) {
+      for (final e in g.entries) {
+        for (final id in app.genresOf(e.primary) ?? const <int>[]) {
+          if (names.containsKey(id)) counts[id] = (counts[id] ?? 0) + 1;
+        }
+      }
+    }
+    if (counts.isEmpty) return const SizedBox.shrink();
+    final ids = counts.keys.toList()
+      ..sort((a, b) => names[a]!.compareTo(names[b]!));
+    Widget chip(String label, bool selected, VoidCallback onTap) => Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onTap(),
+        showCheckmark: false,
+        selectedColor: AppColors.primary.withValues(alpha: 0.22),
+        backgroundColor: AppColors.card,
+        side: BorderSide(
+          color: selected ? AppColors.primary : Colors.transparent,
+        ),
+        labelStyle: TextStyle(
+          fontSize: 13,
+          color: selected ? AppColors.primary : AppColors.textSecondary,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+    );
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+        children: [
+          chip(
+            'Tutti i generi',
+            _genreId == null,
+            () => setState(() => _genreId = null),
+          ),
+          for (final id in ids)
+            chip(
+              names[id]!,
+              _genreId == id,
+              () => setState(() => _genreId = _genreId == id ? null : id),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// With a genre selected and no category chosen, the whole catalog of
+  /// that genre is shown (not only the latest additions).
+  List<CatalogEntry> _allOfGenre(AppProvider app) {
+    final seen = <String>{};
+    return [
+      for (final g in app.groupedCatalog(widget.type))
+        for (final e in g.entries)
+          if (_matchesGenre(app, e) && seen.add(e.primary.id)) e,
+    ];
+  }
+
   Widget _buildRecentGrid(AppProvider app) {
-    final entries = app.recentEntries(widget.type);
+    final entries = _genreId != null
+        ? _allOfGenre(app)
+        : app.recentEntries(widget.type);
     if (entries.isEmpty) {
       return EmptyState(
         icon: Icons.search_off_rounded,
@@ -305,22 +439,35 @@ class _CatalogPageState extends State<CatalogPage> {
     final ui = context.watch<UiSettings>();
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      gridDelegate: channelGridDelegate(widget.type,
-          maxExtent: ui.gridMaxExtent, compact: ui.compact),
+      gridDelegate: channelGridDelegate(
+        widget.type,
+        maxExtent: ui.gridMaxExtent,
+        compact: ui.compact,
+      ),
       itemCount: entries.length,
-      itemBuilder: (context, i) =>
-          _entryCard(app, entries[i]),
+      itemBuilder: (context, i) => _entryCard(app, entries[i]),
     );
   }
 
   Widget _buildGroupGrid(AppProvider app, CatalogGroup group) {
     final ui = context.watch<UiSettings>();
+    final entries = group.entries.where((e) => _matchesGenre(app, e)).toList();
+    if (entries.isEmpty) {
+      return EmptyState(
+        icon: Icons.search_off_rounded,
+        title: 'Nessun risultato',
+        message: 'Nessun titolo di questo genere nella categoria.',
+      );
+    }
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      gridDelegate: channelGridDelegate(widget.type,
-          maxExtent: ui.gridMaxExtent, compact: ui.compact),
-      itemCount: group.entries.length,
-      itemBuilder: (context, i) => _entryCard(app, group.entries[i]),
+      gridDelegate: channelGridDelegate(
+        widget.type,
+        maxExtent: ui.gridMaxExtent,
+        compact: ui.compact,
+      ),
+      itemCount: entries.length,
+      itemBuilder: (context, i) => _entryCard(app, entries[i]),
     );
   }
 
@@ -331,6 +478,7 @@ class _CatalogPageState extends State<CatalogPage> {
     for (final g in app.groupedCatalog(widget.type)) {
       for (final e in g.entries) {
         if (!e.primary.name.toLowerCase().contains(q)) continue;
+        if (!_matchesGenre(app, e)) continue;
         final key = e.primary.id;
         if (seen.contains(key)) continue;
         seen.add(key);
@@ -347,8 +495,11 @@ class _CatalogPageState extends State<CatalogPage> {
     final ui = context.watch<UiSettings>();
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      gridDelegate: channelGridDelegate(widget.type,
-          maxExtent: ui.gridMaxExtent, compact: ui.compact),
+      gridDelegate: channelGridDelegate(
+        widget.type,
+        maxExtent: ui.gridMaxExtent,
+        compact: ui.compact,
+      ),
       itemCount: matches.length,
       itemBuilder: (context, i) => _entryCard(app, matches[i]),
     );
@@ -363,8 +514,7 @@ class _CatalogPageState extends State<CatalogPage> {
     );
   }
 
-  Future<void> _openEntry(
-      BuildContext context, CatalogEntry entry) async {
+  Future<void> _openEntry(BuildContext context, CatalogEntry entry) async {
     final channel = await pickVariant(context, entry);
     if (channel == null || !context.mounted) return;
     openChannel(context, channel);
@@ -395,8 +545,10 @@ class _CategoryDrawer extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text('Categorie',
-                  style: Theme.of(context).textTheme.titleMedium),
+              child: Text(
+                'Categorie',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ),
             Expanded(
               child: ListView(
@@ -405,10 +557,12 @@ class _CategoryDrawer extends StatelessWidget {
                   for (final c in categories)
                     ListTile(
                       selected: (selected ?? 'Ultimi Aggiunti') == c,
-                      selectedTileColor:
-                          AppColors.primary.withValues(alpha: 0.15),
+                      selectedTileColor: AppColors.primary.withValues(
+                        alpha: 0.15,
+                      ),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       title: Text(
                         c,
                         maxLines: 1,
@@ -418,10 +572,9 @@ class _CategoryDrawer extends StatelessWidget {
                           color: (selected ?? 'Ultimi Aggiunti') == c
                               ? AppColors.primary
                               : AppColors.textPrimary,
-                          fontWeight:
-                              (selected ?? 'Ultimi Aggiunti') == c
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
+                          fontWeight: (selected ?? 'Ultimi Aggiunti') == c
+                              ? FontWeight.w600
+                              : FontWeight.w400,
                         ),
                       ),
                       onTap: () {

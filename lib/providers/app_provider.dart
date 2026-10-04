@@ -170,8 +170,12 @@ class AppProvider extends ChangeNotifier {
   Timer? _kidsRefresh;
 
   void _onKidsVerdicts() {
-    if (!_kidsMode) return;
     _kidsRefresh?.cancel();
+    if (!_kidsMode) {
+      // New TMDB genres for the catalog genre filter: refresh, but rarely.
+      _kidsRefresh = Timer(const Duration(seconds: 5), notifyListeners);
+      return;
+    }
     _kidsRefresh = Timer(const Duration(seconds: 2), () {
       if (!_kidsMode) return;
       _applyAdultFilter();
@@ -312,6 +316,9 @@ class AppProvider extends ChangeNotifier {
     for (final id in _favoriteIds)
       if (channelById(id) case final c?) c,
   ];
+
+  /// TMDB genre ids of a playlist movie/series (null while not checked yet).
+  List<int>? genresOf(Channel c) => _kids.genresOf(c);
 
   List<Channel> searchChannels(String query, {ContentType? type}) {
     final q = query.trim().toLowerCase();

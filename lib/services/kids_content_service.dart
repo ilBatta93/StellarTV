@@ -14,6 +14,7 @@ import '../models/content_type.dart';
 /// they are checked.
 class KidsContentService {
   static const _cacheKey = 'kids_verdicts_v1';
+  static const _genresKey = 'tmdb_genres_v1';
   static const _batchSize = 40;
 
   static final bannedKeywords = RegExp(
@@ -25,6 +26,9 @@ class KidsContentService {
   );
 
   final Map<String, bool> _verdicts = {};
+
+  /// TMDB genre ids per title, filled by the same background scan.
+  final Map<String, List<int>> _genres = {};
   final Set<String> _pending = {};
   bool _loaded = false;
   bool _running = false;
@@ -47,6 +51,14 @@ class KidsContentService {
     if (_loaded) return;
     _loaded = true;
     final prefs = await SharedPreferences.getInstance();
+    final rawGenres = prefs.getString(_genresKey);
+    if (rawGenres != null) {
+      try {
+        (jsonDecode(rawGenres) as Map<String, dynamic>).forEach((k, v) {
+          if (v is List) _genres[k] = v.whereType<int>().toList();
+        });
+      } catch (_) {}
+    }
     final raw = prefs.getString(_cacheKey);
     if (raw == null) return;
     try {
@@ -69,6 +81,9 @@ class KidsContentService {
 
   bool isKnown(Channel item) => _verdicts.containsKey(keyOf(item));
 
+  /// TMDB genre ids of a movie/series, or null while not yet checked.
+  List<int>? genresOf(Channel item) => _genres[keyOf(item)];
+
   /// Starts filling the shared/local cache as soon as a playlist is loaded,
   /// without requiring the kids profile or the player to be open.
   Future<void> warmUp(Iterable<Channel> items) async {
@@ -81,11 +96,7 @@ class KidsContentService {
     for (final c in items) {
       if (c.type != ContentType.movie && c.type != ContentType.series) continue;
       final key = keyOf(c);
-      if (_verdicts.containsKey(key)) continue;
-      if (bannedKeywords.hasMatch(_titleOf(c))) {
-        _verdicts[key] = false;
-        continue;
-      }
+      if (_verdicts.containsKey(key) && _genres.containsKey(key)) continue;
       _pending.add('${key.split(':').first}\u0000${_titleOf(c)}');
     }
     if (!_running) unawaited(_run());
@@ -120,7 +131,10 @@ class KidsContentService {
                 .toLowerCase()
                 .replaceAll(RegExp(r'[^a-z0-9à-ÿ]+'), ' ')
                 .trim();
-            _verdicts['${r['type']}:$norm'] = r['is_kids'] as bool;
+            final key = '${r['type']}:$norm';
+            _verdicts[key] = r['is_kids'] as bool;
+            final g = r['genre_ids'];
+            _genres[key] = g is List ? g.whereType<int>().toList() : const [];
           }
           await _save();
           onVerdicts?.call();
@@ -136,5 +150,6 @@ class KidsContentService {
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_cacheKey, jsonEncode(_verdicts));
+    await prefs.setString(_genresKey, jsonEncode(_genres));
   }
 }
