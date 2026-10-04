@@ -8,7 +8,11 @@ class BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    // Align evita che il logo venga stirato da un genitore che lo allarga.
+    return Align(
+      widthFactor: 1,
+      heightFactor: 1,
+      child: Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
@@ -23,6 +27,7 @@ class BrandMark extends StatelessWidget {
         ],
       ),
       child: CustomPaint(painter: _TvPlayPainter()),
+      ),
     );
   }
 }
