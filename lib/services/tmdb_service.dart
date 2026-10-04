@@ -17,7 +17,7 @@ class TmdbService {
 
   Future<Map<String, dynamic>> _get(String path,
       [Map<String, String> params = const {}]) async {
-    final uri = Uri.parse('${SupabaseConfig.url}/functions/v1/tmdb')
+    final uri = Uri.parse(SupabaseConfig.tmdbProxyUrl)
         .replace(queryParameters: {'path': path, ...params});
     final http.Response res;
     try {
