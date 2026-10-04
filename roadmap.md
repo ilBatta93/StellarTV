@@ -6,4 +6,4 @@
 - [x] Correggere i filtri per genere nel tab Serie TV
 - [x] Rendere più robusta la riproduzione live per l’errore HTTP 458
 - [x] Formattare e verificare le modifiche (analisi completa demandata alla build Flutter/Codemagic)
-- [ ] Salvare le modifiche nella repository GitHub
+- [x] Salvare le modifiche nella repository GitHub
