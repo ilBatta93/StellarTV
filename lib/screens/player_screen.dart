@@ -12,6 +12,8 @@ import '../providers/app_provider.dart';
 import '../providers/epg_provider.dart';
 import '../player/playback_session.dart';
 import '../providers/history_provider.dart';
+import '../services/imdb_resolver.dart';
+import '../services/introdb_service.dart';
 import '../services/native_player_bridge.dart';
 import '../services/player_settings_service.dart';
 import '../theme/app_theme.dart';
@@ -64,6 +66,13 @@ class _PlayerScreenState extends State<PlayerScreen>
   bool _nextDismissed = false;
   bool _advancing = false;
 
+  // IntroDB skip segments (empty when unavailable: no buttons are shown).
+  EpisodeSegments _segments = EpisodeSegments.empty;
+  bool _outroDisabled = false;
+  bool _outroActive = false;
+  int _outroCountdown = 5;
+  Timer? _outroTimer;
+
   bool get _isLive => widget.channel.type == ContentType.live;
 
   @override
@@ -81,6 +90,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     });
     _init();
     _resolveQueue();
+    _loadSegments();
   }
 
   bool get _isEpisode =>
@@ -122,6 +132,60 @@ class _PlayerScreenState extends State<PlayerScreen>
       _next = index >= 0 && index + 1 < queue.length ? queue[index + 1] : null;
     });
   }
+
+  /// IntroDB: resolve the IMDb id of the series, then fetch intro/outro.
+  /// Any failure is ignored silently and playback continues normally.
+  Future<void> _loadSegments() async {
+    final c = widget.channel;
+    if (!_isEpisode || c.season == null || c.episode == null) return;
+    final title = c.seriesName?.isNotEmpty == true ? c.seriesName! : c.name;
+    final imdbId = await ImdbResolver.getImdbId(title: title);
+    if (imdbId == null) return;
+    final segments = await IntroDbService.fetch(imdbId, c.season!, c.episode!);
+    if (mounted) setState(() => _segments = segments);
+  }
+
+  void _skipIntro() {
+    final intro = _segments.intro;
+    if (intro == null) return;
+    _session?.seekTo(intro.end);
+    _onInteraction();
+  }
+
+  void _checkOutro(Duration position) {
+    final outro = _segments.outro;
+    if (outro == null || _next == null || _outroDisabled || _advancing) return;
+    final inOutro = position >= outro.start;
+    if (inOutro && !_outroActive) {
+      _outroActive = true;
+      _outroCountdown = 5;
+      _outroTimer?.cancel();
+      _outroTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+        if (!mounted) return t.cancel();
+        if (_outroCountdown <= 1) {
+          t.cancel();
+          playNextEpisode();
+        } else {
+          setState(() => _outroCountdown--);
+        }
+      });
+    } else if (!inOutro && _outroActive) {
+      // The user seeked back before the credits.
+      _outroActive = false;
+      _outroTimer?.cancel();
+    }
+  }
+
+  void _watchCredits() {
+    _outroTimer?.cancel();
+    setState(() {
+      _outroActive = false;
+      _outroDisabled = true;
+      _nextDismissed = true;
+    });
+  }
+
+  void playNextEpisode() => _playNext();
 
   void _playNext() {
     final next = _next;
@@ -170,17 +234,30 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
+  Future<void> _setOrientation(String mode) async {
+    await SystemChrome.setPreferredOrientations(switch (mode) {
+      'landscape' => [
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ],
+      'portrait' => [DeviceOrientation.portraitUp],
+      _ => [
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ],
+    });
+    // Android: force true sensor rotation (also with auto-rotate quirks).
+    await _bridge.setOrientation(mode);
+  }
+
   void _applyOrientation(PlayerSettings settings) {
     switch (settings.orientation) {
       case PlayerOrientation.landscape:
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
+        _setOrientation('landscape');
       case PlayerOrientation.auto:
-        SystemChrome.setPreferredOrientations(DeviceOrientation.values);
       case PlayerOrientation.followVideo:
-        SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+        _setOrientation('sensor');
     }
   }
 
@@ -194,9 +271,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       if (settings.orientation == PlayerOrientation.followVideo &&
           !_orientationApplied) {
         _orientationApplied = true;
-        SystemChrome.setPreferredOrientations(v.aspectRatio >= 1
-            ? [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
-            : [DeviceOrientation.portraitUp]);
+        _setOrientation(v.aspectRatio >= 1 ? 'landscape' : 'portrait');
       }
       if (_pipSupported && v.size != _pipSize) {
         _pipSize = v.size;
@@ -204,6 +279,8 @@ class _PlayerScreenState extends State<PlayerScreen>
             width: v.size.width.round(), height: v.size.height.round());
       }
     }
+
+    if (!_isLive) _checkOutro(v.position);
 
     // Netflix-style: at the end of an episode go straight to the next one.
     if (v.isEnded && _next != null && !_nextDismissed) {
@@ -316,7 +393,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     _bridge.setKeepScreenOn(false);
     _bridge.resetBrightness();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    _outroTimer?.cancel();
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp])
+        .then((_) => _bridge.setOrientation('portrait'));
     super.dispose();
   }
 
@@ -382,7 +461,30 @@ class _PlayerScreenState extends State<PlayerScreen>
           ),
         ),
       ),
-      if (_next != null && status == SessionStatus.playing && !_inPip)
+      if (status == SessionStatus.playing &&
+          _segments.intro != null &&
+          _segments.intro!.contains(session.value.position))
+        Positioned(
+          right: 24,
+          bottom: 96,
+          child: SafeArea(
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              ),
+              icon: const Icon(Icons.fast_forward_rounded),
+              label: const Text('Salta Sigla',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              onPressed: _skipIntro,
+            ),
+          ),
+        ),
+      if (_outroActive && _next != null && !_inPip)
+        _buildOutroOverlay()
+      else if (_next != null && status == SessionStatus.playing && !_inPip)
         _buildNextOverlay(session),
       if (_statsVisible)
         Positioned(
@@ -398,6 +500,77 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: SafeArea(child: Center(child: _NoticeBanner(text: session.notice!))),
         ),
     ];
+  }
+
+  /// IntroDB credits: next episode card with a 5 second countdown.
+  Widget _buildOutroOverlay() {
+    final next = _next!;
+    final label = next.season != null && next.episode != null
+        ? 'S${next.season} E${next.episode}'
+        : 'Prossimo episodio';
+    return Positioned(
+      right: 24,
+      bottom: 96,
+      child: SafeArea(
+        child: Container(
+          width: 320,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.82),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Prossimo episodio tra $_outroCountdown...',
+                  style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text('$label · ${next.name}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
+              LinearProgressIndicator(
+                value: (5 - _outroCountdown) / 5,
+                color: AppColors.primary,
+                backgroundColor: Colors.white12,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.skip_next_rounded),
+                      label: const Text('Prossimo Episodio'),
+                      onPressed: () {
+                        _outroTimer?.cancel();
+                        playNextEpisode();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.white38)),
+                    onPressed: _watchCredits,
+                    child: const Text('Guarda Crediti'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// "Episodio successivo": a small button while the controls are visible,

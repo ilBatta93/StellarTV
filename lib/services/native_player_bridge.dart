@@ -53,6 +53,10 @@ class NativePlayerBridge {
       _call<void>('setAutoPip',
           {'enabled': enabled, 'width': width, 'height': height});
 
+  /// Android: 'landscape' (sensor), 'portrait' or 'sensor'.
+  Future<void> setOrientation(String mode) =>
+      _call<void>('setOrientation', {'mode': mode});
+
   Future<void> setKeepScreenOn(bool enabled) =>
       _call<void>('setKeepScreenOn', {'enabled': enabled});
 

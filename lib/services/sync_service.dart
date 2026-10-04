@@ -65,6 +65,7 @@ class SyncService {
     'playlist_url',
   ];
   static const _uiKeys = [
+    'kids_pin',
     'ui_accent',
     'ui_grid_size',
     'theme_mode',

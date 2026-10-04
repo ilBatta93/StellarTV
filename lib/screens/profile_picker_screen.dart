@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/user_profile.dart';
 import '../providers/profile_provider.dart';
 import '../services/profile_service.dart';
+import '../widgets/pin_dialog.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
 import 'home_screen.dart';
@@ -87,8 +88,17 @@ class _ProfilePickerScreenState extends State<ProfilePickerScreen> {
     );
   }
 
+  /// True when leaving the kids profile is allowed (PIN entered or none).
+  Future<bool> _unlockFromKids() async {
+    final current = context.read<ProfileProvider>().selected;
+    if (current == null || !current.isKids) return true;
+    return verifyKidsPin(context);
+  }
+
   Future<void> _select(UserProfile p) async {
     final provider = context.read<ProfileProvider>();
+    if (!p.isKids && !await _unlockFromKids()) return;
+    if (!mounted) return;
     unawaited(provider.select(p));
     if (!mounted) return;
     // Opened from Home: just go back instead of rebuilding the whole Home.
@@ -104,6 +114,7 @@ class _ProfilePickerScreenState extends State<ProfilePickerScreen> {
   }
 
   Future<void> _createProfile() async {
+    if (!await _unlockFromKids() || !mounted) return;
     final created = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -119,6 +130,7 @@ class _ProfilePickerScreenState extends State<ProfilePickerScreen> {
   }
 
   Future<void> _showActions(UserProfile p) async {
+    if (!await _unlockFromKids() || !mounted) return;
     final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: AppColors.surface,
@@ -408,6 +420,8 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
   Future<void> _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
+    if (_isKids && !await ensureKidsPin(context)) return;
+    if (!mounted) return;
     setState(() => _saving = true);
     final provider = context.read<ProfileProvider>();
     try {

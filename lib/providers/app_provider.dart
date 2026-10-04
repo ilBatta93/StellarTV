@@ -16,6 +16,7 @@ import '../services/favorites_service.dart';
 import '../services/settings_service.dart';
 import '../services/sync_service.dart';
 import '../services/series_grouping.dart';
+import '../services/kids_content_service.dart';
 
 enum AuthMethod { none, xtream }
 
@@ -128,10 +129,11 @@ class AppProvider extends ChangeNotifier {
   }
 
   void _applyAdultFilter() {
+    if (_kidsMode) _kids.request(_rawChannels);
     _allChannels = _rawChannels
-        .where((c) =>
-            (_kidsMode || _showAdult || !isAdult(c)) &&
-            (!_kidsMode || (!isAdult(c) && isKidsFriendly(c))))
+        .where((c) => _kidsMode
+            ? isKidsContent(c)
+            : (_showAdult || !isAdult(c)))
         .toList(growable: false);
     _channelIndex = null;
     _invalidateCaches();
@@ -144,8 +146,42 @@ class AppProvider extends ChangeNotifier {
   void setKidsMode(bool value) {
     if (value == _kidsMode) return;
     _kidsMode = value;
+    if (value) {
+      _kids.load().then((_) {
+        if (!_kidsMode) return;
+        _applyAdultFilter();
+        notifyListeners();
+      });
+    }
     _applyAdultFilter();
     notifyListeners();
+  }
+
+  late final KidsContentService _kids = KidsContentService()
+    ..onVerdicts = _onKidsVerdicts;
+  Timer? _kidsRefresh;
+
+  void _onKidsVerdicts() {
+    if (!_kidsMode) return;
+    _kidsRefresh?.cancel();
+    _kidsRefresh = Timer(const Duration(seconds: 2), () {
+      if (!_kidsMode) return;
+      _applyAdultFilter();
+      notifyListeners();
+    });
+  }
+
+  /// Kids profile rule: films and series need a children's TMDB age
+  /// certification (G, PG, TV-Y, TV-Y7...) and no banned keywords; Xtream
+  /// categories are not trusted. Live channels have no TMDB rating, so
+  /// they still use the kids channel/category names.
+  bool isKidsContent(Channel c) {
+    if (isAdult(c)) return false;
+    if (KidsContentService.bannedKeywords.hasMatch('${c.name} ${c.group}')) {
+      return false;
+    }
+    if (c.type == ContentType.live) return isKidsFriendly(c);
+    return _kids.isKidsContent(c);
   }
 
   static final _kidsPattern = RegExp(

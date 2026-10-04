@@ -1,6 +1,7 @@
 package com.iptv.iptv_player
 
 import android.app.PictureInPictureParams
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.media.MediaCodecList
@@ -33,6 +34,17 @@ class MainActivity : FlutterActivity() {
                     autoPip = call.argument<Boolean>("enabled") ?: false
                     updateRatio(call.argument<Int>("width"), call.argument<Int>("height"))
                     applyPipParams()
+                    result.success(null)
+                }
+                "setOrientation" -> {
+                    // Flutter maps landscape-only to USER_LANDSCAPE, which on many
+                    // phones ignores the sensor: use real sensor modes instead.
+                    requestedOrientation = when (call.argument<String>("mode")) {
+                        "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        "sensor" -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+                        else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                    }
                     result.success(null)
                 }
                 "setKeepScreenOn" -> {
