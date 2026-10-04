@@ -41,8 +41,12 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? get error => _error;
   bool get isSyncEnabled => true;
 
-  List<HistoryEntry> get continueWatching =>
-      _entries.where((e) => e.resumePosition != null).toList();
+  /// Movies and episodes started but not finished (newest first).
+  List<HistoryEntry> get continueWatching => _entries.where((e) {
+        if (e.isLive || e.position < const Duration(seconds: 5)) return false;
+        if (e.duration <= Duration.zero) return true;
+        return e.duration - e.position > const Duration(minutes: 1);
+      }).toList();
 
   HistoryEntry? entryFor(String contentId) {
     for (final e in _entries) {

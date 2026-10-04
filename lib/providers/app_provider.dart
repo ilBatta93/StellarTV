@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -57,8 +59,24 @@ class AppProvider extends ChangeNotifier {
   Map<String, String>? get xtreamCredentials => _xtreamCredentials;
   bool get isAuthenticated => _isAuthenticated;
 
-  List<Channel> channelsOf(ContentType type) =>
-      _allChannels.where((c) => c.type == type).toList();
+  // Derived lists are cached: rebuilding them on every notify (e.g. when a
+  // favorite changes) froze the UI with large playlists.
+  final Map<ContentType, List<Channel>> _byType = {};
+  final Map<ContentType, List<Channel>> _catalogCache = {};
+  final Map<ContentType, List<CatalogGroup>> _groupedCache = {};
+  final Map<ContentType, List<CatalogEntry>> _recentCache = {};
+  List<Channel>? _favoritesCache;
+
+  void _invalidateCaches() {
+    _byType.clear();
+    _catalogCache.clear();
+    _groupedCache.clear();
+    _recentCache.clear();
+    _favoritesCache = null;
+  }
+
+  List<Channel> channelsOf(ContentType type) => _byType[type] ??=
+      _allChannels.where((c) => c.type == type).toList(growable: false);
 
   /// Channels of a type whose category is not hidden by the user.
   List<Channel> _visibleChannels(ContentType type) {
@@ -71,7 +89,7 @@ class AppProvider extends ChangeNotifier {
 
   List<Channel> catalogOf(ContentType type) {
     if (type == ContentType.series || type == ContentType.anime) {
-      return SeriesGrouping.catalog(channelsOf(type));
+      return _catalogCache[type] ??= SeriesGrouping.catalog(channelsOf(type));
     }
     return channelsOf(type);
   }
@@ -98,6 +116,7 @@ class AppProvider extends ChangeNotifier {
   void _setChannels(List<Channel> channels) {
     _allChannels = channels;
     _channelIndex = null;
+    _invalidateCaches();
   }
 
   List<String> groupsOf(ContentType type) => catalogOf(type)
@@ -121,6 +140,8 @@ class AppProvider extends ChangeNotifier {
       ..._hiddenCategories,
       type.name: hidden,
     };
+    _groupedCache.remove(type);
+    _recentCache.remove(type);
     notifyListeners();
     await _settingsService.setHiddenCategories(_hiddenCategories);
   }
@@ -128,7 +149,7 @@ class AppProvider extends ChangeNotifier {
   /// Catalog grouped by category, preserving the playlist's category order,
   /// with duplicates removed and hidden categories excluded.
   List<CatalogGroup> groupedCatalog(ContentType type) =>
-      CatalogBuilder.groupsOf(
+      _groupedCache[type] ??= CatalogBuilder.groupsOf(
         _visibleChannels(type),
         categoryOrderOf(type)
             .where((g) => !hiddenCategoriesOf(type).contains(g))
@@ -137,40 +158,21 @@ class AppProvider extends ChangeNotifier {
 
   /// Recently added items of a type, in the playlist's own order (the
   /// provider lists newest entries last, so newest-first means reversed).
-  List<CatalogEntry> recentEntries(ContentType type, {int limit = 60}) {
-    final channels = _visibleChannels(type).reversed;
-    final entries = <CatalogEntry>[];
-    final seen = <String>{};
-    for (final c in channels) {
-      final base = CatalogBuilder.normalize(
-          CatalogBuilder.stripQuality(c.displaySeriesName));
-      if (base.isEmpty || seen.contains(base)) continue;
-      seen.add(base);
-      entries.add(CatalogEntry(
-          primary: c, variants: type == ContentType.live ? [c] : variantsFor(c)));
-      if (entries.length >= limit) break;
-    }
-    return entries;
-  }
+  List<CatalogEntry> recentEntries(ContentType type, {int limit = 60}) =>
+      _recentCache[type] ??= _visibleChannels(type)
+          .reversed
+          .take(limit)
+          .map((c) => CatalogEntry(primary: c, variants: [c]))
+          .toList(growable: false);
 
-  /// All playlist copies of a title (other qualities/categories). Used by the
-  /// detail screen to offer quality selection before playback.
-  List<Channel> variantsFor(Channel channel) {
-    final base = CatalogBuilder.normalize(
-        CatalogBuilder.stripQuality(channel.displaySeriesName));
-    if (base.isEmpty) return [channel];
-    final sameType = channelsOf(channel.type);
-    return [
-      for (final c in sameType)
-        if (CatalogBuilder.normalize(
-                CatalogBuilder.stripQuality(c.displaySeriesName)) ==
-            base)
-          c,
-    ];
-  }
+  /// Basic handling: every playlist item is played as it is, no merging of
+  /// copies with different quality (that matching opened the wrong title).
+  List<Channel> variantsFor(Channel channel) => [channel];
 
-  List<Channel> get favorites =>
-      _allChannels.where((c) => _favoriteIds.contains(c.id)).toList();
+  List<Channel> get favorites => _favoritesCache ??= [
+        for (final id in _favoriteIds)
+          if (channelById(id) case final c?) c,
+      ];
 
   List<Channel> searchChannels(String query, {ContentType? type}) {
     final q = query.trim().toLowerCase();
@@ -213,7 +215,10 @@ class AppProvider extends ChangeNotifier {
         if (folder != null) return folder;
         return c;
       }
-      if (loose == null && target.length >= 4 && name.contains(target)) {
+      if (loose == null &&
+          item.contentType != ContentType.movie &&
+          target.length >= 4 &&
+          name.contains(target)) {
         loose = c;
       }
     }
@@ -225,7 +230,7 @@ class AppProvider extends ChangeNotifier {
               .firstOrNull ??
           loose;
     }
-    return loose;
+    return item.contentType == ContentType.movie ? null : loose;
   }
 
   void indexEpisodes(List<Channel> episodes) {
@@ -271,9 +276,13 @@ class AppProvider extends ChangeNotifier {
       _tmdbFavorites.any((e) => e.key == item.key);
 
   Future<void> toggleTmdbFavorite(TmdbItem item) async {
-    _tmdbFavorites = await _favoritesService.toggleTmdbFavorite(item);
+    final before = _tmdbFavorites;
+    _tmdbFavorites = isTmdbFavorite(item)
+        ? before.where((e) => e.key != item.key).toList()
+        : [item, ...before];
     notifyListeners();
-    await _mirrorTmdbFavorite(item);
+    await _favoritesService.toggleTmdbFavorite(item);
+    unawaited(_mirrorTmdbFavorite(item).catchError((_) {}));
   }
 
   /// Merges the cloud favorites for [code] into local storage. Newer local
@@ -370,6 +379,7 @@ class AppProvider extends ChangeNotifier {
     }
     _favoriteIds = await _favoritesService.getFavoriteIds();
     _tmdbFavorites = await _favoritesService.getTmdbFavorites();
+    _favoritesCache = null;
     notifyListeners();
   }
 
@@ -399,6 +409,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> init() async {
     _favoriteIds = await _favoritesService.getFavoriteIds();
+    _favoritesCache = null;
     _tmdbFavorites = await _favoritesService.getTmdbFavorites();
     final prefs = await SharedPreferences.getInstance();
     _syncCode = prefs.getString(SyncService.codeKey);
@@ -524,10 +535,15 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Updates the UI immediately, then saves locally and mirrors to the
+  /// cloud in the background (the cloud call no longer blocks the tap).
   Future<void> toggleFavorite(Channel channel) async {
-    await _favoritesService.toggleFavorite(channel);
-    _favoriteIds = await _favoritesService.getFavoriteIds();
+    final ids = {..._favoriteIds};
+    if (!ids.remove(channel.id)) ids.add(channel.id);
+    _favoriteIds = ids;
+    _favoritesCache = null;
     notifyListeners();
-    await _mirrorChannelFavorite(channel);
+    await _favoritesService.saveFavoriteIds(ids);
+    unawaited(_mirrorChannelFavorite(channel).catchError((_) {}));
   }
 }

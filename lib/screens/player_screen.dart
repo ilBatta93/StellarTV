@@ -166,7 +166,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _history.updatePosition(widget.channel.id, v.position, v.duration);
     if (_settings?.resumePlayback != true) return;
     final remaining = v.duration - v.position;
-    final keep = v.position > const Duration(seconds: 30) &&
+    final keep = v.position > const Duration(seconds: 5) &&
         remaining > const Duration(minutes: 1);
     await _settingsService.saveResumePosition(
         widget.channel.url, keep ? v.position : null);

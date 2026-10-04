@@ -119,7 +119,7 @@ class PlayerSettings {
   bool showStats;
 
   PlayerSettings({
-    this.primaryEngine = PlayerEngineType.exo,
+    this.primaryEngine = PlayerEngineType.mediakit,
     this.autoFallback = true,
     this.startTimeoutSeconds = 12,
     this.hardwareDecoding = HardwareDecoding.auto,
@@ -164,8 +164,10 @@ class PlayerSettings {
     bool b(String k, bool f) => j[k] is bool ? j[k] as bool : f;
     String s(String k, String f) => j[k] is String ? j[k] as String : f;
     return PlayerSettings(
-      primaryEngine:
-          _enum(PlayerEngineType.values, j['primaryEngine'], d.primaryEngine),
+      // Settings saved before mpv became the default are migrated once.
+      primaryEngine: j['engineV'] == 2
+          ? _enum(PlayerEngineType.values, j['primaryEngine'], d.primaryEngine)
+          : PlayerEngineType.mediakit,
       autoFallback: b('autoFallback', d.autoFallback),
       startTimeoutSeconds: i('startTimeoutSeconds', d.startTimeoutSeconds),
       hardwareDecoding: _enum(
@@ -210,6 +212,7 @@ class PlayerSettings {
 
   Map<String, dynamic> toJson() => {
         'primaryEngine': primaryEngine.name,
+        'engineV': 2,
         'autoFallback': autoFallback,
         'startTimeoutSeconds': startTimeoutSeconds,
         'hardwareDecoding': hardwareDecoding.name,

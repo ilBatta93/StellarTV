@@ -156,7 +156,19 @@ class TmdbService {
     final body =
         await _get(isMovie ? 'search/movie' : 'search/tv', {'query': cleaned});
     final items = _parseResults(body, type: isMovie ? 'movie' : 'tv');
-    return items.isEmpty ? null : items.first;
+    if (items.isEmpty) return null;
+    // Prefer an exact title match (and the playlist year when present).
+    String norm(String v) =>
+        v.toLowerCase().replaceAll(RegExp(r'[^a-z0-9à-ÿ]+'), ' ').trim();
+    final target = norm(cleaned);
+    final year = RegExp(r'\b(19|20)\d{2}\b').firstMatch(rawTitle)?.group(0);
+    final exact = items.where((e) => norm(e.title) == target).toList();
+    if (year != null) {
+      for (final e in exact) {
+        if (e.year == year) return e;
+      }
+    }
+    return exact.isNotEmpty ? exact.first : items.first;
   }
 
   static String cleanTitle(String raw) {

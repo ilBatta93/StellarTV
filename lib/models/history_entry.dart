@@ -35,7 +35,7 @@ class HistoryEntry {
   Duration? get resumePosition {
     if (isLive || duration <= Duration.zero) return null;
     final remaining = duration - position;
-    if (position <= const Duration(seconds: 30) ||
+    if (position <= const Duration(seconds: 5) ||
         remaining <= const Duration(minutes: 1)) {
       return null;
     }

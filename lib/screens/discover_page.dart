@@ -44,16 +44,33 @@ class _DiscoverPageState extends State<DiscoverPage> {
         .map((e) => app.channelById(e.contentId))
         .whereType<Channel>()
         .toList();
-    final startedMovies = <ResumeItem>[
+    // Resolve each started item to its playlist channel; when the channel is
+    // not indexed (e.g. series episodes after a restart) rebuild it from the
+    // history entry itself, which stores url, title and poster.
+    final started = <ResumeItem>[
       for (final e in history.continueWatching)
-        if (app.channelById(e.contentId) case final c? when c.type == ContentType.movie)
+        if (app.channelById(e.contentId) ??
+                (e.url.isEmpty
+                    ? null
+                    : Channel(
+                        id: e.contentId,
+                        name: e.title,
+                        url: e.url,
+                        logo: e.posterUrl,
+                        group: e.group,
+                        type: e.type,
+                      ))
+            case final c?)
           (e, c),
     ];
+    final startedMovies = <ResumeItem>[
+      for (final it in started)
+        if (it.$1.type == ContentType.movie) it,
+    ];
     final startedSeries = <ResumeItem>[
-      for (final e in history.continueWatching)
-        if (app.channelById(e.contentId) case final c?
-            when c.type == ContentType.series || c.type == ContentType.anime)
-          (e, c),
+      for (final it in started)
+        if (it.$1.type == ContentType.series || it.$1.type == ContentType.anime)
+          it,
     ];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) context.read<DiscoverProvider>().loadForYou(watched);
@@ -448,12 +465,9 @@ class _HistoryCard extends StatelessWidget {
     final progress = entry.duration > Duration.zero
         ? (entry.position.inSeconds / entry.duration.inSeconds).clamp(0.0, 1.0)
         : 0.0;
-    final isSeries = channel.type == ContentType.series ||
-        channel.type == ContentType.anime;
+    // Resume the exact movie/episode from where it was left.
     return Pressable(
-      onTap: () => isSeries
-          ? openChannel(context, channel)
-          : playChannel(context, channel, startAt: entry.position),
+      onTap: () => playChannel(context, channel, startAt: entry.position),
       child: SizedBox(
         width: 120,
         child: Column(

@@ -20,7 +20,6 @@ class FavoritesPage extends StatelessWidget {
       (ContentType.live, 'Diretta'),
       (ContentType.movie, 'Film'),
       (ContentType.series, 'Serie TV'),
-      (ContentType.anime, 'Anime'),
     ];
 
     return DefaultTabController(
@@ -39,7 +38,6 @@ class FavoritesPage extends StatelessWidget {
               const Tab(text: 'Diretta'),
               const Tab(text: 'Film'),
               const Tab(text: 'Serie TV'),
-              const Tab(text: 'Anime'),
               const Tab(text: 'La mia lista'),
             ],
           ),
@@ -48,7 +46,12 @@ class FavoritesPage extends StatelessWidget {
               children: [
                 for (final (type, label) in tabs)
                   Builder(builder: (context) {
-                    final items = favs.where((c) => c.type == type).toList();
+                    final items = favs
+                        .where((c) =>
+                            c.type == type ||
+                            (type == ContentType.series &&
+                                c.type == ContentType.anime))
+                        .toList();
                     if (items.isEmpty) {
                       return EmptyState(
                         icon: Icons.favorite_border_rounded,

@@ -21,6 +21,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  // Tabs are built only once visited, so opening Home does not build every
+  // catalog at the same time.
+  final Set<int> _visited = {0};
 
   static const _pages = [
     DiscoverPage(),
@@ -54,14 +57,23 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: IndexedStack(index: _currentIndex, children: _pages),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          for (var i = 0; i < _pages.length; i++)
+            _visited.contains(i) ? _pages[i] : const SizedBox.shrink(),
+        ],
+      ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           border: Border(top: BorderSide(color: AppColors.border, width: 0.5)),
         ),
         child: NavigationBar(
           selectedIndex: _currentIndex,
-          onDestinationSelected: (i) => setState(() => _currentIndex = i),
+          onDestinationSelected: (i) => setState(() {
+            _currentIndex = i;
+            _visited.add(i);
+          }),
           destinations: const [
             NavigationDestination(
                 icon: Icon(Icons.home_outlined),

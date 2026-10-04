@@ -10,7 +10,6 @@ import '../providers/discover_provider.dart';
 import '../providers/history_provider.dart';
 import '../services/catalog_builder.dart';
 import '../theme/app_theme.dart';
-import '../screens/catalog_page.dart' show pickVariant;
 import '../screens/person_detail_screen.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
@@ -52,6 +51,13 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
       if (item == null && channel != null) {
         item = await tmdb.findByTitle(channel.name,
             isMovie: channel.type == ContentType.movie);
+        // Series always use the combined page with seasons and episodes.
+        if (channel.type == ContentType.series ||
+            channel.type == ContentType.anime) {
+          if (!mounted) return;
+          openSeries(context, channel, item: item, replace: true);
+          return;
+        }
       }
       final similar =
           item == null ? <TmdbItem>[] : await tmdb.recommendations(item);
@@ -78,9 +84,11 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final item = _item;
+    // A title opened from the playlist always plays that exact item; the
+    // TMDB lookup only adds poster, plot and cast.
     final playable =
         widget.channel ?? (item == null ? null : app.findChannelFor(item));
-    final variants = _findVariants(app, item);
+    final variants = playable == null ? const <Channel>[] : [playable];
     final title = item?.title ?? widget.channel!.name;
     final image = item?.backdropUrl ?? widget.channel?.logo;
 
@@ -162,17 +170,6 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
         ],
       ),
     );
-  }
-
-  /// All playlist copies of this title (different qualities/categories).
-  List<Channel> _findVariants(AppProvider app, TmdbItem? item) {
-    if (item != null) {
-      final found = app.findChannelFor(item);
-      if (found != null) return app.variantsFor(found);
-    }
-    final channel = widget.channel;
-    if (channel != null) return app.variantsFor(channel);
-    return const [];
   }
 
   Widget _buildCast() {
@@ -449,9 +446,12 @@ class _Actions extends StatelessWidget {
     final entry = CatalogEntry(
         primary: playable!,
         variants: variants.isEmpty ? [playable!] : variants);
-    final channel = await pickVariant(context, entry);
-    if (channel == null || !context.mounted) return;
-    // Movies play directly; re-opening the detail screen here would loop.
+    final channel = entry.primary;
+    if (channel.type == ContentType.series ||
+        channel.type == ContentType.anime) {
+      openSeries(context, channel, item: item);
+      return;
+    }
     playChannel(context, channel, startAt: _resumeFor(context, channel));
   }
 

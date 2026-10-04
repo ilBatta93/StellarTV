@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/user_profile.dart';
@@ -22,7 +24,9 @@ class _ProfilePickerScreenState extends State<ProfilePickerScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ProfileProvider>().load();
+      final provider = context.read<ProfileProvider>();
+      // Profiles already loaded: show them at once, refresh only if empty.
+      if (!provider.hasLoaded || provider.items.isEmpty) provider.load();
     });
   }
 
@@ -85,9 +89,15 @@ class _ProfilePickerScreenState extends State<ProfilePickerScreen> {
 
   Future<void> _select(UserProfile p) async {
     final provider = context.read<ProfileProvider>();
-    await provider.select(p);
+    unawaited(provider.select(p));
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
+    // Opened from Home: just go back instead of rebuilding the whole Home.
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop();
+      return;
+    }
+    nav.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const HomeScreen()),
       (_) => false,
     );

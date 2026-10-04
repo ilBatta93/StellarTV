@@ -52,27 +52,13 @@ class CatalogBuilder {
   /// appearance order of `channels` (already in playlist category order).
   /// Series folders are passed through untouched.
   static List<CatalogEntry> entriesOf(List<Channel> channels) {
-    final entries = <CatalogEntry>[];
-    final byBase = <String, int>{};
-
-    for (final c in channels) {
-      if (c.isSeriesFolder) {
-        entries.add(CatalogEntry(primary: c, variants: [c]));
-        continue;
-      }
-      final base = normalize(stripQuality(c.displaySeriesName));
-      final existing = byBase[base];
-      if (existing != null) {
-        final entry = entries[existing];
-        if (!entry.variants.any((v) => v.url == c.url || v.id == c.id)) {
-          entry.variants.add(c);
-        }
-        continue;
-      }
-      byBase[base] = entries.length;
-      entries.add(CatalogEntry(primary: c, variants: [c]));
-    }
-    return entries;
+    // Basic handling: one entry per playlist item, only exact duplicates
+    // (same id) are skipped.
+    final seen = <String>{};
+    return [
+      for (final c in channels)
+        if (seen.add(c.id)) CatalogEntry(primary: c, variants: [c]),
+    ];
   }
 
   /// Groups by category, preserving the playlist's category order. Titles
@@ -87,10 +73,7 @@ class CatalogBuilder {
     void addGroup(String label, List<Channel> items) {
       final entries = <CatalogEntry>[];
       for (final entry in entriesOf(items)) {
-        final key = normalize(
-            stripQuality(entry.primary.displaySeriesName));
-        if (seenGlobal.contains(key)) continue;
-        seenGlobal.add(key);
+        if (!seenGlobal.add(entry.primary.id)) continue;
         entries.add(entry);
       }
       if (entries.isNotEmpty) {

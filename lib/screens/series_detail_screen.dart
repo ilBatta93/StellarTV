@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/channel.dart';
 import '../models/series_details.dart';
+import '../models/tmdb_item.dart';
+import '../models/tmdb_person.dart';
+import '../providers/discover_provider.dart';
+import '../providers/history_provider.dart';
+import '../widgets/cast_row.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../theme/app_theme.dart';
@@ -11,7 +16,10 @@ import '../widgets/section_row.dart';
 class SeriesDetailScreen extends StatefulWidget {
   final Channel series;
 
-  const SeriesDetailScreen({super.key, required this.series});
+  /// TMDB info when already known (e.g. opened from the Top 10).
+  final TmdbItem? item;
+
+  const SeriesDetailScreen({super.key, required this.series, this.item});
 
   @override
   State<SeriesDetailScreen> createState() => _SeriesDetailScreenState();
@@ -22,11 +30,34 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   bool _loading = true;
   String? _error;
   int _selectedSeason = 0;
+  TmdbItem? _item;
+  List<TmdbPerson> _cast = [];
 
   @override
   void initState() {
     super.initState();
+    _item = widget.item;
     _load();
+    _loadInfo();
+  }
+
+  /// Plot, backdrop and cast from TMDB, loaded alongside the episodes.
+  Future<void> _loadInfo() async {
+    try {
+      final tmdb = context.read<DiscoverProvider>().tmdb;
+      final item = _item ??
+          await tmdb.findByTitle(widget.series.displaySeriesName,
+              isMovie: false);
+      if (item == null) return;
+      final cast = await tmdb.cast(item);
+      if (!mounted) return;
+      setState(() {
+        _item = item;
+        _cast = cast.take(20).toList();
+      });
+    } catch (_) {
+      // Info is optional: seasons and episodes still work without it.
+    }
   }
 
   Future<void> _load() async {
@@ -55,6 +86,13 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final series = _details?.series ?? widget.series;
+    final app = context.watch<AppProvider>();
+    final isFav = app.favoriteIds.contains(widget.series.id);
+    final item = _item;
+    final plot = (series.plot != null && series.plot!.trim().isNotEmpty)
+        ? series.plot!
+        : (item?.overview ?? '');
+    final image = item?.backdropUrl ?? series.logo;
     final seasons = _details?.seasons ?? const [];
     final currentSeason =
         seasons.isNotEmpty && _selectedSeason < seasons.length
@@ -69,11 +107,23 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
             expandedHeight: 280,
             backgroundColor: AppColors.background,
             leading: const BackButton(),
+            actions: [
+              IconButton(
+                tooltip: 'Preferiti',
+                icon: Icon(
+                  isFav
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: isFav ? AppColors.primary : AppColors.textPrimary,
+                ),
+                onPressed: () => app.toggleFavorite(widget.series),
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  PosterImage(url: series.logo),
+                  PosterImage(url: image),
                   const DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -114,21 +164,35 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  if (series.plot != null && series.plot!.trim().isNotEmpty) ...[
+                  if (plot.trim().isNotEmpty) ...[
                     Text('Trama', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
-                    Text(series.plot!,
+                    Text(plot,
                         style: Theme.of(context).textTheme.bodyMedium),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 8),
                   ],
                 ],
               ),
             ),
           ),
+          SliverToBoxAdapter(child: CastRow(cast: _cast)),
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Text('Stagioni ed episodi',
+                  style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700)),
+            ),
+          ),
           if (_loading)
-            SliverFillRemaining(
-              child: Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                ),
               ),
             )
           else if (_error != null)
@@ -191,7 +255,11 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                 final ep = currentSeason.episodes[i];
                 return _EpisodeTile(
                   episode: ep,
-                  onTap: () => playChannel(context, ep.channel),
+                  onTap: () => playChannel(context, ep.channel,
+                      startAt: context
+                          .read<HistoryProvider>()
+                          .entryFor(ep.channel.id)
+                          ?.resumePosition),
                 );
               },
             ),
