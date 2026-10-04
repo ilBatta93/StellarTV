@@ -237,10 +237,10 @@ class MediaKitEngine extends PlaybackEngine {
   }
 
   /// mpv expects delays in seconds (fractions allowed); harmless no-op on
-  /// platforms where the native platform handle is unavailable.
+  /// platforms where the native player handle is unavailable.
   Future<void> _setProperty(String name, Duration delay) async {
     final platform = _player.platform;
-    if (platform == null) return;
+    if (platform is! NativePlayer) return;
     try {
       await platform
           .setProperty(name, (delay.inMicroseconds / 1e6).toStringAsFixed(3));
