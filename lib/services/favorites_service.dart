@@ -20,6 +20,11 @@ class FavoritesService {
     await prefs.setStringList(_key, set.toList());
   }
 
+  Future<void> saveFavoriteIds(Iterable<String> ids) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_key, ids.toList());
+  }
+
   Future<List<TmdbItem>> getTmdbFavorites() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_tmdbKey);

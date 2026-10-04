@@ -23,6 +23,14 @@ class SyncProvider extends ChangeNotifier {
   /// Set by main.dart: pushes the full snapshot (favorites included).
   Future<SnapshotPart> Function()? snapshotSource;
 
+  /// Set by main.dart: uploads every local favorite when a code is enabled or
+  /// entered, so the cloud starts from the list already on the device.
+  Future<void> Function(String code)? onCodeReady;
+
+  /// Set by main.dart: stops mirroring favorites to the cloud when sync is
+  /// turned off (local favorites are kept).
+  Future<void> Function()? onCodeCleared;
+
   String? get code => _code;
   DateTime? get lastPush => _lastPush;
   DateTime? get lastPull => _lastPull;
@@ -42,7 +50,8 @@ class SyncProvider extends ChangeNotifier {
     _message = null;
     notifyListeners();
     _code = await _sync.ensureCode();
-    // Publish this device's state right away so other devices can pull it.
+    // Upload the favorites already on this device, then publish the snapshot.
+    await onCodeReady?.call(_code!);
     await pushNow(silent: true);
     _busy = false;
     _message = 'Sincronizzazione attiva. Usa lo stesso codice sugli altri dispositivi.';
@@ -57,6 +66,7 @@ class SyncProvider extends ChangeNotifier {
     _debounce?.cancel();
     await _sync.clearCode();
     _code = null;
+    await onCodeCleared?.call();
     _lastPush = null;
     _lastPull = null;
     _busy = false;
@@ -76,6 +86,7 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
     await _sync.setCodeManually(cleaned);
     _code = cleaned;
+    await onCodeReady?.call(cleaned);
     final (payload, updated) = await _sync.pull(cleaned);
     if (payload != null) {
       _busy = false;

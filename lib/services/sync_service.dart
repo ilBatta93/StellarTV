@@ -45,7 +45,7 @@ class SyncService {
 
   final SupabaseClient _client;
 
-  static const _codeKey = 'sync_code';
+  static const codeKey = 'sync_code';
   static const _localHistoryKey = 'local_watch_history';
   static const _lastPushKey = 'sync_last_push';
   static const _lastPullKey = 'sync_last_pull';
@@ -70,26 +70,26 @@ class SyncService {
   /// The pairing code for this profile; created lazily on first access.
   Future<String> ensureCode() async {
     final prefs = await SharedPreferences.getInstance();
-    final existing = prefs.getString(_codeKey);
+    final existing = prefs.getString(codeKey);
     if (existing != null && existing.length == 8) return existing;
     final code = _generateCode();
-    await prefs.setString(_codeKey, code);
+    await prefs.setString(codeKey, code);
     return code;
   }
 
   Future<String?> getStoredCode() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_codeKey);
+    return prefs.getString(codeKey);
   }
 
   Future<void> setCodeManually(String code) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_codeKey, code.toUpperCase().trim());
+    await prefs.setString(codeKey, code.toUpperCase().trim());
   }
 
   Future<void> clearCode() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_codeKey);
+    await prefs.remove(codeKey);
   }
 
   String _generateCode() {

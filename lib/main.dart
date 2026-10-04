@@ -60,6 +60,10 @@ class _IlBattaTvAppState extends State<IlBattaTvApp> {
               _appProvider.tmdbFavorites.map((e) => e.toJson()).toList(),
         );
     _historyProvider.onCredentialsRestored = _appProvider.reloadFromStorage;
+    // Keep the cloud favorites table in step with the sync code: upload the
+    // local list when a code is enabled/entered, stop mirroring when cleared.
+    _syncProvider.onCodeReady = _appProvider.pushAllFavorites;
+    _syncProvider.onCodeCleared = () async => _appProvider.clearCloudCode();
     _appProvider.addListener(_onAppChanged);
     _syncProvider.load();
   }

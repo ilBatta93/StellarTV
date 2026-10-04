@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/series_details.dart';
@@ -6,8 +8,10 @@ import '../models/tmdb_item.dart';
 import '../services/catalog_builder.dart';
 import '../services/playlist_refresh_service.dart';
 import '../services/xtream_service.dart';
+import '../services/cloud_favorites_service.dart';
 import '../services/favorites_service.dart';
 import '../services/settings_service.dart';
+import '../services/sync_service.dart';
 import '../services/series_grouping.dart';
 
 enum AuthMethod { none, xtream }
@@ -16,6 +20,18 @@ class AppProvider extends ChangeNotifier {
   final _xtreamService = XtreamService();
   final _favoritesService = FavoritesService();
   final _settingsService = SettingsService();
+  CloudFavoritesService? _cloudFavorites;
+  String? _syncCode;
+
+  /// Builds the cloud client on first use. Returns null when Supabase has not
+  /// been initialized (e.g. widget tests), so favorites simply stay local.
+  CloudFavoritesService? get _cloud {
+    try {
+      return _cloudFavorites ??= CloudFavoritesService(Supabase.instance.client);
+    } catch (_) {
+      return null;
+    }
+  }
   late final PlaylistRefreshService _refreshService =
       PlaylistRefreshService(refreshPlaylist);
 
@@ -257,7 +273,70 @@ class AppProvider extends ChangeNotifier {
   Future<void> toggleTmdbFavorite(TmdbItem item) async {
     _tmdbFavorites = await _favoritesService.toggleTmdbFavorite(item);
     notifyListeners();
+    await _mirrorTmdbFavorite(item);
   }
+
+  /// Merges the cloud favorites for [code] into local storage. Newer local
+  /// choices win: an item is only added locally, never removed, so a pull can
+  /// not erase what the user just saved on this device.
+  Future<void> _restoreCloudFavorites(String code) async {
+    final rows = await _cloud?.load(code) ?? const [];
+    if (rows.isEmpty) return;
+    final channelIds = rows
+        .where((r) => r['item_kind'] == 'channel')
+        .map((r) => r['item_key']?.toString())
+        .whereType<String>()
+        .toList();
+    final tmdbItems = rows
+        .where((r) => r['item_kind'] == 'tmdb')
+        .map((r) => r['payload'])
+        .whereType<Map<String, dynamic>>()
+        .map(TmdbItem.tryParse)
+        .whereType<TmdbItem>()
+        .toList();
+    if (channelIds.isNotEmpty || tmdbItems.isNotEmpty) {
+      await importFavorites({
+        'ids': channelIds,
+        'tmdb': tmdbItems.map((e) => e.toJson()).toList(),
+      });
+    }
+  }
+
+  Future<void> _mirrorChannelFavorite(Channel channel) async {
+    final code = _syncCode;
+    final cloud = _cloud;
+    if (code == null || cloud == null) return;
+    if (_favoriteIds.contains(channel.id)) {
+      await cloud.addChannel(code, channel);
+    } else {
+      await cloud.remove(code, channel.id, 'channel');
+    }
+  }
+
+  Future<void> _mirrorTmdbFavorite(TmdbItem item) async {
+    final code = _syncCode;
+    final cloud = _cloud;
+    if (code == null || cloud == null) return;
+    if (isTmdbFavorite(item)) {
+      await cloud.addTmdb(code, item);
+    } else {
+      await cloud.remove(code, item.key, 'tmdb');
+    }
+  }
+
+  /// Uploads every local favorite under [code]. Called when the user enables
+  /// sync, so the cloud starts from the list already on the device.
+  Future<void> pushAllFavorites(String code) async {
+    _syncCode = code;
+    await _cloud?.replaceAll(
+      syncCode: code,
+      channels: favorites,
+      tmdbItems: _tmdbFavorites,
+    );
+  }
+
+  /// Stops mirroring favorites to the cloud. Local favorites are kept.
+  void clearCloudCode() => _syncCode = null;
 
   Map<String, dynamic> exportFavorites() => {
         'ids': _favoriteIds.toList(),
@@ -272,13 +351,18 @@ class AppProvider extends ChangeNotifier {
             .whereType<TmdbItem>()
             .toList() ??
         const <TmdbItem>[];
+    final newIds = <String>[..._favoriteIds];
     for (final id in ids) {
-      if (!_favoriteIds.contains(id)) {
+      if (!newIds.contains(id)) {
         // Persist through the service so both storage layers stay aligned.
         final channel = channelById(id);
         if (channel != null) await _favoritesService.toggleFavorite(channel);
+        // Remember the id even when the channel is not in the playlist yet
+        // (playlist still loading, or removed from the provider).
+        newIds.add(id);
       }
     }
+    await _favoritesService.saveFavoriteIds(newIds);
     for (final item in tmdb) {
       if (!_tmdbFavorites.any((e) => e.key == item.key)) {
         await _favoritesService.toggleTmdbFavorite(item);
@@ -316,6 +400,11 @@ class AppProvider extends ChangeNotifier {
   Future<void> init() async {
     _favoriteIds = await _favoritesService.getFavoriteIds();
     _tmdbFavorites = await _favoritesService.getTmdbFavorites();
+    final prefs = await SharedPreferences.getInstance();
+    _syncCode = prefs.getString(SyncService.codeKey);
+    if (_syncCode != null) {
+      await _restoreCloudFavorites(_syncCode!);
+    }
     _hiddenCategories = await _settingsService.getHiddenCategories();
     final methodStr = await _settingsService.getAuthMethod();
     _authMethod = switch (methodStr) {
@@ -439,5 +528,6 @@ class AppProvider extends ChangeNotifier {
     await _favoritesService.toggleFavorite(channel);
     _favoriteIds = await _favoritesService.getFavoriteIds();
     notifyListeners();
+    await _mirrorChannelFavorite(channel);
   }
 }
