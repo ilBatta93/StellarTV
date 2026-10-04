@@ -25,6 +25,7 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _scaleAnimation;
   bool _navigated = false;
   bool _cloudChecked = false;
+  int _initAttempts = 0;
 
   @override
   void initState() {
@@ -52,8 +53,12 @@ class _SplashScreenState extends State<SplashScreen>
     final history = context.read<HistoryProvider>();
 
     if (!app.isInitialized) {
-      Future.delayed(const Duration(milliseconds: 300), _tryNavigate);
-      return;
+      // Bounded wait: if startup never completes, fall through to the login
+      // screen instead of leaving the app stuck on the splash forever.
+      if (_initAttempts++ < 20) {
+        Future.delayed(const Duration(milliseconds: 300), _tryNavigate);
+        return;
+      }
     }
 
     // If a sync code is configured, restore cloud data on startup: this is
@@ -94,7 +99,16 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<void> _restoreFromCloud(
       HistoryProvider history, AppProvider app) async {
-    await history.pullFromCloud();
+    // Cloud restore must never block launch: if the device is offline, the
+    // code is unknown or the server is unreachable, fall through to the normal
+    // flow after a short wait instead of staying on the splash forever.
+    try {
+      await history
+          .pullFromCloud()
+          .timeout(const Duration(seconds: 8), onTimeout: () => false);
+    } catch (_) {
+      // Ignore: the app continues with the data already on the device.
+    }
     if (!mounted) return;
     _tryNavigate();
   }

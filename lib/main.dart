@@ -17,12 +17,53 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // A widget that throws during build would otherwise leave the whole app on a
+  // blank white screen on a real device. Show a readable fallback instead.
+  ErrorWidget.builder = (details) => _StartupErrorView(details: details);
   MediaKit.ensureInitialized();
   await Supabase.initialize(
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.anonKey,
   );
   runApp(const IlBattaTvApp());
+}
+
+/// Shown in place of a widget that fails to build, so a crash never presents
+/// as a fully white screen with no explanation.
+class _StartupErrorView extends StatelessWidget {
+  final FlutterErrorDetails details;
+
+  const _StartupErrorView({required this.details});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.background,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline_rounded,
+              color: AppColors.error, size: 40),
+          const SizedBox(height: 12),
+          const Text(
+            'Si è verificato un errore. Riapri l\'app.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textPrimary, fontSize: 15),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            details.exceptionAsString(),
+            textAlign: TextAlign.center,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class IlBattaTvApp extends StatefulWidget {
