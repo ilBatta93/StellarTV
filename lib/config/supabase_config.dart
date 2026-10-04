@@ -1,5 +1,8 @@
 class SupabaseConfig {
-  static const url = 'https://ngixocuxkaoxxfwngrnr.supabase.co';
-  static const anonKey =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5naXhvY3V4a2FveHhmd25ncm5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA5NzQzNjYsImV4cCI6MjEwNjU1MDM2Nn0.wNDfEaK6bgWa737Dl4KvvfQXuaZ3FmGee-wFRevUJlI';
+  static const url = 'https://vjubaazqoccrdnlcpdwx.supabase.co';
+  static const anonKey = 'sb_publishable_7DmqD5nqcV1iQiPkEcgLFg_RcATrGiH';
+
+  /// Proxy TMDB (Top 10 / Scopri) ospitato sul nuovo cloud.
+  static const tmdbProxyUrl =
+      'https://project--5d51775b-0a01-49cc-aff9-d4b4e9960156-dev.lovable.app/api/public/tmdb';
 }
