@@ -312,10 +312,8 @@ class AppProvider extends ChangeNotifier {
   /// copies with different quality (that matching opened the wrong title).
   List<Channel> variantsFor(Channel channel) => [channel];
 
-  List<Channel> get favorites => _favoritesCache ??= [
-    for (final id in _favoriteIds)
-      if (channelById(id) case final c?) c,
-  ];
+  List<Channel> get favorites =>
+      _favoritesCache ??= [for (final id in _favoriteIds) ?channelById(id)];
 
   /// TMDB genre ids of a playlist movie/series (null while not checked yet).
   List<int>? genresOf(Channel c) => _kids.genresOf(c);
@@ -328,7 +326,10 @@ class AppProvider extends ChangeNotifier {
       // instead of scanning every episode for every series (very slow).
       final episodeHits = <String>{};
       for (final e in _allChannels) {
-        if (e.name.toLowerCase().contains(q)) episodeHits.add(e.seriesKey);
+        final key = e.seriesKey;
+        if (key != null && e.name.toLowerCase().contains(q)) {
+          episodeHits.add(key);
+        }
       }
       return catalogOf(type!)
           .where(

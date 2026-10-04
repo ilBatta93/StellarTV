@@ -38,8 +38,7 @@ class _ProfilePickerScreenState extends State<ProfilePickerScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: profiles.isLoading && profiles.items.isEmpty
-            ? Center(
-                child: CircularProgressIndicator(color: AppColors.primary))
+            ? Center(child: CircularProgressIndicator(color: AppColors.primary))
             : SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -147,10 +146,14 @@ class _ProfilePickerScreenState extends State<ProfilePickerScreen> {
               onTap: () => Navigator.pop(ctx, 'edit'),
             ),
             ListTile(
-              leading: const Icon(Icons.delete_outline_rounded,
-                  color: AppColors.error),
-              title: const Text('Elimina profilo',
-                  style: TextStyle(color: AppColors.error)),
+              leading: const Icon(
+                Icons.delete_outline_rounded,
+                color: AppColors.error,
+              ),
+              title: const Text(
+                'Elimina profilo',
+                style: TextStyle(color: AppColors.error),
+              ),
               onTap: () => Navigator.pop(ctx, 'delete'),
             ),
           ],
@@ -191,8 +194,10 @@ class _ProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Color(ProfileAvatars.colors[profile.avatarColor] ??
-        ProfileAvatars.colors['arancio']!);
+    final color = Color(
+      ProfileAvatars.colors[profile.avatarColor] ??
+          ProfileAvatars.colors['arancio']!,
+    );
     final icon = ProfileAvatars.iconOf(profile.avatarKey);
     return InkWell(
       onTap: onTap,
@@ -218,23 +223,22 @@ class _ProfileAvatar extends StatelessWidget {
                   color: color.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 40,
-                ),
+                child: Icon(icon, color: color, size: 40),
               ),
             ),
             const SizedBox(height: 8),
             if (profile.isKids)
               Padding(
                 padding: const EdgeInsets.only(bottom: 2),
-                child: Text('BAMBINI',
-                    style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1)),
+                child: Text(
+                  'BAMBINI',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                  ),
+                ),
               ),
             Text(
               profile.name,
@@ -316,8 +320,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
   @override
   void initState() {
     super.initState();
-    _nameController =
-        TextEditingController(text: widget.existing?.name ?? '');
+    _nameController = TextEditingController(text: widget.existing?.name ?? '');
     _avatarKey = widget.existing?.avatarKey ?? 'rocket';
     _avatarColor = widget.existing?.avatarColor ?? 'arancio';
     _isKids = widget.existing?.isKids ?? false;
@@ -333,7 +336,11 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
-          24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+        24,
+        24,
+        24,
+        MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -353,9 +360,10 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
             ),
           ),
           const SizedBox(height: 12),
-          const Text('Icona',
-              style:
-                  TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          const Text(
+            'Icona',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 10,
@@ -364,17 +372,20 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
               for (final entry in ProfileAvatars.entries.entries)
                 _IconOption(
                   icon: ProfileAvatars.iconOf(entry.key),
-                  color: Color(ProfileAvatars.colors[_avatarColor] ??
-                      ProfileAvatars.colors['arancio']!),
+                  color: Color(
+                    ProfileAvatars.colors[_avatarColor] ??
+                        ProfileAvatars.colors['arancio']!,
+                  ),
                   selected: entry.key == _avatarKey,
                   onTap: () => setState(() => _avatarKey = entry.key),
                 ),
             ],
           ),
           const SizedBox(height: 16),
-          const Text('Colore',
-              style:
-                  TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          const Text(
+            'Colore',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 10,
@@ -392,7 +403,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
             value: _isKids,
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
             onChanged: (v) => setState(() => _isKids = v),
             title: const Text('Profilo bambini'),
             subtitle: const Text(
@@ -407,7 +418,10 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Icon(Icons.check_rounded),
             label: const Text('Salva'),
             onPressed: _saving ? null : _save,
@@ -427,25 +441,32 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
     try {
       if (widget.existing == null) {
         await provider.create(
-            name: name,
-            avatarKey: _avatarKey,
-            avatarColor: _avatarColor,
-            isKids: _isKids);
+          name: name,
+          avatarKey: _avatarKey,
+          avatarColor: _avatarColor,
+          isKids: _isKids,
+        );
       } else {
-        await provider.update(widget.existing!,
-            name: name,
-            avatarKey: _avatarKey,
-            avatarColor: _avatarColor,
-            isKids: _isKids);
+        await provider.update(
+          widget.existing!,
+          name: name,
+          avatarKey: _avatarKey,
+          avatarColor: _avatarColor,
+          isKids: _isKids,
+        );
       }
       if (mounted) Navigator.pop(context, true);
     } catch (_) {
       if (mounted) {
         setState(() => _saving = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text('Salvataggio non riuscito. Controlla la connessione.'),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              'Salvataggio non riuscito. Controlla la connessione.',
+            ),
+          ),
+        );
       }
     }
   }

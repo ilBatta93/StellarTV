@@ -63,23 +63,31 @@ class _LivePageState extends State<LivePage> {
     // Default category: "TV Sat" (when the playlist has it).
     if (!_defaultApplied) {
       _defaultApplied = true;
-      String n(String s) => s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      String n(String s) =>
+          s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
       _category = groups
           .map((g) => g.label)
           .where((l) => n(l) == 'tvsat')
-          .followedBy(groups.map((g) => g.label).where((l) => n(l).contains('tvsat')))
+          .followedBy(
+            groups.map((g) => g.label).where((l) => n(l).contains('tvsat')),
+          )
           .firstOrNull;
     }
     final selected = groups.where((g) => g.label == _category).firstOrNull;
     var channels = selected != null
         ? [for (final e in selected.entries) e.primary]
-        : [for (final g in groups) for (final e in g.entries) e.primary];
+        : [
+            for (final g in groups)
+              for (final e in g.entries) e.primary,
+          ];
     if (_query.isNotEmpty) {
       final q = _query.toLowerCase();
       channels = channels
-          .where((c) =>
-              c.name.toLowerCase().contains(q) ||
-              (epg.nowFor(c)?.title.toLowerCase().contains(q) ?? false))
+          .where(
+            (c) =>
+                c.name.toLowerCase().contains(q) ||
+                (epg.nowFor(c)?.title.toLowerCase().contains(q) ?? false),
+          )
           .toList();
     }
 
@@ -105,12 +113,15 @@ class _LivePageState extends State<LivePage> {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: AppColors.primary))
+                          strokeWidth: 2,
+                          color: AppColors.primary,
+                        ),
+                      )
                     : const Icon(Icons.calendar_view_day_rounded),
                 onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const EpgSettingsScreen())),
+                  context,
+                  MaterialPageRoute(builder: (_) => const EpgSettingsScreen()),
+                ),
               ),
             ],
           ),
@@ -121,11 +132,17 @@ class _LivePageState extends State<LivePage> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             children: [
-              _chip('Tutti', _category == null,
-                  () => setState(() => _category = null)),
+              _chip(
+                'Tutti',
+                _category == null,
+                () => setState(() => _category = null),
+              ),
               for (final g in groups)
-                _chip(g.label, _category == g.label,
-                    () => setState(() => _category = g.label)),
+                _chip(
+                  g.label,
+                  _category == g.label,
+                  () => setState(() => _category = g.label),
+                ),
             ],
           ),
         ),
@@ -147,7 +164,7 @@ class _LivePageState extends State<LivePage> {
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   itemCount: channels.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) => _LiveTile(
                     channel: channels[i],
                     now: epg.nowFor(channels[i]),
@@ -174,14 +191,17 @@ class _LivePageState extends State<LivePage> {
             color: selected ? AppColors.primary : AppColors.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-                color: selected ? AppColors.primary : AppColors.border),
+              color: selected ? AppColors.primary : AppColors.border,
+            ),
           ),
-          child: Text(label,
-              style: TextStyle(
-                color: selected ? Colors.white : AppColors.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              )),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? Colors.white : AppColors.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ),
     );
@@ -236,29 +256,37 @@ class _LiveTile extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: PosterImage(
-                  url: channel.logo,
-                  fit: BoxFit.contain,
-                  fallbackIcon: Icons.live_tv_rounded),
+                url: channel.logo,
+                fit: BoxFit.contain,
+                fallbackIcon: Icons.live_tv_rounded,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(channel.name,
+                  Text(
+                    channel.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  if (now != null) ...[
+                    Text(
+                      '${_hm(now!.startTime)}  ${now!.title}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 3),
-                  if (now != null) ...[
-                    Text('${_hm(now!.startTime)}  ${now!.title}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: AppColors.textSecondary, fontSize: 12)),
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
                     const SizedBox(height: 5),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(2),
@@ -266,24 +294,31 @@ class _LiveTile extends StatelessWidget {
                         value: _progressOf(now!),
                         minHeight: 3,
                         backgroundColor: AppColors.border,
-                        valueColor:
-                            AlwaysStoppedAnimation(AppColors.primary),
+                        valueColor: AlwaysStoppedAnimation(AppColors.primary),
                       ),
                     ),
                     if (next != null) ...[
                       const SizedBox(height: 4),
-                      Text('Poi ${_hm(next!.startTime)}  ${next!.title}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: AppColors.textMuted, fontSize: 11)),
-                    ],
-                  ] else
-                    Text(channel.group,
+                      Text(
+                        'Poi ${_hm(next!.startTime)}  ${next!.title}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: AppColors.textMuted, fontSize: 12)),
+                          color: AppColors.textMuted,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ] else
+                    Text(
+                      channel.group,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -297,17 +332,18 @@ class _LiveTile extends StatelessWidget {
                         ? Icons.favorite_rounded
                         : Icons.favorite_border_rounded,
                     size: 20,
-                    color: isFavorite
-                        ? AppColors.primary
-                        : AppColors.textMuted,
+                    color: isFavorite ? AppColors.primary : AppColors.textMuted,
                   ),
                   onPressed: onFavorite,
                 ),
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   tooltip: 'Guida',
-                  icon: const Icon(Icons.view_list_rounded,
-                      size: 20, color: AppColors.textMuted),
+                  icon: const Icon(
+                    Icons.view_list_rounded,
+                    size: 20,
+                    color: AppColors.textMuted,
+                  ),
                   onPressed: () => showChannelGuide(context, channel),
                 ),
               ],
@@ -326,7 +362,8 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
     isScrollControlled: true,
     backgroundColor: AppColors.surface,
     shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
     builder: (ctx) {
       final epg = ctx.watch<EpgProvider>();
       final now = DateTime.now();
@@ -345,10 +382,12 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(channel.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(ctx).textTheme.titleMedium),
+                    child: Text(
+                      channel.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(ctx).textTheme.titleMedium,
+                    ),
                   ),
                   ElevatedButton.icon(
                     icon: const Icon(Icons.play_arrow_rounded),
@@ -389,48 +428,61 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                                 : AppColors.card,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                                color: live
-                                    ? AppColors.primary
-                                    : AppColors.border),
+                              color: live
+                                  ? AppColors.primary
+                                  : AppColors.border,
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  Text(p.timeRange,
-                                      style: TextStyle(
-                                          color: live
-                                              ? AppColors.primary
-                                              : AppColors.textMuted,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700)),
+                                  Text(
+                                    p.timeRange,
+                                    style: TextStyle(
+                                      color: live
+                                          ? AppColors.primary
+                                          : AppColors.textMuted,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                   if (live) ...[
                                     const SizedBox(width: 8),
-                                    const Text('IN ONDA',
-                                        style: TextStyle(
-                                            color: AppColors.error,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: 0.8)),
+                                    const Text(
+                                      'IN ONDA',
+                                      style: TextStyle(
+                                        color: AppColors.error,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.8,
+                                      ),
+                                    ),
                                   ],
                                 ],
                               ),
                               const SizedBox(height: 4),
-                              Text(p.title,
-                                  style: const TextStyle(
-                                      color: AppColors.textPrimary,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600)),
+                              Text(
+                                p.title,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                               if (p.description.isNotEmpty) ...[
                                 const SizedBox(height: 4),
-                                Text(p.description,
-                                    maxLines: live ? 4 : 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 12,
-                                        height: 1.35)),
+                                Text(
+                                  p.description,
+                                  maxLines: live ? 4 : 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12,
+                                    height: 1.35,
+                                  ),
+                                ),
                               ],
                               if (live) ...[
                                 const SizedBox(height: 8),
@@ -439,7 +491,8 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                                   minHeight: 3,
                                   backgroundColor: AppColors.border,
                                   valueColor: AlwaysStoppedAnimation(
-                                      AppColors.primary),
+                                    AppColors.primary,
+                                  ),
                                 ),
                               ],
                             ],
