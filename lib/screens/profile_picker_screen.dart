@@ -214,6 +214,16 @@ class _ProfileAvatar extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
+            if (profile.isKids)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text('BAMBINI',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1)),
+              ),
             Text(
               profile.name,
               maxLines: 1,
@@ -288,6 +298,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
   late final TextEditingController _nameController;
   late String _avatarKey;
   late String _avatarColor;
+  late bool _isKids;
   bool _saving = false;
 
   @override
@@ -297,6 +308,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
         TextEditingController(text: widget.existing?.name ?? '');
     _avatarKey = widget.existing?.avatarKey ?? 'rocket';
     _avatarColor = widget.existing?.avatarColor ?? 'arancio';
+    _isKids = widget.existing?.isKids ?? false;
   }
 
   @override
@@ -364,7 +376,19 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
                 ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _isKids,
+            activeColor: AppColors.primary,
+            onChanged: (v) => setState(() => _isKids = v),
+            title: const Text('Profilo bambini'),
+            subtitle: const Text(
+              'Mostra solo canali, film e serie per bambini (cartoni, animazione, famiglia).',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+            ),
+          ),
+          const SizedBox(height: 16),
           ElevatedButton.icon(
             icon: _saving
                 ? const SizedBox(
@@ -389,10 +413,16 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
     try {
       if (widget.existing == null) {
         await provider.create(
-            name: name, avatarKey: _avatarKey, avatarColor: _avatarColor);
+            name: name,
+            avatarKey: _avatarKey,
+            avatarColor: _avatarColor,
+            isKids: _isKids);
       } else {
         await provider.update(widget.existing!,
-            name: name, avatarKey: _avatarKey, avatarColor: _avatarColor);
+            name: name,
+            avatarKey: _avatarKey,
+            avatarColor: _avatarColor,
+            isKids: _isKids);
       }
       if (mounted) Navigator.pop(context, true);
     } catch (_) {

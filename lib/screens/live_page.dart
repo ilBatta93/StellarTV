@@ -26,6 +26,7 @@ class LivePage extends StatefulWidget {
 class _LivePageState extends State<LivePage> {
   String _query = '';
   String? _category;
+  bool _defaultApplied = false;
   Timer? _tick;
 
   @override
@@ -58,6 +59,16 @@ class _LivePageState extends State<LivePage> {
         title: 'Nessun canale',
         message: 'La tua playlist non contiene canali in diretta.',
       );
+    }
+    // Default category: "TV Sat" (when the playlist has it).
+    if (!_defaultApplied) {
+      _defaultApplied = true;
+      String n(String s) => s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      _category = groups
+          .map((g) => g.label)
+          .where((l) => n(l) == 'tvsat')
+          .followedBy(groups.map((g) => g.label).where((l) => n(l).contains('tvsat')))
+          .firstOrNull;
     }
     final selected = groups.where((g) => g.label == _category).firstOrNull;
     var channels = selected != null

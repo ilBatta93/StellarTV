@@ -79,6 +79,7 @@ class _IlBattaTvAppState extends State<IlBattaTvApp> {
   late final SyncProvider _syncProvider;
   late final HistoryProvider _historyProvider;
   late final ProfileProvider _profileProvider;
+  final UiSettings _uiSettings = UiSettings()..load();
 
   @override
   void initState() {
@@ -92,6 +93,14 @@ class _IlBattaTvAppState extends State<IlBattaTvApp> {
     _profileProvider = ProfileProvider(profileService, syncService);
     // Load profiles at startup so the top-bar avatar and the splash routing
     // know which profile is active on this device.
+    // Each profile has a private history; kids profiles see kids content only.
+    _profileProvider.onSelectionChanged = (profile) {
+      _historyProvider.switchProfile(profile?.id);
+      _appProvider.setKidsMode(profile?.isKids ?? false);
+    };
+    ProfileProvider.savedSelectionIsKids(profileService).then((kids) {
+      if (kids) _appProvider.setKidsMode(true);
+    });
     _profileProvider.load();
     // The sync needs favorites from the app state and must reload the app
     // when credentials arrive from another device.
@@ -102,6 +111,14 @@ class _IlBattaTvAppState extends State<IlBattaTvApp> {
               _appProvider.tmdbFavorites.map((e) => e.toJson()).toList(),
         );
     _historyProvider.onCredentialsRestored = _appProvider.reloadFromStorage;
+    _historyProvider.onSettingsRestored = () async {
+      await _appProvider.reloadSettings();
+      await _uiSettings.load();
+    };
+    // Profiles created/edited on other devices show up automatically.
+    _historyProvider.onAfterAutoPull =
+        () => _profileProvider.load(silent: true);
+    _historyProvider.startAutoSync();
     // Keep the cloud favorites table in step with the sync code: upload the
     // local list when a code is enabled/entered, stop mirroring when cleared.
     _syncProvider.onCodeReady = _appProvider.pushAllFavorites;
@@ -133,7 +150,7 @@ class _IlBattaTvAppState extends State<IlBattaTvApp> {
         ChangeNotifierProvider.value(value: _profileProvider),
         ChangeNotifierProvider(create: (_) => DiscoverProvider(TmdbService())),
         ChangeNotifierProvider(create: (_) => EpgProvider(_appProvider)),
-        ChangeNotifierProvider(create: (_) => UiSettings()..load()),
+        ChangeNotifierProvider.value(value: _uiSettings),
       ],
       child: Builder(
         builder: (context) {

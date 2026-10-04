@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_profile.dart';
 import '../services/profile_service.dart';
 import '../services/sync_service.dart';
@@ -23,10 +24,20 @@ class ProfileProvider extends ChangeNotifier {
   bool get hasLoaded => _loaded;
   String? get error => _error;
 
+  /// Notified whenever the active profile changes (history, kids filter).
+  void Function(UserProfile? profile)? onSelectionChanged;
+  String? _announcedId = '__none__';
+
+  void _announce() {
+    if (_announcedId == _selectedId) return;
+    _announcedId = _selectedId;
+    onSelectionChanged?.call(selected);
+  }
+
   UserProfile? get selected =>
       _items.where((e) => e.id == _selectedId).firstOrNull;
 
-  Future<void> load() async {
+  Future<void> load({bool silent = false}) async {
     final code = await _sync.getStoredCode();
     if (code == null) {
       _items = [];
@@ -34,9 +45,13 @@ class ProfileProvider extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+    if (!silent) {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+    }
+    // Show the selection saved on this device right away (offline too).
+    _selectedId ??= await _service.getSelectedProfileId();
     try {
       _items = await _service.listProfiles(code);
       _selectedId = await _service.getSelectedProfileId();
@@ -45,18 +60,39 @@ class ProfileProvider extends ChangeNotifier {
         await _service.setSelectedProfileId(null);
       }
       _loaded = true;
+      _cacheKids();
     } catch (_) {
-      _error = 'Impossibile caricare i profili. Controlla la connessione.';
+      if (!silent) {
+        _error = 'Impossibile caricare i profili. Controlla la connessione.';
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
+      _announce();
     }
   }
 
   Future<void> select(UserProfile profile) async {
     _selectedId = profile.id;
     notifyListeners();
+    _announce();
     await _service.setSelectedProfileId(profile.id);
+  }
+
+  /// Remembers which profiles are kids profiles, so the filter applies
+  /// immediately at next launch even before the cloud answers.
+  Future<void> _cacheKids() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+        'kids_profile_ids', [for (final p in _items) if (p.isKids) p.id]);
+  }
+
+  /// True when the profile saved on this device is a kids profile.
+  static Future<bool> savedSelectionIsKids(ProfileService service) async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = await service.getSelectedProfileId();
+    return id != null &&
+        (prefs.getStringList('kids_profile_ids') ?? const []).contains(id);
   }
 
   /// True when a profile picker decision is still needed after launch:
@@ -70,6 +106,7 @@ class ProfileProvider extends ChangeNotifier {
     required String name,
     required String avatarKey,
     required String avatarColor,
+    bool isKids = false,
   }) async {
     // Genera il codice al primo uso, cosi la creazione non fallisce.
     final code = await _sync.ensureCode();
@@ -78,8 +115,10 @@ class ProfileProvider extends ChangeNotifier {
       name: name,
       avatarKey: avatarKey,
       avatarColor: avatarColor,
+      isKids: isKids,
     );
     _items = [..._items, profile];
+    _cacheKids();
     notifyListeners();
     return profile;
   }
@@ -89,6 +128,7 @@ class ProfileProvider extends ChangeNotifier {
     String? name,
     String? avatarKey,
     String? avatarColor,
+    bool? isKids,
   }) async {
     final code = await _sync.getStoredCode();
     if (code == null) return;
@@ -98,15 +138,25 @@ class ProfileProvider extends ChangeNotifier {
       name: name,
       avatarKey: avatarKey,
       avatarColor: avatarColor,
+      isKids: isKids,
     );
     _items = [
       for (final p in _items)
         if (p.id == profile.id)
-          p.copyWith(name: name, avatarKey: avatarKey, avatarColor: avatarColor)
+          p.copyWith(
+              name: name,
+              avatarKey: avatarKey,
+              avatarColor: avatarColor,
+              isKids: isKids)
         else
           p,
     ];
+    _cacheKids();
     notifyListeners();
+    if (profile.id == _selectedId) {
+      _announcedId = '__changed__';
+      _announce();
+    }
   }
 
   Future<void> delete(UserProfile profile) async {
@@ -119,6 +169,7 @@ class ProfileProvider extends ChangeNotifier {
         _selectedId = null;
         await _service.setSelectedProfileId(null);
       }
+      _announce();
     } catch (_) {
       _error = 'Eliminazione non riuscita. Controlla la connessione.';
     }

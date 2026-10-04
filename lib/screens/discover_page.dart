@@ -87,7 +87,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
         action: ElevatedButton.icon(
           icon: const Icon(Icons.refresh_rounded),
           label: const Text('Riprova'),
-          onPressed: discover.load,
+          onPressed: () => discover.load(force: true),
         ),
       );
     }
@@ -103,7 +103,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
     return RefreshIndicator(
       color: AppColors.primary,
-      onRefresh: discover.load,
+      onRefresh: () => discover.load(force: true),
       child: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [

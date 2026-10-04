@@ -22,7 +22,6 @@ class _HiddenCategoriesScreenState extends State<HiddenCategoriesScreen>
     (ContentType.live, 'Diretta'),
     (ContentType.movie, 'Film'),
     (ContentType.series, 'Serie TV'),
-    (ContentType.anime, 'Anime'),
   ];
 
   @override

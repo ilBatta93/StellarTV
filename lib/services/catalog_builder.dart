@@ -1,4 +1,5 @@
 import '../models/channel.dart';
+import '../models/content_type.dart';
 
 /// One deduplicated catalog entry: a title plus all the alternative copies
 /// (different qualities, e.g. 1080p and 4K) found across categories.
@@ -73,7 +74,11 @@ class CatalogBuilder {
     void addGroup(String label, List<Channel> items) {
       final entries = <CatalogEntry>[];
       for (final entry in entriesOf(items)) {
-        if (!seenGlobal.add(entry.primary.id)) continue;
+        final c = entry.primary;
+        final key = c.type == ContentType.live
+            ? c.id
+            : '${c.type.name}:${normalize(stripQuality(c.seriesName ?? c.name))}';
+        if (!seenGlobal.add(key)) continue;
         entries.add(entry);
       }
       if (entries.isNotEmpty) {

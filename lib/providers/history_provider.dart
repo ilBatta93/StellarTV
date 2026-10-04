@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/channel.dart';
 import '../models/content_type.dart';
@@ -27,6 +28,37 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Reloads the app after credentials were restored from the cloud.
   Future<void> Function()? onCredentialsRestored;
+
+  /// Reloads settings-backed state after newer settings arrived.
+  Future<void> Function()? onSettingsRestored;
+
+  /// Selected profile: each profile has its own private history.
+  String? _profileId;
+  String? get profileId => _profileId;
+
+  /// Switches to the history of [profileId] (null = no profile selected).
+  Future<void> switchProfile(String? profileId) async {
+    await _loadFuture;
+    if (profileId == _profileId) return;
+    _pushDebounce?.cancel();
+    _profileId = profileId;
+    _entries = [];
+    _notify();
+    if (profileId != null) await _migrateLegacy(profileId);
+    _loadFuture = _loadLocal();
+    await _loadFuture;
+  }
+
+  /// One time: the history saved before profiles became private goes to the
+  /// first profile selected on this device.
+  Future<void> _migrateLegacy(String profileId) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('legacy_history_migrated') == true) return;
+    await prefs.setBool('legacy_history_migrated', true);
+    final legacy = await _sync.loadLocalHistory();
+    if (legacy.isEmpty) return;
+    await _sync.mergeHistoryInto(legacy, profileId: profileId);
+  }
 
   List<HistoryEntry> _entries = [];
   bool _loading = false;
@@ -97,7 +129,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _loadLocal() async {
-    final local = await _sync.loadLocalHistory();
+    final local = await _sync.loadLocalHistory(profileId: _profileId);
     final entries = <HistoryEntry>[];
     for (final value in local.values) {
       if (value is! Map<String, dynamic>) continue;
@@ -154,7 +186,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       };
 
   Future<void> _persistLocal() async {
-    await _sync.saveLocalHistory(_localMap());
+    await _sync.saveLocalHistory(_localMap(), profileId: _profileId);
     _scheduleCloudPush();
   }
 
@@ -181,16 +213,28 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
         _error = 'Nessun codice di sincronizzazione configurato.';
         return false;
       }
-      final payload = await _syncProvider?.pullPayload() ??
-          (await _sync.pull(code)).$1;
+      final (payload, updatedAt) = await _sync.pull(code);
       if (payload == null) {
         _error = 'Nessun dato trovato per il codice $code.';
         return false;
       }
+      // Other profiles' histories are merged straight into local storage.
+      for (final e in payload.profileHistories.entries) {
+        if (e.key == _profileId || e.value is! Map<String, dynamic>) continue;
+        await _sync.mergeHistoryInto(e.value as Map<String, dynamic>,
+            profileId: e.key);
+      }
+      if (_profileId == null) {
+        await _sync.mergeHistoryInto(payload.history);
+      }
+      final remoteCurrent = _profileId == null
+          ? payload.history
+          : (payload.profileHistories[_profileId] as Map<String, dynamic>?) ??
+              const <String, dynamic>{};
       final merged = <String, HistoryEntry>{
         for (final e in _entries) e.contentId: e,
       };
-      for (final value in payload.history.values) {
+      for (final value in remoteCurrent.values) {
         if (value is! Map<String, dynamic>) continue;
         final remote = _entryFromLocal(value);
         if (remote == null) continue;
@@ -200,6 +244,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
           merged[remote.contentId] = remote;
         }
       }
+      final lastPush = await _sync.lastPush();
+      final cloudIsNewer = updatedAt != null &&
+          (lastPush == null || updatedAt.isAfter(lastPush.toUtc()));
       _entries = merged.values.toList()
         ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
       if (_favorites != null && payload.favoriteIds.isNotEmpty) {
@@ -210,7 +257,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
       // Settings and credentials: fill in what the device does not have yet
       // (never overwrite local values with older cloud copies).
-      await _sync.applySnapshotSettings(payload.settings);
+      final settingsChanged = await _sync.applySnapshotSettings(
+          payload.settings,
+          overwrite: cloudIsNewer);
+      if (settingsChanged) await onSettingsRestored?.call();
       final needsCredentials = await _settingsService.getAuthMethod() == null;
       if (needsCredentials && _sync.hasCredentials(payload.settings)) {
         await _sync.applyCredentials(payload.settings);
@@ -246,8 +296,39 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && !_loading) {
-      _syncProvider?.schedulePush();
+      // Bring in changes made on other devices, then publish ours.
+      _autoPull();
+    } else if (state == AppLifecycleState.paused) {
+      _syncProvider?.pushNow(silent: true);
     }
+  }
+
+  DateTime? _lastAutoPull;
+  Timer? _periodic;
+
+  /// Pulls from the cloud when the app comes back to foreground and every
+  /// few minutes while open (throttled), so all devices stay aligned.
+  Future<void> _autoPull() async {
+    final now = DateTime.now();
+    if (_lastAutoPull != null &&
+        now.difference(_lastAutoPull!) < const Duration(seconds: 45)) {
+      return;
+    }
+    _lastAutoPull = now;
+    if (await _sync.getStoredCode() == null) return;
+    final ok = await pullFromCloud();
+    if (ok) _syncProvider?.schedulePush();
+    await onAfterAutoPull?.call();
+  }
+
+  /// Called after each automatic pull (e.g. to refresh profiles).
+  Future<void> Function()? onAfterAutoPull;
+
+  /// Starts periodic background sync while the app is open.
+  void startAutoSync() {
+    _periodic?.cancel();
+    _periodic = Timer.periodic(const Duration(minutes: 5), (_) => _autoPull());
+    _autoPull();
   }
 
   Future<void> recordStart(Channel channel) async {
@@ -327,6 +408,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   void dispose() {
     _disposed = true;
     _pushDebounce?.cancel();
+    _periodic?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

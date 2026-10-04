@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/series_details.dart';
-import 'series_grouping.dart';
 
 class XtreamService {
   /// Scarica e decodifica una risposta JSON in modo robusto:
@@ -93,7 +92,7 @@ class XtreamService {
         id: 'live_${item['stream_id']}',
         name: item['name']?.toString() ?? 'Sconosciuto',
         url:
-            '$base/${Uri.encodeComponent(username)}/${Uri.encodeComponent(password)}/${item['stream_id']}.m3u8',
+            '$base/live/${Uri.encodeComponent(username)}/${Uri.encodeComponent(password)}/${item['stream_id']}.m3u8',
         logo: item['stream_icon']?.toString() ?? '',
         group: groupName,
         type: ContentType.live,
@@ -153,9 +152,7 @@ class XtreamService {
         url: '',
         logo: (item['cover'] ?? item['stream_icon'])?.toString() ?? '',
         group: groupName,
-        type: SeriesGrouping.isAnimeGroup(groupName)
-            ? ContentType.anime
-            : ContentType.series,
+        type: ContentType.series,
         seriesKey: 'series_$seriesId',
         seriesName: item['name']?.toString(),
         plot: item['plot']?.toString(),

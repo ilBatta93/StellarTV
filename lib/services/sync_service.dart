@@ -12,15 +12,21 @@ class SyncPayload {
   final List<Map<String, dynamic>> tmdbFavorites;
   final Map<String, dynamic> settings;
 
+  /// Watch history of each profile (key: profile id), kept private per
+  /// profile. [history] is the history used when no profile is selected.
+  final Map<String, dynamic> profileHistories;
+
   const SyncPayload({
     required this.history,
     required this.favoriteIds,
     required this.tmdbFavorites,
     required this.settings,
+    this.profileHistories = const {},
   });
 
   Map<String, dynamic> toJson() => {
-        'v': 2,
+        'v': 3,
+        'profile_histories': profileHistories,
         'history': history,
         'favorite_ids': favoriteIds,
         'tmdb_favorites': tmdbFavorites,
@@ -35,6 +41,8 @@ class SyncPayload {
             .whereType<Map<String, dynamic>>()
             .toList(),
         settings: (json['settings'] as Map<String, dynamic>?) ?? const {},
+        profileHistories:
+            (json['profile_histories'] as Map<String, dynamic>?) ?? const {},
       );
 }
 
@@ -56,12 +64,24 @@ class SyncService {
     'xtream_password',
     'playlist_url',
   ];
-  static const _uiKeys = ['ui_accent', 'ui_grid_size', 'theme_mode'];
+  static const _uiKeys = [
+    'ui_accent',
+    'ui_grid_size',
+    'theme_mode',
+    'ui_animations',
+    'ui_show_posters',
+    'ui_compact',
+    'show_adult_content',
+    'hidden_categories',
+    'playlist_refresh_minutes',
+    'epg_use_playlist',
+    'epg_sources',
+    'epg_refresh_minutes',
+  ];
   static const _syncedKeys = [
     ..._credentialsKeys,
     'player_settings_v1',
     'player_resume_positions',
-    'local_watch_history',
     ..._uiKeys,
     'favorite_channels',
     'favorite_tmdb_items',
@@ -100,17 +120,55 @@ class SyncService {
 
   // ----- local persistence -----
 
-  Future<Map<String, dynamic>> loadLocalHistory() async {
+  static String historyKeyFor(String? profileId) =>
+      profileId == null || profileId.isEmpty
+          ? _localHistoryKey
+          : '${_localHistoryKey}__$profileId';
+
+  Future<Map<String, dynamic>> loadLocalHistory({String? profileId}) async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_localHistoryKey);
+    final raw = prefs.getString(historyKeyFor(profileId));
     if (raw == null) return {};
     final decoded = jsonDecode(raw);
     return decoded is Map<String, dynamic> ? decoded : {};
   }
 
-  Future<void> saveLocalHistory(Map<String, dynamic> history) async {
+  Future<void> saveLocalHistory(Map<String, dynamic> history,
+      {String? profileId}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_localHistoryKey, jsonEncode(history));
+    await prefs.setString(historyKeyFor(profileId), jsonEncode(history));
+  }
+
+  /// Every per-profile history stored on this device.
+  Future<Map<String, dynamic>> loadAllProfileHistories() async {
+    final prefs = await SharedPreferences.getInstance();
+    final prefix = '${_localHistoryKey}__';
+    final out = <String, dynamic>{};
+    for (final key in prefs.getKeys()) {
+      if (!key.startsWith(prefix)) continue;
+      try {
+        final d = jsonDecode(prefs.getString(key) ?? '{}');
+        if (d is Map<String, dynamic>) out[key.substring(prefix.length)] = d;
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  /// Merges a remote history map into local storage (newest `watched` wins).
+  Future<Map<String, dynamic>> mergeHistoryInto(
+      Map<String, dynamic> remote, {String? profileId}) async {
+    final local = await loadLocalHistory(profileId: profileId);
+    final merged = {...local};
+    for (final e in remote.entries) {
+      final r = e.value;
+      if (r is! Map<String, dynamic>) continue;
+      final l = merged[e.key];
+      final rw = DateTime.tryParse(r['watched']?.toString() ?? '');
+      final lw = l is Map ? DateTime.tryParse(l['watched']?.toString() ?? '') : null;
+      if (lw == null || (rw != null && rw.isAfter(lw))) merged[e.key] = r;
+    }
+    await saveLocalHistory(merged, profileId: profileId);
+    return merged;
   }
 
   // ----- snapshot collection -----
@@ -126,8 +184,10 @@ class SyncService {
       settings[key] = prefs.get(key);
     }
     final localHistory = await loadLocalHistory();
+    final profiles = await loadAllProfileHistories();
     return SyncPayload(
       history: localHistory,
+      profileHistories: profiles,
       favoriteIds: favoriteIds?.toList() ?? const [],
       tmdbFavorites: tmdbFavorites ?? const [],
       settings: _dropNulls(settings),
@@ -137,25 +197,35 @@ class SyncService {
   Map<String, dynamic> _dropNulls(Map<String, dynamic> map) =>
       Map.fromEntries(map.entries.where((e) => e.value != null));
 
-  /// Writes a cloud snapshot into local storage. Only fills keys the cloud
-  /// has and local does not, so restoring never erases newer local edits.
-  Future<void> applySnapshotSettings(Map<String, dynamic> settings) async {
+  /// Writes a cloud snapshot into local storage. With [overwrite] (the cloud
+  /// copy is newer than this device's last upload) values replace local
+  /// ones, so a change made on another device reaches every device;
+  /// otherwise only keys missing locally are filled in.
+  Future<bool> applySnapshotSettings(Map<String, dynamic> settings,
+      {bool overwrite = false}) async {
     final prefs = await SharedPreferences.getInstance();
+    var changed = false;
     for (final entry in settings.entries) {
       final key = entry.key;
-      if (!_syncedKeys.contains(key)) continue;
+      if (!_syncedKeys.contains(key) || key == 'local_watch_history') continue;
       final value = entry.value;
-      if (value is String && !prefs.containsKey(key)) {
+      final write = overwrite || !prefs.containsKey(key);
+      if (!write || prefs.get(key).toString() == value.toString()) continue;
+      changed = true;
+      if (value is String) {
         await prefs.setString(key, value);
-      } else if (value is bool && !prefs.containsKey(key)) {
+      } else if (value is bool) {
         await prefs.setBool(key, value);
-      } else if (value is int && !prefs.containsKey(key)) {
+      } else if (value is int) {
         await prefs.setInt(key, value);
-      } else if (value is List && !prefs.containsKey(key)) {
+      } else if (value is double) {
+        await prefs.setDouble(key, value);
+      } else if (value is List) {
         await prefs.setStringList(
             key, value.whereType<String>().toList());
       }
     }
+    return changed;
   }
 
   /// Overwrites local storage with cloud credentials (used when the local

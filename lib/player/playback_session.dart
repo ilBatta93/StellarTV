@@ -16,13 +16,34 @@ class PlaybackSession extends ChangeNotifier {
     required this.isLive,
     required this.settings,
     this.startAt,
-  })  : speed = isLive ? 1.0 : settings.defaultSpeed,
+  })  : _candidates = liveCandidates(url, isLive),
+        speed = isLive ? 1.0 : settings.defaultSpeed,
         fitMode = settings.fitMode,
         subtitleDelay = Duration(milliseconds: settings.subtitleDelayMs),
         audioDelay = Duration(milliseconds: settings.audioDelayMs);
 
   final String url;
   final bool isLive;
+
+  /// Alternative addresses for the same stream. Xtream live channels were
+  /// saved without the `/live/` segment (HTTP 404); the standard
+  /// `/live/user/pass/id.m3u8` form is tried first, then MPEG-TS.
+  final List<String> _candidates;
+  int _urlIndex = 0;
+  String get currentUrl => _candidates[_urlIndex];
+
+  static final _xtreamLive = RegExp(
+      r'^(https?://[^/]+)/(?:live/)?([^/]+)/([^/]+)/(\d+)(?:\.(m3u8|ts))?$');
+
+  static List<String> liveCandidates(String url, bool isLive) {
+    if (!isLive) return [url];
+    final m = _xtreamLive.firstMatch(url.trim());
+    if (m == null || url.contains('/movie/') || url.contains('/series/')) {
+      return [url];
+    }
+    final base = '${m[1]}/live/${m[2]}/${m[3]}/${m[4]}';
+    return {'$base.m3u8', '$base.ts', url}.toList();
+  }
   final PlayerSettings settings;
   final Duration? startAt;
 
@@ -53,6 +74,7 @@ class PlaybackSession extends ChangeNotifier {
 
   Future<void> retry() {
     _openCount.clear();
+    _urlIndex = 0;
     return _open(settings.primaryEngine, resumeAt: _resumePoint());
   }
 
@@ -68,9 +90,9 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   PlaybackEngine _create(PlayerEngineType type) => switch (type) {
-        PlayerEngineType.exo => ExoEngine(url: url, settings: settings),
+        PlayerEngineType.exo => ExoEngine(url: currentUrl, settings: settings),
         PlayerEngineType.mediakit =>
-          MediaKitEngine(url: url, settings: settings),
+          MediaKitEngine(url: currentUrl, settings: settings),
       };
 
   Future<void> _open(PlayerEngineType type, {Duration? resumeAt}) async {
@@ -212,6 +234,15 @@ class PlaybackSession extends ChangeNotifier {
       _notice = 'Nuovo tentativo con ${failed.label}...';
       _notify();
       await _open(failed, resumeAt: resumeAt);
+      return;
+    }
+    if (_urlIndex < _candidates.length - 1) {
+      _urlIndex++;
+      _openCount.clear();
+      _status = SessionStatus.switching;
+      _notice = 'Provo un formato alternativo del canale...';
+      _notify();
+      await _open(settings.primaryEngine, resumeAt: resumeAt);
       return;
     }
     _retire(_engine);

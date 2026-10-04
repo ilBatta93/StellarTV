@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/streaming_platform.dart';
@@ -36,29 +39,94 @@ class DiscoverProvider extends ChangeNotifier {
     return pool.isEmpty ? null : pool.first;
   }
 
-  Future<void> load() async {
+  static const _cacheKey = 'discover_cache_v1';
+  static const _cacheTtl = Duration(hours: 6);
+  bool _cacheRead = false;
+
+  static List<Map<String, dynamic>> _enc(List<TmdbItem> l) =>
+      l.map((e) => e.toJson()).toList();
+  static List<TmdbItem> _dec(dynamic raw) => raw is List
+      ? raw
+          .whereType<Map>()
+          .map((m) => TmdbItem.tryParse(m.cast<String, dynamic>()))
+          .whereType<TmdbItem>()
+          .toList()
+      : <TmdbItem>[];
+
+  /// Shows the last saved Top lists instantly (no network wait at startup),
+  /// then refreshes them in background when older than [_cacheTtl].
+  Future<bool> _readCache() async {
+    if (_cacheRead) return false;
+    _cacheRead = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_cacheKey);
+      if (raw == null) return false;
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      _topMovies = _dec(m['movies']);
+      _topSeries = _dec(m['series']);
+      final plat = (m['platforms'] as Map?) ?? const {};
+      for (final e in plat.entries) {
+        final v = (e.value as Map?) ?? const {};
+        _platformTops[e.key.toString()] =
+            PlatformTops(movies: _dec(v['m']), series: _dec(v['s']));
+      }
+      notifyListeners();
+      final at = DateTime.tryParse(m['at']?.toString() ?? '');
+      return at != null && DateTime.now().difference(at) < _cacheTtl;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _writeCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+          _cacheKey,
+          jsonEncode({
+            'at': DateTime.now().toIso8601String(),
+            'movies': _enc(_topMovies),
+            'series': _enc(_topSeries),
+            'platforms': {
+              for (final e in _platformTops.entries)
+                e.key: {'m': _enc(e.value.movies), 's': _enc(e.value.series)},
+            },
+          }));
+    } catch (_) {}
+  }
+
+  Future<void> load({bool force = false}) async {
     if (_isLoading) return;
-    _isLoading = true;
+    final fresh = await _readCache();
+    if (fresh && !force) return;
+    _isLoading = !hasData;
     _error = null;
     notifyListeners();
     try {
-      final results = await Future.wait([
+      // Everything in parallel: trending and every platform at once.
+      final trending = Future.wait([
         tmdb.trending('movie'),
         tmdb.trending('tv'),
-      ]);
-      _topMovies = results[0];
-      _topSeries = results[1];
-      notifyListeners();
-
-      await Future.wait(StreamingPlatform.all.map((p) async {
+      ]).then((r) {
+        _topMovies = r[0];
+        _topSeries = r[1];
+        _isLoading = false;
+        notifyListeners();
+      });
+      final platforms = Future.wait(StreamingPlatform.all.map((p) async {
         try {
-          _platformTops[p.name] = await tmdb.platformTop(p);
+          final tops = await tmdb.platformTop(p);
+          _platformTops[p.name] = tops;
+          notifyListeners();
         } catch (_) {
-          _platformTops[p.name] = const PlatformTops();
+          _platformTops.putIfAbsent(p.name, () => const PlatformTops());
         }
       }));
+      await Future.wait([trending, platforms]);
+      await _writeCache();
     } catch (e) {
-      _error = e.toString();
+      if (!hasData) _error = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();

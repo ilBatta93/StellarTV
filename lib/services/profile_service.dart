@@ -75,9 +75,11 @@ class ProfileService {
     String? name,
     String? avatarKey,
     String? avatarColor,
+    bool? isKids,
   }) async {
     final updates = <String, dynamic>{};
     if (name != null) updates['name'] = name;
+    if (isKids != null) updates['is_kids'] = isKids;
     if (avatarKey != null && ProfileAvatars.exists(avatarKey)) {
       updates['avatar_key'] = avatarKey;
     }

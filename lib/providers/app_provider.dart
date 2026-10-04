@@ -128,12 +128,38 @@ class AppProvider extends ChangeNotifier {
   }
 
   void _applyAdultFilter() {
-    _allChannels = _showAdult
-        ? _rawChannels
-        : _rawChannels.where((c) => !isAdult(c)).toList(growable: false);
+    _allChannels = _rawChannels
+        .where((c) =>
+            (_kidsMode || _showAdult || !isAdult(c)) &&
+            (!_kidsMode || (!isAdult(c) && isKidsFriendly(c))))
+        .toList(growable: false);
     _channelIndex = null;
     _invalidateCaches();
   }
+
+  /// Kids profile: only children's categories/channels are visible.
+  bool _kidsMode = false;
+  bool get kidsMode => _kidsMode;
+
+  void setKidsMode(bool value) {
+    if (value == _kidsMode) return;
+    _kidsMode = value;
+    _applyAdultFilter();
+    notifyListeners();
+  }
+
+  static final _kidsPattern = RegExp(
+    r'\bkids?\b|bambin|\bbimbi|cartoon|cartoni|animazione|animation|'
+    r'animat|\bfamily\b|famiglia|junior|ragazzi|disney|pixar|dreamworks|'
+    r'nick\s*jr|nickelodeon|\bboing\b|\bk2\b|frisbee|yoyo|rai\s*gulp|'
+    r'cartoonito|\bbaby|infanzia|\bteen|deakids|super!|\bpeppa|\bkinder',
+    caseSensitive: false,
+  );
+
+  /// True for content suitable for a kids profile (by category or title).
+  static bool isKidsFriendly(Channel c) =>
+      _kidsPattern.hasMatch(c.group) ||
+      (c.type == ContentType.live && _kidsPattern.hasMatch(c.name));
 
   /// Adult content is hidden by default; the user can show it in Settings.
   bool get showAdult => _showAdult;
@@ -224,10 +250,12 @@ class AppProvider extends ChangeNotifier {
             final byDate = b.$2.addedAt.compareTo(a.$2.addedAt);
             return byDate != 0 ? byDate : b.$1.compareTo(a.$1);
           });
+        // The same title is often listed in several categories: show it
+        // once (normalized title, quality tags ignored).
         final seen = <String>{};
         return [
           for (final (_, c) in indexed)
-            if (seen.add(c.id)) CatalogEntry(primary: c, variants: [c]),
+            if (seen.add(_dedupeKey(c))) CatalogEntry(primary: c, variants: [c]),
         ].take(limit).toList(growable: false);
       }();
 
@@ -342,6 +370,11 @@ class AppProvider extends ChangeNotifier {
       RegExp(r'\b(19|20)\d{2}\b').firstMatch(name)?.group(0);
 
   /// Title key without language prefix, brackets, quality tags and year.
+  static String _dedupeKey(Channel c) {
+    final k = _titleKey(c.seriesName ?? c.name);
+    return k.isEmpty ? c.id : '${c.type.name}:$k';
+  }
+
   static String _titleKey(String raw) =>
       _normalize(TmdbService.cleanTitle(raw));
 
@@ -501,6 +534,26 @@ class AppProvider extends ChangeNotifier {
     _initialized = false;
     await init();
     await _refreshService.schedule();
+  }
+
+  /// Re-reads settings that may have been updated from another device.
+  Future<void> reloadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _showAdult = prefs.getBool(_showAdultKey) ?? false;
+    _hiddenCategories = await _settingsService.getHiddenCategories();
+    final creds = await _settingsService.getXtreamCredentials();
+    final credsChanged = creds != null &&
+        (_xtreamCredentials == null ||
+            creds['server'] != _xtreamCredentials!['server'] ||
+            creds['username'] != _xtreamCredentials!['username'] ||
+            creds['password'] != _xtreamCredentials!['password']);
+    _applyAdultFilter();
+    notifyListeners();
+    if (credsChanged) {
+      await reloadFromStorage();
+    } else {
+      await _refreshService.schedule();
+    }
   }
 
   Future<void> saveRefreshInterval(int minutes) async {
