@@ -103,6 +103,42 @@ class _PlayerScreenState extends State<PlayerScreen>
     _loadSegments();
   }
 
+  /// "Scheda titolo": leaves the player and shows the movie/series page,
+  /// returning to the existing one when the player was opened from it.
+  void _openTitle() {
+    final navigator = Navigator.of(context);
+    final app = context.read<AppProvider>();
+    final key = _isEpisode
+        ? (widget.channel.seriesKey ?? widget.channel.id)
+        : widget.channel.id;
+    final target = _isEpisode
+        ? (app.seriesFolderFor(key) ??
+              Channel(
+                id: key,
+                name: widget.channel.seriesName ?? widget.channel.name,
+                url: '',
+                logo: '',
+                group: widget.channel.group,
+                type: widget.channel.type,
+                seriesKey: key,
+                seriesName: widget.channel.seriesName,
+                isSeriesFolder: true,
+              ))
+        : widget.channel;
+    navigator.pop();
+    String? topName;
+    navigator.popUntil((r) {
+      topName = r.settings.name;
+      return true;
+    });
+    if (topName == titleRouteName(key)) return;
+    if (_isEpisode) {
+      openSeries(navigator.context, target);
+    } else {
+      openChannel(navigator.context, target);
+    }
+  }
+
   bool get _isEpisode =>
       widget.channel.type == ContentType.series ||
       widget.channel.type == ContentType.anime;
@@ -532,6 +568,7 @@ class _PlayerScreenState extends State<PlayerScreen>
             onPreviousChannel: () => _playLiveChannel(_adjacentLiveChannel(-1)),
             onNextChannel: () => _playLiveChannel(_adjacentLiveChannel(1)),
             onBack: () => Navigator.pop(context),
+            onOpenTitle: _isLive ? null : _openTitle,
             onPip: _enterPip,
             onMenu: _openMenu,
             onToggleLock: () {

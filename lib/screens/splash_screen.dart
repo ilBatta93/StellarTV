@@ -7,6 +7,7 @@ import '../providers/sync_provider.dart';
 import '../providers/ui_settings.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
+import 'account_screen.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 import 'profile_picker_screen.dart';
@@ -64,6 +65,12 @@ class _SplashScreenState extends State<SplashScreen>
     // If a sync code is configured, restore cloud data on startup: this is
     // what carries history, favorites and playlist credentials over to a new
     // device. Run once per launch, then continue navigating.
+    // Every device needs an ilBattaTV account: it is what syncs the data.
+    if (!sync.isSignedIn) {
+      _navigate(const AccountScreen());
+      return;
+    }
+
     if (!_cloudChecked) {
       _cloudChecked = true;
       if (sync.code != null) {

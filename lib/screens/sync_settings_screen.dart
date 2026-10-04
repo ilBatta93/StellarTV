@@ -5,6 +5,7 @@ import '../providers/history_provider.dart';
 import '../providers/sync_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_tiles.dart';
+import 'account_screen.dart';
 
 class SyncSettingsScreen extends StatefulWidget {
   const SyncSettingsScreen({super.key});
@@ -14,14 +15,6 @@ class SyncSettingsScreen extends StatefulWidget {
 }
 
 class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
-  final _codeController = TextEditingController();
-
-  @override
-  void dispose() {
-    _codeController.dispose();
-    super.dispose();
-  }
-
   String _fmtDate(DateTime? at) {
     if (at == null) return 'Mai';
     final local = at.toLocal();
@@ -36,107 +29,54 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
     final history = context.watch<HistoryProvider>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Sincronizzazione')),
+      appBar: AppBar(title: const Text('Account e sincronizzazione')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           SettingsSection(
             title: 'Come funziona',
             description:
-                'Tutti i tuoi dati (credenziali della playlist, cronologia, '
-                'preferiti, impostazioni del player e aspetto dell\'app) sono '
-                'salvati su questo dispositivo. Attiva la sincronizzazione per '
-                'ritrovarli anche sugli altri dispositivi (Fire TV, iPhone, '
-                'iPad, Android TV): ti basta usare lo stesso codice a 8 '
-                'caratteri ovunque. Le modifiche vengono inviate '
-                'automaticamente.',
+                'Tutto è legato al tuo account ilBattaTV: playlist, profili, '
+                'cronologia di ogni profilo, preferiti e impostazioni. Accedi '
+                'con la stessa email e password su ogni dispositivo (telefono, '
+                'tablet, Fire TV, Google TV) e i dati si aggiornano da soli.',
             children: const [],
           ),
-          if (sync.code == null) ...[
-            SettingsSection(
-              title: 'Attiva',
-              children: [
-                SettingsValueTile(
-                  icon: Icons.cloud_sync_outlined,
-                  title: 'Attiva la sincronizzazione',
-                  subtitle: 'Genera un codice da usare sugli altri dispositivi',
-                  onTap: sync.isBusy ? null : () => context.read<SyncProvider>().enable(),
-                ),
-                SettingsValueTile(
-                  icon: Icons.input_rounded,
-                  title: 'Ho già un codice',
-                  subtitle: 'Inserisci il codice di un altro dispositivo',
-                  onTap: () => _showCodeInputDialog(context),
-                ),
-              ],
-            ),
-          ] else ...[
-            SettingsSection(
-              title: 'Il tuo codice',
-              description:
-                  'Inserisci questo codice nell\'app su un altro dispositivo per '
-                  'sincronizzare cronologia, preferiti e impostazioni.',
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.card,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Center(
-                          child: GestureDetector(
-                            onTap: () => _copyCode(context, sync.code!),
-                            child: Text(
-                              sync.code!,
-                              style: TextStyle(
-                                fontSize: 28,
-                                letterSpacing: 6,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        icon: const Icon(Icons.copy_rounded, size: 16),
-                        label: const Text('Copia codice'),
-                        onPressed: () => _copyCode(context, sync.code!),
-                      ),
-                    ],
-                  ),
-                ),
-                SettingsValueTile(
-                  icon: Icons.upload_rounded,
-                  title: 'Invia al cloud',
-                  subtitle: 'Ultimo invio: ${_fmtDate(sync.lastPush)} · automatico ad ogni modifica',
-                  onTap: sync.isBusy
-                      ? null
-                      : () => _pushAll(context),
-                ),
-                SettingsValueTile(
-                  icon: Icons.download_rounded,
-                  title: 'Scarica dal cloud',
-                  subtitle:
-                      'Unisce i dati remoti con quelli locali · ultimo scaricamento: ${_fmtDate(sync.lastPull)}',
-                  onTap: sync.isBusy ? null : () => _pull(context),
-                ),
-                SettingsValueTile(
-                  icon: Icons.cloud_off_rounded,
-                  title: 'Disattiva sincronizzazione',
-                  color: AppColors.error,
-                  onTap: () => _confirmDisable(context),
-                ),
-              ],
-            ),
-          ],
+          SettingsSection(
+            title: 'Il tuo account',
+            children: [
+              SettingsValueTile(
+                icon: Icons.account_circle_outlined,
+                title: 'Email',
+                value: sync.email ?? '-',
+              ),
+              SettingsValueTile(
+                icon: Icons.upload_rounded,
+                title: 'Invia al cloud',
+                subtitle: 'Ultimo invio: ${_fmtDate(sync.lastPush)} · automatico ad ogni modifica',
+                onTap: sync.isBusy ? null : () => _pushAll(context),
+              ),
+              SettingsValueTile(
+                icon: Icons.download_rounded,
+                title: 'Scarica dal cloud',
+                subtitle:
+                    'Unisce i dati remoti con quelli locali · ultimo scaricamento: ${_fmtDate(sync.lastPull)}',
+                onTap: sync.isBusy ? null : () => _pull(context),
+              ),
+              SettingsValueTile(
+                icon: Icons.password_rounded,
+                title: 'Cambia password',
+                subtitle: 'Ricevi un\'email per sceglierne una nuova',
+                onTap: () => _resetPassword(context),
+              ),
+              SettingsValueTile(
+                icon: Icons.logout_rounded,
+                title: 'Esci dall\'account',
+                color: AppColors.error,
+                onTap: () => _confirmDisable(context),
+              ),
+            ],
+          ),
           if (sync.message != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
@@ -217,64 +157,16 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
     }
   }
 
-  void _copyCode(BuildContext context, String code) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('Codice $code pronto da incollare'),
-      ),
-    );
-  }
-
-  void _showCodeInputDialog(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-            24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Inserisci codice',
-                style: Theme.of(ctx).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            const Text(
-              'Digita il codice a 8 caratteri mostrato sull\'altro dispositivo.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _codeController,
-              autofocus: true,
-              textCapitalization: TextCapitalization.characters,
-              maxLength: 8,
-              decoration: const InputDecoration(
-                hintText: 'ABCD2345',
-                counterText: '',
-              ),
-              style: const TextStyle(
-                  fontSize: 22, letterSpacing: 4, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.check_rounded),
-              label: const Text('Usa questo codice'),
-              onPressed: () {
-                final syncProvider = context.read<SyncProvider>();
-                Navigator.pop(ctx);
-                syncProvider.useExistingCode(_codeController.text);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
+  Future<void> _resetPassword(BuildContext context) async {
+    final sync = context.read<SyncProvider>();
+    final email = sync.email;
+    if (email == null) return;
+    final error = await sync.resetPassword(email);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      content: Text(error ?? 'Email inviata a $email.'),
+    ));
   }
 
   Future<void> _confirmDisable(BuildContext context) async {
@@ -282,9 +174,9 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text('Disattivare la sincronizzazione?'),
+        title: const Text('Uscire dall\'account?'),
         content: const Text(
-            'I dati restano su questo dispositivo, ma non verranno più inviati al cloud.'),
+            'I tuoi dati restano salvati nel cloud. Da questo dispositivo verranno tolti playlist, profili e cronologia finché non accedi di nuovo.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -293,12 +185,17 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child:
-                const Text('Disattiva', style: TextStyle(color: AppColors.error)),
+                const Text('Esci', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    await context.read<SyncProvider>().disable();
+    final navigator = Navigator.of(context);
+    await context.read<SyncProvider>().signOut();
+    navigator.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AccountScreen()),
+      (_) => false,
+    );
   }
 }

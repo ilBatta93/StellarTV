@@ -38,6 +38,9 @@ class SyncProvider extends ChangeNotifier {
   String? get message => _message;
   bool get success => _success;
 
+  String? get email => _sync.currentEmail;
+  bool get isSignedIn => _sync.currentUserId != null;
+
   Future<void> load() async {
     _code = await _sync.getStoredCode();
     _lastPush = await _sync.lastPush();
@@ -45,64 +48,41 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> enable() async {
+  /// Returns null on success, otherwise an Italian error message.
+  Future<String?> signIn(String email, String password) =>
+      _auth(() => _sync.signIn(email, password));
+
+  Future<String?> signUp(String email, String password) =>
+      _auth(() => _sync.signUp(email, password));
+
+  Future<String?> resetPassword(String email) => _sync.resetPassword(email);
+
+  Future<String?> _auth(Future<String?> Function() action) async {
     _busy = true;
     _message = null;
     notifyListeners();
-    _code = await _sync.ensureCode();
-    // Upload the favorites already on this device, then publish the snapshot.
-    await onCodeReady?.call(_code!);
-    await pushNow(silent: true);
+    final error = await action();
+    if (error == null) {
+      _code = await _sync.getStoredCode();
+      if (_code != null) await onCodeReady?.call(_code!);
+    }
     _busy = false;
-    _message = 'Sincronizzazione attiva. Usa lo stesso codice sugli altri dispositivi.';
-    _success = true;
     notifyListeners();
+    return error;
   }
 
-  Future<void> disable() async {
+  /// Signs out: stops syncing and clears this device.
+  Future<void> signOut() async {
     _busy = true;
-    _message = null;
     notifyListeners();
     _debounce?.cancel();
-    await _sync.clearCode();
+    await _sync.signOut();
     _code = null;
-    await onCodeCleared?.call();
     _lastPush = null;
     _lastPull = null;
+    await onCodeCleared?.call();
     _busy = false;
     notifyListeners();
-  }
-
-  Future<void> useExistingCode(String code) async {
-    final cleaned = code.toUpperCase().trim();
-    if (cleaned.length != 8) {
-      _message = 'Il codice deve avere 8 caratteri.';
-      _success = false;
-      notifyListeners();
-      return;
-    }
-    _busy = true;
-    _message = null;
-    notifyListeners();
-    await _sync.setCodeManually(cleaned);
-    _code = cleaned;
-    await onCodeReady?.call(cleaned);
-    final (payload, updated) = await _sync.pull(cleaned);
-    if (payload != null) {
-      _busy = false;
-      _success = true;
-      _message =
-          'Codice collegato: al prossimo avvio i dati del cloud verranno ripristinati. '
-          'Puoi anche scaricarli ora.';
-      notifyListeners();
-    } else {
-      _busy = false;
-      _success = updated == null && payload == null;
-      _message = updated == null && payload == null
-          ? 'Codice impostato, ma nessun dato trovato nel cloud per questo codice.'
-          : 'Codice impostato.';
-      notifyListeners();
-    }
   }
 
   /// Queues an automatic push (debounced by a few seconds).
@@ -161,7 +141,7 @@ class SyncProvider extends ChangeNotifier {
       final (payload, _) = await _sync.pull(code);
       _success = payload != null;
       _message = payload == null
-          ? 'Nessun dato trovato nel cloud per questo codice.'
+          ? 'Nessun dato salvato nel cloud per questo account.'
           : 'Dati scaricati dal cloud.';
       return payload != null;
     } finally {

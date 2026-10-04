@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
-import '../providers/history_provider.dart';
-import '../providers/sync_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
 import 'profile_picker_screen.dart';
@@ -70,11 +68,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: _buildCard(),
                     ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: _buildRestoreCard(),
-                    ),
                     const SizedBox(height: 32),
                   ],
                 ),
@@ -126,72 +119,6 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Padding(
         padding: const EdgeInsets.all(22),
         child: _buildXtreamForm(),
-      ),
-    );
-  }
-
-  Widget _buildRestoreCard() {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primary.withValues(alpha: 0.14),
-            AppColors.secondary.withValues(alpha: 0.08),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: _isLoading ? null : _showSyncCodeDialog,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.primary.withValues(alpha: 0.18),
-                  ),
-                  child: Icon(Icons.cloud_sync_outlined,
-                      size: 22, color: AppColors.primary),
-                ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Hai già usato ilBattaTV?',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        'Ripristina dal cloud con il tuo codice a 8 caratteri',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.arrow_forward_ios,
-                    size: 14, color: AppColors.primary.withValues(alpha: 0.8)),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -258,65 +185,6 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ],
     );
-  }
-
-  /// First-run cloud restore: pairs this device to an existing sync code and
-  /// pulls history, favorites and playlist credentials before connecting.
-  Future<void> _showSyncCodeDialog() async {
-    final codeController = TextEditingController();
-    final sync = context.read<SyncProvider>();
-    final history = context.read<HistoryProvider>();
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: const Text('Ripristina dal cloud'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Inserisci il codice a 8 caratteri che usi sugli altri dispositivi: '
-              'verranno recuperati cronologia, preferiti e dati di accesso.',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: codeController,
-              autofocus: true,
-              maxLength: 8,
-              textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(
-                hintText: 'Es. AB12CD34',
-                counterText: '',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annulla')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Ripristina')),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-
-    setState(() => _isLoading = true);
-    await sync.useExistingCode(codeController.text.toUpperCase().trim());
-    final restored = await history.pullFromCloud();
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-    if (restored) {
-      _navigateHome();
-    } else {
-      _showError(
-          'Ripristino non riuscito: codice non valido o nessun dato nel cloud. '
-          'Puoi comunque connettere il tuo account.');
-    }
   }
 
   Widget _buildFieldLabel(String label) {

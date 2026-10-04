@@ -225,13 +225,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           SettingsSection(
-            title: 'Sincronizzazione',
-            description: 'Cronologia e preferiti salvati sul dispositivo e, se vuoi, nel cloud con un codice.',
+            title: 'Account',
+            description: 'Playlist, profili, cronologia e preferiti sincronizzati su tutti i dispositivi.',
             children: [
               SettingsValueTile(
                 icon: Icons.cloud_sync_outlined,
                 title: 'Backup e sincronizzazione',
-                subtitle: 'Codice a 8 caratteri, nessun account richiesto',
+                subtitle: 'Email, sincronizzazione e uscita dall\'account',
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => const SyncSettingsScreen())),
               ),

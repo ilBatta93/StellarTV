@@ -137,7 +137,8 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (entry != null) entries.add(entry);
     }
     entries.sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
-    _entries = entries;
+    // Live TV channels are never kept in the history.
+    _entries = entries.where((e) => e.type != ContentType.live).toList();
     _loaded = true;
     _notify();
   }
@@ -210,12 +211,12 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     try {
       final code = await _sync.getStoredCode();
       if (code == null) {
-        _error = 'Nessun codice di sincronizzazione configurato.';
+        _error = 'Accedi al tuo account per usare il cloud.';
         return false;
       }
       final (payload, updatedAt) = await _sync.pull(code);
       if (payload == null) {
-        _error = 'Nessun dato trovato per il codice $code.';
+        _error = 'Nessun dato salvato nel cloud per questo account.';
         return false;
       }
       // Other profiles' histories are merged straight into local storage.
@@ -247,7 +248,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       final lastPush = await _sync.lastPush();
       final cloudIsNewer = updatedAt != null &&
           (lastPush == null || updatedAt.isAfter(lastPush.toUtc()));
-      _entries = merged.values.toList()
+      _entries = merged.values
+          .where((e) => e.type != ContentType.live)
+          .toList()
         ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
       if (_favorites != null && payload.favoriteIds.isNotEmpty) {
         await _favorites.importFavorites({
@@ -332,6 +335,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> recordStart(Channel channel) async {
+    if (channel.type == ContentType.live) return;
     await _loadFuture;
     final now = DateTime.now();
     final previous = entryFor(channel.id);

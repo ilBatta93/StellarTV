@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -88,35 +87,91 @@ class SyncService {
     'favorite_tmdb_items',
   ];
 
-  /// The pairing code for this profile; created lazily on first access.
+  /// The cloud "code" is now the id of the signed-in account: every row in
+  /// the cloud is tied to it and protected so only that account can read it.
+  String? get currentUserId => _client.auth.currentUser?.id;
+  String? get currentEmail => _client.auth.currentUser?.email;
+
+  /// Returns the account id; throws when nobody is signed in.
   Future<String> ensureCode() async {
-    final prefs = await SharedPreferences.getInstance();
-    final existing = prefs.getString(codeKey);
-    if (existing != null && existing.length == 8) return existing;
-    final code = _generateCode();
-    await prefs.setString(codeKey, code);
-    return code;
+    final id = currentUserId;
+    if (id == null) throw StateError('Accedi al tuo account per usare il cloud.');
+    await _storeCode(id);
+    return id;
   }
 
   Future<String?> getStoredCode() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(codeKey);
+    final id = currentUserId;
+    if (id != null) await _storeCode(id);
+    return id;
   }
 
-  Future<void> setCodeManually(String code) async {
+  Future<void> _storeCode(String id) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(codeKey, code.toUpperCase().trim());
+    if (prefs.getString(codeKey) != id) await prefs.setString(codeKey, id);
   }
 
-  Future<void> clearCode() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(codeKey);
+  Future<String?> signIn(String email, String password) async {
+    try {
+      await _client.auth
+          .signInWithPassword(email: email.trim(), password: password);
+      await getStoredCode();
+      return null;
+    } on AuthException catch (e) {
+      return _authMessage(e);
+    } catch (_) {
+      return 'Accesso non riuscito. Controlla la connessione.';
+    }
   }
 
-  String _generateCode() {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final rnd = Random.secure();
-    return List.generate(8, (_) => alphabet[rnd.nextInt(alphabet.length)]).join();
+  Future<String?> signUp(String email, String password) async {
+    try {
+      final res =
+          await _client.auth.signUp(email: email.trim(), password: password);
+      if (res.session == null) {
+        return 'Account creato: controlla la tua email per confermarlo.';
+      }
+      await getStoredCode();
+      return null;
+    } on AuthException catch (e) {
+      return _authMessage(e);
+    } catch (_) {
+      return 'Registrazione non riuscita. Controlla la connessione.';
+    }
+  }
+
+  Future<String?> resetPassword(String email) async {
+    try {
+      await _client.auth.resetPasswordForEmail(email.trim());
+      return null;
+    } on AuthException catch (e) {
+      return _authMessage(e);
+    } catch (_) {
+      return 'Invio non riuscito. Controlla la connessione.';
+    }
+  }
+
+  String _authMessage(AuthException e) {
+    final m = e.message.toLowerCase();
+    if (m.contains('invalid login')) return 'Email o password non corretti.';
+    if (m.contains('already registered') || m.contains('already exists')) {
+      return 'Esiste già un account con questa email: accedi.';
+    }
+    if (m.contains('password') && (m.contains('weak') || m.contains('pwned') || m.contains('leaked'))) {
+      return 'Password troppo debole o già trapelata online: scegline un\'altra.';
+    }
+    if (m.contains('at least')) return 'La password deve avere almeno 6 caratteri.';
+    if (m.contains('email') && m.contains('invalid')) return 'Email non valida.';
+    return e.message;
+  }
+
+  /// Signs out and wipes every local copy of account data from this device.
+  Future<void> signOut() async {
+    try {
+      await _client.auth.signOut();
+    } catch (_) {}
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
   }
 
   // ----- local persistence -----

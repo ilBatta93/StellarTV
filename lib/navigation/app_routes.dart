@@ -32,6 +32,7 @@ void playChannel(BuildContext context, Channel channel,
 void openSeries(BuildContext context, Channel channel,
     {TmdbItem? item, bool replace = false}) {
   final route = MaterialPageRoute(
+    settings: RouteSettings(name: titleRouteName(channel.seriesKey ?? channel.id)),
     builder: (_) => SeriesDetailScreen(
       series: channel.copyWith(
         isSeriesFolder: true,
@@ -59,9 +60,16 @@ void openChannel(BuildContext context, Channel channel) {
   }
   Navigator.push(
     context,
-    MaterialPageRoute(builder: (_) => TitleDetailScreen(channel: channel)),
+    MaterialPageRoute(
+      settings: RouteSettings(name: titleRouteName(channel.id)),
+      builder: (_) => TitleDetailScreen(channel: channel),
+    ),
   );
 }
+
+/// Route name of a title page, used by the player's "Scheda titolo" button
+/// to go back to the page it was opened from instead of opening a copy.
+String titleRouteName(String id) => 'title:$id';
 
 void openTmdbItem(BuildContext context, TmdbItem item) {
   if (item.contentType != ContentType.movie) {

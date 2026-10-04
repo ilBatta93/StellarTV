@@ -122,7 +122,15 @@ class _IlBattaTvAppState extends State<IlBattaTvApp> {
     // Keep the cloud favorites table in step with the sync code: upload the
     // local list when a code is enabled/entered, stop mirroring when cleared.
     _syncProvider.onCodeReady = _appProvider.pushAllFavorites;
-    _syncProvider.onCodeCleared = () async => _appProvider.clearCloudCode();
+    _syncProvider.onCodeCleared = () async {
+      // Sign-out wipes the device: drop the playlist, profiles and history
+      // kept in memory so the next account starts clean.
+      _appProvider.clearCloudCode();
+      await _appProvider.logout();
+      await _appProvider.reloadFromStorage();
+      _historyProvider.switchProfile(null);
+      await _profileProvider.load(silent: true);
+    };
     _appProvider.addListener(_onAppChanged);
     _syncProvider.load();
   }

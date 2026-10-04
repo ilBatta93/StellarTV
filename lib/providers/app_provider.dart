@@ -80,6 +80,7 @@ class AppProvider extends ChangeNotifier {
     _byType.clear();
     _catalogCache.clear();
     _groupedCache.clear();
+    _allCache.clear();
     _recentCache.clear();
     _favoritesCache = null;
     _titleIndex = null;
@@ -271,6 +272,7 @@ class AppProvider extends ChangeNotifier {
   ) async {
     _hiddenCategories = {..._hiddenCategories, type.name: hidden};
     _groupedCache.remove(type);
+    _allCache.remove(type);
     _recentCache.remove(type);
     notifyListeners();
     await _settingsService.setHiddenCategories(_hiddenCategories);
@@ -317,6 +319,24 @@ class AppProvider extends ChangeNotifier {
 
   /// TMDB genre ids of a playlist movie/series (null while not checked yet).
   List<int>? genresOf(Channel c) => _kids.genresOf(c);
+
+  /// Asks the background TMDB check for genres of exactly these titles (the
+  /// catalog cards), so the genre bar fills for series folders too.
+  void requestTitleInfo(Iterable<Channel> items) => _kids.request(items);
+
+  /// "Tutti i Film" / "Tutte le Serie": every visible title once, A-Z.
+  List<CatalogEntry> allEntries(ContentType type) =>
+      _allCache[type] ??= () {
+        final seen = <String>{};
+        final list = [
+          for (final g in groupedCatalog(type))
+            for (final e in g.entries)
+              if (seen.add(_dedupeKey(e.primary))) e,
+        ]..sort((a, b) => a.primary.name.toLowerCase()
+            .compareTo(b.primary.name.toLowerCase()));
+        return list;
+      }();
+  final Map<ContentType, List<CatalogEntry>> _allCache = {};
 
   List<Channel> searchChannels(String query, {ContentType? type}) {
     final q = query.trim().toLowerCase();

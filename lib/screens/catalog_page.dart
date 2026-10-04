@@ -246,6 +246,11 @@ class _CatalogPageState extends State<CatalogPage> {
   String _query = '';
   String? _selectedCategory;
   int? _genreId;
+  bool _infoRequested = false;
+
+  static const _recentLabel = 'Ultimi Aggiunti';
+  String get _allLabel =>
+      widget.type == ContentType.movie ? 'Tutti i Film' : 'Tutte le Serie';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   String get _noun => switch (widget.type) {
@@ -292,8 +297,14 @@ class _CatalogPageState extends State<CatalogPage> {
       );
     }
 
+    if (!_infoRequested) {
+      _infoRequested = true;
+      app.requestTitleInfo(app.catalogOf(widget.type));
+    }
+
     final selected = _selectedCategory;
-    final visibleGroup = selected == null
+    final showAll = selected == _allLabel;
+    final visibleGroup = selected == null || showAll
         ? null
         : groups.where((g) => g.label == selected).firstOrNull;
 
@@ -302,13 +313,16 @@ class _CatalogPageState extends State<CatalogPage> {
       drawerEnableOpenDragGesture: true,
       drawerEdgeDragWidth: 48,
       drawer: _CategoryDrawer(
-        categories: ['Ultimi Aggiunti', ...groups.map((g) => g.label)],
+        categories: [
+          _recentLabel,
+          _allLabel,
+          ...groups.map((g) => g.label).where((l) => l != _allLabel),
+        ],
         selected: _selectedCategory,
         onSelected: (category) {
           setState(
-            () => _selectedCategory = category == 'Ultimi Aggiunti'
-                ? null
-                : category,
+            () => _selectedCategory =
+                category == _recentLabel ? null : category,
           );
         },
       ),
@@ -340,6 +354,8 @@ class _CatalogPageState extends State<CatalogPage> {
           Expanded(
             child: _query.isNotEmpty
                 ? _buildSearchResults(app)
+                : showAll
+                ? _buildAllGrid(app)
                 : visibleGroup != null
                 ? _buildGroupGrid(app, visibleGroup)
                 : _buildRecentGrid(app),
@@ -437,6 +453,29 @@ class _CatalogPageState extends State<CatalogPage> {
       );
     }
     final ui = context.watch<UiSettings>();
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      gridDelegate: channelGridDelegate(
+        widget.type,
+        maxExtent: ui.gridMaxExtent,
+        compact: ui.compact,
+      ),
+      itemCount: entries.length,
+      itemBuilder: (context, i) => _entryCard(app, entries[i]),
+    );
+  }
+
+  Widget _buildAllGrid(AppProvider app) {
+    final ui = context.watch<UiSettings>();
+    final entries =
+        app.allEntries(widget.type).where((e) => _matchesGenre(app, e)).toList();
+    if (entries.isEmpty) {
+      return EmptyState(
+        icon: Icons.search_off_rounded,
+        title: 'Nessun risultato',
+        message: 'Nessun titolo di questo genere.',
+      );
+    }
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       gridDelegate: channelGridDelegate(

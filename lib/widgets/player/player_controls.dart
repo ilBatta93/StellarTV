@@ -19,6 +19,9 @@ class PlayerControls extends StatelessWidget {
   final VoidCallback onPreviousChannel;
   final VoidCallback onNextChannel;
   final VoidCallback onBack;
+
+  /// Opens the movie/series page; null for live TV (button hidden).
+  final VoidCallback? onOpenTitle;
   final VoidCallback onPip;
   final VoidCallback onMenu;
   final VoidCallback onToggleLock;
@@ -37,6 +40,7 @@ class PlayerControls extends StatelessWidget {
     required this.onPreviousChannel,
     required this.onNextChannel,
     required this.onBack,
+    this.onOpenTitle,
     required this.onPip,
     required this.onMenu,
     required this.onToggleLock,
@@ -140,6 +144,29 @@ class PlayerControls extends StatelessWidget {
             ],
           ),
         ),
+        if (onOpenTitle != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: ActionChip(
+              tooltip: 'Apri la scheda del titolo',
+              onPressed: onOpenTitle,
+              avatar: const Icon(
+                Icons.info_outline_rounded,
+                size: 16,
+                color: Colors.white,
+              ),
+              label: const Text('Scheda titolo'),
+              labelStyle: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+              backgroundColor: Colors.white.withValues(alpha: 0.12),
+              side: BorderSide.none,
+              shape: const StadiumBorder(),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
         if (engine != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
