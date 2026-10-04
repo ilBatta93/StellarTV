@@ -10,9 +10,8 @@ import 'playback_engine.dart';
 /// mpv-backed engine (media_kit): full subtitle and multi-audio-track
 /// support for IPTV streams, far more tolerant than the old VLC engine.
 class MediaKitEngine extends PlaybackEngine {
-  MediaKitEngine({required String url, required PlayerSettings settings})
-      : _url = url,
-        _settings = settings,
+  MediaKitEngine({required this.url, required PlayerSettings settings})
+      : _settings = settings,
         _player = Player(
           configuration: PlayerConfiguration(
             bufferSize: settings.networkCachingMs * 1024,
@@ -37,7 +36,7 @@ class MediaKitEngine extends PlaybackEngine {
   }
 
   final PlayerSettings _settings;
-  final String _url;
+  final String url;
   late final Player _player;
   late final VideoController _videoController;
   PlaybackSnapshot _value = const PlaybackSnapshot();
@@ -136,7 +135,7 @@ class MediaKitEngine extends PlaybackEngine {
     );
   }
 
-  String _urlWithUserAgent(String ua) => _url; // media_kit uses httpHeaders.
+  String _urlWithUserAgent(String ua) => url; // media_kit uses httpHeaders.
 
   @override
   Widget buildView(double boxRatio) => Video(
@@ -229,16 +228,23 @@ class MediaKitEngine extends PlaybackEngine {
 
   @override
   Future<void> setSubtitleDelay(Duration delay) async {
-    final platform = _player.platform;
-    if (platform == null) return;
-    await platform.setSubtitleDelay(delay);
+    await _setProperty('sub-delay', delay);
   }
 
   @override
   Future<void> setAudioDelay(Duration delay) async {
+    await _setProperty('audio-delay', delay);
+  }
+
+  /// mpv expects delays in seconds (fractions allowed); harmless no-op on
+  /// platforms where the native platform handle is unavailable.
+  Future<void> _setProperty(String name, Duration delay) async {
     final platform = _player.platform;
     if (platform == null) return;
-    await platform.setAudioDelay(delay);
+    try {
+      await platform
+          .setProperty(name, (delay.inMicroseconds / 1e6).toStringAsFixed(3));
+    } catch (_) {}
   }
 
   @override
