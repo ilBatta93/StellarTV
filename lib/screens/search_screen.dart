@@ -27,16 +27,25 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _searchingTmdb = false;
   String? _tmdbError;
   int _requestId = 0;
+  Timer? _localDebounce;
+  String _localQuery = '';
+  Map<ContentType, List<Channel>> _local = const {};
+  Object? _localSource;
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _localDebounce?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
   void _onChanged(String value) {
     setState(() => _query = value.trim());
+    _localDebounce?.cancel();
+    _localDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (mounted) setState(() => _localQuery = _query);
+    });
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 450), _searchTmdb);
   }
@@ -74,6 +83,9 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+    if (_localSource != app || _computedFor != _localQuery) {
+      _computeLocal(app);
+    }
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -111,6 +123,26 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  String? _computedFor;
+
+  /// Playlist results are computed once per (debounced) query, not on
+  /// every keystroke / rebuild.
+  void _computeLocal(AppProvider app) {
+    _localSource = app;
+    _computedFor = _localQuery;
+    _local = {
+      for (final type in const [
+        ContentType.live,
+        ContentType.movie,
+        ContentType.series,
+        ContentType.anime,
+      ])
+        type: _localQuery.length < 2 && _localQuery.isNotEmpty
+            ? const <Channel>[]
+            : app.searchChannels(_localQuery, type: type),
+    };
+  }
+
   Widget _buildResults(AppProvider app) {
     final sections = [
       (ContentType.live, 'TV in Diretta'),
@@ -118,34 +150,40 @@ class _SearchScreenState extends State<SearchScreen> {
       (ContentType.series, 'Serie TV nella tua playlist'),
       (ContentType.anime, 'Anime nella tua playlist'),
     ];
-    final local = {
-      for (final (type, _) in sections)
-        type: app.searchChannels(_query, type: type),
-    };
+    final local = _local;
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
         for (final (type, label) in sections)
-          if (local[type]!.isNotEmpty) ...[
+          if ((local[type] ?? const []).isNotEmpty) ...[
             SectionHeader(
-                title: label, subtitle: '${local[type]!.length} risultati'),
+              title: label,
+              subtitle: '${local[type]!.length} risultati',
+            ),
             _ChannelRow(channels: local[type]!.take(30).toList(), type: type),
           ],
         const SectionHeader(
-            title: 'Dal catalogo', subtitle: 'Film e serie da TMDB'),
+          title: 'Dal catalogo',
+          subtitle: 'Film e serie da TMDB',
+        ),
         if (_searchingTmdb)
           Padding(
             padding: EdgeInsets.all(24),
             child: Center(
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: AppColors.primary)),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.primary,
+              ),
+            ),
           )
         else if (_tmdbError != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(_tmdbError!,
-                style: Theme.of(context).textTheme.bodyMedium),
+            child: Text(
+              _tmdbError!,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
           )
         else if (_tmdbResults.isEmpty)
           Padding(

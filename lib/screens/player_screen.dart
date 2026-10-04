@@ -79,9 +79,15 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   bool get _isLive => widget.channel.type == ContentType.live;
 
+  /// Players currently on screen. When a player replaces another (next
+  /// channel / next episode) the old one is disposed AFTER the new one is
+  /// created: it must not force portrait while a player is still visible.
+  static int _activePlayers = 0;
+
   @override
   void initState() {
     super.initState();
+    _activePlayers++;
     WidgetsBinding.instance.addObserver(this);
     _history = context.read<HistoryProvider>();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -342,6 +348,17 @@ class _PlayerScreenState extends State<PlayerScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final settings = _settings;
+    if (state == AppLifecycleState.resumed && settings != null) {
+      if (settings.orientation == PlayerOrientation.followVideo &&
+          _orientationApplied) {
+        final v = _session?.value;
+        if (v != null && v.hasVideoSize) {
+          _setOrientation(v.aspectRatio >= 1 ? 'landscape' : 'portrait');
+        }
+      } else {
+        _applyOrientation(settings);
+      }
+    }
     if (state == AppLifecycleState.paused && settings != null) {
       _saveResume();
       if (settings.backgroundAudio) return;
@@ -440,11 +457,18 @@ class _PlayerScreenState extends State<PlayerScreen>
     _bridge.setAutoPip(false);
     _bridge.setKeepScreenOn(false);
     _bridge.resetBrightness();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _outroTimer?.cancel();
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-    ]).then((_) => _bridge.setOrientation('portrait'));
+    _activePlayers--;
+    if (_activePlayers <= 0) {
+      _activePlayers = 0;
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]).then((_) {
+        // Re-check: a new player may have opened meanwhile.
+        if (_activePlayers == 0) _bridge.setOrientation('portrait');
+      });
+    }
     super.dispose();
   }
 

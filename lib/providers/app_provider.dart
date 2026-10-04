@@ -317,16 +317,18 @@ class AppProvider extends ChangeNotifier {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return [];
     if (type == ContentType.series || type == ContentType.anime) {
+      // One pass over the playlist to find series whose episodes match,
+      // instead of scanning every episode for every series (very slow).
+      final episodeHits = <String>{};
+      for (final e in _allChannels) {
+        if (e.name.toLowerCase().contains(q)) episodeHits.add(e.seriesKey);
+      }
       return catalogOf(type!)
           .where(
             (c) =>
                 c.name.toLowerCase().contains(q) ||
-                (c.group.toLowerCase().contains(q)) ||
-                _allChannels.any(
-                  (e) =>
-                      e.seriesKey == c.seriesKey &&
-                      e.name.toLowerCase().contains(q),
-                ),
+                c.group.toLowerCase().contains(q) ||
+                episodeHits.contains(c.seriesKey),
           )
           .toList();
     }
