@@ -86,11 +86,20 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _navigate(Widget target) {
     _navigated = true;
+    // Read the setting NOW, while the splash is still mounted. The transition
+    // builder keeps running after this screen is replaced and disposed, so
+    // looking up UiSettings from the splash context inside it throws
+    // "Provider<UiSettings> not found for SplashScreen".
+    final animate = context.read<UiSettings>().animations;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (_, _, _) => target,
+        transitionDuration:
+            animate ? const Duration(milliseconds: 300) : Duration.zero,
+        reverseTransitionDuration:
+            animate ? const Duration(milliseconds: 300) : Duration.zero,
         transitionsBuilder: (_, anim, _, child) {
-          if (!context.read<UiSettings>().animations) return child;
+          if (!animate) return child;
           return FadeTransition(opacity: anim, child: child);
         },
       ),
