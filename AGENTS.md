@@ -1,0 +1,1 @@
+Kids certification is warmed in the background after playlist loading and cached locally/cloud-side so profiles remain responsive.

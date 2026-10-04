@@ -30,8 +30,12 @@ class PlayerScreen extends StatefulWidget {
   /// Ordered episodes of the series being watched (null for films/live).
   final List<Channel>? queue;
 
-  const PlayerScreen(
-      {super.key, required this.channel, this.startAt, this.queue});
+  const PlayerScreen({
+    super.key,
+    required this.channel,
+    this.startAt,
+    this.queue,
+  });
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -106,7 +110,8 @@ class _PlayerScreenState extends State<PlayerScreen>
       final key = widget.channel.seriesKey;
       if (key == null || key.isEmpty) return;
       final app = context.read<AppProvider>();
-      final folder = app.seriesFolderFor(key) ??
+      final folder =
+          app.seriesFolderFor(key) ??
           Channel(
             id: key,
             name: widget.channel.seriesName ?? widget.channel.name,
@@ -193,8 +198,38 @@ class _PlayerScreenState extends State<PlayerScreen>
     _advancing = true;
     _saveResume();
     final entry = _history.entryFor(next.id);
-    playChannel(context, next,
-        startAt: entry?.resumePosition, queue: _queue, replace: true);
+    playChannel(
+      context,
+      next,
+      startAt: entry?.resumePosition,
+      queue: _queue,
+      replace: true,
+    );
+  }
+
+  List<Channel> get _liveChannels {
+    if (!_isLive) return const [];
+    final all = context.read<AppProvider>().channelsOf(ContentType.live);
+    final sameGroup = all
+        .where((channel) => channel.group == widget.channel.group)
+        .toList(growable: false);
+    return sameGroup.length > 1 ? sameGroup : all;
+  }
+
+  Channel? _adjacentLiveChannel(int offset) {
+    final channels = _liveChannels;
+    final index = channels.indexWhere(
+      (channel) => channel.id == widget.channel.id,
+    );
+    final target = index + offset;
+    if (index < 0 || target < 0 || target >= channels.length) return null;
+    return channels[target];
+  }
+
+  void _playLiveChannel(Channel? channel) {
+    if (channel == null || _advancing) return;
+    _advancing = true;
+    playChannel(context, channel, replace: true);
   }
 
   Future<void> _init() async {
@@ -202,7 +237,8 @@ class _PlayerScreenState extends State<PlayerScreen>
     final pipSupported = await _bridge.isPipSupported();
     Duration? startAt = _isLive ? null : widget.startAt;
     if (startAt == null && !_isLive && settings.resumePlayback) {
-      startAt = _history.entryFor(widget.channel.id)?.resumePosition ??
+      startAt =
+          _history.entryFor(widget.channel.id)?.resumePosition ??
           await _settingsService.getResumePosition(widget.channel.url);
     }
     if (!mounted) return;
@@ -229,23 +265,25 @@ class _PlayerScreenState extends State<PlayerScreen>
     session.start();
     _scheduleHide();
     if (!_isLive) {
-      _resumeTimer =
-          Timer.periodic(const Duration(seconds: 10), (_) => _saveResume());
+      _resumeTimer = Timer.periodic(
+        const Duration(seconds: 10),
+        (_) => _saveResume(),
+      );
     }
   }
 
   Future<void> _setOrientation(String mode) async {
     await SystemChrome.setPreferredOrientations(switch (mode) {
       'landscape' => [
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ],
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ],
       'portrait' => [DeviceOrientation.portraitUp],
       _ => [
-          DeviceOrientation.portraitUp,
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ],
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ],
     });
     // Android: force true sensor rotation (also with auto-rotate quirks).
     await _bridge.setOrientation(mode);
@@ -275,8 +313,11 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
       if (_pipSupported && v.size != _pipSize) {
         _pipSize = v.size;
-        _bridge.setAutoPip(settings.autoPip,
-            width: v.size.width.round(), height: v.size.height.round());
+        _bridge.setAutoPip(
+          settings.autoPip,
+          width: v.size.width.round(),
+          height: v.size.height.round(),
+        );
       }
     }
 
@@ -327,10 +368,13 @@ class _PlayerScreenState extends State<PlayerScreen>
     _history.updatePosition(widget.channel.id, v.position, v.duration);
     if (_settings?.resumePlayback != true) return;
     final remaining = v.duration - v.position;
-    final keep = v.position > const Duration(seconds: 5) &&
+    final keep =
+        v.position > const Duration(seconds: 5) &&
         remaining > const Duration(minutes: 1);
     await _settingsService.saveResumePosition(
-        widget.channel.url, keep ? v.position : null);
+      widget.channel.url,
+      keep ? v.position : null,
+    );
   }
 
   void _scheduleHide() {
@@ -360,10 +404,14 @@ class _PlayerScreenState extends State<PlayerScreen>
       height: size.height > 0 ? size.height.round() : 9,
     );
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Picture-in-Picture non disponibile su questo dispositivo'),
-        behavior: SnackBarBehavior.floating,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Picture-in-Picture non disponibile su questo dispositivo',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -394,8 +442,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     _bridge.resetBrightness();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _outroTimer?.cancel();
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp])
-        .then((_) => _bridge.setOrientation('portrait'));
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]).then((_) => _bridge.setOrientation('portrait'));
     super.dispose();
   }
 
@@ -406,8 +455,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       body: session == null || settings == null
-          ? Center(
-              child: CircularProgressIndicator(color: AppColors.primary))
+          ? Center(child: CircularProgressIndicator(color: AppColors.primary))
           : Stack(
               fit: StackFit.expand,
               children: [
@@ -418,10 +466,15 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  List<Widget> _buildOverlays(PlaybackSession session, PlayerSettings settings) {
+  List<Widget> _buildOverlays(
+    PlaybackSession session,
+    PlayerSettings settings,
+  ) {
     final status = session.status;
     if (status == SessionStatus.failed) {
-      return [_FailureView(session: session, onBack: () => Navigator.pop(context))];
+      return [
+        _FailureView(session: session, onBack: () => Navigator.pop(context)),
+      ];
     }
     final connecting =
         status == SessionStatus.connecting || status == SessionStatus.switching;
@@ -445,11 +498,15 @@ class _PlayerScreenState extends State<PlayerScreen>
             title: widget.channel.name,
             subtitle: _isLive
                 ? (context.watch<EpgProvider>().nowFor(widget.channel)?.title ??
-                    widget.channel.group)
+                      widget.channel.group)
                 : widget.channel.group,
             locked: _locked,
             pipSupported: _pipSupported,
             seekStepSeconds: settings.seekStepSeconds,
+            previousChannel: _adjacentLiveChannel(-1),
+            nextChannel: _adjacentLiveChannel(1),
+            onPreviousChannel: () => _playLiveChannel(_adjacentLiveChannel(-1)),
+            onNextChannel: () => _playLiveChannel(_adjacentLiveChannel(1)),
             onBack: () => Navigator.pop(context),
             onPip: _enterPip,
             onMenu: _openMenu,
@@ -472,20 +529,21 @@ class _PlayerScreenState extends State<PlayerScreen>
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Colors.black,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 14,
+                ),
               ),
               icon: const Icon(Icons.fast_forward_rounded),
-              label: const Text('Salta Sigla',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
+              label: const Text(
+                'Salta Sigla',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
               onPressed: _skipIntro,
             ),
           ),
         ),
-      if (_outroActive && _next != null && !_inPip)
-        _buildOutroOverlay()
-      else if (_next != null && status == SessionStatus.playing && !_inPip)
-        _buildNextOverlay(session),
+      if (_outroActive && _next != null && !_inPip) _buildOutroOverlay(),
       if (_statsVisible)
         Positioned(
           top: 72,
@@ -497,7 +555,9 @@ class _PlayerScreenState extends State<PlayerScreen>
           top: 16,
           left: 0,
           right: 0,
-          child: SafeArea(child: Center(child: _NoticeBanner(text: session.notice!))),
+          child: SafeArea(
+            child: Center(child: _NoticeBanner(text: session.notice!)),
+          ),
         ),
     ];
   }
@@ -524,19 +584,25 @@ class _PlayerScreenState extends State<PlayerScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Prossimo episodio tra $_outroCountdown...',
-                  style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
+              Text(
+                'Prossimo episodio tra $_outroCountdown...',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 6),
-              Text('$label · ${next.name}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600)),
+              Text(
+                '$label · ${next.name}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 10),
               LinearProgressIndicator(
                 value: (5 - _outroCountdown) / 5,
@@ -559,8 +625,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                   const SizedBox(width: 8),
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white38)),
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white38),
+                    ),
                     onPressed: _watchCredits,
                     child: const Text('Guarda Crediti'),
                   ),
@@ -569,90 +636,6 @@ class _PlayerScreenState extends State<PlayerScreen>
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  /// "Episodio successivo": a small button while the controls are visible,
-  /// and a countdown card in the last 25 seconds (end credits).
-  Widget _buildNextOverlay(PlaybackSession session) {
-    final v = session.value;
-    final remaining = v.duration - v.position;
-    final nearEnd = v.duration > const Duration(minutes: 3) &&
-        remaining <= const Duration(seconds: 25) &&
-        remaining > Duration.zero;
-    final showCard = nearEnd && !_nextDismissed;
-    if (!showCard && (!_controlsVisible || _locked)) {
-      return const SizedBox.shrink();
-    }
-    final next = _next!;
-    final label = next.season != null && next.episode != null
-        ? 'S${next.season} E${next.episode}'
-        : 'Episodio successivo';
-    return Positioned(
-      right: 16,
-      bottom: showCard ? 96 : 84,
-      child: SafeArea(
-        child: showCard
-            ? Container(
-                width: 260,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.card.withValues(alpha: 0.95),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text('PROSSIMO EPISODIO',
-                              style: TextStyle(
-                                  color: AppColors.textMuted,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.8)),
-                        ),
-                        GestureDetector(
-                          onTap: () => setState(() => _nextDismissed = true),
-                          child: const Icon(Icons.close_rounded,
-                              color: AppColors.textSecondary, size: 18),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text('$label · ${next.name}',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.skip_next_rounded),
-                        label: Text('Avvio tra ${remaining.inSeconds}s'),
-                        onPressed: _playNext,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            : ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black.withValues(alpha: 0.55),
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white24),
-                ),
-                icon: const Icon(Icons.skip_next_rounded),
-                label: Text('Episodio successivo · $label'),
-                onPressed: _playNext,
-              ),
       ),
     );
   }
@@ -674,11 +657,15 @@ class _ConnectingView extends StatelessWidget {
               width: 44,
               height: 44,
               child: CircularProgressIndicator(
-                  color: AppColors.primary, strokeWidth: 3),
+                color: AppColors.primary,
+                strokeWidth: 3,
+              ),
             ),
             const SizedBox(height: 16),
-            Text('Connessione con $engine...',
-                style: const TextStyle(color: Colors.white70, fontSize: 14)),
+            Text(
+              'Connessione con $engine...',
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
+            ),
           ],
         ),
       ),
@@ -704,12 +691,21 @@ class _NoticeBanner extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.swap_horiz_rounded, color: AppColors.warning, size: 20),
+          const Icon(
+            Icons.swap_horiz_rounded,
+            color: AppColors.warning,
+            size: 20,
+          ),
           const SizedBox(width: 12),
           Flexible(
-            child: Text(text,
-                style: const TextStyle(
-                    color: AppColors.textPrimary, fontSize: 13, height: 1.4)),
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
           ),
         ],
       ),
@@ -733,35 +729,45 @@ class _FailureView extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline_rounded,
-                    color: AppColors.error, size: 48),
+                const Icon(
+                  Icons.error_outline_rounded,
+                  color: AppColors.error,
+                  size: 48,
+                ),
                 const SizedBox(height: 16),
-                const Text('Impossibile riprodurre il flusso',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600)),
+                const Text(
+                  'Impossibile riprodurre il flusso',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: Text(
                     session.settings.autoFallback
                         ? 'Il canale potrebbe essere offline o in un formato non supportato. '
-                            'Sono stati provati entrambi i motori disponibili.'
+                              'Sono stati provati entrambi i motori disponibili.'
                         : 'Il canale potrebbe essere offline o in un formato non supportato. '
-                            'Prova con l\'altro motore di riproduzione.',
+                              'Prova con l\'altro motore di riproduzione.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ),
                 if (session.error != null) ...[
                   const SizedBox(height: 8),
-                  Text(session.error!,
-                      textAlign: TextAlign.center,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          color: AppColors.textMuted, fontSize: 12)),
+                  Text(
+                    session.error!,
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 24),
                 Wrap(
@@ -769,7 +775,10 @@ class _FailureView extends StatelessWidget {
                   runSpacing: 12,
                   alignment: WrapAlignment.center,
                   children: [
-                    OutlinedButton(onPressed: onBack, child: const Text('Indietro')),
+                    OutlinedButton(
+                      onPressed: onBack,
+                      child: const Text('Indietro'),
+                    ),
                     for (final e in PlayerEngineType.values)
                       OutlinedButton(
                         onPressed: () => session.switchEngine(e),

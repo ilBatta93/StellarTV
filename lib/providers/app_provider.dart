@@ -31,13 +31,17 @@ class AppProvider extends ChangeNotifier {
   /// been initialized (e.g. widget tests), so favorites simply stay local.
   CloudFavoritesService? get _cloud {
     try {
-      return _cloudFavorites ??= CloudFavoritesService(Supabase.instance.client);
+      return _cloudFavorites ??= CloudFavoritesService(
+        Supabase.instance.client,
+      );
     } catch (_) {
       return null;
     }
   }
-  late final PlaylistRefreshService _refreshService =
-      PlaylistRefreshService(refreshPlaylist);
+
+  late final PlaylistRefreshService _refreshService = PlaylistRefreshService(
+    refreshPlaylist,
+  );
 
   List<Channel> _rawChannels = [];
   List<Channel> _allChannels = [];
@@ -82,8 +86,9 @@ class AppProvider extends ChangeNotifier {
     _matchCache.clear();
   }
 
-  List<Channel> channelsOf(ContentType type) => _byType[type] ??=
-      _allChannels.where((c) => c.type == type).toList(growable: false);
+  List<Channel> channelsOf(ContentType type) => _byType[type] ??= _allChannels
+      .where((c) => c.type == type)
+      .toList(growable: false);
 
   /// Channels of a type whose category is not hidden by the user.
   List<Channel> _visibleChannels(ContentType type) {
@@ -104,19 +109,21 @@ class AppProvider extends ChangeNotifier {
     return channelsOf(type);
   }
 
-  List<String> languagesOf(ContentType type) => catalogOf(type)
-      .map((c) => c.language?.trim() ?? '')
-      .where((v) => v.isNotEmpty)
-      .toSet()
-      .toList()
-    ..sort();
+  List<String> languagesOf(ContentType type) =>
+      catalogOf(type)
+          .map((c) => c.language?.trim() ?? '')
+          .where((v) => v.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
 
-  List<String> countriesOf(ContentType type) => catalogOf(type)
-      .map((c) => c.country?.trim() ?? '')
-      .where((v) => v.isNotEmpty)
-      .toSet()
-      .toList()
-    ..sort();
+  List<String> countriesOf(ContentType type) =>
+      catalogOf(type)
+          .map((c) => c.country?.trim() ?? '')
+          .where((v) => v.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
 
   Channel? channelById(String id) {
     final index = _channelIndex ??= {for (final c in _allChannels) c.id: c};
@@ -125,15 +132,16 @@ class AppProvider extends ChangeNotifier {
 
   void _setChannels(List<Channel> channels) {
     _rawChannels = channels;
+    unawaited(_kids.warmUp(_rawChannels));
     _applyAdultFilter();
   }
 
   void _applyAdultFilter() {
     if (_kidsMode) _kids.request(_rawChannels);
     _allChannels = _rawChannels
-        .where((c) => _kidsMode
-            ? isKidsContent(c)
-            : (_showAdult || !isAdult(c)))
+        .where(
+          (c) => _kidsMode ? isKidsContent(c) : (_showAdult || !isAdult(c)),
+        )
         .toList(growable: false);
     _channelIndex = null;
     _invalidateCaches();
@@ -216,8 +224,10 @@ class AppProvider extends ChangeNotifier {
     r'private\s*(tv|spice)|\bspice\b|vivid|xxl\s*tv|blue\s*hustler|\bnsfw\b|milf',
     caseSensitive: false,
   );
-  static final _adultExceptions =
-      RegExp(r'adult\s*swim|young\s*adults?', caseSensitive: false);
+  static final _adultExceptions = RegExp(
+    r'adult\s*swim|young\s*adults?',
+    caseSensitive: false,
+  );
 
   /// True for pornographic items: "XXX" or "for adults" in the title or
   /// category, plus well known adult channel brands and keywords.
@@ -227,24 +237,23 @@ class AppProvider extends ChangeNotifier {
       final clean = s.replaceAll(_adultExceptions, ' ');
       return _adultPattern.hasMatch(clean);
     }
+
     return test(c.group) || test(c.name) || test(c.seriesName);
   }
 
-  List<String> groupsOf(ContentType type) => catalogOf(type)
-      .map((c) => c.group)
-      .toSet()
-      .toList()
-    ..sort();
+  List<String> groupsOf(ContentType type) =>
+      catalogOf(type).map((c) => c.group).toSet().toList()..sort();
 
   /// Category labels in the playlist's own order (not alphabetical).
-  List<String> categoryOrderOf(ContentType type) =>
-      channelsOf(type)
-          .where((c) =>
-              (type != ContentType.series && type != ContentType.anime) ||
-              c.isSeriesFolder)
-          .map((c) => c.group)
-          .toSet()
-          .toList();
+  List<String> categoryOrderOf(ContentType type) => channelsOf(type)
+      .where(
+        (c) =>
+            (type != ContentType.series && type != ContentType.anime) ||
+            c.isSeriesFolder,
+      )
+      .map((c) => c.group)
+      .toSet()
+      .toList();
 
   /// Categories the user hid per type (key: content type name).
   Map<String, List<String>> get hiddenCategories => _hiddenCategories;
@@ -252,11 +261,11 @@ class AppProvider extends ChangeNotifier {
   List<String> hiddenCategoriesOf(ContentType type) =>
       _hiddenCategories[type.name] ?? const [];
 
-  Future<void> setHiddenCategories(ContentType type, List<String> hidden) async {
-    _hiddenCategories = {
-      ..._hiddenCategories,
-      type.name: hidden,
-    };
+  Future<void> setHiddenCategories(
+    ContentType type,
+    List<String> hidden,
+  ) async {
+    _hiddenCategories = {..._hiddenCategories, type.name: hidden};
     _groupedCache.remove(type);
     _recentCache.remove(type);
     notifyListeners();
@@ -268,9 +277,9 @@ class AppProvider extends ChangeNotifier {
   List<CatalogGroup> groupedCatalog(ContentType type) =>
       _groupedCache[type] ??= CatalogBuilder.groupsOf(
         _visibleChannels(type),
-        categoryOrderOf(type)
-            .where((g) => !hiddenCategoriesOf(type).contains(g))
-            .toList(),
+        categoryOrderOf(
+          type,
+        ).where((g) => !hiddenCategoriesOf(type).contains(g)).toList(),
       );
 
   /// Recently added items of a type, in the playlist's own order (the
@@ -280,9 +289,8 @@ class AppProvider extends ChangeNotifier {
   List<CatalogEntry> recentEntries(ContentType type, {int limit = 50}) =>
       _recentCache[type] ??= () {
         final items = _visibleChannels(type);
-        final indexed = [
-          for (var i = 0; i < items.length; i++) (i, items[i]),
-        ]..sort((a, b) {
+        final indexed = [for (var i = 0; i < items.length; i++) (i, items[i])]
+          ..sort((a, b) {
             final byDate = b.$2.addedAt.compareTo(a.$2.addedAt);
             return byDate != 0 ? byDate : b.$1.compareTo(a.$1);
           });
@@ -291,7 +299,8 @@ class AppProvider extends ChangeNotifier {
         final seen = <String>{};
         return [
           for (final (_, c) in indexed)
-            if (seen.add(_dedupeKey(c))) CatalogEntry(primary: c, variants: [c]),
+            if (seen.add(_dedupeKey(c)))
+              CatalogEntry(primary: c, variants: [c]),
         ].take(limit).toList(growable: false);
       }();
 
@@ -300,28 +309,34 @@ class AppProvider extends ChangeNotifier {
   List<Channel> variantsFor(Channel channel) => [channel];
 
   List<Channel> get favorites => _favoritesCache ??= [
-        for (final id in _favoriteIds)
-          if (channelById(id) case final c?) c,
-      ];
+    for (final id in _favoriteIds)
+      if (channelById(id) case final c?) c,
+  ];
 
   List<Channel> searchChannels(String query, {ContentType? type}) {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return [];
     if (type == ContentType.series || type == ContentType.anime) {
       return catalogOf(type!)
-          .where((c) =>
-              c.name.toLowerCase().contains(q) ||
-              (c.group.toLowerCase().contains(q)) ||
-              _allChannels.any((e) =>
-                  e.seriesKey == c.seriesKey &&
-                  e.name.toLowerCase().contains(q)))
+          .where(
+            (c) =>
+                c.name.toLowerCase().contains(q) ||
+                (c.group.toLowerCase().contains(q)) ||
+                _allChannels.any(
+                  (e) =>
+                      e.seriesKey == c.seriesKey &&
+                      e.name.toLowerCase().contains(q),
+                ),
+          )
           .toList();
     }
     return _allChannels
-        .where((c) =>
-            (type == null || c.type == type) &&
-            !c.isSeriesFolder &&
-            c.name.toLowerCase().contains(q))
+        .where(
+          (c) =>
+              (type == null || c.type == type) &&
+              !c.isSeriesFolder &&
+              c.name.toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -378,9 +393,11 @@ class AppProvider extends ChangeNotifier {
     if (target.isEmpty) return null;
     final isMovie = item.contentType == ContentType.movie;
     final candidates = (index[target] ?? const <Channel>[])
-        .where((c) => isMovie
-            ? c.type == ContentType.movie
-            : c.type != ContentType.movie)
+        .where(
+          (c) => isMovie
+              ? c.type == ContentType.movie
+              : c.type != ContentType.movie,
+        )
         .toList();
     if (candidates.isEmpty) return null;
     final year = item.year;
@@ -529,13 +546,14 @@ class AppProvider extends ChangeNotifier {
   void clearCloudCode() => _syncCode = null;
 
   Map<String, dynamic> exportFavorites() => {
-        'ids': _favoriteIds.toList(),
-        'tmdb': _tmdbFavorites.map((e) => e.toJson()).toList(),
-      };
+    'ids': _favoriteIds.toList(),
+    'tmdb': _tmdbFavorites.map((e) => e.toJson()).toList(),
+  };
 
   Future<void> importFavorites(Map<String, dynamic> data) async {
     final ids = (data['ids'] as List?)?.cast<String>() ?? const [];
-    final tmdb = (data['tmdb'] as List?)
+    final tmdb =
+        (data['tmdb'] as List?)
             ?.whereType<Map<String, dynamic>>()
             .map(TmdbItem.tryParse)
             .whereType<TmdbItem>()
@@ -578,7 +596,8 @@ class AppProvider extends ChangeNotifier {
     _showAdult = prefs.getBool(_showAdultKey) ?? false;
     _hiddenCategories = await _settingsService.getHiddenCategories();
     final creds = await _settingsService.getXtreamCredentials();
-    final credsChanged = creds != null &&
+    final credsChanged =
+        creds != null &&
         (_xtreamCredentials == null ||
             creds['server'] != _xtreamCredentials!['server'] ||
             creds['username'] != _xtreamCredentials!['username'] ||

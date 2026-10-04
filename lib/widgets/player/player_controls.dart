@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/channel.dart';
 import '../../player/playback_session.dart';
 import '../../theme/app_theme.dart';
 import '../channel_card.dart';
@@ -13,6 +14,10 @@ class PlayerControls extends StatelessWidget {
   final bool locked;
   final bool pipSupported;
   final int seekStepSeconds;
+  final Channel? previousChannel;
+  final Channel? nextChannel;
+  final VoidCallback onPreviousChannel;
+  final VoidCallback onNextChannel;
   final VoidCallback onBack;
   final VoidCallback onPip;
   final VoidCallback onMenu;
@@ -27,6 +32,10 @@ class PlayerControls extends StatelessWidget {
     required this.locked,
     required this.pipSupported,
     required this.seekStepSeconds,
+    required this.previousChannel,
+    required this.nextChannel,
+    required this.onPreviousChannel,
+    required this.onNextChannel,
     required this.onBack,
     required this.onPip,
     required this.onMenu,
@@ -66,7 +75,12 @@ class PlayerControls extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0xCC000000), Color(0x00000000), Color(0x00000000), Color(0xE6000000)],
+                colors: [
+                  Color(0xCC000000),
+                  Color(0x00000000),
+                  Color(0x00000000),
+                  Color(0xE6000000),
+                ],
                 stops: [0, 0.3, 0.6, 1],
               ),
             ),
@@ -105,19 +119,24 @@ class PlayerControls extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(title,
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                ),
+              ),
+              if (subtitle.isNotEmpty)
+                Text(
+                  subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      height: 1.2)),
-              if (subtitle.isNotEmpty)
-                Text(subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
             ],
           ),
         ),
@@ -126,10 +145,17 @@ class PlayerControls extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: ActionChip(
               onPressed: () => _act(() => showEngineSheet(context, session)),
-              avatar: const Icon(Icons.memory_rounded, size: 16, color: Colors.white),
+              avatar: const Icon(
+                Icons.memory_rounded,
+                size: 16,
+                color: Colors.white,
+              ),
               label: Text(engine.type.label),
               labelStyle: const TextStyle(
-                  color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
               backgroundColor: Colors.white.withValues(alpha: 0.12),
               side: BorderSide.none,
               shape: const StadiumBorder(),
@@ -139,7 +165,10 @@ class PlayerControls extends StatelessWidget {
         if (pipSupported)
           IconButton(
             tooltip: 'Picture-in-Picture',
-            icon: const Icon(Icons.picture_in_picture_alt_rounded, color: Colors.white),
+            icon: const Icon(
+              Icons.picture_in_picture_alt_rounded,
+              color: Colors.white,
+            ),
             onPressed: onPip,
           ),
         IconButton(
@@ -153,17 +182,27 @@ class PlayerControls extends StatelessWidget {
 
   Widget _buildCenter() {
     final v = session.value;
+    final previousLive = previousChannel;
+    final nextLive = nextChannel;
     final step = Duration(seconds: seekStepSeconds);
     final canSeek = !session.isLive && v.duration > Duration.zero;
     final playIcon = v.isEnded
         ? Icons.replay_rounded
         : v.isPlaying
-            ? Icons.pause_rounded
-            : Icons.play_arrow_rounded;
+        ? Icons.pause_rounded
+        : Icons.play_arrow_rounded;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (canSeek)
+        if (session.isLive)
+          _RoundButton(
+            icon: Icons.skip_previous_rounded,
+            tooltip: previousLive == null
+                ? 'Nessun canale precedente'
+                : 'Canale precedente: ${previousLive.name}',
+            onPressed: previousLive == null ? null : onPreviousChannel,
+          )
+        else if (canSeek)
           _RoundButton(
             icon: Icons.replay_rounded,
             label: '${step.inSeconds}',
@@ -177,7 +216,10 @@ class PlayerControls extends StatelessWidget {
                 height: 72,
                 child: Padding(
                   padding: EdgeInsets.all(16),
-                  child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3),
+                  child: CircularProgressIndicator(
+                    color: AppColors.primary,
+                    strokeWidth: 3,
+                  ),
                 ),
               )
             : _RoundButton(
@@ -188,7 +230,15 @@ class PlayerControls extends StatelessWidget {
                 onPressed: () => _act(session.togglePlay),
               ),
         const SizedBox(width: 32),
-        if (canSeek)
+        if (session.isLive)
+          _RoundButton(
+            icon: Icons.skip_next_rounded,
+            tooltip: nextLive == null
+                ? 'Nessun canale successivo'
+                : 'Canale successivo: ${nextLive.name}',
+            onPressed: nextLive == null ? null : onNextChannel,
+          )
+        else if (canSeek)
           _RoundButton(
             icon: Icons.forward_rounded,
             label: '${step.inSeconds}',
@@ -220,7 +270,9 @@ class PlayerControls extends StatelessWidget {
         Row(
           children: [
             _BarButton(
-              icon: session.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+              icon: session.muted
+                  ? Icons.volume_off_rounded
+                  : Icons.volume_up_rounded,
               label: session.muted ? 'Muto' : 'Volume',
               onPressed: () => _act(session.toggleMute),
             ),
@@ -238,23 +290,27 @@ class PlayerControls extends StatelessWidget {
                     _BarButton(
                       icon: Icons.audiotrack_rounded,
                       label: 'Audio',
-                      onPressed: () => _act(() => showAudioSheet(context, session)),
+                      onPressed: () =>
+                          _act(() => showAudioSheet(context, session)),
                     ),
                     _BarButton(
                       icon: Icons.subtitles_rounded,
                       label: 'Sottotitoli',
-                      onPressed: () => _act(() => showSubtitleSheet(context, session)),
+                      onPressed: () =>
+                          _act(() => showSubtitleSheet(context, session)),
                     ),
                     if (!session.isLive)
                       _BarButton(
                         icon: Icons.speed_rounded,
                         label: formatSpeed(session.speed),
-                        onPressed: () => _act(() => showSpeedSheet(context, session)),
+                        onPressed: () =>
+                            _act(() => showSpeedSheet(context, session)),
                       ),
                     _BarButton(
                       icon: Icons.aspect_ratio_rounded,
                       label: session.fitMode.label,
-                      onPressed: () => _act(() => showFitSheet(context, session)),
+                      onPressed: () =>
+                          _act(() => showFitSheet(context, session)),
                     ),
                   ],
                 ),
@@ -299,7 +355,10 @@ class _ScrubBarState extends State<_ScrubBar> {
         ? Duration(milliseconds: (_dragValue! * total).round())
         : widget.position;
     const timeStyle = TextStyle(
-        color: Colors.white, fontSize: 12, fontFeatures: [FontFeature.tabularFigures()]);
+      color: Colors.white,
+      fontSize: 12,
+      fontFeatures: [FontFeature.tabularFigures()],
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -350,7 +409,7 @@ class _RoundButton extends StatelessWidget {
   final String tooltip;
   final double size;
   final bool filled;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   const _RoundButton({
     required this.icon,
@@ -366,7 +425,9 @@ class _RoundButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: filled
+        color: onPressed == null
+            ? Colors.black.withValues(alpha: 0.16)
+            : filled
             ? AppColors.primary
             : Colors.black.withValues(alpha: 0.35),
         shape: const CircleBorder(),
@@ -379,15 +440,22 @@ class _RoundButton extends StatelessWidget {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                Icon(icon, color: Colors.white, size: size * 0.55),
+                Icon(
+                  icon,
+                  color: onPressed == null ? Colors.white30 : Colors.white,
+                  size: size * 0.55,
+                ),
                 if (label != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
-                    child: Text(label!,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700)),
+                    child: Text(
+                      label!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -403,8 +471,11 @@ class _BarButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
 
-  const _BarButton(
-      {required this.icon, required this.label, required this.onPressed});
+  const _BarButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {

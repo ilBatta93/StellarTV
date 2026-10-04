@@ -59,13 +59,22 @@ class KidsContentService {
 
   /// True when the item can be shown in a kids profile.
   bool isKidsContent(Channel item) {
-    if (bannedKeywords.hasMatch('${item.name} ${item.seriesName ?? ''} ${item.plot ?? ''}')) {
+    if (bannedKeywords.hasMatch(
+      '${item.name} ${item.seriesName ?? ''} ${item.plot ?? ''}',
+    )) {
       return false;
     }
     return _verdicts[keyOf(item)] == true;
   }
 
   bool isKnown(Channel item) => _verdicts.containsKey(keyOf(item));
+
+  /// Starts filling the shared/local cache as soon as a playlist is loaded,
+  /// without requiring the kids profile or the player to be open.
+  Future<void> warmUp(Iterable<Channel> items) async {
+    await load();
+    request(items);
+  }
 
   /// Queues unknown titles and checks them in the background.
   void request(Iterable<Channel> items) {
@@ -94,9 +103,11 @@ class KidsContentService {
         ];
         try {
           final res = await http
-              .post(Uri.parse('${SupabaseConfig.apiBase}/kids-check'),
-                  headers: {'Content-Type': 'application/json'},
-                  body: jsonEncode({'items': items}))
+              .post(
+                Uri.parse('${SupabaseConfig.apiBase}/kids-check'),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({'items': items}),
+              )
               .timeout(const Duration(seconds: 60));
           if (res.statusCode != 200) {
             await Future<void>.delayed(const Duration(seconds: 20));
