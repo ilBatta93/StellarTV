@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'package:http/http.dart' as http;
 import '../models/channel.dart';
 import '../models/content_type.dart';
@@ -6,6 +7,44 @@ import '../models/series_details.dart';
 import 'series_grouping.dart';
 
 class XtreamService {
+  /// Scarica e decodifica una risposta JSON in modo robusto:
+  /// - riprova fino a 3 volte se la risposta arriva troncata o la rete cade
+  ///   (succede con liste film molto grandi, specie riaprendo l'app);
+  /// - decodifica in un isolate separato, cosi l'interfaccia non si blocca.
+  Future<dynamic> _getJson(String url, {bool throwOnHttpError = false}) async {
+    Object? lastError;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final response = await http
+            .get(Uri.parse(url), headers: const {'Connection': 'close'})
+            .timeout(const Duration(seconds: 120));
+        if (response.statusCode != 200) {
+          if (throwOnHttpError) {
+            throw Exception(
+                'Impossibile caricare i dati (HTTP ${response.statusCode})');
+          }
+          return null;
+        }
+        final bytes = response.bodyBytes;
+        final expected = response.contentLength;
+        if (expected != null && expected > 0 && bytes.length < expected) {
+          throw const FormatException('Risposta incompleta dal server');
+        }
+        return await Isolate.run(
+            () => jsonDecode(utf8.decode(bytes, allowMalformed: true)));
+      } catch (e) {
+        lastError = e;
+        if (attempt < 2) {
+          await Future.delayed(Duration(seconds: 1 + attempt * 2));
+        }
+      }
+    }
+    if (lastError is FormatException) {
+      throw Exception(
+          'Il server ha inviato una lista incompleta. Riprova tra poco.');
+    }
+    throw lastError ?? Exception('Errore di rete');
+  }
   String _normalizeServerUrl(String server) {
     var url = server.trim();
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -43,9 +82,9 @@ class XtreamService {
     final base = _normalizeServerUrl(server);
     final url =
         '$base/player_api.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}&action=get_live_streams';
-    final response = await http.get(Uri.parse(url));
-    if (response.statusCode != 200) return [];
-    final List<dynamic> data = jsonDecode(response.body) as List;
+    final decoded = await _getJson(url);
+    if (decoded is! List) return [];
+    final List<dynamic> data = decoded;
     final categories = await _getCategories(base, username, password, 'live');
     return data.map((item) {
       final catId = item['category_id']?.toString() ?? '';
@@ -71,9 +110,9 @@ class XtreamService {
     final base = _normalizeServerUrl(server);
     final url =
         '$base/player_api.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}&action=get_vod_streams';
-    final response = await http.get(Uri.parse(url));
-    if (response.statusCode != 200) return [];
-    final List<dynamic> data = jsonDecode(response.body) as List;
+    final decoded = await _getJson(url);
+    if (decoded is! List) return [];
+    final List<dynamic> data = decoded;
     final categories = await _getCategories(base, username, password, 'vod');
     return data.map((item) {
       final catId = item['category_id']?.toString() ?? '';
@@ -98,9 +137,9 @@ class XtreamService {
     final base = _normalizeServerUrl(server);
     final url =
         '$base/player_api.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}&action=get_series';
-    final response = await http.get(Uri.parse(url));
-    if (response.statusCode != 200) return [];
-    final List<dynamic> data = jsonDecode(response.body) as List;
+    final decoded = await _getJson(url);
+    if (decoded is! List) return [];
+    final List<dynamic> data = decoded;
     final categories =
         await _getCategories(base, username, password, 'series');
     return data.map((item) {
@@ -134,11 +173,7 @@ class XtreamService {
     final seriesId = (series.seriesKey ?? series.id).replaceFirst('series_', '');
     final url =
         '$base/player_api.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}&action=get_series_info&series_id=${Uri.encodeComponent(seriesId)}';
-    final response = await http.get(Uri.parse(url));
-    if (response.statusCode != 200) {
-      throw Exception('Impossibile caricare le stagioni (HTTP ${response.statusCode})');
-    }
-    final decoded = jsonDecode(response.body);
+    final decoded = await _getJson(url, throwOnHttpError: true);
     if (decoded is! Map) {
       throw Exception('Risposta serie non valida dal server');
     }
@@ -285,9 +320,9 @@ class XtreamService {
     final url =
         '$base/player_api.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}&action=get_${type}_categories';
     try {
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode != 200) return {};
-      final List<dynamic> data = jsonDecode(response.body) as List;
+      final decoded = await _getJson(url);
+      if (decoded is! List) return {};
+      final List<dynamic> data = decoded;
       final map = <String, String>{};
       for (final cat in data) {
         map[cat['category_id']?.toString() ?? ''] =
