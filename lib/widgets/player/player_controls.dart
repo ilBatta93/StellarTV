@@ -27,6 +27,12 @@ class PlayerControls extends StatelessWidget {
   final VoidCallback onToggleLock;
   final VoidCallback onInteraction;
 
+  /// Sottotitoli online (OpenSubtitles): stato e azioni del foglio.
+  final bool onlineSubsActive;
+  final bool onlineSubsLoading;
+  final VoidCallback? onLoadOnlineSubs;
+  final VoidCallback? onDisableOnlineSubs;
+
   const PlayerControls({
     super.key,
     required this.session,
@@ -45,6 +51,10 @@ class PlayerControls extends StatelessWidget {
     required this.onMenu,
     required this.onToggleLock,
     required this.onInteraction,
+    this.onlineSubsActive = false,
+    this.onlineSubsLoading = false,
+    this.onLoadOnlineSubs,
+    this.onDisableOnlineSubs,
   });
 
   void _act(VoidCallback action) {
@@ -322,9 +332,17 @@ class PlayerControls extends StatelessWidget {
                     ),
                     _BarButton(
                       icon: Icons.subtitles_rounded,
-                      label: 'Sottotitoli',
-                      onPressed: () =>
-                          _act(() => showSubtitleSheet(context, session)),
+                      label: onlineSubsActive ? 'ITA online' : 'Sottotitoli',
+                      onPressed: () => _act(
+                        () => showSubtitleSheet(
+                          context,
+                          session,
+                          onlineActive: onlineSubsActive,
+                          onlineLoading: onlineSubsLoading,
+                          onLoadOnline: onLoadOnlineSubs,
+                          onDisableOnline: onDisableOnlineSubs,
+                        ),
+                      ),
                     ),
                     if (!session.isLive)
                       _BarButton(

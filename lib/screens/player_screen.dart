@@ -16,11 +16,13 @@ import '../services/imdb_resolver.dart';
 import '../services/introdb_service.dart';
 import '../services/native_player_bridge.dart';
 import '../services/player_settings_service.dart';
+import '../services/subtitles_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/player/player_controls.dart';
 import '../widgets/player/player_gestures.dart';
 import '../widgets/player/player_sheets.dart';
 import '../widgets/player/player_stats.dart';
+import '../widgets/player/subtitle_overlay.dart';
 import '../widgets/player/video_surface.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -69,6 +71,10 @@ class _PlayerScreenState extends State<PlayerScreen>
   Channel? _next;
   bool _nextDismissed = false;
   bool _advancing = false;
+
+  // Sottotitoli online (OpenSubtitles), disegnati sopra il video.
+  List<SubtitleCue>? _onlineCues;
+  bool _onlineSubsLoading = false;
 
   // IntroDB skip segments (empty when unavailable: no buttons are shown).
   EpisodeSegments _segments = EpisodeSegments.empty;
@@ -191,6 +197,50 @@ class _PlayerScreenState extends State<PlayerScreen>
     final segments = await IntroDbService.fetch(imdbId, c.season!, c.episode!);
     if (mounted) setState(() => _segments = segments);
   }
+
+  /// Cerca e scarica i sottotitoli in italiano da OpenSubtitles (via cloud).
+  /// Per le serie risolve l'IMDb della serie e usa stagione/episodio del
+  /// canale; per i film cerca per titolo. Gli errori finiscono in uno
+  /// snackbar e la riproduzione continua senza sottotitoli.
+  Future<void> _loadOnlineSubtitles() async {
+    if (_isLive || _onlineSubsLoading || _onlineCues != null) return;
+    setState(() => _onlineSubsLoading = true);
+    try {
+      final c = widget.channel;
+      final title = _isEpisode
+          ? (c.seriesName?.isNotEmpty == true ? c.seriesName! : c.name)
+          : c.name;
+      final imdbId = await ImdbResolver.getImdbId(
+        title: title,
+        isMovie: !_isEpisode,
+      );
+      if (imdbId == null) throw 'titolo non trovato su TMDB';
+      final results = await SubtitlesService.search(
+        imdbId: imdbId,
+        season: _isEpisode ? c.season : null,
+        episode: _isEpisode ? c.episode : null,
+      );
+      if (results.isEmpty) throw 'nessun sottotitolo italiano disponibile';
+      final cues = await SubtitlesService.download(results.first.fileId);
+      if (cues == null) throw 'file dei sottotitoli non valido';
+      // Evita la doppia scritta spegnendo la traccia incorporata.
+      await _session?.engine?.selectSubtitleTrack(null);
+      if (mounted) setState(() => _onlineCues = cues);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sottotitoli online: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _onlineSubsLoading = false);
+    }
+  }
+
+  void _disableOnlineSubtitles() => setState(() => _onlineCues = null);
 
   void _skipIntro() {
     final intro = _segments.intro;
@@ -485,6 +535,10 @@ class _PlayerScreenState extends State<PlayerScreen>
       session,
       statsVisible: _statsVisible,
       onStatsChanged: (v) => setState(() => _statsVisible = v),
+      onlineSubsActive: _onlineCues != null,
+      onlineSubsLoading: _onlineSubsLoading,
+      onLoadOnlineSubs: _loadOnlineSubtitles,
+      onDisableOnlineSubs: _disableOnlineSubtitles,
     ).whenComplete(_scheduleHide);
   }
 
@@ -584,9 +638,20 @@ class _PlayerScreenState extends State<PlayerScreen>
               _scheduleHide();
             },
             onInteraction: _onInteraction,
+            onlineSubsActive: _onlineCues != null,
+            onlineSubsLoading: _onlineSubsLoading,
+            onLoadOnlineSubs: _loadOnlineSubtitles,
+            onDisableOnlineSubs: _disableOnlineSubtitles,
           ),
         ),
       ),
+      if (_onlineCues != null)
+        SubtitleOverlay(
+          cues: _onlineCues!,
+          position: session.value.position,
+          delay: session.subtitleDelay,
+          settings: settings,
+        ),
       if (status == SessionStatus.playing &&
           _segments.intro != null &&
           _segments.intro!.contains(session.value.position))

@@ -11,8 +11,15 @@ import '../config/supabase_config.dart';
 class ImdbResolver {
   static final Map<String, String?> _cache = {};
 
-  static Future<String?> getImdbId({int? tmdbId, String? title}) async {
-    final cacheKey = tmdbId != null ? 'id:$tmdbId' : 't:${title ?? ''}';
+  static Future<String?> getImdbId({
+    int? tmdbId,
+    String? title,
+    bool isMovie = false,
+  }) async {
+    final kind = isMovie ? 'movie' : 'tv';
+    final cacheKey = tmdbId != null
+        ? '$kind:id:$tmdbId'
+        : '$kind:t:${title ?? ''}';
     if (_cache.containsKey(cacheKey)) return _cache[cacheKey];
     if (tmdbId == null && (title == null || title.trim().isEmpty)) return null;
     try {
@@ -20,6 +27,7 @@ class ImdbResolver {
         queryParameters: {
           'tmdb_id': ?tmdbId?.toString(),
           'title': ?title,
+          'type': kind,
         },
       );
       final res = await http.get(uri).timeout(const Duration(seconds: 10));
