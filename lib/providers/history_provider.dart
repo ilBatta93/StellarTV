@@ -45,8 +45,36 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   List<HistoryEntry> get continueWatching => _entries.where((e) {
         if (e.isLive || e.position < const Duration(seconds: 5)) return false;
         if (e.duration <= Duration.zero) return true;
-        return e.duration - e.position > const Duration(minutes: 1);
+        return !e.isWatched;
       }).toList();
+
+  bool isWatched(String contentId) => entryFor(contentId)?.isWatched ?? false;
+
+  /// Marks an item as fully watched (position = runtime), like Netflix.
+  Future<void> markWatched(Channel channel, {Duration? duration}) async {
+    await _loadFuture;
+    final previous = entryFor(channel.id);
+    var total = previous?.duration ?? Duration.zero;
+    if (total <= Duration.zero) total = duration ?? Duration.zero;
+    if (total <= Duration.zero) total = const Duration(minutes: 1);
+    final entry = HistoryEntry(
+      contentId: channel.id,
+      type: channel.type,
+      title: channel.name,
+      posterUrl: channel.logo,
+      group: channel.group,
+      url: channel.url,
+      position: total,
+      duration: total,
+      lastWatchedAt: DateTime.now(),
+    );
+    _entries = [entry, ..._entries.where((e) => e.contentId != channel.id)];
+    _notify();
+    await _persistLocal();
+  }
+
+  /// Clears the watched mark and the resume point.
+  Future<void> markUnwatched(String contentId) => remove(contentId);
 
   HistoryEntry? entryFor(String contentId) {
     for (final e in _entries) {

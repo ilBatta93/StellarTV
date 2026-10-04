@@ -253,8 +253,20 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
               itemCount: currentSeason.episodes.length,
               itemBuilder: (context, i) {
                 final ep = currentSeason.episodes[i];
+                final history = context.watch<HistoryProvider>();
+                final entry = history.entryFor(ep.channel.id);
                 return _EpisodeTile(
                   episode: ep,
+                  progress: entry?.isWatched == true ? null : entry?.progress,
+                  watched: entry?.isWatched ?? false,
+                  onToggleWatched: () {
+                    final h = context.read<HistoryProvider>();
+                    if (entry?.isWatched ?? false) {
+                      h.markUnwatched(ep.channel.id);
+                    } else {
+                      h.markWatched(ep.channel, duration: ep.duration);
+                    }
+                  },
                   onTap: () => playChannel(context, ep.channel,
                       startAt: context
                           .read<HistoryProvider>()
@@ -274,8 +286,17 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
 class _EpisodeTile extends StatelessWidget {
   final SeriesEpisode episode;
   final VoidCallback onTap;
+  final double? progress;
+  final bool watched;
+  final VoidCallback onToggleWatched;
 
-  const _EpisodeTile({required this.episode, required this.onTap});
+  const _EpisodeTile({
+    required this.episode,
+    required this.onTap,
+    required this.onToggleWatched,
+    this.progress,
+    this.watched = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -287,6 +308,7 @@ class _EpisodeTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: onTap,
+          onLongPress: onToggleWatched,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(10),
@@ -297,13 +319,39 @@ class _EpisodeTile extends StatelessWidget {
                   child: SizedBox(
                     width: 120,
                     height: 68,
-                    child: ep.image != null && ep.image!.isNotEmpty
-                        ? Image.network(
-                            ep.image!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => _placeholder(),
-                          )
-                        : _placeholder(),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ep.image != null && ep.image!.isNotEmpty
+                            ? Image.network(
+                                ep.image!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => _placeholder(),
+                              )
+                            : _placeholder(),
+                        if (watched)
+                          Container(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.check_circle_rounded,
+                                color: Colors.white, size: 28),
+                          ),
+                        if (progress != null && progress! > 0)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              minHeight: 4,
+                              backgroundColor:
+                                  Colors.white.withValues(alpha: 0.25),
+                              valueColor: AlwaysStoppedAnimation(
+                                  AppColors.primary),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -349,8 +397,17 @@ class _EpisodeTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Icon(Icons.play_circle_fill_rounded,
-                    color: AppColors.primary, size: 32),
+                IconButton(
+                  tooltip: watched ? 'Segna come non visto' : 'Segna come visto',
+                  onPressed: onToggleWatched,
+                  icon: Icon(
+                    watched
+                        ? Icons.check_circle_rounded
+                        : Icons.check_circle_outline_rounded,
+                    color: watched ? AppColors.primary : AppColors.textMuted,
+                    size: 26,
+                  ),
+                ),
               ],
             ),
           ),

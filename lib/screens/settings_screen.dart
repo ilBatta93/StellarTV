@@ -214,6 +214,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => const HiddenCategoriesScreen())),
               ),
+              SettingsSwitchTile(
+                icon: Icons.no_adult_content_outlined,
+                title: 'Mostra contenuti per adulti',
+                subtitle: 'Canali, film e serie XXX o "for adults" (nascosti di base)',
+                value: provider.showAdult,
+                onChanged: provider.setShowAdult,
+              ),
             ],
           ),
           SettingsSection(

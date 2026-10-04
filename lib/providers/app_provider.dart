@@ -37,7 +37,10 @@ class AppProvider extends ChangeNotifier {
   late final PlaylistRefreshService _refreshService =
       PlaylistRefreshService(refreshPlaylist);
 
+  List<Channel> _rawChannels = [];
   List<Channel> _allChannels = [];
+  bool _showAdult = false;
+  static const _showAdultKey = 'show_adult_content';
   Map<String, Channel>? _channelIndex;
   Set<String> _favoriteIds = {};
   List<TmdbItem> _tmdbFavorites = [];
@@ -81,10 +84,13 @@ class AppProvider extends ChangeNotifier {
   /// Channels of a type whose category is not hidden by the user.
   List<Channel> _visibleChannels(ContentType type) {
     final hidden = hiddenCategoriesOf(type).toSet();
-    if (hidden.isEmpty) return channelsOf(type);
-    return channelsOf(type)
-        .where((c) => !hidden.contains(c.group))
-        .toList();
+    // Series tabs list whole series only: episodes indexed after opening a
+    // series must never show up as separate titles.
+    final base = (type == ContentType.series || type == ContentType.anime)
+        ? catalogOf(type)
+        : channelsOf(type);
+    if (hidden.isEmpty) return base;
+    return base.where((c) => !hidden.contains(c.group)).toList();
   }
 
   List<Channel> catalogOf(ContentType type) {
@@ -114,9 +120,49 @@ class AppProvider extends ChangeNotifier {
   }
 
   void _setChannels(List<Channel> channels) {
-    _allChannels = channels;
+    _rawChannels = channels;
+    _applyAdultFilter();
+  }
+
+  void _applyAdultFilter() {
+    _allChannels = _showAdult
+        ? _rawChannels
+        : _rawChannels.where((c) => !isAdult(c)).toList(growable: false);
     _channelIndex = null;
     _invalidateCaches();
+  }
+
+  /// Adult content is hidden by default; the user can show it in Settings.
+  bool get showAdult => _showAdult;
+
+  Future<void> setShowAdult(bool value) async {
+    if (value == _showAdult) return;
+    _showAdult = value;
+    _applyAdultFilter();
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_showAdultKey, value);
+  }
+
+  static final _adultPattern = RegExp(
+    r'\bx{3,}\b|for\s*adults?|\badults?\b|\badulti\b|\b18\s*\+|\+\s*18\b|'
+    r'\bporn|\bp0rn|\bhentai\b|\beroti[ck]|\bsexy?\b|\bhot\s*club\b|'
+    r'playboy|brazzers|dorcel|hustler|penthouse|redlight|red\s*light|'
+    r'private\s*(tv|spice)|\bspice\b|vivid|xxl\s*tv|blue\s*hustler|\bnsfw\b|milf',
+    caseSensitive: false,
+  );
+  static final _adultExceptions =
+      RegExp(r'adult\s*swim|young\s*adults?', caseSensitive: false);
+
+  /// True for pornographic items: "XXX" or "for adults" in the title or
+  /// category, plus well known adult channel brands and keywords.
+  static bool isAdult(Channel c) {
+    bool test(String? s) {
+      if (s == null || s.isEmpty) return false;
+      final clean = s.replaceAll(_adultExceptions, ' ');
+      return _adultPattern.hasMatch(clean);
+    }
+    return test(c.group) || test(c.name) || test(c.seriesName);
   }
 
   List<String> groupsOf(ContentType type) => catalogOf(type)
@@ -127,7 +173,13 @@ class AppProvider extends ChangeNotifier {
 
   /// Category labels in the playlist's own order (not alphabetical).
   List<String> categoryOrderOf(ContentType type) =>
-      channelsOf(type).map((c) => c.group).toSet().toList();
+      channelsOf(type)
+          .where((c) =>
+              (type != ContentType.series && type != ContentType.anime) ||
+              c.isSeriesFolder)
+          .map((c) => c.group)
+          .toSet()
+          .toList();
 
   /// Categories the user hid per type (key: content type name).
   Map<String, List<String>> get hiddenCategories => _hiddenCategories;
@@ -158,12 +210,23 @@ class AppProvider extends ChangeNotifier {
 
   /// Recently added items of a type, in the playlist's own order (the
   /// provider lists newest entries last, so newest-first means reversed).
-  List<CatalogEntry> recentEntries(ContentType type, {int limit = 60}) =>
-      _recentCache[type] ??= _visibleChannels(type)
-          .reversed
-          .take(limit)
-          .map((c) => CatalogEntry(primary: c, variants: [c]))
-          .toList(growable: false);
+  /// "Ultimi Aggiunti": the 50 newest items by the provider's added date
+  /// (playlist order as tie-breaker, newest entries come last there).
+  List<CatalogEntry> recentEntries(ContentType type, {int limit = 50}) =>
+      _recentCache[type] ??= () {
+        final items = _visibleChannels(type);
+        final indexed = [
+          for (var i = 0; i < items.length; i++) (i, items[i]),
+        ]..sort((a, b) {
+            final byDate = b.$2.addedAt.compareTo(a.$2.addedAt);
+            return byDate != 0 ? byDate : b.$1.compareTo(a.$1);
+          });
+        final seen = <String>{};
+        return [
+          for (final (_, c) in indexed)
+            if (seen.add(c.id)) CatalogEntry(primary: c, variants: [c]),
+        ].take(limit).toList(growable: false);
+      }();
 
   /// Basic handling: every playlist item is played as it is, no merging of
   /// copies with different quality (that matching opened the wrong title).
@@ -237,7 +300,7 @@ class AppProvider extends ChangeNotifier {
     if (episodes.isEmpty) return;
     final ids = {for (final e in episodes) e.id};
     _setChannels([
-      ..._allChannels.where((c) => !ids.contains(c.id)),
+      ..._rawChannels.where((c) => !ids.contains(c.id)),
       ...episodes,
     ]);
   }
@@ -257,12 +320,12 @@ class AppProvider extends ChangeNotifier {
         indexEpisodes(details.allEpisodes.map((e) => e.channel).toList());
         return details;
       } catch (_) {
-        final local = SeriesGrouping.detailsFromEpisodes(series, _allChannels);
+        final local = SeriesGrouping.detailsFromEpisodes(series, _rawChannels);
         if (local.seasons.isNotEmpty) return local;
         rethrow;
       }
     }
-    return SeriesGrouping.detailsFromEpisodes(series, _allChannels);
+    return SeriesGrouping.detailsFromEpisodes(series, _rawChannels);
   }
 
   static String _normalize(String s) => s
@@ -413,6 +476,7 @@ class AppProvider extends ChangeNotifier {
     _tmdbFavorites = await _favoritesService.getTmdbFavorites();
     final prefs = await SharedPreferences.getInstance();
     _syncCode = prefs.getString(SyncService.codeKey);
+    _showAdult = prefs.getBool(_showAdultKey) ?? false;
     if (_syncCode != null) {
       await _restoreCloudFavorites(_syncCode!);
     }

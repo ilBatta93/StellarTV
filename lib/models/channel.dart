@@ -18,6 +18,8 @@ class Channel {
   final String? plot;
   final bool isSeriesFolder;
   final int episodeCount;
+  /// Unix seconds when the provider added the item (0 when unknown).
+  final int addedAt;
 
   Channel({
     required this.id,
@@ -37,6 +39,7 @@ class Channel {
     this.plot,
     this.isSeriesFolder = false,
     this.episodeCount = 0,
+    this.addedAt = 0,
   });
 
   bool get isPlayable => url.isNotEmpty && !isSeriesFolder;
@@ -68,6 +71,7 @@ class Channel {
       plot: map['plot'] as String?,
       isSeriesFolder: map['is_series_folder'] == true,
       episodeCount: (map['episode_count'] as num?)?.toInt() ?? 0,
+      addedAt: (map['added_at'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -90,6 +94,7 @@ class Channel {
       'plot': plot,
       'is_series_folder': isSeriesFolder,
       'episode_count': episodeCount,
+      'added_at': addedAt,
     };
   }
 
@@ -111,6 +116,7 @@ class Channel {
     String? plot,
     bool? isSeriesFolder,
     int? episodeCount,
+    int? addedAt,
   }) {
     return Channel(
       id: id ?? this.id,
@@ -130,6 +136,7 @@ class Channel {
       plot: plot ?? this.plot,
       isSeriesFolder: isSeriesFolder ?? this.isSeriesFolder,
       episodeCount: episodeCount ?? this.episodeCount,
+      addedAt: addedAt ?? this.addedAt,
     );
   }
 

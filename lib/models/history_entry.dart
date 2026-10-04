@@ -32,8 +32,19 @@ class HistoryEntry {
     return (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
   }
 
+  /// Netflix-style "watched": 95% of the runtime reached (or less than two
+  /// minutes left, which covers end credits on short episodes).
+  bool get isWatched {
+    if (isLive || duration <= Duration.zero) return false;
+    final ratio = position.inMilliseconds / duration.inMilliseconds;
+    return ratio >= 0.95 ||
+        (position > Duration.zero &&
+            duration - position <= const Duration(minutes: 2) &&
+            duration >= const Duration(minutes: 10));
+  }
+
   Duration? get resumePosition {
-    if (isLive || duration <= Duration.zero) return null;
+    if (isLive || duration <= Duration.zero || isWatched) return null;
     final remaining = duration - position;
     if (position <= const Duration(seconds: 5) ||
         remaining <= const Duration(minutes: 1)) {

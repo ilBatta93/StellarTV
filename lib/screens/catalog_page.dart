@@ -248,11 +248,11 @@ class _CatalogPageState extends State<CatalogPage> {
       drawerEnableOpenDragGesture: true,
       drawerEdgeDragWidth: 48,
       drawer: _CategoryDrawer(
-        categories: ['Ultimi aggiunti', ...groups.map((g) => g.label)],
+        categories: ['Ultimi Aggiunti', ...groups.map((g) => g.label)],
         selected: _selectedCategory,
         onSelected: (category) {
           setState(() => _selectedCategory =
-              category == 'Ultimi aggiunti' ? null : category);
+              category == 'Ultimi Aggiunti' ? null : category);
         },
       ),
       body: Column(
@@ -404,7 +404,7 @@ class _CategoryDrawer extends StatelessWidget {
                 children: [
                   for (final c in categories)
                     ListTile(
-                      selected: (selected ?? 'Ultimi aggiunti') == c,
+                      selected: (selected ?? 'Ultimi Aggiunti') == c,
                       selectedTileColor:
                           AppColors.primary.withValues(alpha: 0.15),
                       shape: RoundedRectangleBorder(
@@ -415,11 +415,11 @@ class _CategoryDrawer extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 14,
-                          color: (selected ?? 'Ultimi aggiunti') == c
+                          color: (selected ?? 'Ultimi Aggiunti') == c
                               ? AppColors.primary
                               : AppColors.textPrimary,
                           fontWeight:
-                              (selected ?? 'Ultimi aggiunti') == c
+                              (selected ?? 'Ultimi Aggiunti') == c
                                   ? FontWeight.w600
                                   : FontWeight.w400,
                         ),

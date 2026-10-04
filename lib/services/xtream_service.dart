@@ -125,6 +125,7 @@ class XtreamService {
         logo: item['stream_icon']?.toString() ?? '',
         group: groupName,
         type: ContentType.movie,
+        addedAt: int.tryParse(item['added']?.toString() ?? '') ?? 0,
       );
     }).toList();
   }
@@ -159,6 +160,9 @@ class XtreamService {
         seriesName: item['name']?.toString(),
         plot: item['plot']?.toString(),
         isSeriesFolder: true,
+        addedAt: int.tryParse(
+                (item['last_modified'] ?? item['added'])?.toString() ?? '') ??
+            0,
       );
     }).toList();
   }
