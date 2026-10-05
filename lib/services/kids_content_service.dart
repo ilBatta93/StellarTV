@@ -137,8 +137,9 @@ class KidsContentService {
         if (res.statusCode != 200) return;
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         for (final r in (body['results'] as List? ?? const [])) {
-          if (r is! Map || r['is_kids'] is! bool || r['key'] is! String)
+          if (r is! Map || r['is_kids'] is! bool || r['key'] is! String) {
             continue;
+          }
           final key = r['key'] as String;
           _verdicts[key] = r['is_kids'] as bool;
           final g = r['genre_ids'];

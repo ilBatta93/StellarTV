@@ -28,8 +28,9 @@ class ExoEngine extends PlaybackEngine {
 
   static VideoFormat? _formatHint(String url) {
     final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
-    if (path.endsWith('.m3u8') || path.contains('.m3u8'))
+    if (path.endsWith('.m3u8') || path.contains('.m3u8')) {
       return VideoFormat.hls;
+    }
     if (path.endsWith('.mpd')) return VideoFormat.dash;
     if (path.contains('.ism')) return VideoFormat.ss;
     return null;

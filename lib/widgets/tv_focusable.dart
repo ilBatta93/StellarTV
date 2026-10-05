@@ -46,34 +46,36 @@ class _TvFocusableState extends State<TvFocusable> {
   @override
   Widget build(BuildContext context) {
     if (!DeviceTypeService.isTv) return widget.child;
-    return FocusableActionDetector(
-      autofocus: widget.autofocus,
-      onShowFocusHighlight: (value) => setState(() => _focused = value),
+    return Focus(
       onKeyEvent: _onKey,
-      mouseCursor: SystemMouseCursors.click,
-      child: AnimatedScale(
-        scale: _focused ? widget.focusedScale : 1,
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOut,
-        child: AnimatedContainer(
+      child: FocusableActionDetector(
+        autofocus: widget.autofocus,
+        onShowFocusHighlight: (value) => setState(() => _focused = value),
+        mouseCursor: SystemMouseCursors.click,
+        child: AnimatedScale(
+          scale: _focused ? widget.focusedScale : 1,
           duration: const Duration(milliseconds: 140),
-          decoration: BoxDecoration(
-            borderRadius: widget.borderRadius,
-            border: Border.all(
-              color: _focused ? AppColors.primary : Colors.transparent,
-              width: 3,
+          curve: Curves.easeOut,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            decoration: BoxDecoration(
+              borderRadius: widget.borderRadius,
+              border: Border.all(
+                color: _focused ? AppColors.primary : Colors.transparent,
+                width: 3,
+              ),
+              boxShadow: _focused
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.38),
+                        blurRadius: 14,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : const [],
             ),
-            boxShadow: _focused
-                ? [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.38),
-                      blurRadius: 14,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : const [],
+            child: widget.child,
           ),
-          child: widget.child,
         ),
       ),
     );
