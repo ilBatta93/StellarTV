@@ -104,6 +104,8 @@ class MainActivity : FlutterActivity() {
     private fun showSoftKeyboard(): Boolean {
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         val view = currentFocus ?: window.decorView
+        if (!view.hasFocus()) view.requestFocus()
+        if (imm.showSoftInput(view, 0)) return true
         @Suppress("DEPRECATION")
         return imm.showSoftInput(view, InputMethodManager.SHOW_FORCED)
     }

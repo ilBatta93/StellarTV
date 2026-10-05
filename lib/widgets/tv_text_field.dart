@@ -2,9 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/device_type_service.dart';
 
-/// TextField usable with a TV remote (Fire TV / Google TV): arrows up/down
-/// move between fields, OK/Enter opens the on-screen keyboard, and moving
-/// to the next field also opens the keyboard there.
+/// TextField usable with a TV remote (Fire TV / Google TV).
+///
+/// Phones and tablets get a plain, always-editable [TextField] (unchanged).
+///
+/// On TV the field is made of two focus stops:
+/// * an outer "shell" that the D-Pad lands on: it is highlighted but does
+///   not open the keyboard, so passing over a search bar never pops it up;
+/// * the real [TextField], skipped by D-Pad traversal. OK / click moves the
+///   focus into it, which is the standard Flutter path (gaining focus opens
+///   the input connection and shows the keyboard), the same one used on
+///   phones. The field is never read-only, so nothing has to re-open the
+///   connection later.
+///
+/// Back closes the keyboard (Android) and a second Back, or Up/Down, leaves
+/// the field and returns to D-Pad navigation.
 class TvTextField extends StatefulWidget {
   const TvTextField({
     super.key,
@@ -19,6 +31,7 @@ class TvTextField extends StatefulWidget {
     this.decoration,
     this.autofillHints,
     this.autofocus = false,
+    this.openOnFocus = false,
   });
 
   final TextEditingController controller;
@@ -32,6 +45,11 @@ class TvTextField extends StatefulWidget {
   final InputDecoration? decoration;
   final Iterable<String>? autofillHints;
   final bool autofocus;
+
+  /// TV: open the keyboard as soon as the D-Pad reaches the field (login
+  /// and account forms), instead of waiting for OK. After Back closes the
+  /// keyboard it is not re-opened until the field is left and reached again.
+  final bool openOnFocus;
 
   static Future<void> showKeyboard() async {
     try {
@@ -51,8 +69,8 @@ class TvTextField extends StatefulWidget {
   /// Moves focus to [node] and opens the keyboard there.
   static void focusWithKeyboard(FocusNode node) {
     final state = _TvTextFieldState._registry[node];
-    if (state != null && DeviceTypeService.isTv) {
-      state._beginTvEditing();
+    if (state != null && state.mounted) {
+      state._startEditing();
       return;
     }
     node.requestFocus();
@@ -67,104 +85,180 @@ class TvTextField extends StatefulWidget {
 
 class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
   static final Map<FocusNode, _TvTextFieldState> _registry = {};
-  final FocusNode _own = FocusNode();
-  FocusNode get _node => widget.focusNode ?? _own;
+  final FocusNode _own = FocusNode(debugLabel: 'TvTextField');
+  late final FocusNode _shell = FocusNode(
+    debugLabel: 'TvTextField shell',
+    onKeyEvent: _onShellKey,
+  );
+  late FocusNode _node;
   FocusOnKeyEventCallback? _prev;
-  bool _tvEditing = false;
   bool _keyboardSeen = false;
-  int _showSerial = 0;
+  int _serial = 0;
+
+  bool get _tv => DeviceTypeService.isTv;
+  bool get _editing => _node.hasFocus;
 
   @override
   void initState() {
     super.initState();
-    _prev = _node.onKeyEvent;
-    _node.onKeyEvent = _onKey;
-    _registry[_node] = this;
-    _node.addListener(_onFocusChange);
+    _attach(widget.focusNode ?? _own);
+    _shell.addListener(_onShellFocus);
     WidgetsBinding.instance.addObserver(this);
   }
 
-  void _onFocusChange() {
-    if (!_node.hasFocus && _tvEditing && mounted) _endTvEditing(hide: false);
+  @override
+  void didUpdateWidget(covariant TvTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.focusNode ?? _own;
+    if (next != _node) {
+      _detach();
+      _attach(next);
+    }
   }
 
-  /// TV: OK/click turns the field editable and opens the keyboard. The
-  /// field stays focused: EditableText opens the input connection itself
-  /// once readOnly turns false, then the keyboard is requested again
-  /// (Flutter and native) so slow TV IMEs still show up.
-  void _beginTvEditing() {
-    if (!DeviceTypeService.isTv) return;
+  void _attach(FocusNode node) {
+    _node = node;
+    _prev = node.onKeyEvent;
+    node.onKeyEvent = _onFieldKey;
+    // D-Pad traversal stops on the shell, never directly on the field.
+    if (_tv) node.skipTraversal = true;
+    node.addListener(_onFieldFocus);
+    _registry[node] = this;
+  }
+
+  void _detach() {
+    _node.removeListener(_onFieldFocus);
+    if (_registry[_node] == this) _registry.remove(_node);
+    _node.onKeyEvent = _prev;
+  }
+
+  void _rebuild() {
+    if (mounted) setState(() {});
+  }
+
+  bool _suppressAuto = false;
+
+  void _onShellFocus() {
+    if (!_shell.hasFocus) _suppressAuto = false;
+    if (_tv && widget.openOnFocus && !_suppressAuto && _shell.hasPrimaryFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _shell.hasPrimaryFocus && !_suppressAuto) {
+          _startEditing();
+        }
+      });
+    }
+    _rebuild();
+  }
+
+  void _onFieldFocus() {
+    if (!_node.hasFocus) {
+      _serial++;
+      _keyboardSeen = false;
+    }
+    _rebuild();
+  }
+
+  /// Focuses the real field: Flutter opens the input connection and shows
+  /// the keyboard. The show request is repeated (Flutter + native) because
+  /// some TV keyboards ignore the first one.
+  void _startEditing() {
+    final serial = ++_serial;
     _keyboardSeen = false;
-    final serial = ++_showSerial;
-    if (!_tvEditing) setState(() => _tvEditing = true);
+    if (!_node.hasFocus) _node.requestFocus();
+    if (!_tv) return;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted || serial != _showSerial) return;
-      // requestFocus grants the keyboard token: if the field was not
-      // focused, gaining focus opens the connection and the keyboard.
-      if (!_node.hasFocus) _node.requestFocus();
-      for (final ms in const [80, 250, 600]) {
+      for (final ms in const [120, 350, 800]) {
         await Future<void>.delayed(Duration(milliseconds: ms));
-        if (!mounted || !_tvEditing || serial != _showSerial) return;
-        if (!_node.hasFocus) _node.requestFocus();
+        if (!mounted || serial != _serial || !_node.hasFocus) return;
         if (_keyboardSeen) return;
         await TvTextField.showKeyboard();
-        if (ms >= 250) await TvTextField.showNativeKeyboard();
+        if (ms >= 350) await TvTextField.showNativeKeyboard();
       }
     });
   }
 
-  void _endTvEditing({bool hide = true}) {
-    _showSerial++;
-    if (hide) SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  /// Leaves the field: focus goes back to the shell, Flutter closes the
+  /// input connection and hides the keyboard.
+  void _stopEditing() {
+    _suppressAuto = true;
+    _serial++;
     _keyboardSeen = false;
-    if (_tvEditing && mounted) setState(() => _tvEditing = false);
+    if (_shell.context != null) _shell.requestFocus();
   }
 
-  /// Android consumes Back to close the IME: detect the keyboard closing
-  /// and leave edit mode so the D-Pad navigates again.
+  /// Android consumes Back to close the IME: when the keyboard disappears,
+  /// leave the field so the D-Pad navigates again.
   @override
   void didChangeMetrics() {
-    if (!DeviceTypeService.isTv || !_tvEditing) return;
+    if (!_tv || !_editing) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_tvEditing) return;
+      if (!mounted || !_editing) return;
       final views = WidgetsBinding.instance.platformDispatcher.views;
       if (views.isEmpty) return;
       final inset = views.first.viewInsets.bottom;
       if (inset > 0) {
         _keyboardSeen = true;
       } else if (_keyboardSeen) {
-        _endTvEditing(hide: false);
+        _stopEditing();
       }
     });
   }
 
-  KeyEventResult _onKey(FocusNode node, KeyEvent e) {
-    if (e is KeyDownEvent) {
+  static bool _isOk(LogicalKeyboardKey k) =>
+      k == LogicalKeyboardKey.select ||
+      k == LogicalKeyboardKey.enter ||
+      k == LogicalKeyboardKey.numpadEnter ||
+      k == LogicalKeyboardKey.gameButtonA;
+
+  static bool _isBack(LogicalKeyboardKey k) =>
+      k == LogicalKeyboardKey.escape ||
+      k == LogicalKeyboardKey.goBack ||
+      k == LogicalKeyboardKey.browserBack;
+
+  /// Keys on the highlighted (not editing) field.
+  KeyEventResult _onShellKey(FocusNode node, KeyEvent e) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final k = e.logicalKey;
+    if (e is KeyDownEvent && _isOk(k)) {
+      _startEditing();
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.arrowDown) {
+      node.nextFocus();
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.arrowUp) {
+      node.previousFocus();
+      return KeyEventResult.handled;
+    }
+    return _prev?.call(node, e) ?? KeyEventResult.ignored;
+  }
+
+  /// Keys while the real field is focused (keyboard open or just closed).
+  KeyEventResult _onFieldKey(FocusNode node, KeyEvent e) {
+    if (_tv && e is KeyDownEvent) {
       final k = e.logicalKey;
-      if (DeviceTypeService.isTv &&
-          _tvEditing &&
-          (k == LogicalKeyboardKey.escape ||
-              k == LogicalKeyboardKey.goBack ||
-              k == LogicalKeyboardKey.browserBack)) {
-        _endTvEditing();
+      if (_isBack(k)) {
+        _stopEditing();
         return KeyEventResult.handled;
       }
-      if (DeviceTypeService.isTv && k == LogicalKeyboardKey.arrowDown) {
-        node.nextFocus();
+      if (k == LogicalKeyboardKey.arrowDown) {
+        _stopEditing();
+        _shell.nextFocus();
         return KeyEventResult.handled;
       }
-      if (DeviceTypeService.isTv && k == LogicalKeyboardKey.arrowUp) {
-        node.previousFocus();
+      if (k == LogicalKeyboardKey.arrowUp) {
+        _stopEditing();
+        _shell.previousFocus();
         return KeyEventResult.handled;
       }
-      // D-Pad OK always (re)opens the keyboard: Android may close the IME
-      // without notifying Flutter. Enter submits while editing.
-      final isOk =
-          k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.gameButtonA;
-      final isEnter =
-          k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.numpadEnter;
-      if (DeviceTypeService.isTv && (isOk || (isEnter && !_tvEditing))) {
-        _beginTvEditing();
+      // D-Pad OK re-opens a keyboard Android closed without telling us.
+      if (k == LogicalKeyboardKey.select ||
+          k == LogicalKeyboardKey.gameButtonA) {
+        _startEditing();
+        TvTextField.showKeyboard();
         return KeyEventResult.handled;
       }
     }
@@ -174,36 +268,71 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _node.removeListener(_onFocusChange);
-    if (_registry[_node] == this) _registry.remove(_node);
-    _node.onKeyEvent = _prev;
+    _detach();
+    _shell.removeListener(_onShellFocus);
+    _shell.dispose();
     _own.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
+  void _submitted(String v) {
+    final next = widget.nextFocus;
+    if (next != null) {
+      TvTextField.focusWithKeyboard(next);
+    } else if (_tv && mounted) {
+      _stopEditing();
+    }
+    widget.onSubmitted?.call(v);
+  }
+
+  Widget _field({InputDecoration? decoration, bool autofocus = false}) {
     return TextField(
-      autofocus: widget.autofocus,
+      autofocus: autofocus,
       controller: widget.controller,
       focusNode: _node,
-      readOnly: DeviceTypeService.isTv && !_tvEditing,
-      showCursor: !DeviceTypeService.isTv || _tvEditing,
       keyboardType: widget.keyboardType,
       obscureText: widget.obscureText,
       autofillHints: widget.autofillHints,
       textInputAction: widget.textInputAction,
-      decoration: widget.decoration,
+      decoration: decoration,
       onChanged: widget.onChanged,
-      onTap: DeviceTypeService.isTv
-          ? _beginTvEditing
-          : TvTextField.showKeyboard,
-      onSubmitted: (v) {
-        if (DeviceTypeService.isTv && mounted) _endTvEditing();
-        final next = widget.nextFocus;
-        if (next != null) TvTextField.focusWithKeyboard(next);
-        widget.onSubmitted?.call(v);
-      },
+      onTap: _tv ? _startEditing : TvTextField.showKeyboard,
+      onSubmitted: _submitted,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_tv) {
+      return _field(decoration: widget.decoration, autofocus: widget.autofocus);
+    }
+    final theme = Theme.of(context);
+    final highlighted = _shell.hasPrimaryFocus;
+    var decoration = widget.decoration ?? const InputDecoration();
+    if (highlighted) {
+      final border =
+          theme.inputDecorationTheme.focusedBorder ??
+          OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+          );
+      final side = border.borderSide.copyWith(
+        color: theme.colorScheme.primary,
+        width: 2.5,
+      );
+      decoration = decoration.copyWith(
+        enabledBorder: border.copyWith(borderSide: side),
+        border: border.copyWith(borderSide: side),
+      );
+    }
+    return Focus(
+      focusNode: _shell,
+      autofocus: widget.autofocus,
+      child: AnimatedScale(
+        scale: highlighted ? 1.02 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        child: _field(decoration: decoration),
+      ),
     );
   }
 }

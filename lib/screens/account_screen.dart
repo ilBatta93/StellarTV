@@ -159,6 +159,7 @@ class _AccountScreenState extends State<AccountScreen> {
                       ),
                       const SizedBox(height: 20),
                       TvTextField(
+                        openOnFocus: true,
                         controller: _email,
                         nextFocus: _passwordFocus,
                         keyboardType: TextInputType.emailAddress,
@@ -171,6 +172,7 @@ class _AccountScreenState extends State<AccountScreen> {
                       ),
                       const SizedBox(height: 12),
                       TvTextField(
+                        openOnFocus: true,
                         controller: _password,
                         focusNode: _passwordFocus,
                         nextFocus: _register ? _confirmFocus : null,
@@ -203,6 +205,7 @@ class _AccountScreenState extends State<AccountScreen> {
                       if (_register) ...[
                         const SizedBox(height: 12),
                         TvTextField(
+                          openOnFocus: true,
                           controller: _confirm,
                           focusNode: _confirmFocus,
                           obscureText: _obscure,

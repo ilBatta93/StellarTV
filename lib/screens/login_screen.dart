@@ -120,6 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _buildFieldLabel('Server URL'),
         const SizedBox(height: 6),
         TvTextField(
+          openOnFocus: true,
           controller: _xtreamServerController,
           nextFocus: _xtreamUserFocus,
           textInputAction: TextInputAction.next,
@@ -133,6 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _buildFieldLabel('Nome utente'),
         const SizedBox(height: 6),
         TvTextField(
+          openOnFocus: true,
           controller: _xtreamUserController,
           focusNode: _xtreamUserFocus,
           nextFocus: _xtreamPassFocus,
@@ -146,6 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _buildFieldLabel('Password'),
         const SizedBox(height: 6),
         TvTextField(
+          openOnFocus: true,
           controller: _xtreamPassController,
           focusNode: _xtreamPassFocus,
           textInputAction: TextInputAction.done,
