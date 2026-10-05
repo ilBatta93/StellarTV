@@ -112,10 +112,23 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   final FocusScopeNode _tvNavScope = FocusScopeNode(debugLabel: 'tvNav');
+  final FocusScopeNode _tvContentScope = FocusScopeNode(
+    debugLabel: 'tvContent',
+  );
+  // One node per tab pill, so the white focus oval always follows the tab that
+  // is actually selected (e.g. after Back returns to Home).
+  final List<FocusNode> _tabNodes = List.generate(
+    _pages.length,
+    (i) => FocusNode(debugLabel: 'tvTab$i'),
+  );
 
   @override
   void dispose() {
     _tvNavScope.dispose();
+    _tvContentScope.dispose();
+    for (final n in _tabNodes) {
+      n.dispose();
+    }
     super.dispose();
   }
 
@@ -124,15 +137,61 @@ class _HomeScreenState extends State<HomeScreen> {
     _visited.add(i);
   });
 
+  void _focusNav() => _tabNodes[_currentIndex].requestFocus();
+
+  /// Moves focus from the top menu to the first item of the visible tab.
+  void _focusContent() {
+    _tvContentScope.requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final primary = FocusManager.instance.primaryFocus;
+      final inside =
+          primary != null &&
+          primary != _tvContentScope &&
+          primary.ancestors.contains(_tvContentScope);
+      if (!inside) _tvContentScope.nextFocus();
+    });
+  }
+
+  static bool _isKeyPress(KeyEvent e) =>
+      e is KeyDownEvent || e is KeyRepeatEvent;
+
+  // Arrow Down on the top menu always enters the content of the current tab.
+  KeyEventResult _onNavKey(FocusNode node, KeyEvent event) {
+    if (!_isKeyPress(event)) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _focusContent();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  // Arrow Up inside the content moves up normally; at the top row it returns
+  // to the menu instead of getting stuck.
+  KeyEventResult _onContentKey(FocusNode node, KeyEvent event) {
+    if (!_isKeyPress(event)) return KeyEventResult.ignored;
+    if (event.logicalKey != LogicalKeyboardKey.arrowUp) {
+      return KeyEventResult.ignored;
+    }
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary != null &&
+        primary != _tvContentScope &&
+        primary.focusInDirection(TraversalDirection.up)) {
+      return KeyEventResult.handled;
+    }
+    _focusNav();
+    return KeyEventResult.handled;
+  }
+
   // Back on TV: content -> top menu -> Home tab -> app to background (it keeps
   // running, like other TV apps, instead of closing).
   void _onTvBack() {
     if (!_tvNavScope.hasFocus) {
-      _tvNavScope.requestFocus();
+      _focusNav();
       return;
     }
     if (_currentIndex != 0) {
       _selectTab(0);
+      _tabNodes[0].requestFocus();
       return;
     }
     DeviceTypeService.moveToBackground();
@@ -143,7 +202,11 @@ class _HomeScreenState extends State<HomeScreen> {
       index: _currentIndex,
       children: [
         for (var i = 0; i < _pages.length; i++)
-          _visited.contains(i) ? _pages[i] : const SizedBox.shrink(),
+          // Hidden tabs must never receive D-Pad focus.
+          ExcludeFocus(
+            excluding: i != _currentIndex,
+            child: _visited.contains(i) ? _pages[i] : const SizedBox.shrink(),
+          ),
       ],
     );
     return PopScope(
@@ -155,19 +218,34 @@ class _HomeScreenState extends State<HomeScreen> {
         body: Stack(
           children: [
             // Home draws its hero under the menu; other tabs start below it.
-            Positioned.fill(top: _currentIndex == 0 ? 0 : 92, child: content),
+            Positioned.fill(
+              top: _currentIndex == 0 ? 0 : _TvTopBar.height,
+              child: Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onKeyEvent: _onContentKey,
+                child: FocusScope(node: _tvContentScope, child: content),
+              ),
+            ),
             Positioned(
               left: 0,
               right: 0,
               top: 0,
-              child: FocusScope(
-                node: _tvNavScope,
-                child: _TvTopBar(
-                  selectedIndex: _currentIndex,
-                  onSelected: _selectTab,
-                  onSearch: () => _push(const SearchScreen()),
-                  onProfile: () => _push(const ProfilePickerScreen()),
-                  onSettings: () => _push(const SettingsScreen()),
+              child: Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onKeyEvent: _onNavKey,
+                child: FocusScope(
+                  node: _tvNavScope,
+                  autofocus: true,
+                  child: _TvTopBar(
+                    selectedIndex: _currentIndex,
+                    tabNodes: _tabNodes,
+                    onSelected: _selectTab,
+                    onSearch: () => _push(const SearchScreen()),
+                    onProfile: () => _push(const ProfilePickerScreen()),
+                    onSettings: () => _push(const SettingsScreen()),
+                  ),
                 ),
               ),
             ),
@@ -179,7 +257,10 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _TvTopBar extends StatelessWidget {
+  static const double height = 92;
+
   final int selectedIndex;
+  final List<FocusNode> tabNodes;
   final ValueChanged<int> onSelected;
   final VoidCallback onSearch;
   final VoidCallback onProfile;
@@ -187,6 +268,7 @@ class _TvTopBar extends StatelessWidget {
 
   const _TvTopBar({
     required this.selectedIndex,
+    required this.tabNodes,
     required this.onSelected,
     required this.onSearch,
     required this.onProfile,
@@ -198,13 +280,19 @@ class _TvTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 92,
+      height: height,
       padding: const EdgeInsets.symmetric(horizontal: 40),
-      decoration: const BoxDecoration(
+      // Solid enough to stay readable over bright artwork.
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xE60B0D10), Color(0x000B0D10)],
+          colors: [
+            AppColors.background.withValues(alpha: 0.97),
+            AppColors.background.withValues(alpha: 0.85),
+            AppColors.background.withValues(alpha: 0),
+          ],
+          stops: const [0, 0.7, 1],
         ),
       ),
       child: Row(
@@ -219,8 +307,9 @@ class _TvTopBar extends StatelessWidget {
           for (var i = 0; i < _tabs.length; i++)
             _TvNavPill(
               label: _tabs[i],
+              focusNode: tabNodes[i],
               selected: selectedIndex == i,
-              autofocus: i == 0,
+              autofocus: i == selectedIndex,
               onPressed: () => onSelected(i),
             ),
           const Spacer(),
@@ -237,6 +326,7 @@ class _TvNavPill extends StatefulWidget {
   final IconData? icon;
   final bool selected;
   final bool autofocus;
+  final FocusNode? focusNode;
   final VoidCallback onPressed;
 
   const _TvNavPill({
@@ -244,6 +334,7 @@ class _TvNavPill extends StatefulWidget {
     this.icon,
     this.selected = false,
     this.autofocus = false,
+    this.focusNode,
     required this.onPressed,
   });
 
@@ -273,7 +364,9 @@ class _TvNavPillState extends State<_TvNavPill> {
         : widget.selected
         ? AppColors.primary
         : AppColors.textPrimary;
+    const shadow = [Shadow(color: Color(0xCC000000), blurRadius: 6)];
     return Focus(
+      focusNode: widget.focusNode,
       autofocus: widget.autofocus,
       onKeyEvent: _onKey,
       onFocusChange: (v) => setState(() => _focused = v),
@@ -288,11 +381,20 @@ class _TvNavPillState extends State<_TvNavPill> {
           decoration: BoxDecoration(
             color: _focused ? AppColors.textPrimary : Colors.transparent,
             borderRadius: BorderRadius.circular(28),
+            border: widget.selected && !_focused
+                ? Border.all(color: AppColors.primary, width: 2)
+                : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (widget.icon != null) Icon(widget.icon, color: fg, size: 24),
+              if (widget.icon != null)
+                Icon(
+                  widget.icon,
+                  color: fg,
+                  size: 24,
+                  shadows: _focused ? null : shadow,
+                ),
               if (widget.icon != null && widget.label != null)
                 const SizedBox(width: 8),
               if (widget.label != null)
@@ -301,6 +403,7 @@ class _TvNavPillState extends State<_TvNavPill> {
                   style: TextStyle(
                     color: fg,
                     fontSize: 19,
+                    shadows: _focused ? null : shadow,
                     fontWeight: widget.selected || _focused
                         ? FontWeight.w700
                         : FontWeight.w500,
