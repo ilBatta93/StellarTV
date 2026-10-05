@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../models/channel.dart';
 import '../models/content_type.dart';
@@ -10,44 +13,130 @@ class XtreamService {
     'Connection': 'close',
     'User-Agent': 'StellarTV/1.0',
   };
+
+  /// Alcuni pannelli IPTV rifiutano o troncano le risposte per client
+  /// sconosciuti: ai tentativi successivi ci presentiamo come player diffusi.
+  static const _userAgents = [
+    'StellarTV/1.0',
+    'okhttp/4.12.0',
+    'VLC/3.0.20 LibVLC/3.0.20',
+    'IPTVSmartersPro',
+  ];
+
   /// Scarica e decodifica una risposta JSON in modo robusto:
-  /// - riprova fino a 3 volte se la risposta arriva troncata o la rete cade
-  ///   (succede con liste film molto grandi, specie riaprendo l'app);
+  /// - legge i dati a blocchi, con un limite di attesa tra un blocco e
+  ///   l'altro (non un limite totale): le liste enormi su TV/emulatori lenti
+  ///   non vengono piu interrotte a meta;
+  /// - riprova fino a 4 volte cambiando compressione e User-Agent;
+  /// - ignora testo spurio prima del JSON (BOM, avvisi PHP) e, se la lista
+  ///   arriva comunque troncata, recupera tutti gli elementi completi;
   /// - decodifica in un isolate separato, cosi l'interfaccia non si blocca.
   Future<dynamic> _getJson(String url, {bool throwOnHttpError = false}) async {
     Object? lastError;
-    for (var attempt = 0; attempt < 3; attempt++) {
+    String? diagnostic;
+    dynamic bestPartial;
+    var bestPartialCount = -1;
+
+    for (var attempt = 0; attempt < _userAgents.length; attempt++) {
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 20)
+        ..idleTimeout = const Duration(seconds: 10)
+        ..userAgent = _userAgents[attempt];
       try {
-        final response = await http
-            .get(Uri.parse(url), headers: _headers)
-            .timeout(const Duration(seconds: 120));
+        final request = await client
+            .getUrl(Uri.parse(url))
+            .timeout(const Duration(seconds: 25));
+        request.headers.set(HttpHeaders.acceptHeader, 'application/json, */*');
+        request.headers.set(HttpHeaders.connectionHeader, 'close');
+        if (attempt > 0) {
+          // Con alcuni server/proxy la risposta compressa si interrompe:
+          // dal secondo tentativo la chiediamo non compressa.
+          request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
+        }
+        final response = await request.close().timeout(
+          const Duration(seconds: 60),
+        );
         if (response.statusCode != 200) {
+          await response.drain<void>().catchError((_) {});
           if (throwOnHttpError) {
-            throw Exception(
-                'Impossibile caricare i dati (HTTP ${response.statusCode})');
+            throw HttpException(
+              'Impossibile caricare i dati (HTTP ${response.statusCode})',
+            );
           }
           return null;
         }
-        final bytes = response.bodyBytes;
-        final expected = response.contentLength;
-        if (expected != null && expected > 0 && bytes.length < expected) {
-          throw const FormatException('Risposta incompleta dal server');
+
+        final builder = BytesBuilder(copy: false);
+        var truncated = false;
+        try {
+          await for (final chunk in response.timeout(
+            const Duration(seconds: 45),
+          )) {
+            builder.add(chunk);
+          }
+        } catch (e) {
+          truncated = true;
+          lastError = e;
         }
-        return await Isolate.run(
-            () => jsonDecode(utf8.decode(bytes, allowMalformed: true)));
+        final bytes = builder.takeBytes();
+        final expected = response.contentLength;
+        if (expected > 0 && bytes.length < expected) truncated = true;
+
+        final result = await Isolate.run(() => _decodeLenient(bytes));
+        if (result.value != null && !truncated && !result.salvaged) {
+          return result.value;
+        }
+        if (result.value != null) {
+          final count = result.value is List
+              ? (result.value as List).length
+              : 0;
+          if (count > bestPartialCount) {
+            bestPartial = result.value;
+            bestPartialCount = count;
+          }
+        }
+        diagnostic = truncated
+            ? 'ricevuti ${bytes.length ~/ 1024} KB'
+                  '${expected > 0 ? ' su ${expected ~/ 1024} KB' : ''}'
+            : result.diagnostic;
+        lastError = const FormatException('Risposta incompleta dal server');
+      } on HttpException catch (e) {
+        if (throwOnHttpError) {
+          throw Exception(e.message);
+        }
+        lastError = e;
       } catch (e) {
         lastError = e;
-        if (attempt < 2) {
-          await Future.delayed(Duration(seconds: 1 + attempt * 2));
-        }
+      } finally {
+        client.close(force: true);
+      }
+      if (attempt < _userAgents.length - 1) {
+        await Future.delayed(Duration(seconds: 1 + attempt * 2));
       }
     }
+
+    // Meglio una lista quasi completa che nessuna lista.
+    if (bestPartial != null) return bestPartial;
+
     if (lastError is FormatException) {
       throw Exception(
-          'Il server ha inviato una lista incompleta. Riprova tra poco.');
+        'Il server ha inviato una lista incompleta. Riprova tra poco.'
+        '${diagnostic != null ? ' ($diagnostic)' : ''}',
+      );
+    }
+    if (lastError is TimeoutException) {
+      throw Exception(
+        'Il server della playlist non risponde. Controlla la connessione e riprova.',
+      );
+    }
+    if (lastError is SocketException || lastError is HttpException) {
+      throw Exception(
+        'Impossibile raggiungere il server della playlist. Controlla la connessione e riprova.',
+      );
     }
     throw lastError ?? Exception('Errore di rete');
   }
+
   String _normalizeServerUrl(String server) {
     var url = server.trim();
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -144,8 +233,7 @@ class XtreamService {
     final decoded = await _getJson(url);
     if (decoded is! List) return [];
     final List<dynamic> data = decoded;
-    final categories =
-        await _getCategories(base, username, password, 'series');
+    final categories = await _getCategories(base, username, password, 'series');
     return data.map((item) {
       final catId = item['category_id']?.toString() ?? '';
       final groupName = categories[catId] ?? 'Senza categoria';
@@ -161,8 +249,10 @@ class XtreamService {
         seriesName: item['name']?.toString(),
         plot: item['plot']?.toString(),
         isSeriesFolder: true,
-        addedAt: int.tryParse(
-                (item['last_modified'] ?? item['added'])?.toString() ?? '') ??
+        addedAt:
+            int.tryParse(
+              (item['last_modified'] ?? item['added'])?.toString() ?? '',
+            ) ??
             0,
       );
     }).toList();
@@ -175,7 +265,10 @@ class XtreamService {
     required Channel series,
   }) async {
     final base = _normalizeServerUrl(server);
-    final seriesId = (series.seriesKey ?? series.id).replaceFirst('series_', '');
+    final seriesId = (series.seriesKey ?? series.id).replaceFirst(
+      'series_',
+      '',
+    );
     final url =
         '$base/player_api.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}&action=get_series_info&series_id=${Uri.encodeComponent(seriesId)}';
     final decoded = await _getJson(url, throwOnHttpError: true);
@@ -196,25 +289,23 @@ class XtreamService {
           ?.toString();
       if (streamId == null || streamId.isEmpty) continue;
       final episodeInfo = _asMap(episodeJson['info']);
-      final season = _toInt(episodeJson['season']) ??
-          _toInt(episodeInfo['season']) ??
-          1;
-      final number = _toInt(episodeJson['episode_num']) ??
+      final season =
+          _toInt(episodeJson['season']) ?? _toInt(episodeInfo['season']) ?? 1;
+      final number =
+          _toInt(episodeJson['episode_num']) ??
           _toInt(episodeJson['episode']) ??
           (seasons[season]?.length ?? 0) + 1;
-      final ext =
-          (episodeJson['container_extension'] ?? 'mp4').toString();
-      final title = (episodeJson['title'] ??
-              episodeInfo['name'] ??
-              'Episodio $number')
-          .toString();
-      final image = (episodeInfo['movie_image'] ??
-              episodeJson['cover'] ??
-              cover)
-          .toString();
+      final ext = (episodeJson['container_extension'] ?? 'mp4').toString();
+      final title =
+          (episodeJson['title'] ?? episodeInfo['name'] ?? 'Episodio $number')
+              .toString();
+      final image =
+          (episodeInfo['movie_image'] ?? episodeJson['cover'] ?? cover)
+              .toString();
       final channel = Channel(
         id: 'episode_$streamId',
-        name: '${series.name} · S${season.toString().padLeft(2, '0')}E${number.toString().padLeft(2, '0')} · $title',
+        name:
+            '${series.name} · S${season.toString().padLeft(2, '0')}E${number.toString().padLeft(2, '0')} · $title',
         url: '$base/series/$user/$pass/$streamId.$ext',
         logo: image,
         group: series.group,
@@ -268,8 +359,11 @@ class XtreamService {
   Iterable<Map<String, dynamic>> _extractEpisodeMaps(dynamic raw) sync* {
     if (raw is Map) {
       final entries = raw.entries.toList()
-        ..sort((a, b) => _toInt(a.key)?.compareTo(_toInt(b.key) ?? 0) ??
-            a.key.toString().compareTo(b.key.toString()));
+        ..sort(
+          (a, b) =>
+              _toInt(a.key)?.compareTo(_toInt(b.key) ?? 0) ??
+              a.key.toString().compareTo(b.key.toString()),
+        );
       for (final entry in entries) {
         yield* _extractEpisodeMaps(entry.value);
       }
@@ -298,10 +392,13 @@ class XtreamService {
     return int.tryParse(value?.toString() ?? '');
   }
 
-  Duration? _durationFrom(Map<String, dynamic> info, Map<String, dynamic> episode) {
-    final secs = _toInt(info['duration_secs'] ??
-        info['duration_sec'] ??
-        episode['duration_secs']);
+  Duration? _durationFrom(
+    Map<String, dynamic> info,
+    Map<String, dynamic> episode,
+  ) {
+    final secs = _toInt(
+      info['duration_secs'] ?? info['duration_sec'] ?? episode['duration_secs'],
+    );
     if (secs != null && secs > 0) return Duration(seconds: secs);
     final raw = (info['duration'] ?? episode['duration'])?.toString();
     if (raw == null || raw.isEmpty) return null;
@@ -338,4 +435,68 @@ class XtreamService {
       return {};
     }
   }
+}
+
+/// Risultato della decodifica tollerante di una risposta Xtream.
+typedef _LenientJson = ({dynamic value, bool salvaged, String? diagnostic});
+
+/// Decodifica JSON tollerante (eseguita in un isolate):
+/// salta BOM/testo prima del JSON e, se una lista e troncata, la chiude
+/// dopo l'ultimo elemento completo.
+_LenientJson _decodeLenient(Uint8List bytes) {
+  var text = utf8.decode(bytes, allowMalformed: true);
+  if (text.startsWith('\uFEFF')) text = text.substring(1);
+  final trimmed = text.trimLeft();
+  if (trimmed.isEmpty) {
+    return (value: null, salvaged: false, diagnostic: 'risposta vuota');
+  }
+  final firstArray = text.indexOf('[');
+  final firstObject = text.indexOf('{');
+  int start;
+  if (firstArray < 0) {
+    start = firstObject;
+  } else if (firstObject < 0) {
+    start = firstArray;
+  } else {
+    start = firstArray < firstObject ? firstArray : firstObject;
+  }
+  if (start < 0) {
+    final preview = trimmed.length > 60 ? trimmed.substring(0, 60) : trimmed;
+    return (
+      value: null,
+      salvaged: false,
+      diagnostic: 'risposta non valida: "${preview.replaceAll('\n', ' ')}"',
+    );
+  }
+  final body = start == 0 ? text : text.substring(start);
+  try {
+    return (value: jsonDecode(body), salvaged: false, diagnostic: null);
+  } on FormatException {
+    // continua sotto con il recupero
+  }
+  if (body.startsWith('[')) {
+    var cut = body.length;
+    for (var i = 0; i < 60; i++) {
+      final idx = body.lastIndexOf('}', cut - 1);
+      if (idx <= 0) break;
+      try {
+        final value = jsonDecode('${body.substring(0, idx + 1)}]');
+        if (value is List && value.isNotEmpty) {
+          return (
+            value: value,
+            salvaged: true,
+            diagnostic: 'lista troncata, recuperati ${value.length} elementi',
+          );
+        }
+      } on FormatException {
+        // prova con la graffa precedente
+      }
+      cut = idx;
+    }
+  }
+  return (
+    value: null,
+    salvaged: false,
+    diagnostic: 'ricevuti ${bytes.length ~/ 1024} KB non leggibili',
+  );
 }

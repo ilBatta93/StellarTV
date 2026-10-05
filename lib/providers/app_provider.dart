@@ -107,7 +107,9 @@ class AppProvider extends ChangeNotifier {
 
   List<Channel> catalogOf(ContentType type) {
     if (type == ContentType.series || type == ContentType.anime) {
-      return _seriesCatalogCache[type] ??= SeriesGrouping.catalog(channelsOf(type));
+      return _seriesCatalogCache[type] ??= SeriesGrouping.catalog(
+        channelsOf(type),
+      );
     }
     return channelsOf(type);
   }
@@ -327,17 +329,20 @@ class AppProvider extends ChangeNotifier {
   void requestTitleInfo(Iterable<Channel> items) => _kids.request(items);
 
   /// "Tutti i Film" / "Tutte le Serie": every visible title once, A-Z.
-  List<CatalogEntry> allEntries(ContentType type) =>
-      _allCache[type] ??= () {
-        final seen = <String>{};
-        final list = [
+  List<CatalogEntry> allEntries(ContentType type) => _allCache[type] ??= () {
+    final seen = <String>{};
+    final list =
+        [
           for (final g in groupedCatalog(type))
             for (final e in g.entries)
               if (seen.add(_dedupeKey(e.primary))) e,
-        ]..sort((a, b) => a.primary.name.toLowerCase()
-            .compareTo(b.primary.name.toLowerCase()));
-        return list;
-      }();
+        ]..sort(
+          (a, b) => a.primary.name.toLowerCase().compareTo(
+            b.primary.name.toLowerCase(),
+          ),
+        );
+    return list;
+  }();
   final Map<ContentType, List<CatalogEntry>> _allCache = {};
 
   List<Channel> searchChannels(String query, {ContentType? type}) {
@@ -761,32 +766,75 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final live = await _xtreamService.getLiveChannels(
-        server: server,
-        username: username,
-        password: password,
-      );
-      final vod = await _xtreamService.getVodChannels(
-        server: server,
-        username: username,
-        password: password,
-      );
-      final series = await _xtreamService.getSeriesChannels(
-        server: server,
-        username: username,
-        password: password,
-      );
-      final channels = [...live, ...vod, ...series];
-      _setChannels(channels);
-      unawaited(
-        _catalogCache.write(
-          _cacheKey({'server': server, 'username': username}),
-          channels,
+      // Ogni lista viene caricata in modo indipendente: se una sola fallisce
+      // (per esempio le serie, spesso enormi) le altre restano disponibili e
+      // per quella mancante si usa l'ultima copia salvata sul dispositivo.
+      final failures = <String>[];
+      Future<List<Channel>> safeLoad(
+        Future<List<Channel>> Function() load,
+      ) async {
+        try {
+          return await load();
+        } catch (e) {
+          debugPrint('[xtream] caricamento lista fallito: $e');
+          failures.add(e.toString().replaceFirst('Exception: ', ''));
+          return const [];
+        }
+      }
+
+      final live = await safeLoad(
+        () => _xtreamService.getLiveChannels(
+          server: server,
+          username: username,
+          password: password,
         ),
       );
+      final vod = await safeLoad(
+        () => _xtreamService.getVodChannels(
+          server: server,
+          username: username,
+          password: password,
+        ),
+      );
+      final series = await safeLoad(
+        () => _xtreamService.getSeriesChannels(
+          server: server,
+          username: username,
+          password: password,
+        ),
+      );
+      final channels = [...live, ...vod, ...series];
+      final key = _cacheKey({'server': server, 'username': username});
+
+      if (failures.isNotEmpty) {
+        final cached = await _catalogCache.read(key);
+        if (live.isEmpty) {
+          channels.addAll(cached.where((c) => c.type == ContentType.live));
+        }
+        if (vod.isEmpty) {
+          channels.addAll(cached.where((c) => c.type == ContentType.movie));
+        }
+        if (series.isEmpty) {
+          channels.addAll(
+            cached.where(
+              (c) =>
+                  c.type == ContentType.series || c.type == ContentType.anime,
+            ),
+          );
+        }
+        if (channels.isEmpty) {
+          _error = failures.first;
+          return;
+        }
+      }
+
+      _setChannels(channels);
+      if (failures.isEmpty) {
+        unawaited(_catalogCache.write(key, channels));
+      }
       _isAuthenticated = true;
     } catch (e) {
-      _error = e.toString();
+      _error = e.toString().replaceFirst('Exception: ', '');
     } finally {
       _isLoading = false;
       notifyListeners();
