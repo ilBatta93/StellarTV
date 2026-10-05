@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:isolate';
 
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/supabase_config.dart';
@@ -34,51 +37,65 @@ class KidsContentService {
   bool _running = false;
   void Function()? onVerdicts;
 
+  /// Normalized keys are computed once per channel object: the kids filter
+  /// and the genre bars call this for every title of big playlists.
+  static final Expando<String> _keys = Expando('kidsKey');
+  static final _nonWord = RegExp(r'[^a-z0-9à-ÿ]+');
+
   static String keyOf(Channel c) {
+    final cached = _keys[c];
+    if (cached != null) return cached;
     final type = c.type == ContentType.movie ? 'movie' : 'tv';
     final title = (c.seriesName?.isNotEmpty == true ? c.seriesName! : c.name);
-    final norm = title
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9à-ÿ]+'), ' ')
-        .trim();
-    return '$type:$norm';
+    final norm = title.toLowerCase().replaceAll(_nonWord, ' ').trim();
+    return _keys[c] = '$type:$norm';
   }
 
   static String _titleOf(Channel c) =>
       c.seriesName?.isNotEmpty == true ? c.seriesName! : c.name;
 
+  Future<File> _file() async => File(
+    '${(await getApplicationSupportDirectory()).path}/stellartv_kids_v2.json',
+  );
+
   Future<void> load() async {
     if (_loaded) return;
     _loaded = true;
-    final prefs = await SharedPreferences.getInstance();
-    final rawGenres = prefs.getString(_genresKey);
-    if (rawGenres != null) {
-      try {
-        (jsonDecode(rawGenres) as Map<String, dynamic>).forEach((k, v) {
-          if (v is List) _genres[k] = v.whereType<int>().toList();
-        });
-      } catch (_) {}
-    }
-    final raw = prefs.getString(_cacheKey);
-    if (raw != null) {
-      try {
-        final map = jsonDecode(raw) as Map<String, dynamic>;
-        map.forEach((k, v) {
-          if (v is bool) _verdicts[k] = v;
-        });
-      } catch (_) {}
-    }
+    // Verdicts live in a file decoded in a background isolate. They used to
+    // be huge strings in the preferences, which slowed every app start and
+    // were rewritten on the main thread after each small batch.
+    try {
+      final file = await _file();
+      final path = file.path;
+      final data = await Isolate.run(() => _readStore(path));
+      _verdicts.addAll(data.verdicts);
+      _genres.addAll(data.genres);
+    } catch (_) {}
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rawGenres = prefs.getString(_genresKey);
+      final raw = prefs.getString(_cacheKey);
+      if (raw != null || rawGenres != null) {
+        final legacy = await Isolate.run(() => _decodeLegacy(raw, rawGenres));
+        legacy.verdicts.forEach((k, v) => _verdicts.putIfAbsent(k, () => v));
+        legacy.genres.forEach((k, v) => _genres.putIfAbsent(k, () => v));
+        await _persist();
+        await prefs.remove(_cacheKey);
+        await prefs.remove(_genresKey);
+      }
+    } catch (_) {}
     // Refresh lists/genre bar right away with the saved data.
     if (_verdicts.isNotEmpty || _genres.isNotEmpty) onVerdicts?.call();
   }
 
   /// True when the item can be shown in a kids profile.
+  static final Expando<bool> _banned = Expando('kidsBanned');
+
   bool isKidsContent(Channel item) {
-    if (bannedKeywords.hasMatch(
+    final banned = _banned[item] ??= bannedKeywords.hasMatch(
       '${item.name} ${item.seriesName ?? ''} ${item.plot ?? ''}',
-    )) {
-      return false;
-    }
+    );
+    if (banned) return false;
     return _verdicts[keyOf(item)] == true;
   }
 
@@ -115,7 +132,7 @@ class KidsContentService {
           .split('\u0000')
           .last
           .toLowerCase()
-          .replaceAll(RegExp(r'[^a-z0-9à-ÿ]+'), ' ')
+          .replaceAll(_nonWord, ' ')
           .trim();
       keys['$type:$norm'] = b;
     }
@@ -186,7 +203,7 @@ class KidsContentService {
             if (r is! Map || r['is_kids'] is! bool) continue;
             final norm = (r['title'] as String)
                 .toLowerCase()
-                .replaceAll(RegExp(r'[^a-z0-9à-ÿ]+'), ' ')
+                .replaceAll(_nonWord, ' ')
                 .trim();
             final key = '${r['type']}:$norm';
             _verdicts[key] = r['is_kids'] as bool;
@@ -204,9 +221,90 @@ class KidsContentService {
     }
   }
 
+  Timer? _saveTimer;
+
+  /// Batched disk write: at most once every 20 seconds.
   Future<void> _save() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_cacheKey, jsonEncode(_verdicts));
-    await prefs.setString(_genresKey, jsonEncode(_genres));
+    if (_saveTimer?.isActive ?? false) return;
+    _saveTimer = Timer(const Duration(seconds: 20), () {
+      unawaited(_persist());
+    });
   }
+
+  Future<void> _persist() async {
+    try {
+      final file = await _file();
+      final path = file.path;
+      final verdicts = Map<String, bool>.of(_verdicts);
+      final genres = Map<String, List<int>>.of(_genres);
+      await Isolate.run(() => _writeStore(path, verdicts, genres));
+    } catch (_) {}
+  }
+}
+
+class _KidsStore {
+  final Map<String, bool> verdicts;
+  final Map<String, List<int>> genres;
+  const _KidsStore(this.verdicts, this.genres);
+}
+
+_KidsStore _readStore(String path) {
+  final file = File(path);
+  if (!file.existsSync()) return const _KidsStore({}, {});
+  try {
+    final map = jsonDecode(file.readAsStringSync());
+    if (map is! Map) return const _KidsStore({}, {});
+    final verdicts = <String, bool>{};
+    final genres = <String, List<int>>{};
+    final v = map['v'];
+    if (v is Map) {
+      v.forEach((k, value) {
+        if (k is String && value is bool) verdicts[k] = value;
+      });
+    }
+    final g = map['g'];
+    if (g is Map) {
+      g.forEach((k, value) {
+        if (k is String && value is List) {
+          genres[k] = value.whereType<int>().toList();
+        }
+      });
+    }
+    return _KidsStore(verdicts, genres);
+  } catch (_) {
+    return const _KidsStore({}, {});
+  }
+}
+
+_KidsStore _decodeLegacy(String? rawVerdicts, String? rawGenres) {
+  final verdicts = <String, bool>{};
+  final genres = <String, List<int>>{};
+  try {
+    if (rawVerdicts != null) {
+      (jsonDecode(rawVerdicts) as Map<String, dynamic>).forEach((k, v) {
+        if (v is bool) verdicts[k] = v;
+      });
+    }
+  } catch (_) {}
+  try {
+    if (rawGenres != null) {
+      (jsonDecode(rawGenres) as Map<String, dynamic>).forEach((k, v) {
+        if (v is List) genres[k] = v.whereType<int>().toList();
+      });
+    }
+  } catch (_) {}
+  return _KidsStore(verdicts, genres);
+}
+
+void _writeStore(
+  String path,
+  Map<String, bool> verdicts,
+  Map<String, List<int>> genres,
+) {
+  final temporary = File('$path.tmp');
+  temporary.writeAsStringSync(
+    jsonEncode({'v': verdicts, 'g': genres}),
+    flush: true,
+  );
+  temporary.renameSync(path);
 }

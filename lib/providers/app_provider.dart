@@ -155,9 +155,18 @@ class AppProvider extends ChangeNotifier {
     return index[id];
   }
 
+  Timer? _warmUpTimer;
+
   void _setChannels(List<Channel> channels) {
     _rawChannels = channels;
-    unawaited(_kids.warmUp(_rawChannels));
+    // The background age check is heavy on big playlists: start it once the
+    // sections settle and the first navigation is done, not at every publish.
+    _warmUpTimer?.cancel();
+    if (channels.isNotEmpty) {
+      _warmUpTimer = Timer(const Duration(seconds: 20), () {
+        unawaited(_kids.warmUp(_rawChannels));
+      });
+    }
     _applyAdultFilter();
   }
 
@@ -194,18 +203,18 @@ class AppProvider extends ChangeNotifier {
     ..onVerdicts = _onKidsVerdicts;
   Timer? _kidsRefresh;
 
+  /// Throttled (not debounced): verdicts arrive in a continuous stream of
+  /// small batches, and rebuilding every list after each one made the whole
+  /// interface sluggish while the check was running.
   void _onKidsVerdicts() {
-    _kidsRefresh?.cancel();
-    if (!_kidsMode) {
-      // Refresh Film/Serie as soon as the TMDB genres arrive.
-      _kidsRefresh = Timer(const Duration(milliseconds: 250), notifyListeners);
-      return;
-    }
-    _kidsRefresh = Timer(const Duration(seconds: 2), () {
-      if (!_kidsMode) return;
-      _applyAdultFilter();
-      notifyListeners();
-    });
+    if (_kidsRefresh?.isActive ?? false) return;
+    _kidsRefresh = Timer(
+      _kidsMode ? const Duration(seconds: 3) : const Duration(seconds: 30),
+      () {
+        if (_kidsMode) _applyAdultFilter();
+        notifyListeners();
+      },
+    );
   }
 
   /// Kids profile rule: films and series need a children's TMDB age
@@ -307,9 +316,9 @@ class AppProvider extends ChangeNotifier {
   List<CatalogGroup> groupedCatalog(ContentType type) =>
       _groupedCache[type] ??= CatalogBuilder.groupsOf(
         _visibleChannels(type),
-        categoryOrderOf(type)
-            .where((g) => !hiddenCategoriesOf(type).contains(g))
-            .toList(),
+        categoryOrderOf(
+          type,
+        ).where((g) => !hiddenCategoriesOf(type).contains(g)).toList(),
       );
 
   /// Recently added items of a type, in the playlist's own order (the
@@ -695,7 +704,8 @@ class AppProvider extends ChangeNotifier {
     _syncCode = prefs.getString(SyncService.codeKey);
     _showAdult = prefs.getBool(_showAdultKey) ?? false;
     if (_syncCode != null) {
-      await _restoreCloudFavorites(_syncCode!);
+      // Network call: never hold the start-up (and the saved playlist) on it.
+      unawaited(_restoreCloudFavorites(_syncCode!).catchError((_) {}));
     }
     _hiddenCategories = await _settingsService.getHiddenCategories();
     final methodStr = await _settingsService.getAuthMethod();
@@ -708,24 +718,77 @@ class AppProvider extends ChangeNotifier {
     // routes to Home while the playlist is still loading in the background.
     _isAuthenticated =
         _authMethod == AuthMethod.xtream && _xtreamCredentials != null;
+    final saved = <ContentType>{};
     if (_xtreamCredentials case final credentials?) {
       final cached = await _catalogCache.read(_cacheKey(credentials));
       if (cached.isNotEmpty && _rawChannels.isEmpty) _setChannels(cached);
+      for (final type in _playlistTypes) {
+        if (_hasSection(type)) {
+          saved.add(type);
+          _catalogStates[type] = const CatalogLoadState(
+            phase: CatalogLoadPhase.ready,
+            hasContent: true,
+          );
+        }
+      }
     }
     _initialized = true;
     notifyListeners();
 
-    if (_authMethod == AuthMethod.xtream && _xtreamCredentials != null) {
-      await loadFromXtream(
-        server: _xtreamCredentials!['server']!,
-        username: _xtreamCredentials!['username']!,
-        password: _xtreamCredentials!['password']!,
-      );
+    final credentials = _xtreamCredentials;
+    if (_authMethod == AuthMethod.xtream && credentials != null) {
+      final missing = [
+        for (final type in _playlistTypes)
+          if (!saved.contains(type)) type,
+      ];
+      if (missing.length == _playlistTypes.length) {
+        // Nothing saved on this device yet: full first download.
+        await loadFromXtream(
+          server: credentials['server']!,
+          username: credentials['username']!,
+          password: credentials['password']!,
+        );
+      } else if (missing.isNotEmpty) {
+        // Only the sections never saved are downloaded; the others open
+        // instantly from the device copy.
+        await _loadSections(missing, credentials);
+      } else {
+        _isLoading = false;
+        _error = null;
+        notifyListeners();
+      }
     } else {
       _isLoading = false;
       notifyListeners();
     }
+    // Automatic update only when the chosen interval has elapsed since the
+    // last complete download.
     await _refreshService.schedule();
+  }
+
+  /// Downloads some sections only (missing from the device copy).
+  Future<void> _loadSections(
+    List<ContentType> types,
+    Map<String, String> credentials,
+  ) async {
+    _activeLoadKey = _cacheKey(credentials);
+    _isLoading = true;
+    _error = null;
+    _loadFailures.clear();
+    for (final type in types) {
+      _catalogStates[type] = CatalogLoadState(
+        phase: CatalogLoadPhase.queued,
+        hasContent: _hasSection(type),
+      );
+    }
+    notifyListeners();
+    try {
+      for (final type in types) {
+        await _enqueue(type, credentials);
+      }
+    } finally {
+      _finishIfIdle();
+    }
   }
 
   Future<bool> loginWithXtream({
@@ -908,7 +971,8 @@ class AppProvider extends ChangeNotifier {
     if (_anyPending && requestedKey == _activeLoadKey) return;
     _activeLoadKey = requestedKey;
     final current = _xtreamCredentials;
-    final credentials = current != null &&
+    final credentials =
+        current != null &&
             _cacheKey(current) == requestedKey &&
             current['password'] == password
         ? current
@@ -929,6 +993,12 @@ class AppProvider extends ChangeNotifier {
         await _enqueue(type, credentials);
       }
       _isAuthenticated = true;
+      final complete = _playlistTypes.every(
+        (type) => _catalogStates[type]?.phase == CatalogLoadPhase.ready,
+      );
+      if (complete && requestedKey == _currentKey) {
+        await _refreshService.markRun();
+      }
     } finally {
       _finishIfIdle();
     }
@@ -939,6 +1009,9 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     await _settingsService.clearCredentials();
+    _refreshService.stop();
+    // A new account must download its playlist completely the first time.
+    unawaited(_refreshService.clearLastRun());
     _setChannels([]);
     _catalogStates.clear();
     for (final p in _progress.values) {

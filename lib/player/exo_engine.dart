@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/player_settings.dart';
+import '../services/device_type_service.dart';
 import 'playback_engine.dart';
 
 class ExoEngine extends PlaybackEngine {
@@ -9,16 +10,22 @@ class ExoEngine extends PlaybackEngine {
     : _controller = VideoPlayerController.networkUrl(
         Uri.parse(url),
         formatHint: _formatHint(url),
-          httpHeaders: {
-            'User-Agent': settings.userAgent.trim().isEmpty
-                ? 'StellarTV/1.0'
-                : settings.userAgent.trim(),
-          },
+        httpHeaders: {
+          'User-Agent': settings.userAgent.trim().isEmpty
+              ? 'StellarTV/1.0'
+              : settings.userAgent.trim(),
+        },
         videoPlayerOptions: VideoPlayerOptions(
           allowBackgroundPlayback: settings.backgroundAudio,
           preventsDisplaySleepDuringVideoPlayback: settings.keepScreenOn,
           backBufferDurationMs: settings.backBufferSeconds * 1000,
         ),
+        // TV: the video goes straight to a native surface composed by the
+        // hardware (no copy through a texture): smooth frame pacing and the
+        // TV scaler's full quality instead of a blurry, stuttering texture.
+        viewType: DeviceTypeService.isTv
+            ? VideoViewType.platformView
+            : VideoViewType.textureView,
       );
 
   final VideoPlayerController _controller;

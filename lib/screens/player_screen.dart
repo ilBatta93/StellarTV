@@ -20,10 +20,12 @@ import '../services/subtitles_service.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/player/player_controls.dart';
+import '../widgets/player/player_format.dart';
 import '../widgets/player/player_gestures.dart';
 import '../widgets/player/player_sheets.dart';
 import '../widgets/player/player_stats.dart';
 import '../widgets/player/subtitle_overlay.dart';
+import '../widgets/player/tv_player_controls.dart';
 import '../widgets/player/video_surface.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -48,6 +50,24 @@ class _PlayerScreenState extends State<PlayerScreen>
     with WidgetsBindingObserver {
   final FocusNode _remoteFocus = FocusNode(debugLabel: 'player remote');
   final FocusNode _playFocus = FocusNode(debugLabel: 'player play');
+  final FocusNode _failureFocus = FocusNode(debugLabel: 'player failure');
+  ModalRoute<dynamic>? _route;
+
+  // TV remote: highlighted command, seek being composed, Back to exit.
+  TvPlayerRowKind _tvRow = TvPlayerRowKind.center;
+  int _tvCol = 0;
+  Duration? _tvSeekTarget;
+  Timer? _tvSeekTimer;
+  int _tvOutroCol = 0;
+  DateTime? _exitArmedAt;
+  DateTime _lastBackAt = DateTime(2000);
+  Timer? _exitTimer;
+  bool _exitPrompt = false;
+  bool _failureFocused = false;
+
+  // TV: rebuild only when something visible changed (see _needsRebuild).
+  int? _lastSignature;
+  DateTime _lastPositionBuild = DateTime(2000);
   final _settingsService = PlayerSettingsService();
   final _bridge = NativePlayerBridge.instance;
   late final HistoryProvider _history;
@@ -111,104 +131,528 @@ class _PlayerScreenState extends State<PlayerScreen>
     _resolveQueue();
     _loadSegments();
     if (DeviceTypeService.isTv) {
+      // Remote keys are read before the focus system: the player commands
+      // work whatever widget holds the focus, and the D-Pad can never get
+      // lost behind the video or inside a control.
+      FocusManager.instance.addEarlyKeyEventHandler(_onEarlyKey);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _remoteFocus.requestFocus();
       });
     }
   }
 
-  KeyEventResult _onRemoteKey(FocusNode node, KeyEvent event) {
-    if (!DeviceTypeService.isTv ||
-        (event is! KeyDownEvent && event is! KeyRepeatEvent)) {
-      return KeyEventResult.ignored;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _route = ModalRoute.of(context);
+  }
+
+  static bool _isBackKey(LogicalKeyboardKey key) =>
+      key == LogicalKeyboardKey.goBack ||
+      key == LogicalKeyboardKey.escape ||
+      key == LogicalKeyboardKey.browserBack;
+
+  static bool _isOkKey(LogicalKeyboardKey key) =>
+      key == LogicalKeyboardKey.select ||
+      key == LogicalKeyboardKey.enter ||
+      key == LogicalKeyboardKey.numpadEnter ||
+      key == LogicalKeyboardKey.gameButtonA;
+
+  static bool _isArrowKey(LogicalKeyboardKey key) =>
+      key == LogicalKeyboardKey.arrowLeft ||
+      key == LogicalKeyboardKey.arrowRight ||
+      key == LogicalKeyboardKey.arrowUp ||
+      key == LogicalKeyboardKey.arrowDown;
+
+  static final Set<LogicalKeyboardKey> _mediaKeys = {
+    LogicalKeyboardKey.mediaPlayPause,
+    LogicalKeyboardKey.mediaPlay,
+    LogicalKeyboardKey.mediaPause,
+    LogicalKeyboardKey.mediaFastForward,
+    LogicalKeyboardKey.mediaRewind,
+    LogicalKeyboardKey.mediaTrackNext,
+    LogicalKeyboardKey.channelUp,
+    LogicalKeyboardKey.channelDown,
+    LogicalKeyboardKey.contextMenu,
+    LogicalKeyboardKey.info,
+  };
+
+  /// TV only. Runs before the focus system for every key while the player
+  /// is the visible page (option panels opened above it get their keys).
+  KeyEventResult _onEarlyKey(KeyEvent event) {
+    if (!mounted || !DeviceTypeService.isTv) return KeyEventResult.ignored;
+    final route = _route;
+    if (route != null && !route.isCurrent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (_isBackKey(key)) {
+      if (event is KeyDownEvent) _handleTvBack();
+      // Key up is swallowed too, so Android never adds a second "back".
+      return KeyEventResult.handled;
     }
     final session = _session;
     if (session == null) return KeyEventResult.ignored;
-    final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.goBack ||
-        key == LogicalKeyboardKey.escape ||
-        key == LogicalKeyboardKey.browserBack) {
-      if (_controlsVisible && (session.value.isPlaying)) {
-        setState(() => _controlsVisible = false);
-        _remoteFocus.requestFocus();
-        return KeyEventResult.handled;
-      }
-      Navigator.maybePop(context);
-      return KeyEventResult.handled;
-    }
-    // Controls visible: the D-Pad moves between the on-screen buttons and OK
-    // activates the focused one, exactly like a tap.
-    if (_controlsVisible) {
-      final primary = FocusManager.instance.primaryFocus;
-      final onButton = primary != null && primary != _remoteFocus;
-      final isArrow =
-          key == LogicalKeyboardKey.arrowLeft ||
-          key == LogicalKeyboardKey.arrowRight ||
-          key == LogicalKeyboardKey.arrowUp ||
-          key == LogicalKeyboardKey.arrowDown;
-      if (onButton) {
-        _onInteraction();
-        return KeyEventResult.ignored;
-      }
-      if (isArrow) {
-        _onInteraction();
-        _playFocus.requestFocus();
-        return KeyEventResult.handled;
-      }
-    }
-    if (key == LogicalKeyboardKey.select ||
-        key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.numpadEnter ||
-        key == LogicalKeyboardKey.gameButtonA) {
-      if (!_controlsVisible) {
-        _onInteraction();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _controlsVisible) _playFocus.requestFocus();
-        });
-      } else {
-        session.togglePlay();
-        _onInteraction();
-      }
-      return KeyEventResult.handled;
-    }
-    if (!_controlsVisible &&
-        (key == LogicalKeyboardKey.arrowLeft ||
-            key == LogicalKeyboardKey.arrowRight ||
-            key == LogicalKeyboardKey.arrowUp ||
-            key == LogicalKeyboardKey.arrowDown)) {
-      _onInteraction();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _controlsVisible) _playFocus.requestFocus();
-      });
-      return KeyEventResult.handled;
-    }
+    // The error page uses normal buttons and focus.
+    if (session.status == SessionStatus.failed) return KeyEventResult.ignored;
+    final ours = _isOkKey(key) || _isArrowKey(key) || _mediaKeys.contains(key);
+    if (!ours) return KeyEventResult.ignored;
+    if (event is KeyUpEvent) return KeyEventResult.handled;
+    _onTvKey(session, key, repeat: event is KeyRepeatEvent);
+    return KeyEventResult.handled;
+  }
+
+  bool _introActive(PlaybackSession session) {
+    final intro = _segments.intro;
+    return session.status == SessionStatus.playing &&
+        intro != null &&
+        intro.contains(session.value.position);
+  }
+
+  bool _canSeek(PlaybackSession session) =>
+      !_isLive && session.value.duration > Duration.zero;
+
+  void _onTvKey(
+    PlaybackSession session,
+    LogicalKeyboardKey key, {
+    required bool repeat,
+  }) {
+    final step = Duration(seconds: _settings?.seekStepSeconds ?? 10);
+
+    // Dedicated remote buttons work in every state.
     if (key == LogicalKeyboardKey.mediaPlayPause) {
       session.togglePlay();
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowLeft) {
-      if (!_isLive) {
-        session.seekBy(Duration(seconds: -(_settings?.seekStepSeconds ?? 10)));
-      }
       _onInteraction();
-      return KeyEventResult.handled;
+      return;
     }
-    if (key == LogicalKeyboardKey.arrowRight) {
-      if (!_isLive) {
-        session.seekBy(Duration(seconds: _settings?.seekStepSeconds ?? 10));
-      }
+    if (key == LogicalKeyboardKey.mediaPlay) {
+      if (!session.value.isPlaying) session.togglePlay();
       _onInteraction();
-      return KeyEventResult.handled;
+      return;
     }
-    if (_isLive && key == LogicalKeyboardKey.arrowUp) {
-      _playLiveChannel(_adjacentLiveChannel(-1));
-      return KeyEventResult.handled;
+    if (key == LogicalKeyboardKey.mediaPause) {
+      if (session.value.isPlaying) session.togglePlay();
+      _onInteraction();
+      return;
     }
-    if (_isLive && key == LogicalKeyboardKey.arrowDown) {
-      _playLiveChannel(_adjacentLiveChannel(1));
-      return KeyEventResult.handled;
+    if (key == LogicalKeyboardKey.mediaFastForward ||
+        key == LogicalKeyboardKey.mediaRewind) {
+      if (_canSeek(session)) {
+        _showTvControls(TvPlayerRowKind.progress);
+        final delta = step * 3;
+        _tvSeekBy(
+          key == LogicalKeyboardKey.mediaRewind ? -delta : delta,
+          repeat,
+        );
+      }
+      return;
     }
-    return KeyEventResult.ignored;
+    if (key == LogicalKeyboardKey.mediaTrackNext) {
+      if (_next != null) _playNext();
+      return;
+    }
+    if (key == LogicalKeyboardKey.channelUp ||
+        key == LogicalKeyboardKey.channelDown) {
+      if (_isLive) {
+        _playLiveChannel(
+          _adjacentLiveChannel(key == LogicalKeyboardKey.channelUp ? -1 : 1),
+        );
+      }
+      return;
+    }
+    if (key == LogicalKeyboardKey.contextMenu ||
+        key == LogicalKeyboardKey.info) {
+      _openMenu();
+      return;
+    }
+
+    final left = key == LogicalKeyboardKey.arrowLeft;
+    final right = key == LogicalKeyboardKey.arrowRight;
+    final up = key == LogicalKeyboardKey.arrowUp;
+    final down = key == LogicalKeyboardKey.arrowDown;
+    final ok = _isOkKey(key);
+
+    if (_locked) {
+      if (ok && _controlsVisible) {
+        setState(() => _locked = false);
+        _showTvControls(TvPlayerRowKind.center);
+      } else {
+        _onInteraction();
+      }
+      return;
+    }
+
+    if (!_controlsVisible) {
+      final outro = _outroActive && _next != null;
+      if (ok) {
+        if (_introActive(session)) {
+          _skipIntro();
+        } else if (outro) {
+          if (_tvOutroCol == 0) {
+            _outroTimer?.cancel();
+            playNextEpisode();
+          } else {
+            _watchCredits();
+          }
+        } else {
+          _showTvControls(TvPlayerRowKind.center);
+        }
+        return;
+      }
+      if (outro && (left || right)) {
+        setState(() => _tvOutroCol = right ? 1 : 0);
+        return;
+      }
+      if (_isLive && (up || down)) {
+        _playLiveChannel(_adjacentLiveChannel(up ? -1 : 1));
+        return;
+      }
+      if ((left || right) && _canSeek(session)) {
+        _showTvControls(TvPlayerRowKind.progress);
+        _tvSeekBy(left ? -step : step, repeat);
+        return;
+      }
+      _showTvControls(TvPlayerRowKind.center);
+      return;
+    }
+
+    // Controls visible: move the highlighted command.
+    _onInteraction();
+    final rows = _tvRows(session);
+    if (rows.isEmpty) return;
+    var rowIndex = rows.indexWhere((r) => r.kind == _tvRow);
+    if (rowIndex < 0) {
+      rowIndex = rows.indexWhere((r) => r.kind == TvPlayerRowKind.center);
+      if (rowIndex < 0) rowIndex = 0;
+      _tvRow = rows[rowIndex].kind;
+      _tvCol = _entryColumn(null, rows[rowIndex]);
+    }
+    final row = rows[rowIndex];
+    final col = _tvCol.clamp(
+      0,
+      row.actions.isEmpty ? 0 : row.actions.length - 1,
+    );
+
+    if (ok) {
+      if (row.kind == TvPlayerRowKind.progress) {
+        _commitTvSeek();
+        session.togglePlay();
+        return;
+      }
+      if (row.actions.isNotEmpty) row.actions[col].onPressed?.call();
+      return;
+    }
+    if (row.kind == TvPlayerRowKind.progress && (left || right)) {
+      _tvSeekBy(left ? -step : step, repeat);
+      return;
+    }
+    if (left || right) {
+      if (row.actions.isEmpty) return;
+      final next = (col + (left ? -1 : 1)).clamp(0, row.actions.length - 1);
+      if (next != _tvCol) setState(() => _tvCol = next);
+      return;
+    }
+    final target = (rowIndex + (up ? -1 : 1)).clamp(0, rows.length - 1);
+    if (target == rowIndex) return;
+    if (row.kind == TvPlayerRowKind.progress) _commitTvSeek();
+    setState(() {
+      _tvCol = _entryColumn(row, rows[target], fromColumn: col);
+      _tvRow = rows[target].kind;
+    });
+  }
+
+  /// Column highlighted when entering [to]: play in the middle row,
+  /// otherwise the command horizontally closest to the previous one.
+  int _entryColumn(TvPlayerRow? from, TvPlayerRow to, {int fromColumn = 0}) {
+    if (to.actions.isEmpty) return 0;
+    if (to.kind == TvPlayerRowKind.center) {
+      final play = to.actions.indexWhere((a) => a.id == 'play');
+      return play < 0 ? 0 : play;
+    }
+    if (to.kind == TvPlayerRowKind.progress) return 0;
+    if (from == null || from.actions.length <= 1) {
+      return to.kind == TvPlayerRowKind.top ? to.actions.length - 1 : 0;
+    }
+    final fraction = fromColumn / (from.actions.length - 1);
+    return (fraction * (to.actions.length - 1)).round();
+  }
+
+  void _showTvControls(TvPlayerRowKind row) {
+    final session = _session;
+    setState(() {
+      _controlsVisible = true;
+      _tvRow = row;
+      final rows = session == null ? const <TvPlayerRow>[] : _tvRows(session);
+      final target = rows.where((r) => r.kind == row).firstOrNull;
+      if (target == null) {
+        _tvRow = TvPlayerRowKind.center;
+        final center = rows
+            .where((r) => r.kind == TvPlayerRowKind.center)
+            .firstOrNull;
+        _tvCol = center == null ? 0 : _entryColumn(null, center);
+      } else {
+        _tvCol = _entryColumn(null, target);
+      }
+    });
+    _scheduleHide();
+  }
+
+  void _tvSeekBy(Duration delta, bool repeat) {
+    final session = _session;
+    if (session == null) return;
+    final duration = session.value.duration;
+    if (duration <= Duration.zero) return;
+    final base = _tvSeekTarget ?? session.value.position;
+    var target = base + (repeat ? delta * 3 : delta);
+    if (target < Duration.zero) target = Duration.zero;
+    final end = duration - const Duration(seconds: 1);
+    if (target > end) target = end;
+    setState(() => _tvSeekTarget = target);
+    _tvSeekTimer?.cancel();
+    // One seek after the user stops pressing: repeated seeks on every press
+    // made the engines stutter and rebuffer.
+    _tvSeekTimer = Timer(const Duration(milliseconds: 700), _commitTvSeek);
+    _onInteraction();
+  }
+
+  void _commitTvSeek() {
+    _tvSeekTimer?.cancel();
+    final target = _tvSeekTarget;
+    if (target == null) return;
+    _session?.seekTo(target);
+    if (mounted) setState(() => _tvSeekTarget = null);
+  }
+
+  /// First Back: asks for confirmation. Second Back within 3 s: exits.
+  void _handleTvBack() {
+    final now = DateTime.now();
+    // The same press may arrive both as a key and as a system "back".
+    if (now.difference(_lastBackAt) < const Duration(milliseconds: 250)) {
+      return;
+    }
+    _lastBackAt = now;
+    if (_session?.status == SessionStatus.failed) {
+      _exitPlayer();
+      return;
+    }
+    final armed = _exitArmedAt;
+    if (armed != null && now.difference(armed) <= const Duration(seconds: 3)) {
+      _exitPlayer();
+      return;
+    }
+    _exitArmedAt = now;
+    _exitTimer?.cancel();
+    setState(() => _exitPrompt = true);
+    _exitTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() {
+        _exitPrompt = false;
+        _exitArmedAt = null;
+      });
+    });
+  }
+
+  void _exitPlayer() {
+    _exitTimer?.cancel();
+    if (!mounted) return;
+    // Navigator.pop ignores the PopScope that blocks the first Back.
+    Navigator.of(context).pop();
+  }
+
+  void _openTvSheet(Future<void> Function() open) {
+    _hideTimer?.cancel();
+    open().whenComplete(() {
+      if (!mounted) return;
+      _remoteFocus.requestFocus();
+      _scheduleHide();
+    });
+  }
+
+  /// Commands of the TV overlay, row by row.
+  List<TvPlayerRow> _tvRows(PlaybackSession session) {
+    if (_locked) {
+      return [
+        TvPlayerRow(TvPlayerRowKind.center, [
+          TvPlayerAction(
+            id: 'unlock',
+            icon: Icons.lock_rounded,
+            label: 'Sblocca comandi',
+            onPressed: () {
+              setState(() => _locked = false);
+              _scheduleHide();
+            },
+          ),
+        ]),
+      ];
+    }
+    final v = session.value;
+    final step = Duration(seconds: _settings?.seekStepSeconds ?? 10);
+    final canSeek = _canSeek(session);
+    final engine = session.engine;
+    final previousLive = _adjacentLiveChannel(-1);
+    final nextLive = _adjacentLiveChannel(1);
+    return [
+      TvPlayerRow(TvPlayerRowKind.top, [
+        TvPlayerAction(
+          id: 'exit',
+          icon: Icons.arrow_back_rounded,
+          label: 'Esci',
+          onPressed: _exitPlayer,
+        ),
+        if (!_isLive)
+          TvPlayerAction(
+            id: 'title',
+            icon: Icons.info_outline_rounded,
+            label: 'Scheda titolo',
+            onPressed: _openTitle,
+          ),
+        if (engine != null)
+          TvPlayerAction(
+            id: 'engine',
+            icon: Icons.memory_rounded,
+            label: engine.type.label,
+            onPressed: () =>
+                _openTvSheet(() => showEngineSheet(context, session)),
+          ),
+        if (_pipSupported)
+          TvPlayerAction(
+            id: 'pip',
+            icon: Icons.picture_in_picture_alt_rounded,
+            label: 'PiP',
+            onPressed: _enterPip,
+          ),
+        TvPlayerAction(
+          id: 'menu',
+          icon: Icons.tune_rounded,
+          label: 'Opzioni',
+          onPressed: _openMenu,
+        ),
+      ]),
+      TvPlayerRow(TvPlayerRowKind.center, [
+        if (_isLive)
+          TvPlayerAction(
+            id: 'prevChannel',
+            icon: Icons.skip_previous_rounded,
+            label: previousLive == null
+                ? 'Nessun canale precedente'
+                : previousLive.name,
+            onPressed: previousLive == null
+                ? null
+                : () => _playLiveChannel(previousLive),
+          )
+        else if (canSeek)
+          TvPlayerAction(
+            id: 'rewind',
+            icon: Icons.replay_rounded,
+            label: '-${step.inSeconds} s',
+            onPressed: () => _tvSeekBy(-step, false),
+          ),
+        TvPlayerAction(
+          id: 'play',
+          icon: v.isEnded
+              ? Icons.replay_rounded
+              : v.isPlaying
+              ? Icons.pause_rounded
+              : Icons.play_arrow_rounded,
+          label: v.isPlaying ? 'Pausa' : 'Riproduci',
+          primary: true,
+          onPressed: session.togglePlay,
+        ),
+        if (_isLive)
+          TvPlayerAction(
+            id: 'nextChannel',
+            icon: Icons.skip_next_rounded,
+            label: nextLive == null
+                ? 'Nessun canale successivo'
+                : nextLive.name,
+            onPressed: nextLive == null
+                ? null
+                : () => _playLiveChannel(nextLive),
+          )
+        else if (canSeek)
+          TvPlayerAction(
+            id: 'forward',
+            icon: Icons.forward_rounded,
+            label: '+${step.inSeconds} s',
+            onPressed: () => _tvSeekBy(step, false),
+          ),
+        if (_introActive(session))
+          TvPlayerAction(
+            id: 'skipIntro',
+            icon: Icons.fast_forward_rounded,
+            label: 'Salta sigla',
+            onPressed: _skipIntro,
+          ),
+        if (_next != null)
+          TvPlayerAction(
+            id: 'nextEpisode',
+            icon: Icons.skip_next_rounded,
+            label: 'Episodio successivo',
+            onPressed: _playNext,
+          ),
+      ]),
+      if (canSeek) const TvPlayerRow(TvPlayerRowKind.progress, []),
+      TvPlayerRow(TvPlayerRowKind.bottom, [
+        TvPlayerAction(
+          id: 'volume',
+          icon: session.muted
+              ? Icons.volume_off_rounded
+              : Icons.volume_up_rounded,
+          label: session.muted ? 'Muto' : 'Volume',
+          onPressed: session.toggleMute,
+        ),
+        TvPlayerAction(
+          id: 'lock',
+          icon: Icons.lock_open_rounded,
+          label: 'Blocca',
+          onPressed: () {
+            setState(() => _locked = true);
+            _scheduleHide();
+          },
+        ),
+        TvPlayerAction(
+          id: 'audio',
+          icon: Icons.audiotrack_rounded,
+          label: 'Audio',
+          onPressed: () => _openTvSheet(() => showAudioSheet(context, session)),
+        ),
+        TvPlayerAction(
+          id: 'subtitles',
+          icon: Icons.subtitles_rounded,
+          label: _onlineCues != null ? 'ITA online' : 'Sottotitoli',
+          onPressed: () => _openTvSheet(
+            () => showSubtitleSheet(
+              context,
+              session,
+              onlineActive: _onlineCues != null,
+              onlineLoading: _onlineSubsLoading,
+              onLoadOnline: _loadOnlineSubtitles,
+              onDisableOnline: _disableOnlineSubtitles,
+            ),
+          ),
+        ),
+        if (engine?.supportsQualitySelection ?? false)
+          TvPlayerAction(
+            id: 'quality',
+            icon: Icons.high_quality_rounded,
+            label: 'Qualità',
+            onPressed: () =>
+                _openTvSheet(() => showQualitySheet(context, session)),
+          ),
+        if (!_isLive)
+          TvPlayerAction(
+            id: 'speed',
+            icon: Icons.speed_rounded,
+            label: formatSpeed(session.speed),
+            onPressed: () =>
+                _openTvSheet(() => showSpeedSheet(context, session)),
+          ),
+        TvPlayerAction(
+          id: 'fit',
+          icon: Icons.aspect_ratio_rounded,
+          label: session.fitMode.label,
+          onPressed: () => _openTvSheet(() => showFitSheet(context, session)),
+        ),
+      ]),
+    ];
   }
 
   /// "Scheda titolo": leaves the player and shows the movie/series page,
@@ -533,7 +977,59 @@ class _PlayerScreenState extends State<PlayerScreen>
         session.clearNotice();
       });
     }
+    if (DeviceTypeService.isTv) {
+      if (session.status == SessionStatus.failed && !_failureFocused) {
+        _failureFocused = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _failureFocus.requestFocus();
+        });
+      } else if (session.status != SessionStatus.failed && _failureFocused) {
+        _failureFocused = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _remoteFocus.requestFocus();
+        });
+      }
+      if (!_needsRebuild(session)) return;
+    }
     setState(() {});
+  }
+
+  /// TV boxes are slow: the engines report the position many times per
+  /// second and rebuilding the whole player each time stole CPU from the
+  /// video (stutter). Rebuild on real state changes, and for the position
+  /// only when something on screen shows it.
+  bool _needsRebuild(PlaybackSession session) {
+    final v = session.value;
+    final signature = Object.hashAll([
+      session.status,
+      session.engine,
+      session.notice,
+      session.muted,
+      session.speed,
+      session.fitMode,
+      v.isPlaying,
+      v.isBuffering,
+      v.isEnded,
+      v.error,
+      v.size,
+      v.duration.inSeconds,
+      v.caption,
+      _outroActive,
+      _introActive(session),
+    ]);
+    final now = DateTime.now();
+    if (signature != _lastSignature) {
+      _lastSignature = signature;
+      _lastPositionBuild = now;
+      return true;
+    }
+    final showsPosition =
+        _controlsVisible || _onlineCues != null || _statsVisible;
+    if (!showsPosition) return false;
+    final gap = _onlineCues != null ? 120 : 500;
+    if (now.difference(_lastPositionBuild).inMilliseconds < gap) return false;
+    _lastPositionBuild = now;
+    return true;
   }
 
   @override
@@ -642,7 +1138,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       onDisableOnlineSubs: _disableOnlineSubtitles,
     ).whenComplete(() {
       if (!mounted) return;
-      _playFocus.requestFocus();
+      (DeviceTypeService.isTv ? _remoteFocus : _playFocus).requestFocus();
       _scheduleHide();
     });
   }
@@ -661,6 +1157,12 @@ class _PlayerScreenState extends State<PlayerScreen>
     _bridge.setKeepScreenOn(false);
     _bridge.resetBrightness();
     _outroTimer?.cancel();
+    if (DeviceTypeService.isTv) {
+      FocusManager.instance.removeEarlyKeyEventHandler(_onEarlyKey);
+    }
+    _tvSeekTimer?.cancel();
+    _exitTimer?.cancel();
+    _failureFocus.dispose();
     _remoteFocus.dispose();
     _playFocus.dispose();
     _activePlayers--;
@@ -676,11 +1178,12 @@ class _PlayerScreenState extends State<PlayerScreen>
           if (_activePlayers == 0) _bridge.setOrientation('landscape');
         });
       } else {
-        SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp])
-            .then((_) {
-              // Re-check: a new player may have opened meanwhile.
-              if (_activePlayers == 0) _bridge.setOrientation('portrait');
-            });
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+        ]).then((_) {
+          // Re-check: a new player may have opened meanwhile.
+          if (_activePlayers == 0) _bridge.setOrientation('portrait');
+        });
       }
     }
     super.dispose();
@@ -695,21 +1198,30 @@ class _PlayerScreenState extends State<PlayerScreen>
         : Stack(
             fit: StackFit.expand,
             children: [
-              VideoSurface(session: session, settings: settings),
+              // Own layer: overlay updates never repaint the video.
+              RepaintBoundary(
+                child: VideoSurface(session: session, settings: settings),
+              ),
               if (!_inPip) ..._buildOverlays(session, settings),
+              if (_exitPrompt && DeviceTypeService.isTv)
+                const Positioned(
+                  top: 32,
+                  left: 0,
+                  right: 0,
+                  child: Center(child: TvExitPrompt()),
+                ),
             ],
           );
     return PopScope(
-      canPop: true,
+      // TV: the first Back asks for confirmation (see _handleTvBack).
+      canPop: !DeviceTypeService.isTv,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && DeviceTypeService.isTv) _handleTvBack();
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: DeviceTypeService.isTv
-            ? Focus(
-                focusNode: _remoteFocus,
-                autofocus: true,
-                onKeyEvent: _onRemoteKey,
-                child: body,
-              )
+            ? Focus(focusNode: _remoteFocus, autofocus: true, child: body)
             : body,
       ),
     );
@@ -722,7 +1234,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     final status = session.status;
     if (status == SessionStatus.failed) {
       return [
-        _FailureView(session: session, onBack: () => Navigator.pop(context)),
+        _FailureView(
+          session: session,
+          onBack: () => Navigator.pop(context),
+          retryFocus: DeviceTypeService.isTv ? _failureFocus : null,
+        ),
       ];
     }
     final connecting =
@@ -737,49 +1253,81 @@ class _PlayerScreenState extends State<PlayerScreen>
           onInteraction: _onInteraction,
         ),
       if (connecting) _ConnectingView(session: session),
-      ExcludeFocus(
-        excluding: DeviceTypeService.isTv && !_controlsVisible,
-        child: IgnorePointer(
-          ignoring: !_controlsVisible,
-          child: AnimatedOpacity(
-            opacity: _controlsVisible ? 1 : 0,
-            duration: const Duration(milliseconds: 220),
-            child: PlayerControls(
-              session: session,
-              playFocusNode: DeviceTypeService.isTv ? _playFocus : null,
-              title: widget.channel.name,
-              subtitle: _isLive
-                  ? (context
-                            .watch<EpgProvider>()
-                            .nowFor(widget.channel)
-                            ?.title ??
-                        widget.channel.group)
-                  : widget.channel.group,
-              locked: _locked,
-              pipSupported: _pipSupported,
-              seekStepSeconds: settings.seekStepSeconds,
-              previousChannel: _adjacentLiveChannel(-1),
-              nextChannel: _adjacentLiveChannel(1),
-              onPreviousChannel: () =>
-                  _playLiveChannel(_adjacentLiveChannel(-1)),
-              onNextChannel: () => _playLiveChannel(_adjacentLiveChannel(1)),
-              onBack: () => Navigator.pop(context),
-              onOpenTitle: _isLive ? null : _openTitle,
-              onPip: _enterPip,
-              onMenu: _openMenu,
-              onToggleLock: () {
-                setState(() => _locked = !_locked);
-                _scheduleHide();
-              },
-              onInteraction: _onInteraction,
-              onlineSubsActive: _onlineCues != null,
-              onlineSubsLoading: _onlineSubsLoading,
-              onLoadOnlineSubs: _loadOnlineSubtitles,
-              onDisableOnlineSubs: _disableOnlineSubtitles,
+      if (DeviceTypeService.isTv)
+        ExcludeFocus(
+          child: IgnorePointer(
+            ignoring: !_controlsVisible,
+            child: AnimatedOpacity(
+              opacity: _controlsVisible ? 1 : 0,
+              duration: const Duration(milliseconds: 180),
+              child: RepaintBoundary(
+                child: TvPlayerControls(
+                  rows: _tvRows(session),
+                  selectedRow: _tvRow,
+                  selectedColumn: _tvCol,
+                  title: widget.channel.name,
+                  subtitle: _isLive
+                      ? (context
+                                .watch<EpgProvider>()
+                                .nowFor(widget.channel)
+                                ?.title ??
+                            widget.channel.group)
+                      : widget.channel.group,
+                  isLive: _isLive,
+                  locked: _locked,
+                  position: session.value.position,
+                  duration: session.value.duration,
+                  buffered: session.value.bufferedUntil,
+                  pendingSeek: _tvSeekTarget,
+                ),
+              ),
+            ),
+          ),
+        )
+      else
+        ExcludeFocus(
+          excluding: false,
+          child: IgnorePointer(
+            ignoring: !_controlsVisible,
+            child: AnimatedOpacity(
+              opacity: _controlsVisible ? 1 : 0,
+              duration: const Duration(milliseconds: 220),
+              child: PlayerControls(
+                session: session,
+                playFocusNode: null,
+                title: widget.channel.name,
+                subtitle: _isLive
+                    ? (context
+                              .watch<EpgProvider>()
+                              .nowFor(widget.channel)
+                              ?.title ??
+                          widget.channel.group)
+                    : widget.channel.group,
+                locked: _locked,
+                pipSupported: _pipSupported,
+                seekStepSeconds: settings.seekStepSeconds,
+                previousChannel: _adjacentLiveChannel(-1),
+                nextChannel: _adjacentLiveChannel(1),
+                onPreviousChannel: () =>
+                    _playLiveChannel(_adjacentLiveChannel(-1)),
+                onNextChannel: () => _playLiveChannel(_adjacentLiveChannel(1)),
+                onBack: () => Navigator.pop(context),
+                onOpenTitle: _isLive ? null : _openTitle,
+                onPip: _enterPip,
+                onMenu: _openMenu,
+                onToggleLock: () {
+                  setState(() => _locked = !_locked);
+                  _scheduleHide();
+                },
+                onInteraction: _onInteraction,
+                onlineSubsActive: _onlineCues != null,
+                onlineSubsLoading: _onlineSubsLoading,
+                onLoadOnlineSubs: _loadOnlineSubtitles,
+                onDisableOnlineSubs: _disableOnlineSubtitles,
+              ),
             ),
           ),
         ),
-      ),
       if (_onlineCues != null)
         SubtitleOverlay(
           cues: _onlineCues!,
@@ -794,21 +1342,24 @@ class _PlayerScreenState extends State<PlayerScreen>
           right: 24,
           bottom: 96,
           child: SafeArea(
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
+            child: _tvHighlight(
+              selected: DeviceTypeService.isTv && !_controlsVisible,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
                 ),
+                icon: const Icon(Icons.fast_forward_rounded),
+                label: const Text(
+                  'Salta Sigla',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                onPressed: _skipIntro,
               ),
-              icon: const Icon(Icons.fast_forward_rounded),
-              label: const Text(
-                'Salta Sigla',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              onPressed: _skipIntro,
             ),
           ),
         ),
@@ -829,6 +1380,24 @@ class _PlayerScreenState extends State<PlayerScreen>
           ),
         ),
     ];
+  }
+
+  /// TV: remote-selected look (no focus node; keys are handled above).
+  Widget _tvHighlight({required bool selected, required Widget child}) {
+    if (!DeviceTypeService.isTv) return child;
+    return ExcludeFocus(
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: selected ? AppColors.primary : Colors.transparent,
+            width: 3,
+          ),
+        ),
+        child: child,
+      ),
+    );
   }
 
   /// IntroDB credits: next episode card with a 5 second countdown.
@@ -882,23 +1451,35 @@ class _PlayerScreenState extends State<PlayerScreen>
               Row(
                 children: [
                   Expanded(
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.skip_next_rounded),
-                      label: const Text('Prossimo Episodio'),
-                      onPressed: () {
-                        _outroTimer?.cancel();
-                        playNextEpisode();
-                      },
+                    child: _tvHighlight(
+                      selected:
+                          DeviceTypeService.isTv &&
+                          !_controlsVisible &&
+                          _tvOutroCol == 0,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.skip_next_rounded),
+                        label: const Text('Prossimo Episodio'),
+                        onPressed: () {
+                          _outroTimer?.cancel();
+                          playNextEpisode();
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white38),
+                  _tvHighlight(
+                    selected:
+                        DeviceTypeService.isTv &&
+                        !_controlsVisible &&
+                        _tvOutroCol == 1,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.white38),
+                      ),
+                      onPressed: _watchCredits,
+                      child: const Text('Guarda Crediti'),
                     ),
-                    onPressed: _watchCredits,
-                    child: const Text('Guarda Crediti'),
                   ),
                 ],
               ),
@@ -985,7 +1566,12 @@ class _NoticeBanner extends StatelessWidget {
 class _FailureView extends StatelessWidget {
   final PlaybackSession session;
   final VoidCallback onBack;
-  const _FailureView({required this.session, required this.onBack});
+  final FocusNode? retryFocus;
+  const _FailureView({
+    required this.session,
+    required this.onBack,
+    this.retryFocus,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1054,6 +1640,7 @@ class _FailureView extends StatelessWidget {
                         child: Text('Prova con ${e.label}'),
                       ),
                     ElevatedButton.icon(
+                      focusNode: retryFocus,
                       icon: const Icon(Icons.refresh_rounded),
                       label: const Text('Riprova'),
                       onPressed: session.retry,

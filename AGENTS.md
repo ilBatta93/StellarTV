@@ -3,6 +3,8 @@ Kids certification is warmed in the background after playlist loading and cached
 - The native application identity is StellarTV on every platform; Dart and native player bridge names change together.
 - TV presentation is capability-gated through the native Android UI mode; touch layouts and behavior remain the unchanged default.
 - TV category panels share one remote-only drawer implementation with geometric left-edge detection and explicit focus restoration, to avoid trapping navigation across catalog tabs.
-- TV player controls use a dedicated play focus anchor and leave button activation to the focused control, so showing controls never traverses back into the video surface.
+- The TV player reads the remote through an early key handler and moves its own (row, column) selection over a focus-free overlay; option panels above it use normal focus, and Back needs a confirmation press so playback is never left by accident.
 
 - Playlist sections download in a background isolate with a streaming JSON parser (truncation-tolerant, bounded timeouts), run one at a time through a shared queue, publish and cache per section, and can be retried individually; pages are wrapped by a shared section frame that shows real progress, retry and saved-copy states on touch and TV, so huge playlists never block the UI or reload unrelated sections.
+- The playlist opens from the device copy at every start; only sections never saved are downloaded immediately, and a full refresh runs only when the chosen interval has elapsed since the last complete download.
+- Large derived caches (kids verdicts, playlist sections) are persisted to files through background isolates with batched writes, never to preferences or the main thread.

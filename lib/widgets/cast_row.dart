@@ -18,7 +18,9 @@ class CastRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SectionHeader(
-            title: 'Cast', subtitle: 'Tocca un attore per saperne di più'),
+          title: 'Cast',
+          subtitle: 'Tocca un attore per saperne di più',
+        ),
         HorizontalRow(
           height: 160,
           itemCount: cast.length,
@@ -28,7 +30,8 @@ class CastRow extends StatelessWidget {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => PersonDetailScreen(person: person)),
+                  builder: (_) => PersonDetailScreen(person: person),
+                ),
               ),
               child: SizedBox(
                 width: 96,
@@ -42,6 +45,7 @@ class CastRow extends StatelessWidget {
                         child: person.profileUrl.isNotEmpty
                             ? Image.network(
                                 person.profileUrl,
+                                cacheWidth: 256,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, _, _) => _fallback(person),
                               )
@@ -65,7 +69,9 @@ class CastRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: AppColors.textMuted, fontSize: 11),
+                          color: AppColors.textMuted,
+                          fontSize: 11,
+                        ),
                       ),
                   ],
                 ),
@@ -78,14 +84,15 @@ class CastRow extends StatelessWidget {
   }
 
   Widget _fallback(TmdbPerson person) => Container(
-        color: AppColors.card,
-        alignment: Alignment.center,
-        child: Text(
-          person.name.isNotEmpty ? person.name[0].toUpperCase() : '?',
-          style: const TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 24,
-              fontWeight: FontWeight.w700),
-        ),
-      );
+    color: AppColors.card,
+    alignment: Alignment.center,
+    child: Text(
+      person.name.isNotEmpty ? person.name[0].toUpperCase() : '?',
+      style: const TextStyle(
+        color: AppColors.textMuted,
+        fontSize: 24,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 }

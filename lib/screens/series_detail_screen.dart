@@ -114,23 +114,28 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
 
     return Scaffold(
       body: CustomScrollView(
+        // TV: every section stays built, so going up always reaches the
+        // title and the buttons at the top of the page.
+        cacheExtent: DeviceTypeService.isTv ? 4000 : null,
         slivers: [
           SliverAppBar(
-            pinned: true,
+            pinned: !DeviceTypeService.isTv,
+            automaticallyImplyLeading: !DeviceTypeService.isTv,
             expandedHeight: DeviceTypeService.isTv ? 180 : 280,
             backgroundColor: AppColors.background,
-            leading: const BackButton(),
+            leading: DeviceTypeService.isTv ? null : const BackButton(),
             actions: [
-              IconButton(
-                tooltip: 'Preferiti',
-                icon: Icon(
-                  isFav
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
-                  color: isFav ? AppColors.primary : AppColors.textPrimary,
+              if (!DeviceTypeService.isTv)
+                IconButton(
+                  tooltip: 'Preferiti',
+                  icon: Icon(
+                    isFav
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    color: isFav ? AppColors.primary : AppColors.textPrimary,
+                  ),
+                  onPressed: () => app.toggleFavorite(widget.series),
                 ),
-                onPressed: () => app.toggleFavorite(widget.series),
-              ),
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
@@ -179,6 +184,10 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
+                  if (DeviceTypeService.isTv) ...[
+                    _buildTvActions(context, isFav),
+                    const SizedBox(height: 16),
+                  ],
                   if (plot.trim().isNotEmpty) ...[
                     Text(
                       'Trama',
@@ -317,6 +326,76 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     );
   }
 
+  /// Episode to start from: the one in progress, otherwise the first one
+  /// after the last watched episode.
+  SeriesEpisode? _resumeEpisode(HistoryProvider history) {
+    final all = _details?.allEpisodes ?? const <SeriesEpisode>[];
+    if (all.isEmpty) return null;
+    var lastWatched = -1;
+    for (final (i, e) in all.indexed) {
+      final entry = history.entryFor(e.channel.id);
+      if (entry == null) continue;
+      if (entry.isWatched) {
+        lastWatched = i;
+      } else if ((entry.resumePosition ?? Duration.zero) > Duration.zero) {
+        return e;
+      }
+    }
+    return lastWatched + 1 < all.length ? all[lastWatched + 1] : all.first;
+  }
+
+  /// TV only: focusable buttons at the top of the page (first focus).
+  Widget _buildTvActions(BuildContext context, bool isFav) {
+    final history = context.watch<HistoryProvider>();
+    final app = context.read<AppProvider>();
+    final episode = _resumeEpisode(history);
+    final started =
+        episode != null && history.entryFor(episode.channel.id) != null;
+    void play() {
+      if (episode == null) return;
+      playChannel(
+        context,
+        episode.channel,
+        queue: [for (final e in _details?.allEpisodes ?? const []) e.channel],
+        startAt: history.entryFor(episode.channel.id)?.resumePosition,
+      );
+    }
+
+    return Row(
+      children: [
+        TvFocusable(
+          autofocus: true,
+          onPressed: play,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: Text(
+              episode == null
+                  ? (_loading ? 'Caricamento episodi...' : 'Guarda ora')
+                  : '${started ? 'Riprendi' : 'Guarda'} ${episode.code}',
+            ),
+            onPressed: play,
+          ),
+        ),
+        const SizedBox(width: 12),
+        TvFocusable(
+          onPressed: () => app.toggleFavorite(widget.series),
+          child: OutlinedButton.icon(
+            icon: Icon(
+              isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              color: isFav ? AppColors.primary : AppColors.textPrimary,
+            ),
+            label: Text(isFav ? 'Nei preferiti' : 'Aggiungi ai preferiti'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              side: const BorderSide(color: AppColors.border),
+            ),
+            onPressed: () => app.toggleFavorite(widget.series),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSimilar(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,108 +438,107 @@ class _EpisodeTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ep = episode;
-    final tile = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Material(
-        color: AppColors.card,
+    final card = Material(
+      color: AppColors.card,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onToggleWatched,
         borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          onLongPress: onToggleWatched,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(
-                    width: 120,
-                    height: 68,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ep.image != null && ep.image!.isNotEmpty
-                            ? Image.network(
-                                ep.image!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => _placeholder(),
-                              )
-                            : _placeholder(),
-                        if (watched)
-                          Container(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            alignment: Alignment.center,
-                            child: const Icon(
-                              Icons.check_circle_rounded,
-                              color: Colors.white,
-                              size: 28,
-                            ),
-                          ),
-                        if (progress != null && progress! > 0)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            child: LinearProgressIndicator(
-                              value: progress,
-                              minHeight: 4,
-                              backgroundColor: Colors.white.withValues(
-                                alpha: 0.25,
-                              ),
-                              valueColor: AlwaysStoppedAnimation(
-                                AppColors.primary,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  width: 120,
+                  height: 68,
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      Text(
-                        '${ep.code} · ${ep.title}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (ep.overview != null &&
-                          ep.overview!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          ep.overview!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                            height: 1.4,
+                      ep.image != null && ep.image!.isNotEmpty
+                          ? Image.network(
+                              ep.image!,
+                              fit: BoxFit.cover,
+                              cacheWidth: 320,
+                              errorBuilder: (_, _, _) => _placeholder(),
+                            )
+                          : _placeholder(),
+                      if (watched)
+                        Container(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.check_circle_rounded,
+                            color: Colors.white,
+                            size: 28,
                           ),
                         ),
-                      ],
-                      if (ep.duration != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          _formatDuration(ep.duration!),
-                          style: const TextStyle(
-                            color: AppColors.textMuted,
-                            fontSize: 11,
+                      if (progress != null && progress! > 0)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 4,
+                            backgroundColor: Colors.white.withValues(
+                              alpha: 0.25,
+                            ),
+                            valueColor: AlwaysStoppedAnimation(
+                              AppColors.primary,
+                            ),
                           ),
                         ),
-                      ],
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                if (!DeviceTypeService.isTv)
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${ep.code} · ${ep.title}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (ep.overview != null &&
+                        ep.overview!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        ep.overview!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                    if (ep.duration != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatDuration(ep.duration!),
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (!DeviceTypeService.isTv)
                 IconButton(
                   tooltip: watched
                       ? 'Segna come non visto'
@@ -474,37 +552,48 @@ class _EpisodeTile extends StatelessWidget {
                     size: 26,
                   ),
                 ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
     );
+    final tile = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: card,
+    );
     if (!DeviceTypeService.isTv) return tile;
-    return FocusTraversalGroup(
-      child: Row(
-        children: [
-          Expanded(
-            child: TvFocusable(
-              onPressed: onTap,
-              onLongPress: onToggleWatched,
-              child: tile,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16, bottom: 12),
-            child: TvFocusable(
-            onPressed: onToggleWatched,
-            child: IconButton(
-              tooltip: watched ? 'Segna come non visto' : 'Segna come visto',
-              onPressed: onToggleWatched,
-              icon: Icon(
-                watched ? Icons.check_circle : Icons.check_circle_outline,
+    // TV: the focus ring hugs the card (no outer margin inside it, no
+    // enlargement), so it never runs off the screen or over the next row.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: FocusTraversalGroup(
+        child: Row(
+          children: [
+            Expanded(
+              child: TvFocusable(
+                onPressed: onTap,
+                onLongPress: onToggleWatched,
+                focusedScale: 1.0,
+                borderRadius: BorderRadius.circular(12),
+                child: card,
               ),
             ),
+            const SizedBox(width: 12),
+            TvFocusable(
+              onPressed: onToggleWatched,
+              focusedScale: 1.0,
+              borderRadius: BorderRadius.circular(24),
+              child: IconButton(
+                tooltip: watched ? 'Segna come non visto' : 'Segna come visto',
+                onPressed: onToggleWatched,
+                icon: Icon(
+                  watched ? Icons.check_circle : Icons.check_circle_outline,
+                  color: watched ? AppColors.primary : AppColors.textMuted,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -98,13 +98,19 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
 
     return Scaffold(
       body: CustomScrollView(
+        // TV: keep every section built so the remote can always move back
+        // up to "Guarda ora", even after scrolling far down.
+        cacheExtent: DeviceTypeService.isTv ? 4000 : null,
         slivers: [
           SliverAppBar(
-            pinned: true,
+            // TV: no pinned bar with a back arrow above the content (Back is
+            // on the remote); going up always lands on "Guarda ora".
+            pinned: !DeviceTypeService.isTv,
+            automaticallyImplyLeading: !DeviceTypeService.isTv,
             expandedHeight: DeviceTypeService.isTv ? 180 : 280,
             backgroundColor: AppColors.background,
             actions: [
-              if (playable != null)
+              if (playable != null && !DeviceTypeService.isTv)
                 IconButton(
                   tooltip: 'Preferiti',
                   icon: Icon(
@@ -160,26 +166,23 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                   _Meta(item: item, channel: widget.channel),
                   const SizedBox(height: 16),
                   if (!DeviceTypeService.isTv)
-                    _Actions(
-                      item: item,
-                      playable: playable,
-                      variants: variants,
-                    )
-                  else Align(
-                    alignment: Alignment.centerLeft,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: DeviceTypeService.isTv
-                            ? 380
-                            : double.infinity,
-                      ),
-                      child: _Actions(
-                        item: item,
-                        playable: playable,
-                        variants: variants,
+                    _Actions(item: item, playable: playable, variants: variants)
+                  else
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: DeviceTypeService.isTv
+                              ? 380
+                              : double.infinity,
+                        ),
+                        child: _Actions(
+                          item: item,
+                          playable: playable,
+                          variants: variants,
+                        ),
                       ),
                     ),
-                  ),
                   if (item != null && item.overview.isNotEmpty) ...[
                     const SizedBox(height: 24),
                     Text(
@@ -238,6 +241,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                             ? Image.network(
                                 person.profileUrl,
                                 fit: BoxFit.cover,
+                                cacheWidth: 256,
                                 errorBuilder: (_, _, _) =>
                                     _castFallback(person),
                               )
@@ -466,24 +470,59 @@ class _Actions extends StatelessWidget {
             ],
           ),
         ],
+        if (DeviceTypeService.isTv && playable != null) ...[
+          const SizedBox(height: 8),
+          TvFocusable(
+            onPressed: () => app.toggleFavorite(playable!),
+            child: OutlinedButton.icon(
+              icon: Icon(
+                app.favoriteIds.contains(playable!.id)
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                color: app.favoriteIds.contains(playable!.id)
+                    ? AppColors.primary
+                    : AppColors.textPrimary,
+              ),
+              label: Text(
+                app.favoriteIds.contains(playable!.id)
+                    ? 'Nei preferiti'
+                    : 'Aggiungi ai preferiti',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                side: const BorderSide(color: AppColors.border),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: () => app.toggleFavorite(playable!),
+            ),
+          ),
+        ],
         if (item != null) ...[
           const SizedBox(height: 8),
-          OutlinedButton.icon(
-            icon: Icon(inList ? Icons.check_rounded : Icons.add_rounded),
-            label: Text(inList ? 'Nella mia lista' : 'Aggiungi alla mia lista'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: inList
-                  ? AppColors.success
-                  : AppColors.textPrimary,
-              side: BorderSide(
-                color: inList ? AppColors.success : AppColors.border,
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
+          TvFocusable(
             onPressed: () => app.toggleTmdbFavorite(item!),
+            child: OutlinedButton.icon(
+              icon: Icon(inList ? Icons.check_rounded : Icons.add_rounded),
+              label: Text(
+                inList ? 'Nella mia lista' : 'Aggiungi alla mia lista',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: inList
+                    ? AppColors.success
+                    : AppColors.textPrimary,
+                side: BorderSide(
+                  color: inList ? AppColors.success : AppColors.border,
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: () => app.toggleTmdbFavorite(item!),
+            ),
           ),
         ],
         if (playable != null && playable!.type != ContentType.live) ...[

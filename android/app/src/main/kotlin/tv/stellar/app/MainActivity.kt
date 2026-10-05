@@ -119,7 +119,25 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        // A native video surface (ExoPlayer on TV) must never keep the
+        // remote keys away from the app: give the focus back to Flutter.
+        if (!textEditing && event.action == KeyEvent.ACTION_DOWN) {
+            val fv = flutterView()
+            val focused = currentFocus
+            if (fv != null && focused != null && !isInside(focused, fv)) {
+                fv.requestFocus()
+            }
+        }
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun isInside(view: View, ancestor: View): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current === ancestor) return true
+            current = current.parent as? View
+        }
+        return false
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

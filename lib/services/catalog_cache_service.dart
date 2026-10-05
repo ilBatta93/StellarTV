@@ -26,8 +26,7 @@ class CatalogCacheService {
     return hash;
   }
 
-  Future<String> _dir() async =>
-      (await getApplicationSupportDirectory()).path;
+  Future<String> _dir() async => (await getApplicationSupportDirectory()).path;
 
   String _sectionPath(String dir, String accountKey, ContentType type) =>
       '$dir/stellartv_catalog_v2_${_hash(accountKey)}_${type.name}.json';
@@ -57,8 +56,11 @@ class CatalogCacheService {
     try {
       final dir = await _dir();
       final path = _sectionPath(dir, accountKey, type);
-      final rows = [for (final c in channels) c.toMap()];
-      await Isolate.run(() => _writeFile(path, rows));
+      final list = List<Channel>.of(channels, growable: false);
+      // Serialization happens in the background isolate too.
+      await Isolate.run(
+        () => _writeFile(path, [for (final c in list) c.toMap()]),
+      );
     } catch (_) {
       // A cache write must never affect playback or catalog refresh.
     }

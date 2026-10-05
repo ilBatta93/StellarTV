@@ -5,6 +5,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../models/player_settings.dart';
+import '../services/device_type_service.dart';
 import 'playback_engine.dart';
 
 /// mpv-backed engine (media_kit): full subtitle and multi-audio-track
@@ -14,7 +15,9 @@ class MediaKitEngine extends PlaybackEngine {
     : _settings = settings,
       _player = Player(
         configuration: PlayerConfiguration(
-          bufferSize: settings.networkCachingMs * 1024,
+          // The old value (network caching ms * 1 KB, ~1.5 MB) held about a
+          // second of HD video: any network hiccup stuttered. 32 MB minimum.
+          bufferSize: _bufferBytes(settings),
           logLevel: MPVLogLevel.warn,
         ),
       ) {
@@ -26,6 +29,7 @@ class MediaKitEngine extends PlaybackEngine {
         vo: null,
       ),
     );
+    if (DeviceTypeService.isTv) unawaited(_tuneForTv());
     _player.stream.error.listen(_onError);
     _player.stream.completed.listen(_onCompleted);
     _player.stream.playing.listen((_) => _sync());
@@ -34,6 +38,41 @@ class MediaKitEngine extends PlaybackEngine {
     _player.stream.duration.listen((_) => _sync());
     _player.stream.track.listen((_) => _sync());
     _sync();
+  }
+
+  static int _bufferBytes(PlayerSettings settings) {
+    const minimum = 32 * 1024 * 1024;
+    final configured = settings.networkCachingMs * 1024;
+    return configured < minimum ? minimum : configured;
+  }
+
+  /// TV boxes have weak GPUs: mpv's high-quality scalers and dithering
+  /// dropped frames at 1080p/4K. Fast scaling looks the same at TV distance.
+  /// A deeper read-ahead keeps IPTV streams smooth.
+  Future<void> _tuneForTv() async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return;
+    const options = {
+      'scale': 'bilinear',
+      'dscale': 'bilinear',
+      'cscale': 'bilinear',
+      'dither-depth': 'no',
+      'correct-downscaling': 'no',
+      'linear-downscaling': 'no',
+      'sigmoid-upscaling': 'no',
+      'deband': 'no',
+      'interpolation': 'no',
+      'video-sync': 'audio',
+      'cache': 'yes',
+      'demuxer-readahead-secs': '20',
+      'cache-pause-initial': 'no',
+      'vd-lavc-threads': '0',
+    };
+    for (final entry in options.entries) {
+      try {
+        await platform.setProperty(entry.key, entry.value);
+      } catch (_) {}
+    }
   }
 
   final PlayerSettings _settings;
@@ -120,10 +159,7 @@ class MediaKitEngine extends PlaybackEngine {
       final configured = _settings.userAgent.trim();
       final ua = configured.isEmpty ? 'StellarTV/1.0' : configured;
       await _player.open(
-        Media(
-          _urlWithUserAgent(ua),
-          httpHeaders: {'User-Agent': ua},
-        ),
+        Media(_urlWithUserAgent(ua), httpHeaders: {'User-Agent': ua}),
         play: true,
       );
     } catch (e) {

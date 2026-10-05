@@ -25,42 +25,80 @@ Future<void> _showSheet(
     builder: (sheetContext) => FocusTraversalGroup(
       policy: ReadingOrderTraversalPolicy(),
       child: ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(sheetContext).size.height * 0.85,
-      ),
-      child: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 8),
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(2),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(sheetContext).size.height * 0.85,
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 8),
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-              child: Text(
-                title,
-                style: Theme.of(sheetContext).textTheme.titleMedium,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                child: Text(
+                  title,
+                  style: Theme.of(sheetContext).textTheme.titleMedium,
+                ),
               ),
-            ),
-            Flexible(child: builder(sheetContext)),
-            const SizedBox(height: 8),
-          ],
+              Flexible(
+                child: DeviceTypeService.isTv
+                    ? _TvFocusFirst(child: builder(sheetContext))
+                    : builder(sheetContext),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
-      ),
       ),
     ),
   ).whenComplete(() {
     if (previousFocus?.context != null) previousFocus?.requestFocus();
   });
+}
+
+/// TV: highlights the first option as soon as a panel opens, so the remote
+/// works immediately inside it.
+class _TvFocusFirst extends StatefulWidget {
+  final Widget child;
+  const _TvFocusFirst({required this.child});
+
+  @override
+  State<_TvFocusFirst> createState() => _TvFocusFirstState();
+}
+
+class _TvFocusFirstState extends State<_TvFocusFirst> {
+  final FocusScopeNode _scope = FocusScopeNode(debugLabel: 'tv sheet');
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scope.requestFocus();
+      if (_scope.focusedChild == null) _scope.nextFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scope.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      FocusScope(node: _scope, child: widget.child);
 }
 
 class _Option extends StatelessWidget {
