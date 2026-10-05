@@ -52,11 +52,6 @@ class CatalogEntryCard extends StatelessWidget {
     required this.onTap,
     required this.onFavoriteTap,
   });
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 
   @override
@@ -185,11 +180,6 @@ class ChannelGrid extends StatelessWidget {
     required this.type,
     this.padding = const EdgeInsets.fromLTRB(16, 8, 16, 24),
   });
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 
   @override
@@ -653,11 +643,6 @@ class _CategoryDrawer extends StatelessWidget {
     required this.selected,
     required this.onSelected,
   });
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 
   @override

@@ -18,6 +18,7 @@ class TvTextField extends StatefulWidget {
     this.onChanged,
     this.decoration,
     this.autofillHints,
+    this.autofocus = false,
   });
 
   final TextEditingController controller;
@@ -30,6 +31,7 @@ class TvTextField extends StatefulWidget {
   final ValueChanged<String>? onChanged;
   final InputDecoration? decoration;
   final Iterable<String>? autofillHints;
+  final bool autofocus;
 
   static void showKeyboard() =>
       SystemChannels.textInput.invokeMethod<void>('TextInput.show');
@@ -102,6 +104,7 @@ class _TvTextFieldState extends State<TvTextField> {
   @override
   Widget build(BuildContext context) {
     return TextField(
+      autofocus: widget.autofocus,
       controller: widget.controller,
       focusNode: _node,
       readOnly: DeviceTypeService.isTv && !_tvEditing,
