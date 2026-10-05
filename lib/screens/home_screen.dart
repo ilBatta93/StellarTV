@@ -279,9 +279,20 @@ class _TvTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // On narrow TV windows the full-size pills overflow and clip the
+        // settings icon at the right edge; switch to a compact layout.
+        final compact = constraints.maxWidth < 1150;
+        return _buildBar(context, compact);
+      },
+    );
+  }
+
+  Widget _buildBar(BuildContext context, bool compact) {
     return Container(
       height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 40),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 20 : 40),
       // Solid enough to stay readable over bright artwork.
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -297,11 +308,12 @@ class _TvTopBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const BrandLogo(size: 26),
-          const SizedBox(width: 32),
+          BrandLogo(size: compact ? 20 : 26),
+          SizedBox(width: compact ? 16 : 32),
           _TvNavPill(
             label: 'Cerca',
             icon: Icons.search_rounded,
+            compact: compact,
             onPressed: onSearch,
           ),
           for (var i = 0; i < _tabs.length; i++)
@@ -310,11 +322,20 @@ class _TvTopBar extends StatelessWidget {
               focusNode: tabNodes[i],
               selected: selectedIndex == i,
               autofocus: i == selectedIndex,
+              compact: compact,
               onPressed: () => onSelected(i),
             ),
           const Spacer(),
-          _TvNavPill(icon: Icons.person_rounded, onPressed: onProfile),
-          _TvNavPill(icon: Icons.settings_rounded, onPressed: onSettings),
+          _TvNavPill(
+            icon: Icons.person_rounded,
+            compact: compact,
+            onPressed: onProfile,
+          ),
+          _TvNavPill(
+            icon: Icons.settings_rounded,
+            compact: compact,
+            onPressed: onSettings,
+          ),
         ],
       ),
     );
@@ -326,6 +347,7 @@ class _TvNavPill extends StatefulWidget {
   final IconData? icon;
   final bool selected;
   final bool autofocus;
+  final bool compact;
   final FocusNode? focusNode;
   final VoidCallback onPressed;
 
@@ -334,6 +356,7 @@ class _TvNavPill extends StatefulWidget {
     this.icon,
     this.selected = false,
     this.autofocus = false,
+    this.compact = false,
     this.focusNode,
     required this.onPressed,
   });
@@ -373,10 +396,12 @@ class _TvNavPillState extends State<_TvNavPill> {
       child: GestureDetector(
         onTap: widget.onPressed,
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 4),
+          margin: EdgeInsets.symmetric(horizontal: widget.compact ? 2 : 4),
           padding: EdgeInsets.symmetric(
-            horizontal: widget.label == null ? 12 : 20,
-            vertical: 10,
+            horizontal: widget.compact
+                ? (widget.label == null ? 8 : 12)
+                : (widget.label == null ? 12 : 20),
+            vertical: widget.compact ? 8 : 10,
           ),
           decoration: BoxDecoration(
             color: _focused ? AppColors.textPrimary : Colors.transparent,
@@ -392,17 +417,17 @@ class _TvNavPillState extends State<_TvNavPill> {
                 Icon(
                   widget.icon,
                   color: fg,
-                  size: 24,
+                  size: widget.compact ? 20 : 24,
                   shadows: _focused ? null : shadow,
                 ),
               if (widget.icon != null && widget.label != null)
-                const SizedBox(width: 8),
+                SizedBox(width: widget.compact ? 6 : 8),
               if (widget.label != null)
                 Text(
                   widget.label!,
                   style: TextStyle(
                     color: fg,
-                    fontSize: 19,
+                    fontSize: widget.compact ? 16 : 19,
                     shadows: _focused ? null : shadow,
                     fontWeight: widget.selected || _focused
                         ? FontWeight.w700
