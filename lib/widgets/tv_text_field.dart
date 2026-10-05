@@ -33,8 +33,20 @@ class TvTextField extends StatefulWidget {
   final Iterable<String>? autofillHints;
   final bool autofocus;
 
-  static void showKeyboard() =>
-      SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+  static Future<void> showKeyboard() async {
+    try {
+      await SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+    } catch (_) {}
+  }
+
+  static const _device = MethodChannel('stellartv/device');
+
+  /// Android TV fallback: asks the system input manager directly.
+  static Future<void> showNativeKeyboard() async {
+    try {
+      await _device.invokeMethod<bool>('showKeyboard');
+    } catch (_) {}
+  }
 
   /// Moves focus to [node] and opens the keyboard there.
   static void focusWithKeyboard(FocusNode node) {
@@ -60,6 +72,7 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
   FocusOnKeyEventCallback? _prev;
   bool _tvEditing = false;
   bool _keyboardSeen = false;
+  int _showSerial = 0;
 
   @override
   void initState() {
@@ -75,30 +88,33 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
     if (!_node.hasFocus && _tvEditing && mounted) _endTvEditing(hide: false);
   }
 
-  /// TV: OK/click turns the field editable, re-attaches the input
-  /// connection (readOnly fields do not get the IME) and opens the keyboard.
+  /// TV: OK/click turns the field editable and opens the keyboard. The
+  /// field stays focused: EditableText opens the input connection itself
+  /// once readOnly turns false, then the keyboard is requested again
+  /// (Flutter and native) so slow TV IMEs still show up.
   void _beginTvEditing() {
     if (!DeviceTypeService.isTv) return;
     _keyboardSeen = false;
+    final serial = ++_showSerial;
     if (!_tvEditing) setState(() => _tvEditing = true);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      if (_node.hasFocus) {
-        _node.unfocus();
-        await Future<void>.delayed(const Duration(milliseconds: 30));
-        if (!mounted) return;
-        // unfocus resets editing through the focus listener: restore it.
-        if (!_tvEditing) setState(() => _tvEditing = true);
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) return;
+      if (!mounted || serial != _showSerial) return;
+      // requestFocus grants the keyboard token: if the field was not
+      // focused, gaining focus opens the connection and the keyboard.
+      if (!_node.hasFocus) _node.requestFocus();
+      for (final ms in const [80, 250, 600]) {
+        await Future<void>.delayed(Duration(milliseconds: ms));
+        if (!mounted || !_tvEditing || serial != _showSerial) return;
+        if (!_node.hasFocus) _node.requestFocus();
+        if (_keyboardSeen) return;
+        await TvTextField.showKeyboard();
+        if (ms >= 250) await TvTextField.showNativeKeyboard();
       }
-      _node.requestFocus();
-      await Future<void>.delayed(const Duration(milliseconds: 120));
-      if (mounted && _tvEditing) TvTextField.showKeyboard();
     });
   }
 
   void _endTvEditing({bool hide = true}) {
+    _showSerial++;
     if (hide) SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
     _keyboardSeen = false;
     if (_tvEditing && mounted) setState(() => _tvEditing = false);
@@ -141,12 +157,13 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
         node.previousFocus();
         return KeyEventResult.handled;
       }
-      if (DeviceTypeService.isTv &&
-          !_tvEditing &&
-          (k == LogicalKeyboardKey.select ||
-              k == LogicalKeyboardKey.enter ||
-              k == LogicalKeyboardKey.gameButtonA ||
-              k == LogicalKeyboardKey.numpadEnter)) {
+      // D-Pad OK always (re)opens the keyboard: Android may close the IME
+      // without notifying Flutter. Enter submits while editing.
+      final isOk =
+          k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.gameButtonA;
+      final isEnter =
+          k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.numpadEnter;
+      if (DeviceTypeService.isTv && (isOk || (isEnter && !_tvEditing))) {
         _beginTvEditing();
         return KeyEventResult.handled;
       }

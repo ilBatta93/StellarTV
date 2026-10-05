@@ -12,6 +12,7 @@ import android.provider.Settings
 import android.util.Rational
 import android.view.Display
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
 import androidx.annotation.RequiresApi
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -29,6 +30,7 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "isTv" -> result.success(isTelevision())
                     "moveToBack" -> result.success(moveTaskToBack(true))
+                    "showKeyboard" -> result.success(showSoftKeyboard())
                     else -> result.notImplemented()
                 }
             }
@@ -96,6 +98,14 @@ class MainActivity : FlutterActivity() {
         val leanback = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
         val television = packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
         return televisionMode || leanback || television
+    }
+
+    /** TV fallback when the Flutter IME request is ignored by the system. */
+    private fun showSoftKeyboard(): Boolean {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        val view = currentFocus ?: window.decorView
+        @Suppress("DEPRECATION")
+        return imm.showSoftInput(view, InputMethodManager.SHOW_FORCED)
     }
 
     private fun pipSupported(): Boolean =
