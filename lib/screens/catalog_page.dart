@@ -52,7 +52,6 @@ class CatalogEntryCard extends StatelessWidget {
     required this.onTap,
     required this.onFavoriteTap,
   });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,7 +179,6 @@ class ChannelGrid extends StatelessWidget {
     required this.type,
     this.padding = const EdgeInsets.fromLTRB(16, 8, 16, 24),
   });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -643,7 +641,6 @@ class _CategoryDrawer extends StatelessWidget {
     required this.selected,
     required this.onSelected,
   });
-  }
 
   @override
   Widget build(BuildContext context) {
