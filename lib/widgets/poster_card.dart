@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../models/tmdb_item.dart';
 import '../providers/ui_settings.dart';
 import '../theme/app_theme.dart';
+import '../services/device_type_service.dart';
+import 'tv_focusable.dart';
 
 class PosterImage extends StatelessWidget {
   final String? url;
@@ -60,7 +62,7 @@ class _PressableState extends State<Pressable> {
   @override
   Widget build(BuildContext context) {
     final animations = context.watch<UiSettings>().animations;
-    return GestureDetector(
+    final gesture = GestureDetector(
       onTapDown: animations ? (_) => setState(() => _pressed = true) : null,
       onTapCancel: animations ? () => setState(() => _pressed = false) : null,
       onTapUp: animations ? (_) => setState(() => _pressed = false) : null,
@@ -74,6 +76,11 @@ class _PressableState extends State<Pressable> {
         curve: Curves.easeOut,
         child: widget.child,
       ),
+    );
+    return TvFocusable(
+      onPressed: widget.onTap,
+      onLongPress: widget.onLongPress,
+      child: gesture,
     );
   }
 }
@@ -108,10 +115,11 @@ class TmdbPosterCard extends StatelessWidget {
       ),
     );
     final fillsCell = !width.isFinite;
+    final effectiveWidth = DeviceTypeService.isTv && !fillsCell ? 168.0 : width;
     return Pressable(
       onTap: onTap,
       child: SizedBox(
-        width: fillsCell ? null : width,
+        width: fillsCell ? null : effectiveWidth,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -124,9 +132,9 @@ class TmdbPosterCard extends StatelessWidget {
               item.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textPrimary,
-                fontSize: 13,
+                fontSize: DeviceTypeService.isTv ? 17 : 13,
                 fontWeight: FontWeight.w600,
                 height: 1.2,
               ),
@@ -155,7 +163,9 @@ class RankedPosterCard extends StatelessWidget {
     return Pressable(
       onTap: onTap,
       child: SizedBox(
-        width: rank >= 10 ? 196 : 172,
+        width: DeviceTypeService.isTv
+            ? (rank >= 10 ? 250 : 220)
+            : (rank >= 10 ? 196 : 172),
         child: Stack(
           children: [
             Positioned(
@@ -164,7 +174,7 @@ class RankedPosterCard extends StatelessWidget {
               child: Text(
                 '$rank',
                 style: TextStyle(
-                  fontSize: 128,
+                  fontSize: DeviceTypeService.isTv ? 156 : 128,
                   fontWeight: FontWeight.w700,
                   height: 1.2,
                   letterSpacing: -10,

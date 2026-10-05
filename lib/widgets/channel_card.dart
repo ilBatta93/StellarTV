@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../theme/app_theme.dart';
+import '../services/device_type_service.dart';
 import 'poster_card.dart';
 
 class ChannelCard extends StatelessWidget {
@@ -25,81 +26,66 @@ class ChannelCard extends StatelessWidget {
     return Pressable(
       onTap: onTap,
       onLongPress: onFavoriteTap,
-      child: Focus(
-        canRequestFocus: true,
-        child: Builder(
-          builder: (context) {
-            final focused = Focus.of(context).hasFocus;
-            return AnimatedScale(
-              scale: focused ? 1.05 : 1,
-              duration: const Duration(milliseconds: 150),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: focused ? AppColors.primary : Colors.transparent,
-                    width: 2,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            if (_isLive)
-                              Container(
-                                color: AppColors.card,
-                                padding: const EdgeInsets.all(16),
-                                child: PosterImage(
-                                  url: channel.logo,
-                                  fit: BoxFit.contain,
-                                  fallbackIcon: Icons.live_tv_rounded,
-                                ),
-                              )
-                            else
-                              PosterImage(
-                                url: channel.logo,
-                                fallbackIcon: channel.type == ContentType.series ||
-                                        channel.type == ContentType.anime
-                                    ? Icons.video_library_outlined
-                                    : Icons.movie_outlined,
-                              ),
-                            Positioned(
-                              top: 6,
-                              right: 6,
-                              child: _FavoriteButton(
-                                isFavorite: isFavorite,
-                                onTap: onFavoriteTap,
-                              ),
-                            ),
-                            if (_isLive)
-                              const Positioned(
-                                  left: 6, bottom: 6, child: LiveBadge()),
-                          ],
+                    if (_isLive)
+                      Container(
+                        color: AppColors.card,
+                        padding: const EdgeInsets.all(16),
+                        child: PosterImage(
+                          url: channel.logo,
+                          fit: BoxFit.contain,
+                          fallbackIcon: Icons.live_tv_rounded,
                         ),
+                      )
+                    else
+                      PosterImage(
+                        url: channel.logo,
+                        fallbackIcon:
+                            channel.type == ContentType.series ||
+                                channel.type == ContentType.anime
+                            ? Icons.video_library_outlined
+                            : Icons.movie_outlined,
+                      ),
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: _FavoriteButton(
+                        isFavorite: isFavorite,
+                        onTap: onFavoriteTap,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      channel.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        height: 1.2,
-                      ),
-                    ),
+                    if (_isLive)
+                      const Positioned(left: 6, bottom: 6, child: LiveBadge()),
                   ],
                 ),
               ),
-            );
-          },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              channel.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: DeviceTypeService.isTv ? 16 : 12,
+                fontWeight: FontWeight.w600,
+                height: 1.2,
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../services/device_type_service.dart';
 
 class SectionHeader extends StatelessWidget {
   final String title;
@@ -18,7 +19,12 @@ class SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 8, 12),
+      padding: EdgeInsets.fromLTRB(
+        DeviceTypeService.isTv ? 32 : 16,
+        DeviceTypeService.isTv ? 32 : 24,
+        DeviceTypeService.isTv ? 24 : 8,
+        DeviceTypeService.isTv ? 16 : 12,
+      ),
       child: Row(
         children: [
           if (leading != null) ...[leading!, const SizedBox(width: 8)],
@@ -33,8 +39,10 @@ class SectionHeader extends StatelessWidget {
                     subtitle!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 12),
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: DeviceTypeService.isTv ? 16 : 12,
+                    ),
                   ),
                 ],
               ],
@@ -68,7 +76,9 @@ class HorizontalRow extends StatelessWidget {
       height: height,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: EdgeInsets.symmetric(
+          horizontal: DeviceTypeService.isTv ? 32 : 16,
+        ),
         itemCount: itemCount,
         separatorBuilder: (_, _) => SizedBox(width: spacing),
         itemBuilder: itemBuilder,
@@ -109,9 +119,11 @@ class EmptyState extends StatelessWidget {
               child: Icon(icon, size: 32, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Text(
               message,

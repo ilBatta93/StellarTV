@@ -6,6 +6,7 @@ import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/ui_settings.dart';
 import '../services/catalog_builder.dart';
+import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
 import '../widgets/section_row.dart';
@@ -17,6 +18,14 @@ SliverGridDelegate channelGridDelegate(
   bool compact = false,
 }) {
   final isLive = type == ContentType.live;
+  if (DeviceTypeService.isTv) {
+    return SliverGridDelegateWithMaxCrossAxisExtent(
+      maxCrossAxisExtent: isLive ? 240 : 190,
+      childAspectRatio: isLive ? 1.05 : 0.6,
+      crossAxisSpacing: 22,
+      mainAxisSpacing: 24,
+    );
+  }
   return SliverGridDelegateWithMaxCrossAxisExtent(
     maxCrossAxisExtent: isLive ? 150 : (compact ? maxExtent * 0.86 : maxExtent),
     childAspectRatio: isLive ? 0.9 : (compact ? 0.62 : 0.58),
@@ -322,8 +331,8 @@ class _CatalogPageState extends State<CatalogPage> {
         selected: _selectedCategory,
         onSelected: (category) {
           setState(
-            () => _selectedCategory =
-                category == _recentLabel ? null : category,
+            () =>
+                _selectedCategory = category == _recentLabel ? null : category,
           );
         },
       ),
@@ -468,8 +477,10 @@ class _CatalogPageState extends State<CatalogPage> {
 
   Widget _buildAllGrid(AppProvider app) {
     final ui = context.watch<UiSettings>();
-    final entries =
-        app.allEntries(widget.type).where((e) => _matchesGenre(app, e)).toList();
+    final entries = app
+        .allEntries(widget.type)
+        .where((e) => _matchesGenre(app, e))
+        .toList();
     if (entries.isEmpty) {
       return EmptyState(
         icon: Icons.search_off_rounded,
@@ -612,7 +623,8 @@ class _CategoryDrawer extends StatelessWidget {
                           color: (selected ?? 'Ultimi Aggiunti') == entry.key
                               ? AppColors.primary
                               : AppColors.textPrimary,
-                          fontWeight: (selected ?? 'Ultimi Aggiunti') == entry.key
+                          fontWeight:
+                              (selected ?? 'Ultimi Aggiunti') == entry.key
                               ? FontWeight.w600
                               : FontWeight.w400,
                         ),

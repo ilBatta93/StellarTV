@@ -30,13 +30,19 @@ class AppColors {
 }
 
 class AppTheme {
-  static ThemeData darkTheme({Color accent = AppColors.primaryDefault}) {
+  static ThemeData darkTheme({
+    Color accent = AppColors.primaryDefault,
+    bool isTv = false,
+  }) {
     final onAccent = accent.computeLuminance() > 0.5
         ? Colors.black
         : Colors.white;
     return ThemeData(
       brightness: Brightness.dark,
       useMaterial3: true,
+      visualDensity: isTv
+          ? const VisualDensity(horizontal: 1, vertical: 1)
+          : VisualDensity.standard,
       fontFamily: 'Manrope',
       colorScheme: ColorScheme.dark(
         primary: accent,
@@ -167,6 +173,14 @@ class AppTheme {
         ),
       ),
       iconTheme: const IconThemeData(color: AppColors.textPrimary),
+      focusColor: accent.withValues(alpha: 0.28),
+      hoverColor: accent.withValues(alpha: 0.12),
+      splashColor: accent.withValues(alpha: 0.18),
+      listTileTheme: ListTileThemeData(
+        minTileHeight: isTv ? 64 : null,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        selectedTileColor: accent.withValues(alpha: 0.16),
+      ),
       dividerTheme: const DividerThemeData(color: AppColors.card, thickness: 1),
     );
   }

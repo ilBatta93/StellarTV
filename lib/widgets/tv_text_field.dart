@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/device_type_service.dart';
 
 /// TextField usable with a TV remote (Fire TV / Google TV): arrows up/down
 /// move between fields, OK/Enter opens the on-screen keyboard, and moving
@@ -58,17 +59,19 @@ class _TvTextFieldState extends State<TvTextField> {
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is KeyDownEvent) {
       final k = e.logicalKey;
-      if (k == LogicalKeyboardKey.arrowDown) {
+      if (DeviceTypeService.isTv && k == LogicalKeyboardKey.arrowDown) {
         node.nextFocus();
         return KeyEventResult.handled;
       }
-      if (k == LogicalKeyboardKey.arrowUp) {
+      if (DeviceTypeService.isTv && k == LogicalKeyboardKey.arrowUp) {
         node.previousFocus();
         return KeyEventResult.handled;
       }
-      if (k == LogicalKeyboardKey.select ||
-          k == LogicalKeyboardKey.gameButtonA ||
-          k == LogicalKeyboardKey.numpadEnter) {
+      if (DeviceTypeService.isTv &&
+          (k == LogicalKeyboardKey.select ||
+              k == LogicalKeyboardKey.enter ||
+              k == LogicalKeyboardKey.gameButtonA ||
+              k == LogicalKeyboardKey.numpadEnter)) {
         TvTextField.showKeyboard();
         return KeyEventResult.handled;
       }

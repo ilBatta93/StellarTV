@@ -1,6 +1,8 @@
 package tv.stellar.app
 
 import android.app.PictureInPictureParams
+import android.app.UiModeManager
+import android.content.Context
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -22,6 +24,13 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "stellartv/device")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isTv" -> result.success(isTelevision())
+                    else -> result.notImplemented()
+                }
+            }
         val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "stellartv/player")
         ch.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -78,6 +87,14 @@ class MainActivity : FlutterActivity() {
             }
         }
         channel = ch
+    }
+
+    private fun isTelevision(): Boolean {
+        val uiModeManager = getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
+        val televisionMode = uiModeManager.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
+        val leanback = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        val television = packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
+        return televisionMode || leanback || television
     }
 
     private fun pipSupported(): Boolean =

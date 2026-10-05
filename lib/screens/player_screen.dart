@@ -17,6 +17,7 @@ import '../services/introdb_service.dart';
 import '../services/native_player_bridge.dart';
 import '../services/player_settings_service.dart';
 import '../services/subtitles_service.dart';
+import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/player/player_controls.dart';
 import '../widgets/player/player_gestures.dart';
@@ -45,6 +46,7 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen>
     with WidgetsBindingObserver {
+  final FocusNode _remoteFocus = FocusNode(debugLabel: 'player remote');
   final _settingsService = PlayerSettingsService();
   final _bridge = NativePlayerBridge.instance;
   late final HistoryProvider _history;
@@ -107,6 +109,61 @@ class _PlayerScreenState extends State<PlayerScreen>
     _init();
     _resolveQueue();
     _loadSegments();
+    if (DeviceTypeService.isTv) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _remoteFocus.requestFocus();
+      });
+    }
+  }
+
+  KeyEventResult _onRemoteKey(FocusNode node, KeyEvent event) {
+    if (!DeviceTypeService.isTv || event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    final session = _session;
+    if (session == null) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.goBack ||
+        key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.browserBack) {
+      Navigator.maybePop(context);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.select ||
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter ||
+        key == LogicalKeyboardKey.gameButtonA) {
+      if (!_controlsVisible) {
+        _onInteraction();
+      } else {
+        session.togglePlay();
+        _onInteraction();
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowLeft) {
+      if (!_isLive) {
+        session.seekBy(Duration(seconds: -(_settings?.seekStepSeconds ?? 10)));
+      }
+      _onInteraction();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowRight) {
+      if (!_isLive) {
+        session.seekBy(Duration(seconds: _settings?.seekStepSeconds ?? 10));
+      }
+      _onInteraction();
+      return KeyEventResult.handled;
+    }
+    if (_isLive && key == LogicalKeyboardKey.arrowUp) {
+      _playLiveChannel(_adjacentLiveChannel(-1));
+      return KeyEventResult.handled;
+    }
+    if (_isLive && key == LogicalKeyboardKey.arrowDown) {
+      _playLiveChannel(_adjacentLiveChannel(1));
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   /// "Scheda titolo": leaves the player and shows the movie/series page,
@@ -553,6 +610,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _bridge.setKeepScreenOn(false);
     _bridge.resetBrightness();
     _outroTimer?.cancel();
+    _remoteFocus.dispose();
     _activePlayers--;
     if (_activePlayers <= 0) {
       _activePlayers = 0;
@@ -571,17 +629,28 @@ class _PlayerScreenState extends State<PlayerScreen>
   Widget build(BuildContext context) {
     final session = _session;
     final settings = _settings;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: session == null || settings == null
-          ? Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : Stack(
-              fit: StackFit.expand,
-              children: [
-                VideoSurface(session: session, settings: settings),
-                if (!_inPip) ..._buildOverlays(session, settings),
-              ],
-            ),
+    final body = session == null || settings == null
+        ? Center(child: CircularProgressIndicator(color: AppColors.primary))
+        : Stack(
+            fit: StackFit.expand,
+            children: [
+              VideoSurface(session: session, settings: settings),
+              if (!_inPip) ..._buildOverlays(session, settings),
+            ],
+          );
+    return PopScope(
+      canPop: true,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: DeviceTypeService.isTv
+            ? Focus(
+                focusNode: _remoteFocus,
+                autofocus: true,
+                onKeyEvent: _onRemoteKey,
+                child: body,
+              )
+            : body,
+      ),
     );
   }
 

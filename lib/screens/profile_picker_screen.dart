@@ -8,6 +8,8 @@ import '../services/profile_service.dart';
 import '../widgets/pin_dialog.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
+import '../services/device_type_service.dart';
+import '../widgets/tv_focusable.dart';
 import 'home_screen.dart';
 
 /// Netflix-style profile picker shown after login. Lets the user pick an
@@ -199,7 +201,7 @@ class _ProfileAvatar extends StatelessWidget {
           ProfileAvatars.colors['arancio']!,
     );
     final icon = ProfileAvatars.iconOf(profile.avatarKey);
-    return InkWell(
+    final tile = InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(16),
@@ -254,6 +256,13 @@ class _ProfileAvatar extends StatelessWidget {
         ),
       ),
     );
+    return TvFocusable(
+      onPressed: onTap,
+      onLongPress: onLongPress,
+      autofocus: DeviceTypeService.isTv && selected,
+      borderRadius: BorderRadius.circular(16),
+      child: tile,
+    );
   }
 }
 
@@ -264,7 +273,7 @@ class _AddProfileTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final tile = InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: SizedBox(
@@ -296,6 +305,11 @@ class _AddProfileTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+    return TvFocusable(
+      onPressed: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: tile,
     );
   }
 }

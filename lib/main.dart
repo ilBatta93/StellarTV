@@ -12,6 +12,7 @@ import 'providers/sync_provider.dart';
 import 'providers/ui_settings.dart';
 import 'screens/splash_screen.dart';
 import 'services/profile_service.dart';
+import 'services/device_type_service.dart';
 import 'services/sync_service.dart';
 import 'services/tmdb_service.dart';
 import 'theme/app_theme.dart';
@@ -22,6 +23,7 @@ Future<void> main() async {
   // blank white screen on a real device. Show a readable fallback instead.
   ErrorWidget.builder = (details) => _StartupErrorView(details: details);
   MediaKit.ensureInitialized();
+  await DeviceTypeService.initialize();
   await Supabase.initialize(
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.anonKey,
@@ -45,8 +47,11 @@ class _StartupErrorView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              color: AppColors.error, size: 40),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppColors.error,
+            size: 40,
+          ),
           const SizedBox(height: 12),
           const Text(
             'Si è verificato un errore. Riapri l\'app.',
@@ -88,8 +93,11 @@ class _StellarTvAppState extends State<StellarTvApp> {
     final profileService = ProfileService(Supabase.instance.client);
     _appProvider = AppProvider()..init();
     _syncProvider = SyncProvider(syncService);
-    _historyProvider =
-        HistoryProvider(syncService, _appProvider, _syncProvider);
+    _historyProvider = HistoryProvider(
+      syncService,
+      _appProvider,
+      _syncProvider,
+    );
     _profileProvider = ProfileProvider(profileService, syncService);
     // Load profiles at startup so the top-bar avatar and the splash routing
     // know which profile is active on this device.
@@ -105,19 +113,18 @@ class _StellarTvAppState extends State<StellarTvApp> {
     // The sync needs favorites from the app state and must reload the app
     // when credentials arrive from another device.
     _syncProvider.snapshotSource = () async => SnapshotPart(
-          history: {},
-          favoriteIds: _appProvider.favoriteIds.toList(),
-          tmdbFavorites:
-              _appProvider.tmdbFavorites.map((e) => e.toJson()).toList(),
-        );
+      history: {},
+      favoriteIds: _appProvider.favoriteIds.toList(),
+      tmdbFavorites: _appProvider.tmdbFavorites.map((e) => e.toJson()).toList(),
+    );
     _historyProvider.onCredentialsRestored = _appProvider.reloadFromStorage;
     _historyProvider.onSettingsRestored = () async {
       await _appProvider.reloadSettings();
       await _uiSettings.load();
     };
     // Profiles created/edited on other devices show up automatically.
-    _historyProvider.onAfterAutoPull =
-        () => _profileProvider.load(silent: true);
+    _historyProvider.onAfterAutoPull = () =>
+        _profileProvider.load(silent: true);
     _historyProvider.startAutoSync();
     // Keep the cloud favorites table in step with the sync code: upload the
     // local list when a code is enabled/entered, stop mirroring when cleared.
@@ -166,8 +173,14 @@ class _StellarTvAppState extends State<StellarTvApp> {
           return MaterialApp(
             title: 'StellarTV',
             debugShowCheckedModeBanner: false,
-            theme: AppTheme.darkTheme(accent: ui.accent),
-            darkTheme: AppTheme.darkTheme(accent: ui.accent),
+            theme: AppTheme.darkTheme(
+              accent: ui.accent,
+              isTv: DeviceTypeService.isTv,
+            ),
+            darkTheme: AppTheme.darkTheme(
+              accent: ui.accent,
+              isTv: DeviceTypeService.isTv,
+            ),
             themeMode: ThemeMode.dark,
             home: const SplashScreen(),
           );
