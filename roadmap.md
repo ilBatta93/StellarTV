@@ -16,3 +16,7 @@
 - [x] Aprire categorie con sinistra e chiuderle con destra ripristinando il focus
 - [x] Rendere visibile il focus nelle schede e raggiungibili i controlli player
 - [x] Verificare analisi Dart e test focus TV/touch (build APK da verificare in Codemagic)
+
+- [x] Mostrare stati indipendenti Diretta/Film/Serie su mobile e TV
+- [x] Verificare aggiornamento progressivo, errori/cache e navigazione invariata
+- [x] Salvare gli indicatori nella repository GitHub

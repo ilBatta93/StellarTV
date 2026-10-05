@@ -68,7 +68,8 @@ class _LivePageState extends State<LivePage> {
     final app = context.watch<AppProvider>();
     final epg = context.watch<EpgProvider>();
 
-    if (app.isLoading && app.allChannels.isEmpty) {
+    if (app.catalogState(ContentType.live).isPending &&
+        !app.catalogState(ContentType.live).hasContent) {
       return Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
     final groups = app.groupedCatalog(ContentType.live);

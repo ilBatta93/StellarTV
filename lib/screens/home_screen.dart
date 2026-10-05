@@ -8,6 +8,7 @@ import '../services/profile_service.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/catalog_status_indicator.dart';
 import 'catalog_page.dart';
 import 'discover_page.dart';
 import 'favorites_page.dart';
@@ -87,18 +88,36 @@ class _HomeScreenState extends State<HomeScreen> {
               label: 'Home',
             ),
             NavigationDestination(
-              icon: Icon(Icons.live_tv_outlined),
-              selectedIcon: Icon(Icons.live_tv_rounded),
+              icon: CatalogNavigationIcon(
+                icon: Icons.live_tv_outlined,
+                type: ContentType.live,
+              ),
+              selectedIcon: CatalogNavigationIcon(
+                icon: Icons.live_tv_rounded,
+                type: ContentType.live,
+              ),
               label: 'Diretta',
             ),
             NavigationDestination(
-              icon: Icon(Icons.movie_outlined),
-              selectedIcon: Icon(Icons.movie_rounded),
+              icon: CatalogNavigationIcon(
+                icon: Icons.movie_outlined,
+                type: ContentType.movie,
+              ),
+              selectedIcon: CatalogNavigationIcon(
+                icon: Icons.movie_rounded,
+                type: ContentType.movie,
+              ),
               label: 'Film',
             ),
             NavigationDestination(
-              icon: Icon(Icons.video_library_outlined),
-              selectedIcon: Icon(Icons.video_library_rounded),
+              icon: CatalogNavigationIcon(
+                icon: Icons.video_library_outlined,
+                type: ContentType.series,
+              ),
+              selectedIcon: CatalogNavigationIcon(
+                icon: Icons.video_library_rounded,
+                type: ContentType.series,
+              ),
               label: 'Serie TV',
             ),
             NavigationDestination(
@@ -320,6 +339,12 @@ class _TvTopBar extends StatelessWidget {
           for (var i = 0; i < _tabs.length; i++)
             _TvNavPill(
               label: _tabs[i],
+              contentType: switch (i) {
+                1 => ContentType.live,
+                2 => ContentType.movie,
+                3 => ContentType.series,
+                _ => null,
+              },
               focusNode: tabNodes[i],
               selected: selectedIndex == i,
               autofocus: i == selectedIndex,
@@ -345,6 +370,7 @@ class _TvTopBar extends StatelessWidget {
 
 class _TvNavPill extends StatefulWidget {
   final String? label;
+  final ContentType? contentType;
   final IconData? icon;
   final bool selected;
   final bool autofocus;
@@ -354,6 +380,7 @@ class _TvNavPill extends StatefulWidget {
 
   const _TvNavPill({
     this.label,
+    this.contentType,
     this.icon,
     this.selected = false,
     this.autofocus = false,
@@ -435,6 +462,10 @@ class _TvNavPillState extends State<_TvNavPill> {
                         : FontWeight.w500,
                   ),
                 ),
+              if (widget.contentType case final type?) ...[
+                const SizedBox(width: 6),
+                CatalogStatusIndicator(type: type, foreground: fg),
+              ],
             ],
           ),
         ),

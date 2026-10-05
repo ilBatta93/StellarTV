@@ -291,14 +291,17 @@ class _CatalogPageState extends State<CatalogPage> {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
 
-    if (app.isLoading && app.allChannels.isEmpty) {
+    if (app.catalogState(widget.type).isPending &&
+        !app.catalogState(widget.type).hasContent) {
       return Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
-    if (app.error != null && app.allChannels.isEmpty) {
+    if (app.catalogState(widget.type).error != null &&
+        !app.catalogState(widget.type).hasContent) {
       return EmptyState(
         icon: Icons.error_outline_rounded,
         title: 'Impossibile caricare la playlist',
-        message: app.error!,
+        message:
+            app.catalogState(widget.type).error ?? 'Caricamento non riuscito',
         action: ElevatedButton.icon(
           icon: const Icon(Icons.refresh_rounded),
           label: const Text('Riprova'),

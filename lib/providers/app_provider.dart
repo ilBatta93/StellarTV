@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
+import '../models/catalog_load_state.dart';
 import '../models/series_details.dart';
 import '../models/tmdb_item.dart';
 import '../services/catalog_builder.dart';
@@ -22,10 +24,14 @@ import '../services/catalog_cache_service.dart';
 enum AuthMethod { none, xtream }
 
 class AppProvider extends ChangeNotifier {
-  final _xtreamService = XtreamService();
+  AppProvider({XtreamService? xtreamService, CatalogCacheService? catalogCache})
+    : _xtreamService = xtreamService ?? XtreamService(),
+      _catalogCache = catalogCache ?? CatalogCacheService();
+
+  final XtreamService _xtreamService;
   final _favoritesService = FavoritesService();
   final _settingsService = SettingsService();
-  final _catalogCache = CatalogCacheService();
+  final CatalogCacheService _catalogCache;
   CloudFavoritesService? _cloudFavorites;
   String? _syncCode;
 
@@ -64,6 +70,20 @@ class AppProvider extends ChangeNotifier {
   Set<String> get favoriteIds => _favoriteIds;
   List<TmdbItem> get tmdbFavorites => _tmdbFavorites;
   bool get isLoading => _isLoading;
+  final Map<ContentType, CatalogLoadState> _catalogStates = {};
+  CatalogLoadState catalogState(ContentType type) =>
+      _catalogStates[type == ContentType.anime ? ContentType.series : type] ??
+      const CatalogLoadState();
+  static const _playlistTypes = [
+    ContentType.live,
+    ContentType.movie,
+    ContentType.series,
+  ];
+  bool _belongsToSection(Channel channel, ContentType type) =>
+      channel.type == type ||
+      (type == ContentType.series && channel.type == ContentType.anime);
+  bool _hasSection(ContentType type) =>
+      _rawChannels.any((channel) => _belongsToSection(channel, type));
   bool get isInitialized => _initialized;
   String? get error => _error;
   AuthMethod get authMethod => _authMethod;
@@ -287,9 +307,9 @@ class AppProvider extends ChangeNotifier {
   List<CatalogGroup> groupedCatalog(ContentType type) =>
       _groupedCache[type] ??= CatalogBuilder.groupsOf(
         _visibleChannels(type),
-        categoryOrderOf(
-          type,
-        ).where((g) => !hiddenCategoriesOf(type).contains(g)).toList(),
+        categoryOrderOf(type)
+            .where((g) => !hiddenCategoriesOf(type).contains(g))
+            .toList(),
       );
 
   /// Recently added items of a type, in the playlist's own order (the
@@ -761,80 +781,105 @@ class AppProvider extends ChangeNotifier {
     required String username,
     required String password,
   }) async {
+    // Preserve sequential requests and retry behavior to protect IPTV servers.
+    if (_catalogStates.values.any((state) => state.isPending)) return;
     _isLoading = true;
     _error = null;
+    for (final type in _playlistTypes) {
+      _catalogStates[type] = CatalogLoadState(
+        phase: CatalogLoadPhase.queued,
+        hasContent: _hasSection(type),
+      );
+    }
     notifyListeners();
 
+    final failures = <String>[];
+    final key = _cacheKey({'server': server, 'username': username});
     try {
-      // Ogni lista viene caricata in modo indipendente: se una sola fallisce
-      // (per esempio le serie, spesso enormi) le altre restano disponibili e
-      // per quella mancante si usa l'ultima copia salvata sul dispositivo.
-      final failures = <String>[];
-      Future<List<Channel>> safeLoad(
+      final cached = await _catalogCache.read(key);
+      Future<void> loadSection(
+        ContentType type,
         Future<List<Channel>> Function() load,
       ) async {
+        _catalogStates[type] = CatalogLoadState(
+          phase: CatalogLoadPhase.loading,
+          hasContent: _hasSection(type),
+        );
+        notifyListeners();
         try {
-          return await load();
+          final channels = await load();
+          // Publish each completed section immediately, not after all three.
+          _setChannels([
+            ..._rawChannels.where((c) => !_belongsToSection(c, type)),
+            ...channels,
+          ]);
+          _catalogStates[type] = CatalogLoadState(
+            phase: CatalogLoadPhase.ready,
+            hasContent: channels.isNotEmpty,
+          );
         } catch (e) {
-          debugPrint('[xtream] caricamento lista fallito: $e');
-          failures.add(e.toString().replaceFirst('Exception: ', ''));
-          return const [];
+          final message = e.toString().replaceFirst('Exception: ', '');
+          failures.add(message);
+          if (!_hasSection(type)) {
+            final fallback = cached.where((c) => _belongsToSection(c, type));
+            if (fallback.isNotEmpty) {
+              _setChannels([..._rawChannels, ...fallback]);
+            }
+          }
+          final available = _hasSection(type);
+          _catalogStates[type] = CatalogLoadState(
+            phase: available
+                ? CatalogLoadPhase.cached
+                : CatalogLoadPhase.failed,
+            hasContent: available,
+            error: message,
+          );
         }
+        notifyListeners();
       }
 
-      final live = await safeLoad(
+      await loadSection(
+        ContentType.live,
         () => _xtreamService.getLiveChannels(
           server: server,
           username: username,
           password: password,
         ),
       );
-      final vod = await safeLoad(
+      await loadSection(
+        ContentType.movie,
         () => _xtreamService.getVodChannels(
           server: server,
           username: username,
           password: password,
         ),
       );
-      final series = await safeLoad(
+      await loadSection(
+        ContentType.series,
         () => _xtreamService.getSeriesChannels(
           server: server,
           username: username,
           password: password,
         ),
       );
-      final channels = [...live, ...vod, ...series];
-      final key = _cacheKey({'server': server, 'username': username});
-
-      if (failures.isNotEmpty) {
-        final cached = await _catalogCache.read(key);
-        if (live.isEmpty) {
-          channels.addAll(cached.where((c) => c.type == ContentType.live));
-        }
-        if (vod.isEmpty) {
-          channels.addAll(cached.where((c) => c.type == ContentType.movie));
-        }
-        if (series.isEmpty) {
-          channels.addAll(
-            cached.where(
-              (c) =>
-                  c.type == ContentType.series || c.type == ContentType.anime,
-            ),
-          );
-        }
-        if (channels.isEmpty) {
-          _error = failures.first;
-          return;
-        }
-      }
-
-      _setChannels(channels);
       if (failures.isEmpty) {
-        unawaited(_catalogCache.write(key, channels));
+        unawaited(_catalogCache.write(key, _rawChannels));
+      } else if (_rawChannels.isEmpty) {
+        _error = failures.first;
       }
       _isAuthenticated = true;
     } catch (e) {
       _error = e.toString().replaceFirst('Exception: ', '');
+      for (final type in _playlistTypes) {
+        if (!catalogState(type).isPending) continue;
+        _catalogStates[type] = CatalogLoadState(
+          phase: _hasSection(type)
+              ? CatalogLoadPhase.cached
+              : CatalogLoadPhase.failed,
+          hasContent: _hasSection(type),
+          error: _error,
+        );
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -847,6 +892,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> logout() async {
     await _settingsService.clearCredentials();
     _setChannels([]);
+    _catalogStates.clear();
     _authMethod = AuthMethod.none;
     _xtreamCredentials = null;
     _isAuthenticated = false;
