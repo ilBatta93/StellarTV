@@ -8,11 +8,20 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.media.MediaCodecList
 import android.os.Build
+import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Rational
 import android.view.Display
+import android.view.KeyEvent
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
+import android.widget.FrameLayout
 import androidx.annotation.RequiresApi
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -23,6 +32,96 @@ class MainActivity : FlutterActivity() {
     private var autoPip = false
     private var pipRatio = Rational(16, 9)
 
+    // TV text input: true while a Flutter text field is being edited.
+    private var textEditing = false
+    private var imeHealBudget = 0
+    private var lastImeHeal = 0L
+    private var editorProxy: View? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (isTelevision()) installTextEditorProxy()
+    }
+
+    // Many Google TV / Android TV devices (low-RAM overlay, e.g. Chromecast
+    // with Google TV, TCL/Philips TVs) enable config_preventImeStartupUnlessTextEditor:
+    // the system refuses to bind the keyboard to a view that does not report
+    // onCheckIsTextEditor(). FlutterView never reports it, so the keyboard is
+    // drawn but not connected to the app: D-Pad keys reach Flutter instead of
+    // the keyboard, focus moves and the keyboard closes (flutter/flutter#177360).
+    // This 1x1 view lives inside FlutterView, holds Android focus in its place,
+    // reports itself as a text editor while a field is edited and hands the
+    // system Flutter's own InputConnection. Keys still go through FlutterView.
+    private inner class TextEditorProxyView(context: Context, private val flutterView: View) : View(context) {
+        init {
+            isFocusable = true
+            isFocusableInTouchMode = true
+            importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+
+        override fun onCheckIsTextEditor(): Boolean = textEditing
+
+        override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? =
+            flutterView.onCreateInputConnection(outAttrs)
+
+        override fun checkInputConnectionProxy(view: View): Boolean = view === flutterView
+    }
+
+    private fun flutterView(): View? = findViewById(FlutterActivity.FLUTTER_VIEW_ID)
+
+    private fun installTextEditorProxy() {
+        val fv = flutterView() as? ViewGroup ?: return
+        fv.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        val proxy = TextEditorProxyView(this, fv)
+        fv.addView(proxy, FrameLayout.LayoutParams(1, 1))
+        editorProxy = proxy
+        if (fv.isFocused) proxy.requestFocus()
+    }
+
+    private fun isImeVisible(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        return window.decorView.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true
+    }
+
+    private fun setTextEditing(value: Boolean) {
+        val old = textEditing
+        textEditing = value
+        if (value && !old) {
+            imeHealBudget = 2
+            val proxy = editorProxy
+            if (proxy != null && !proxy.isFocused) proxy.requestFocus()
+        }
+    }
+
+    // A healthy keyboard consumes D-Pad keys before the app. One arriving here
+    // while the keyboard is visible means it is not connected: reconnect it
+    // and swallow the key so the focus cannot move behind the keyboard.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (textEditing && imeHealBudget > 0 && isImeVisible()) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent.KEYCODE_DPAD_CENTER -> {
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                        val now = SystemClock.uptimeMillis()
+                        if (now - lastImeHeal >= 1000L) {
+                            lastImeHeal = now
+                            imeHealBudget--
+                            flutterView()?.let {
+                                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                                imm.restartInput(it)
+                            }
+                        }
+                    }
+                    return true
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "stellartv/device")
@@ -31,6 +130,10 @@ class MainActivity : FlutterActivity() {
                     "isTv" -> result.success(isTelevision())
                     "moveToBack" -> result.success(moveTaskToBack(true))
                     "showKeyboard" -> result.success(showSoftKeyboard())
+                    "setTextEditing" -> {
+                        setTextEditing(call.arguments as? Boolean ?: false)
+                        result.success(null)
+                    }
                     else -> result.notImplemented()
                 }
             }

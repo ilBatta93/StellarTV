@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/device_type_service.dart';
+import '../services/tv_remote_keys.dart';
 
 /// TextField usable with a TV remote (Fire TV / Google TV).
 ///
@@ -151,6 +152,15 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
   }
 
   void _onFieldFocus() {
+    if (_tv) {
+      // Registered before the TextField's own listener: Android learns that a
+      // text editor is active before Flutter opens the keyboard connection.
+      if (_node.hasFocus) {
+        TvRemoteKeys.reportEditing(true);
+      } else {
+        TvRemoteKeys.recheckEditing();
+      }
+    }
     if (!_node.hasFocus) {
       _serial++;
       _keyboardSeen = false;
@@ -164,6 +174,7 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
   void _startEditing() {
     final serial = ++_serial;
     _keyboardSeen = false;
+    if (_tv) TvRemoteKeys.reportEditing(true);
     if (!_node.hasFocus) _node.requestFocus();
     if (!_tv) return;
     WidgetsBinding.instance.addPostFrameCallback((_) async {

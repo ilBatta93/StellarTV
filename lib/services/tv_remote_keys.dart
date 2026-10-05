@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -13,11 +15,35 @@ class TvRemoteKeys {
   TvRemoteKeys._();
 
   static bool _installed = false;
+  static bool? _lastEditing;
+  static const _device = MethodChannel('stellartv/device');
 
   static void install() {
     if (_installed || !DeviceTypeService.isTv) return;
     _installed = true;
     FocusManager.instance.addEarlyKeyEventHandler(_onKey);
+    FocusManager.instance.addListener(_syncEditing);
+  }
+
+  static bool get _primaryIsEditable =>
+      FocusManager.instance.primaryFocus?.context
+          ?.findAncestorStateOfType<EditableTextState>() !=
+      null;
+
+  static void _syncEditing() => reportEditing(_primaryIsEditable);
+
+  /// Tells Android whether a text field is being edited, so the system
+  /// connects the on-screen keyboard to the app (needed on many Google TV
+  /// devices, otherwise the D-Pad closes the keyboard instead of moving in it).
+  static void reportEditing(bool editing) {
+    if (!DeviceTypeService.isTv || _lastEditing == editing) return;
+    _lastEditing = editing;
+    _device.invokeMethod<void>('setTextEditing', editing).catchError((_) {});
+  }
+
+  /// Re-checks after a focus change settles (field A -> field B).
+  static void recheckEditing() {
+    scheduleMicrotask(_syncEditing);
   }
 
   static KeyEventResult _onKey(KeyEvent event) {
