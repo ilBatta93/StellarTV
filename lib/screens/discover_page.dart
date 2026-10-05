@@ -878,6 +878,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
             Column(
               children: [
                 SizedBox(
+                  width: double.infinity,
                   height: heroHeight,
                   child: ValueListenableBuilder<TmdbItem?>(
                     valueListenable: _hero,
@@ -1078,44 +1079,60 @@ class _TvHeroBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.topRight,
-      child: FractionallySizedBox(
-        widthFactor: 0.7,
-        heightFactor: 0.58,
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 350),
-          child: item == null
-              ? const SizedBox.expand()
-              : Stack(
-                  key: ValueKey(item!.key),
-                  fit: StackFit.expand,
-                  children: [
-                    PosterImage(url: item!.backdropUrl),
-                    const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          colors: [AppColors.background, Colors.transparent],
-                          stops: [0, 0.55],
-                        ),
-                      ),
+    // Full-screen artwork; scrims keep the menu, the text and the rows
+    // readable without cropping the image into a corner.
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 350),
+      child: item == null
+          ? const SizedBox.expand()
+          : Stack(
+              key: ValueKey(item!.key),
+              fit: StackFit.expand,
+              children: [
+                PosterImage(url: item!.backdropUrl),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        AppColors.background.withValues(alpha: 0.92),
+                        AppColors.background.withValues(alpha: 0.55),
+                        Colors.transparent,
+                      ],
+                      stops: const [0, 0.38, 0.75],
                     ),
-                    const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [AppColors.background, Colors.transparent],
-                          stops: [0, 0.45],
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-        ),
-      ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        AppColors.background,
+                        AppColors.background.withValues(alpha: 0.85),
+                        Colors.transparent,
+                      ],
+                      stops: const [0, 0.38, 0.62],
+                    ),
+                  ),
+                ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        AppColors.background.withValues(alpha: 0.75),
+                        Colors.transparent,
+                      ],
+                      stops: const [0, 0.16],
+                    ),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }

@@ -305,7 +305,9 @@ class _CatalogPageState extends State<CatalogPage> {
         action: ElevatedButton.icon(
           icon: const Icon(Icons.refresh_rounded),
           label: const Text('Riprova'),
-          onPressed: app.isAuthenticated ? app.refreshPlaylist : null,
+          onPressed: app.isAuthenticated
+              ? () => app.retrySection(widget.type)
+              : null,
         ),
       );
     }

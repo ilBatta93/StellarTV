@@ -7,6 +7,9 @@ import 'package:http/http.dart' as http;
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/series_details.dart';
+import 'xtream_downloader.dart';
+
+export 'xtream_downloader.dart' show CatalogProgress;
 
 class XtreamService {
   static const _headers = {
@@ -166,97 +169,40 @@ class XtreamService {
     return status == 1;
   }
 
+  Future<List<Channel>> _section(
+    ContentType type,
+    String server,
+    String username,
+    String password,
+    void Function(CatalogProgress progress)? onProgress,
+  ) => downloadXtreamSection(
+    base: _normalizeServerUrl(server),
+    username: username,
+    password: password,
+    type: type,
+    onProgress: onProgress,
+  );
+
   Future<List<Channel>> getLiveChannels({
     required String server,
     required String username,
     required String password,
-  }) async {
-    final base = _normalizeServerUrl(server);
-    final url =
-        '$base/player_api.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}&action=get_live_streams';
-    final decoded = await _getJson(url);
-    if (decoded is! List) return [];
-    final List<dynamic> data = decoded;
-    final categories = await _getCategories(base, username, password, 'live');
-    return data.map((item) {
-      final catId = item['category_id']?.toString() ?? '';
-      final groupName = categories[catId] ?? 'Senza categoria';
-      return Channel(
-        id: 'live_${item['stream_id']}',
-        name: item['name']?.toString() ?? 'Sconosciuto',
-        url:
-            '$base/live/${Uri.encodeComponent(username)}/${Uri.encodeComponent(password)}/${item['stream_id']}.m3u8',
-        logo: item['stream_icon']?.toString() ?? '',
-        group: groupName,
-        type: ContentType.live,
-        tvgId: item['epg_channel_id']?.toString(),
-      );
-    }).toList();
-  }
+    void Function(CatalogProgress progress)? onProgress,
+  }) => _section(ContentType.live, server, username, password, onProgress);
 
   Future<List<Channel>> getVodChannels({
     required String server,
     required String username,
     required String password,
-  }) async {
-    final base = _normalizeServerUrl(server);
-    final url =
-        '$base/player_api.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}&action=get_vod_streams';
-    final decoded = await _getJson(url);
-    if (decoded is! List) return [];
-    final List<dynamic> data = decoded;
-    final categories = await _getCategories(base, username, password, 'vod');
-    return data.map((item) {
-      final catId = item['category_id']?.toString() ?? '';
-      final groupName = categories[catId] ?? 'Senza categoria';
-      return Channel(
-        id: 'movie_${item['stream_id']}',
-        name: item['name']?.toString() ?? 'Sconosciuto',
-        url:
-            '$base/movie/${Uri.encodeComponent(username)}/${Uri.encodeComponent(password)}/${item['stream_id']}.${item['container_extension'] ?? 'mp4'}',
-        logo: item['stream_icon']?.toString() ?? '',
-        group: groupName,
-        type: ContentType.movie,
-        addedAt: int.tryParse(item['added']?.toString() ?? '') ?? 0,
-      );
-    }).toList();
-  }
+    void Function(CatalogProgress progress)? onProgress,
+  }) => _section(ContentType.movie, server, username, password, onProgress);
 
   Future<List<Channel>> getSeriesChannels({
     required String server,
     required String username,
     required String password,
-  }) async {
-    final base = _normalizeServerUrl(server);
-    final url =
-        '$base/player_api.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}&action=get_series';
-    final decoded = await _getJson(url);
-    if (decoded is! List) return [];
-    final List<dynamic> data = decoded;
-    final categories = await _getCategories(base, username, password, 'series');
-    return data.map((item) {
-      final catId = item['category_id']?.toString() ?? '';
-      final groupName = categories[catId] ?? 'Senza categoria';
-      final seriesId = item['series_id']?.toString() ?? '';
-      return Channel(
-        id: 'series_$seriesId',
-        name: item['name']?.toString() ?? 'Sconosciuto',
-        url: '',
-        logo: (item['cover'] ?? item['stream_icon'])?.toString() ?? '',
-        group: groupName,
-        type: ContentType.series,
-        seriesKey: 'series_$seriesId',
-        seriesName: item['name']?.toString(),
-        plot: item['plot']?.toString(),
-        isSeriesFolder: true,
-        addedAt:
-            int.tryParse(
-              (item['last_modified'] ?? item['added'])?.toString() ?? '',
-            ) ??
-            0,
-      );
-    }).toList();
-  }
+    void Function(CatalogProgress progress)? onProgress,
+  }) => _section(ContentType.series, server, username, password, onProgress);
 
   Future<SeriesDetails> getSeriesInfo({
     required String server,
@@ -411,29 +357,6 @@ class XtreamService {
       return Duration(minutes: parts[0]!, seconds: parts[1]!);
     }
     return null;
-  }
-
-  Future<Map<String, String>> _getCategories(
-    String base,
-    String username,
-    String password,
-    String type,
-  ) async {
-    final url =
-        '$base/player_api.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}&action=get_${type}_categories';
-    try {
-      final decoded = await _getJson(url);
-      if (decoded is! List) return {};
-      final List<dynamic> data = decoded;
-      final map = <String, String>{};
-      for (final cat in data) {
-        map[cat['category_id']?.toString() ?? ''] =
-            cat['category_name']?.toString() ?? 'Senza categoria';
-      }
-      return map;
-    } catch (_) {
-      return {};
-    }
   }
 }
 

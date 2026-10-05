@@ -5,4 +5,4 @@ Kids certification is warmed in the background after playlist loading and cached
 - TV category panels share one remote-only drawer implementation with geometric left-edge detection and explicit focus restoration, to avoid trapping navigation across catalog tabs.
 - TV player controls use a dedicated play focus anchor and leave button activation to the focused control, so showing controls never traverses back into the video surface.
 
-- Playlist loading publishes independent per-section states and data after each sequential request; passive fixed-size navigation indicators share those states on touch and TV without adding focus targets or guessed percentages.
+- Playlist sections download in a background isolate with a streaming JSON parser (truncation-tolerant, bounded timeouts), run one at a time through a shared queue, publish and cache per section, and can be retried individually; pages are wrapped by a shared section frame that shows real progress, retry and saved-copy states on touch and TV, so huge playlists never block the UI or reload unrelated sections.

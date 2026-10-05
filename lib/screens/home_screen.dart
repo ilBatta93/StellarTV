@@ -9,6 +9,7 @@ import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/catalog_status_indicator.dart';
+import '../widgets/catalog_section_status.dart';
 import 'catalog_page.dart';
 import 'discover_page.dart';
 import 'favorites_page.dart';
@@ -32,9 +33,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static const _pages = [
     DiscoverPage(),
-    LivePage(),
-    CatalogPage(type: ContentType.movie),
-    CatalogPage(type: ContentType.series),
+    CatalogSectionFrame(type: ContentType.live, child: LivePage()),
+    CatalogSectionFrame(
+      type: ContentType.movie,
+      child: CatalogPage(type: ContentType.movie),
+    ),
+    CatalogSectionFrame(
+      type: ContentType.series,
+      child: CatalogPage(type: ContentType.series),
+    ),
     FavoritesPage(),
   ];
 

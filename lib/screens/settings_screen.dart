@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../widgets/catalog_section_status.dart';
 
 import '../providers/app_provider.dart';
 import '../providers/ui_settings.dart';
@@ -151,8 +152,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return SettingsSection(
       title: 'Aggiornamento playlist',
       description:
-          'Ricarica automaticamente canali, film e serie dal tuo account Xtream.',
+          'Stato di Diretta, Film e Serie TV: tocca una sezione per ricaricare solo quella.',
       children: [
+        if (provider.authMethod.name == 'xtream') const PlaylistStatusList(),
         SettingsValueTile(
           icon: Icons.update_rounded,
           title: 'Frequenza aggiornamento',

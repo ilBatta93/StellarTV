@@ -20,15 +20,24 @@ class FakeXtream extends XtreamService {
   final live = Completer<List<Channel>>();
   final movies = Completer<List<Channel>>();
   final series = Completer<List<Channel>>();
+  Completer<List<Channel>>? nextMovies;
+  int liveCalls = 0;
   @override
   Future<List<Channel>> getLiveChannels({required String server,
-    required String username, required String password}) => live.future;
+    required String username, required String password,
+    void Function(CatalogProgress progress)? onProgress}) {
+    liveCalls++;
+    return live.future;
+  }
   @override
   Future<List<Channel>> getVodChannels({required String server,
-    required String username, required String password}) => movies.future;
+    required String username, required String password,
+    void Function(CatalogProgress progress)? onProgress}) =>
+      (nextMovies ?? movies).future;
   @override
   Future<List<Channel>> getSeriesChannels({required String server,
-    required String username, required String password}) => series.future;
+    required String username, required String password,
+    void Function(CatalogProgress progress)? onProgress}) => series.future;
 }
 
 class FakeCache extends CatalogCacheService {
@@ -38,6 +47,9 @@ class FakeCache extends CatalogCacheService {
   Future<List<Channel>> read(String accountKey) async => rows;
   @override
   Future<void> write(String accountKey, List<Channel> channels) async {}
+  @override
+  Future<void> writeSection(String accountKey, ContentType type,
+    List<Channel> channels) async {}
 }
 
 Future<void> tick() => Future<void>.delayed(Duration.zero);
@@ -89,6 +101,34 @@ void main() {
     expect(app.catalogState(ContentType.series).phase, CatalogLoadPhase.failed);
     expect(app.catalogState(ContentType.live).phase, CatalogLoadPhase.ready);
     expect(app.catalogState(ContentType.series).isPending, false);
+  });
+
+  test('Retrying one section leaves the others untouched', () async {
+    final api = FakeXtream();
+    final app = AppProvider(xtreamService: api, catalogCache: FakeCache());
+    final loading = app.loadFromXtream(server: 'test', username: '', password: '');
+    api.live.complete([channel(ContentType.live)]);
+    await tick();
+    api.movies.completeError(Exception('offline'));
+    await tick();
+    api.series.complete([channel(ContentType.series)]);
+    await loading;
+    expect(app.catalogState(ContentType.movie).phase, CatalogLoadPhase.failed);
+    final again = Completer<List<Channel>>();
+    api.nextMovies = again;
+    final retry = app.retrySection(ContentType.movie);
+    await tick();
+    expect(app.catalogState(ContentType.movie).phase, CatalogLoadPhase.loading);
+    expect(app.catalogState(ContentType.live).phase, CatalogLoadPhase.ready);
+    expect(app.catalogState(ContentType.series).phase, CatalogLoadPhase.ready);
+    again.complete([channel(ContentType.movie)]);
+    await retry;
+    expect(app.catalogState(ContentType.movie).phase, CatalogLoadPhase.ready);
+    expect(app.channelsOf(ContentType.live), hasLength(1));
+    expect(app.channelsOf(ContentType.series), hasLength(1));
+    expect(app.channelsOf(ContentType.movie), hasLength(1));
+    expect(api.liveCalls, 1);
+    expect(app.isLoading, false);
   });
 
   testWidgets('Mobile and TV indicators are fixed-size and passive', (tester) async {

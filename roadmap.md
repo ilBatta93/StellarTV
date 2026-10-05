@@ -20,3 +20,10 @@
 - [x] Mostrare stati indipendenti Diretta/Film/Serie su mobile e TV
 - [x] Verificare aggiornamento progressivo, errori/cache e navigazione invariata
 - [x] Salvare gli indicatori nella repository GitHub
+
+- [x] Banner Home TV a tutto schermo
+- [x] Scaricamento playlist in background a flusso, tollerante a liste grandi/troncate, con progresso reale
+- [x] Copia salvata separata per Diretta/Film/Serie
+- [x] Riprova per singola sezione su mobile e TV (schermata sezione, barra copia salvata, Impostazioni)
+- [x] Test scaricamento, riprova singola e analisi Dart
+- [ ] Verifica APK su dispositivo (Codemagic)
