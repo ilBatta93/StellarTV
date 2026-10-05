@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/tv_text_field.dart';
 import 'profile_picker_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -16,6 +17,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _xtreamServerController = TextEditingController();
   final _xtreamUserController = TextEditingController();
   final _xtreamPassController = TextEditingController();
+  final _xtreamUserFocus = FocusNode();
+  final _xtreamPassFocus = FocusNode();
   bool _obscurePassword = true;
   bool _isLoading = false;
 
@@ -24,6 +27,8 @@ class _LoginScreenState extends State<LoginScreen> {
     _xtreamServerController.dispose();
     _xtreamUserController.dispose();
     _xtreamPassController.dispose();
+    _xtreamUserFocus.dispose();
+    _xtreamPassFocus.dispose();
     super.dispose();
   }
 
@@ -114,8 +119,10 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         _buildFieldLabel('Server URL'),
         const SizedBox(height: 6),
-        TextField(
+        TvTextField(
           controller: _xtreamServerController,
+          nextFocus: _xtreamUserFocus,
+          textInputAction: TextInputAction.next,
           keyboardType: TextInputType.url,
           decoration: const InputDecoration(
             hintText: 'http://tuo-server.com:8080',
@@ -125,8 +132,11 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: 16),
         _buildFieldLabel('Nome utente'),
         const SizedBox(height: 6),
-        TextField(
+        TvTextField(
           controller: _xtreamUserController,
+          focusNode: _xtreamUserFocus,
+          nextFocus: _xtreamPassFocus,
+          textInputAction: TextInputAction.next,
           decoration: const InputDecoration(
             hintText: 'Inserisci il nome utente',
             prefixIcon: Icon(Icons.person, size: 20),
@@ -135,8 +145,10 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: 16),
         _buildFieldLabel('Password'),
         const SizedBox(height: 6),
-        TextField(
+        TvTextField(
           controller: _xtreamPassController,
+          focusNode: _xtreamPassFocus,
+          textInputAction: TextInputAction.done,
           obscureText: _obscurePassword,
           decoration: InputDecoration(
             hintText: 'Inserisci la password',

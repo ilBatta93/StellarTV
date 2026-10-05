@@ -60,13 +60,16 @@ class KidsContentService {
       } catch (_) {}
     }
     final raw = prefs.getString(_cacheKey);
-    if (raw == null) return;
-    try {
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      map.forEach((k, v) {
-        if (v is bool) _verdicts[k] = v;
-      });
-    } catch (_) {}
+    if (raw != null) {
+      try {
+        final map = jsonDecode(raw) as Map<String, dynamic>;
+        map.forEach((k, v) {
+          if (v is bool) _verdicts[k] = v;
+        });
+      } catch (_) {}
+    }
+    // Refresh lists/genre bar right away with the saved data.
+    if (_verdicts.isNotEmpty || _genres.isNotEmpty) onVerdicts?.call();
   }
 
   /// True when the item can be shown in a kids profile.
@@ -102,9 +105,62 @@ class KidsContentService {
     if (!_running) unawaited(_run());
   }
 
+  /// Bulk-reads titles already classified in the cloud (shared by every
+  /// device and profile), so only truly new titles hit the slow check.
+  Future<void> _cloudLookup() async {
+    final keys = <String, String>{};
+    for (final b in _pending) {
+      final type = b.split('\u0000').first;
+      final norm = b
+          .split('\u0000')
+          .last
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9à-ÿ]+'), ' ')
+          .trim();
+      keys['$type:$norm'] = b;
+    }
+    final all = keys.keys.toList();
+    var changed = false;
+    for (var i = 0; i < all.length; i += 1000) {
+      final chunk = all.sublist(
+        i,
+        i + 1000 > all.length ? all.length : i + 1000,
+      );
+      try {
+        final res = await http
+            .post(
+              Uri.parse('${SupabaseConfig.apiBase}/kids-lookup'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'keys': chunk}),
+            )
+            .timeout(const Duration(seconds: 30));
+        if (res.statusCode != 200) return;
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        for (final r in (body['results'] as List? ?? const [])) {
+          if (r is! Map || r['is_kids'] is! bool || r['key'] is! String)
+            continue;
+          final key = r['key'] as String;
+          _verdicts[key] = r['is_kids'] as bool;
+          final g = r['genre_ids'];
+          _genres[key] = g is List ? g.whereType<int>().toList() : const [];
+          final p = keys[key];
+          if (p != null) _pending.remove(p);
+          changed = true;
+        }
+      } catch (_) {
+        return;
+      }
+    }
+    if (changed) {
+      await _save();
+      onVerdicts?.call();
+    }
+  }
+
   Future<void> _run() async {
     _running = true;
     try {
+      await _cloudLookup();
       while (_pending.isNotEmpty) {
         final batch = _pending.take(_batchSize).toList();
         _pending.removeAll(batch);

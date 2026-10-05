@@ -6,6 +6,7 @@ import '../providers/history_provider.dart';
 import '../providers/sync_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/tv_text_field.dart';
 import 'login_screen.dart';
 import 'profile_picker_screen.dart';
 
@@ -23,6 +24,8 @@ class _AccountScreenState extends State<AccountScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
+  final _passwordFocus = FocusNode();
+  final _confirmFocus = FocusNode();
   bool _register = false;
   bool _loading = false;
   bool _obscure = true;
@@ -32,6 +35,8 @@ class _AccountScreenState extends State<AccountScreen> {
     _email.dispose();
     _password.dispose();
     _confirm.dispose();
+    _passwordFocus.dispose();
+    _confirmFocus.dispose();
     super.dispose();
   }
 
@@ -65,9 +70,10 @@ class _AccountScreenState extends State<AccountScreen> {
     }
     // Restore whatever this account already saved (playlist, profiles…).
     try {
-      await history
-          .pullFromCloud()
-          .timeout(const Duration(seconds: 10), onTimeout: () => false);
+      await history.pullFromCloud().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => false,
+      );
     } catch (_) {}
     if (!mounted) return;
     setState(() => _loading = false);
@@ -89,17 +95,20 @@ class _AccountScreenState extends State<AccountScreen> {
     }
     final error = await context.read<SyncProvider>().resetPassword(email);
     if (!mounted) return;
-    _show(error ??
-        'Ti abbiamo inviato un\'email per reimpostare la password.',
-        ok: error == null);
+    _show(
+      error ?? 'Ti abbiamo inviato un\'email per reimpostare la password.',
+      ok: error == null,
+    );
   }
 
   void _show(String text, {bool ok = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(text),
-      backgroundColor: ok ? AppColors.surface : AppColors.error,
-      behavior: SnackBarBehavior.floating,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: ok ? AppColors.surface : AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -141,14 +150,17 @@ class _AccountScreenState extends State<AccountScreen> {
                       Text(
                         _register
                             ? 'Con un solo account ritrovi playlist, profili, '
-                                'cronologia e preferiti su tutti i dispositivi.'
+                                  'cronologia e preferiti su tutti i dispositivi.'
                             : 'Usa la stessa email e password su ogni dispositivo.',
                         style: const TextStyle(
-                            color: AppColors.textSecondary, fontSize: 13),
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
                       ),
                       const SizedBox(height: 20),
-                      TextField(
+                      TvTextField(
                         controller: _email,
+                        nextFocus: _passwordFocus,
                         keyboardType: TextInputType.emailAddress,
                         autofillHints: const [AutofillHints.email],
                         textInputAction: TextInputAction.next,
@@ -158,25 +170,31 @@ class _AccountScreenState extends State<AccountScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      TextField(
+                      TvTextField(
                         controller: _password,
+                        focusNode: _passwordFocus,
+                        nextFocus: _register ? _confirmFocus : null,
                         obscureText: _obscure,
                         autofillHints: [
                           _register
                               ? AutofillHints.newPassword
-                              : AutofillHints.password
+                              : AutofillHints.password,
                         ],
                         textInputAction: _register
                             ? TextInputAction.next
                             : TextInputAction.done,
-                        onSubmitted: (_) => _register ? null : _submit(),
+                        onSubmitted: (_) {
+                          if (!_register) _submit();
+                        },
                         decoration: InputDecoration(
                           labelText: 'Password',
                           prefixIcon: const Icon(Icons.lock_outline_rounded),
                           suffixIcon: IconButton(
-                            icon: Icon(_obscure
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined),
+                            icon: Icon(
+                              _obscure
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
                             onPressed: () =>
                                 setState(() => _obscure = !_obscure),
                           ),
@@ -184,8 +202,9 @@ class _AccountScreenState extends State<AccountScreen> {
                       ),
                       if (_register) ...[
                         const SizedBox(height: 12),
-                        TextField(
+                        TvTextField(
                           controller: _confirm,
+                          focusNode: _confirmFocus,
                           obscureText: _obscure,
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _submit(),
@@ -214,7 +233,8 @@ class _AccountScreenState extends State<AccountScreen> {
                                   width: 22,
                                   height: 22,
                                   child: CircularProgressIndicator(
-                                      strokeWidth: 2.4),
+                                    strokeWidth: 2.4,
+                                  ),
                                 )
                               : Text(_register ? 'Crea account' : 'Accedi'),
                         ),
@@ -224,9 +244,11 @@ class _AccountScreenState extends State<AccountScreen> {
                         onPressed: _loading
                             ? null
                             : () => setState(() => _register = !_register),
-                        child: Text(_register
-                            ? 'Hai già un account? Accedi'
-                            : 'Non hai un account? Creane uno'),
+                        child: Text(
+                          _register
+                              ? 'Hai già un account? Accedi'
+                              : 'Non hai un account? Creane uno',
+                        ),
                       ),
                     ],
                   ),
