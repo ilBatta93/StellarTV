@@ -460,6 +460,7 @@ class _EpisodeTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
+                if (!DeviceTypeService.isTv)
                 IconButton(
                   tooltip: watched
                       ? 'Segna come non visto'
@@ -490,7 +491,9 @@ class _EpisodeTile extends StatelessWidget {
               child: tile,
             ),
           ),
-          TvFocusable(
+          Padding(
+            padding: const EdgeInsets.only(right: 16, bottom: 12),
+            child: TvFocusable(
             onPressed: onToggleWatched,
             child: IconButton(
               tooltip: watched ? 'Segna come non visto' : 'Segna come visto',
@@ -498,6 +501,7 @@ class _EpisodeTile extends StatelessWidget {
               icon: Icon(
                 watched ? Icons.check_circle : Icons.check_circle_outline,
               ),
+            ),
             ),
           ),
         ],

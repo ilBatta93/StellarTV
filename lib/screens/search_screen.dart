@@ -7,10 +7,12 @@ import '../models/tmdb_item.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/discover_provider.dart';
+import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
+import '../widgets/tv_text_field.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -91,9 +93,9 @@ class _SearchScreenState extends State<SearchScreen> {
         titleSpacing: 0,
         title: Padding(
           padding: const EdgeInsets.only(right: 16),
-          child: TextField(
+          child: TvTextField(
             controller: _controller,
-            autofocus: true,
+            autofocus: !DeviceTypeService.isTv,
             textInputAction: TextInputAction.search,
             onChanged: _onChanged,
             decoration: InputDecoration(

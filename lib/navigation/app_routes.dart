@@ -48,23 +48,25 @@ void openSeries(BuildContext context, Channel channel,
   }
 }
 
-void openChannel(BuildContext context, Channel channel) {
+void openChannel(BuildContext context, Channel channel, {bool replace = false}) {
   if (channel.type == ContentType.live) {
     playChannel(context, channel);
     return;
   }
   if (channel.type == ContentType.series ||
       channel.type == ContentType.anime) {
-    openSeries(context, channel);
+    openSeries(context, channel, replace: replace);
     return;
   }
-  Navigator.push(
-    context,
-    MaterialPageRoute(
+  final route = MaterialPageRoute(
       settings: RouteSettings(name: titleRouteName(channel.id)),
       builder: (_) => TitleDetailScreen(channel: channel),
-    ),
-  );
+    );
+  if (replace) {
+    Navigator.pushReplacement(context, route);
+  } else {
+    Navigator.push(context, route);
+  }
 }
 
 /// Route name of a title page, used by the player's "Scheda titolo" button

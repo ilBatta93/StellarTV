@@ -404,6 +404,7 @@ class _Actions extends StatelessWidget {
       children: [
         if (playable != null)
           TvFocusable(
+            autofocus: DeviceTypeService.isTv,
             onPressed: () => _play(context),
             child: ElevatedButton.icon(
               icon: const Icon(Icons.play_arrow_rounded),

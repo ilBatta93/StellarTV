@@ -4,6 +4,8 @@ import '../../models/player_settings.dart';
 import '../../player/playback_engine.dart';
 import '../../player/playback_session.dart';
 import '../../theme/app_theme.dart';
+import '../../services/device_type_service.dart';
+import '../tv_focusable.dart';
 import 'player_format.dart';
 
 Future<void> _showSheet(
@@ -11,6 +13,7 @@ Future<void> _showSheet(
   String title,
   Widget Function(BuildContext sheetContext) builder,
 ) {
+  final previousFocus = FocusManager.instance.primaryFocus;
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -19,7 +22,9 @@ Future<void> _showSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (sheetContext) => ConstrainedBox(
+    builder: (sheetContext) => FocusTraversalGroup(
+      policy: ReadingOrderTraversalPolicy(),
+      child: ConstrainedBox(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(sheetContext).size.height * 0.85,
       ),
@@ -51,8 +56,11 @@ Future<void> _showSheet(
           ],
         ),
       ),
+      ),
     ),
-  );
+  ).whenComplete(() {
+    if (previousFocus?.context != null) previousFocus?.requestFocus();
+  });
 }
 
 class _Option extends StatelessWidget {
@@ -70,7 +78,7 @@ class _Option extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
+    final tile = ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 24),
       title: Text(
         label,
@@ -90,6 +98,8 @@ class _Option extends StatelessWidget {
           : null,
       onTap: onTap,
     );
+    if (!DeviceTypeService.isTv) return tile;
+    return TvFocusable(onPressed: onTap, child: tile);
   }
 }
 
@@ -494,7 +504,7 @@ Future<void> showPlayerMenu(
       String? value,
       Future<void> Function(BuildContext, PlaybackSession) open,
     ) {
-      return ListTile(
+      final tile = ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 24),
         leading: Icon(icon, color: AppColors.textSecondary),
         title: Text(title),
@@ -518,6 +528,8 @@ Future<void> showPlayerMenu(
           open(context, session);
         },
       );
+      if (!DeviceTypeService.isTv) return tile;
+      return TvFocusable(onPressed: tile.onTap!, child: tile);
     }
 
     return ListView(

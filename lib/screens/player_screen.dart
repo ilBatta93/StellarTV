@@ -233,17 +233,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                 isSeriesFolder: true,
               ))
         : widget.channel;
-    navigator.pop();
-    String? topName;
-    navigator.popUntil((r) {
-      topName = r.settings.name;
-      return true;
-    });
-    if (topName == titleRouteName(key)) return;
     if (_isEpisode) {
-      openSeries(navigator.context, target);
+      openSeries(navigator.context, target, replace: true);
     } else {
-      openChannel(navigator.context, target);
+      openChannel(navigator.context, target, replace: true);
     }
   }
 
@@ -647,7 +640,11 @@ class _PlayerScreenState extends State<PlayerScreen>
       onlineSubsLoading: _onlineSubsLoading,
       onLoadOnlineSubs: _loadOnlineSubtitles,
       onDisableOnlineSubs: _disableOnlineSubtitles,
-    ).whenComplete(_scheduleHide);
+    ).whenComplete(() {
+      if (!mounted) return;
+      _playFocus.requestFocus();
+      _scheduleHide();
+    });
   }
 
   @override

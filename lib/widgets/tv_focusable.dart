@@ -83,7 +83,10 @@ class _TvFocusableState extends State<TvFocusable> {
             Scrollable.ensureVisible(
               context,
               duration: const Duration(milliseconds: 120),
-              alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+              // Keep context above and below the focused control visible. On
+              // TV this avoids clipping row headings when navigating upward.
+              alignment: 0.55,
+              alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
             );
           });
         }

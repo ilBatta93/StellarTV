@@ -7,6 +7,8 @@ import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/history_provider.dart';
 import '../theme/app_theme.dart';
+import '../services/device_type_service.dart';
+import '../widgets/tv_focusable.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
 
@@ -254,87 +256,115 @@ class _HistoryTile extends StatelessWidget {
           ],
         ),
       ),
-      child: Material(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => _open(context),
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    color: AppColors.card,
-                    width: isLive ? 96 : 56,
-                    height: 80,
-                    child: PosterImage(
-                      url: entry.posterUrl,
-                      fit: isLive ? BoxFit.contain : BoxFit.cover,
-                      fallbackIcon:
-                          isLive ? Icons.live_tv_rounded : Icons.movie_outlined,
+      child: FocusTraversalGroup(
+        policy: OrderedTraversalPolicy(),
+        child: Row(
+          children: [
+            Expanded(
+              child: TvFocusable(
+                onPressed: () => _open(context),
+                child: Material(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => _open(context),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              color: AppColors.card,
+                              width: isLive ? 96 : 56,
+                              height: 80,
+                              child: PosterImage(
+                                url: entry.posterUrl,
+                                fit: isLive ? BoxFit.contain : BoxFit.cover,
+                                fallbackIcon: isLive
+                                    ? Icons.live_tv_rounded
+                                    : Icons.movie_outlined,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(entry.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.2)),
+                                const SizedBox(height: 4),
+                                Text(subtitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12)),
+                                const SizedBox(height: 4),
+                                Row(children: [
+                                  const Icon(Icons.schedule_rounded,
+                                      size: 13, color: AppColors.textMuted),
+                                  const SizedBox(width: 4),
+                                  Text(_when(entry.lastWatchedAt),
+                                      style: const TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 12)),
+                                ]),
+                                if (progress != null) ...[
+                                  const SizedBox(height: 8),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(2),
+                                    child: LinearProgressIndicator(
+                                      value: progress,
+                                      minHeight: 3,
+                                      backgroundColor: AppColors.border,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(_remaining(entry),
+                                      style: const TextStyle(
+                                          color: AppColors.textMuted,
+                                          fontSize: 11)),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (!DeviceTypeService.isTv)
+                            IconButton(
+                              tooltip: 'Rimuovi dalla cronologia',
+                              icon: const Icon(Icons.close_rounded,
+                                  color: AppColors.textSecondary),
+                              onPressed: () => _remove(context),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(entry.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              height: 1.2)),
-                      const SizedBox(height: 4),
-                      Text(subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Icon(Icons.schedule_rounded,
-                              size: 13, color: AppColors.textMuted),
-                          const SizedBox(width: 4),
-                          Text(_when(entry.lastWatchedAt),
-                              style: const TextStyle(
-                                  color: AppColors.textMuted, fontSize: 12)),
-                        ],
-                      ),
-                      if (progress != null) ...[
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 3,
-                            backgroundColor: AppColors.border,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(_remaining(entry),
-                            style: const TextStyle(
-                                color: AppColors.textMuted, fontSize: 11)),
-                      ],
-                    ],
-                  ),
-                ),
-                IconButton(
+              ),
+            ),
+            if (DeviceTypeService.isTv) ...[
+              const SizedBox(width: 8),
+              TvFocusable(
+                onPressed: () => _remove(context),
+                borderRadius: BorderRadius.circular(24),
+                child: IconButton(
                   tooltip: 'Rimuovi dalla cronologia',
                   icon: const Icon(Icons.close_rounded,
                       color: AppColors.textSecondary),
                   onPressed: () => _remove(context),
                 ),
-              ],
-            ),
-          ),
+              ),
+            ],
+          ],
         ),
       ),
     );

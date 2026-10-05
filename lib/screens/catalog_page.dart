@@ -11,6 +11,7 @@ import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
 import '../widgets/tv_category_panel.dart';
+import '../widgets/tv_text_field.dart';
 import '../widgets/section_row.dart';
 import 'settings_screen.dart';
 
@@ -51,6 +52,12 @@ class CatalogEntryCard extends StatelessWidget {
     required this.onTap,
     required this.onFavoriteTap,
   });
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,6 +187,12 @@ class ChannelGrid extends StatelessWidget {
   });
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final ui = context.watch<UiSettings>();
@@ -254,6 +267,7 @@ class CatalogPage extends StatefulWidget {
 }
 
 class _CatalogPageState extends State<CatalogPage> {
+  final TextEditingController _searchController = TextEditingController();
   FocusNode? _drawerReturn;
   void _openCategories() {
     _drawerReturn = FocusManager.instance.primaryFocus;
@@ -286,6 +300,12 @@ class _CatalogPageState extends State<CatalogPage> {
     ContentType.series => 'serie',
     ContentType.anime => 'anime',
   };
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -384,7 +404,8 @@ class _CatalogPageState extends State<CatalogPage> {
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
+                  child: TvTextField(
+                    controller: _searchController,
                     onChanged: (v) => setState(() => _query = v),
                     decoration: InputDecoration(
                       hintText: 'Cerca tra $_noun',
@@ -632,6 +653,12 @@ class _CategoryDrawer extends StatelessWidget {
     required this.selected,
     required this.onSelected,
   });
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

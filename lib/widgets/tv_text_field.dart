@@ -15,6 +15,7 @@ class TvTextField extends StatefulWidget {
     this.obscureText = false,
     this.textInputAction,
     this.onSubmitted,
+    this.onChanged,
     this.decoration,
     this.autofillHints,
   });
@@ -26,6 +27,7 @@ class TvTextField extends StatefulWidget {
   final bool obscureText;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
   final InputDecoration? decoration;
   final Iterable<String>? autofillHints;
 
@@ -48,12 +50,23 @@ class _TvTextFieldState extends State<TvTextField> {
   final FocusNode _own = FocusNode();
   FocusNode get _node => widget.focusNode ?? _own;
   FocusOnKeyEventCallback? _prev;
+  bool _tvEditing = false;
 
   @override
   void initState() {
     super.initState();
     _prev = _node.onKeyEvent;
     _node.onKeyEvent = _onKey;
+  }
+
+  void _beginTvEditing() {
+    if (!DeviceTypeService.isTv) return;
+    if (!_tvEditing) setState(() => _tvEditing = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _node.requestFocus();
+      TvTextField.showKeyboard();
+    });
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
@@ -72,7 +85,7 @@ class _TvTextFieldState extends State<TvTextField> {
               k == LogicalKeyboardKey.enter ||
               k == LogicalKeyboardKey.gameButtonA ||
               k == LogicalKeyboardKey.numpadEnter)) {
-        TvTextField.showKeyboard();
+        _beginTvEditing();
         return KeyEventResult.handled;
       }
     }
@@ -91,13 +104,20 @@ class _TvTextFieldState extends State<TvTextField> {
     return TextField(
       controller: widget.controller,
       focusNode: _node,
+      readOnly: DeviceTypeService.isTv && !_tvEditing,
+      showCursor: !DeviceTypeService.isTv || _tvEditing,
       keyboardType: widget.keyboardType,
       obscureText: widget.obscureText,
       autofillHints: widget.autofillHints,
       textInputAction: widget.textInputAction,
       decoration: widget.decoration,
-      onTap: TvTextField.showKeyboard,
+      onChanged: widget.onChanged,
+      onTap: DeviceTypeService.isTv
+          ? _beginTvEditing
+          : TvTextField.showKeyboard,
       onSubmitted: (v) {
+        if (DeviceTypeService.isTv && mounted)
+          setState(() => _tvEditing = false);
         final next = widget.nextFocus;
         if (next != null) TvTextField.focusWithKeyboard(next);
         widget.onSubmitted?.call(v);

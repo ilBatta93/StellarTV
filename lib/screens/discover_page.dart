@@ -13,6 +13,7 @@ import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/discover_provider.dart';
 import '../providers/history_provider.dart';
+import '../providers/profile_provider.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
@@ -108,6 +109,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       // Same sections as the phone Home (Top 10 with Film / Serie TV switch,
       // per-platform Top 10, recommendations), laid out for the remote.
       return _TvDiscover(
+        profileId: context.watch<ProfileProvider>().selected?.id,
         banner: banner,
         startedMovies: startedMovies,
         startedSeries: startedSeries,
@@ -744,6 +746,7 @@ typedef TvTopSpec = (
 );
 
 class _TvDiscover extends StatefulWidget {
+  final String? profileId;
   final List<TmdbItem> banner;
   final List<ResumeItem> startedMovies;
   final List<ResumeItem> startedSeries;
@@ -752,6 +755,7 @@ class _TvDiscover extends StatefulWidget {
   final List<TvTopSpec> tops;
 
   const _TvDiscover({
+    required this.profileId,
     required this.banner,
     required this.startedMovies,
     required this.startedSeries,
@@ -773,6 +777,10 @@ class _TvDiscoverState extends State<_TvDiscover> {
   @override
   void initState() {
     super.initState();
+    _hero = ValueNotifier(_firstHero());
+  }
+
+  TmdbItem? _firstHero() {
     TmdbItem? first;
     if (widget.banner.isNotEmpty) {
       first = widget.banner.first;
@@ -787,7 +795,16 @@ class _TvDiscoverState extends State<_TvDiscover> {
         }
       }
     }
-    _hero = ValueNotifier(first);
+    return first;
+  }
+
+  @override
+  void didUpdateWidget(covariant _TvDiscover oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profileId == widget.profileId) return;
+    _debounce?.cancel();
+    _historyInfo.clear();
+    _hero.value = _firstHero();
   }
 
   @override

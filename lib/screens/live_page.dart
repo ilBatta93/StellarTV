@@ -15,6 +15,7 @@ import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
 import '../widgets/tv_focusable.dart';
 import '../widgets/tv_category_panel.dart';
+import '../widgets/tv_text_field.dart';
 import 'epg_settings_screen.dart';
 
 /// "Diretta" tab: channel list with what is on now, a progress bar and what
@@ -27,6 +28,7 @@ class LivePage extends StatefulWidget {
 }
 
 class _LivePageState extends State<LivePage> {
+  final TextEditingController _searchController = TextEditingController();
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   FocusNode? _drawerReturn;
   void _openCategories() {
@@ -59,6 +61,7 @@ class _LivePageState extends State<LivePage> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _tick?.cancel();
     super.dispose();
   }
@@ -118,7 +121,8 @@ class _LivePageState extends State<LivePage> {
           child: Row(
             children: [
               Expanded(
-                child: TextField(
+                child: TvTextField(
+                  controller: _searchController,
                   onChanged: (v) => setState(() => _query = v),
                   decoration: const InputDecoration(
                     hintText: 'Cerca canale o programma',
@@ -192,14 +196,15 @@ class _LivePageState extends State<LivePage> {
                       next: epg.nextFor(channels[i]),
                       isFavorite: app.favoriteIds.contains(channels[i].id),
                       onFavorite: () => app.toggleFavorite(channels[i]),
+                      channelWrapper: DeviceTypeService.isTv
+                          ? (child) => TvCategoryEdge(
+                              scaffoldKey: _scaffoldKey,
+                              onOpen: _openCategories,
+                              child: child,
+                            )
+                          : null,
                     );
-                    return DeviceTypeService.isTv
-                        ? TvCategoryEdge(
-                            scaffoldKey: _scaffoldKey,
-                            onOpen: _openCategories,
-                            child: tile,
-                          )
-                        : tile;
+                    return tile;
                   },
                 ),
         ),
@@ -276,6 +281,7 @@ class _LiveTile extends StatelessWidget {
   final EpgProgram? next;
   final bool isFavorite;
   final VoidCallback onFavorite;
+  final Widget Function(Widget child)? channelWrapper;
 
   const _LiveTile({
     required this.channel,
@@ -283,6 +289,7 @@ class _LiveTile extends StatelessWidget {
     required this.next,
     required this.isFavorite,
     required this.onFavorite,
+    this.channelWrapper,
   });
 
   @override
@@ -409,7 +416,7 @@ class _LiveTile extends StatelessWidget {
     if (!tv) return tile;
     return Row(
       children: [
-        Expanded(child: tile),
+        Expanded(child: channelWrapper?.call(tile) ?? tile),
         const SizedBox(width: 8),
         actions,
       ],

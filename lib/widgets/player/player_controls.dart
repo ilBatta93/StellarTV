@@ -125,11 +125,13 @@ class PlayerControls extends StatelessWidget {
 
   Widget _buildTopBar(BuildContext context) {
     final engine = session.engine;
-    return Row(
+    return FocusTraversalGroup(
+      policy: ReadingOrderTraversalPolicy(),
+      child: Row(
       children: [
-        IconButton(
+        _TopButton(
+          icon: Icons.arrow_back_rounded,
           tooltip: 'Indietro',
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: onBack,
         ),
         const SizedBox(width: 4),
@@ -162,63 +164,34 @@ class PlayerControls extends StatelessWidget {
         if (onOpenTitle != null)
           Padding(
             padding: const EdgeInsets.only(left: 8),
-            child: ActionChip(
-              tooltip: 'Apri la scheda del titolo',
-              onPressed: onOpenTitle,
-              avatar: const Icon(
-                Icons.info_outline_rounded,
-                size: 16,
-                color: Colors.white,
-              ),
-              label: const Text('Scheda titolo'),
-              labelStyle: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-              backgroundColor: Colors.white.withValues(alpha: 0.12),
-              side: BorderSide.none,
-              shape: const StadiumBorder(),
-              visualDensity: VisualDensity.compact,
+            child: _TopChip(
+              icon: Icons.info_outline_rounded,
+              label: 'Scheda titolo',
+              onPressed: onOpenTitle!,
             ),
           ),
         if (engine != null)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: ActionChip(
+            child: _TopChip(
+              icon: Icons.memory_rounded,
+              label: engine.type.label,
               onPressed: () => _act(() => showEngineSheet(context, session)),
-              avatar: const Icon(
-                Icons.memory_rounded,
-                size: 16,
-                color: Colors.white,
-              ),
-              label: Text(engine.type.label),
-              labelStyle: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-              backgroundColor: Colors.white.withValues(alpha: 0.12),
-              side: BorderSide.none,
-              shape: const StadiumBorder(),
-              visualDensity: VisualDensity.compact,
             ),
           ),
         if (pipSupported)
-          IconButton(
+          _TopButton(
             tooltip: 'Picture-in-Picture',
-            icon: const Icon(
-              Icons.picture_in_picture_alt_rounded,
-              color: Colors.white,
-            ),
+            icon: Icons.picture_in_picture_alt_rounded,
             onPressed: onPip,
           ),
-        IconButton(
+        _TopButton(
           tooltip: 'Opzioni',
-          icon: const Icon(Icons.tune_rounded, color: Colors.white),
+          icon: Icons.tune_rounded,
           onPressed: onMenu,
         ),
       ],
+      ),
     );
   }
 
@@ -310,7 +283,9 @@ class PlayerControls extends StatelessWidget {
             onSeek: (d) => _act(() => session.seekTo(d)),
             onInteraction: onInteraction,
           ),
-        Row(
+        FocusTraversalGroup(
+          policy: ReadingOrderTraversalPolicy(),
+          child: Row(
           children: [
             _BarButton(
               icon: session.muted
@@ -325,10 +300,11 @@ class PlayerControls extends StatelessWidget {
               onPressed: () => _act(onToggleLock),
             ),
             Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                reverse: true,
-                child: Row(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
                   children: [
                     _BarButton(
                       icon: Icons.audiotrack_rounded,
@@ -364,10 +340,12 @@ class PlayerControls extends StatelessWidget {
                           _act(() => showFitSheet(context, session)),
                     ),
                   ],
+                  ),
                 ),
               ),
             ),
           ],
+        ),
         ),
       ],
     );
@@ -450,6 +428,69 @@ class _ScrubBarState extends State<_ScrubBar> {
           Text(formatDuration(widget.duration), style: timeStyle),
         ],
       ),
+    );
+  }
+}
+
+class _TopButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _TopButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final button = IconButton(
+      tooltip: tooltip,
+      icon: Icon(icon, color: Colors.white),
+      onPressed: onPressed,
+    );
+    if (!DeviceTypeService.isTv) return button;
+    return TvFocusable(
+      onPressed: onPressed,
+      borderRadius: BorderRadius.circular(24),
+      child: button,
+    );
+  }
+}
+
+class _TopChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  const _TopChip({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final chip = ActionChip(
+      onPressed: onPressed,
+      avatar: Icon(icon, size: 16, color: Colors.white),
+      label: Text(label),
+      labelStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+      ),
+      backgroundColor: Colors.white.withValues(alpha: 0.12),
+      side: BorderSide.none,
+      shape: const StadiumBorder(),
+      visualDensity: VisualDensity.compact,
+    );
+    if (!DeviceTypeService.isTv) return chip;
+    return TvFocusable(
+      onPressed: onPressed,
+      borderRadius: BorderRadius.circular(24),
+      child: chip,
     );
   }
 }
