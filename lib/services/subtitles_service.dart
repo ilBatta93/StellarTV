@@ -1,6 +1,9 @@
 import 'dart:convert';
 
+import 'dart:io';
+
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 import '../config/supabase_config.dart';
 
@@ -32,6 +35,59 @@ class OnlineSubtitle {
 /// un messaggio leggibile, mostrato nel player.
 class SubtitlesService {
   static final Map<int, List<SubtitleCue>> _cache = {};
+  static final Map<String, List<SubtitleCue>> _memByKey = {};
+
+  static Future<File> _offlineFile(String key) async {
+    final dir = Directory(
+      '${(await getApplicationSupportDirectory()).path}/subtitles',
+    );
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final safe = key.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    return File('${dir.path}/$safe.srt');
+  }
+
+  /// Recupera i sottotitoli italiani: prima dal disco (offline), poi dal
+  /// cloud, che usa una cache condivisa e una catena di provider gratuiti
+  /// (Wyzie, SubDL) con OpenSubtitles come ultimo tentativo.
+  static Future<List<SubtitleCue>> fetch({
+    required String imdbId,
+    int? season,
+    int? episode,
+    String language = 'it',
+  }) async {
+    final key = '${imdbId}_${season ?? ''}_${episode ?? ''}_$language';
+    final mem = _memByKey[key];
+    if (mem != null) return mem;
+    try {
+      final f = await _offlineFile(key);
+      if (await f.exists()) {
+        final cues = parseSrt(await f.readAsString());
+        if (cues.isNotEmpty) return _memByKey[key] = cues;
+      }
+    } catch (_) {}
+    final uri = Uri.parse('${SupabaseConfig.apiBase}/subtitles').replace(
+      queryParameters: {
+        'imdb_id': imdbId,
+        if (season != null && episode != null) 'season': '$season',
+        if (season != null && episode != null) 'episode': '$episode',
+        'language': language,
+      },
+    );
+    final res = await http.get(uri).timeout(const Duration(seconds: 30));
+    if (res.statusCode == 404) {
+      throw Exception('nessun sottotitolo italiano disponibile');
+    }
+    if (res.statusCode != 200) {
+      throw Exception('recupero non riuscito (HTTP ${res.statusCode})');
+    }
+    final body = utf8.decode(res.bodyBytes, allowMalformed: true);
+    final cues = parseSrt(body);
+    if (cues.isEmpty) throw Exception('file dei sottotitoli non valido');
+    try {
+      await (await _offlineFile(key)).writeAsString(body, flush: true);
+    } catch (_) {}
+    return _memByKey[key] = cues;
+  }
 
   static Future<List<OnlineSubtitle>> search({
     required String imdbId,

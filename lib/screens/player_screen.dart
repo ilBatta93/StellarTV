@@ -215,14 +215,11 @@ class _PlayerScreenState extends State<PlayerScreen>
         isMovie: !_isEpisode,
       );
       if (imdbId == null) throw 'titolo non trovato su TMDB';
-      final results = await SubtitlesService.search(
+      final cues = await SubtitlesService.fetch(
         imdbId: imdbId,
         season: _isEpisode ? c.season : null,
         episode: _isEpisode ? c.episode : null,
       );
-      if (results.isEmpty) throw 'nessun sottotitolo italiano disponibile';
-      final cues = await SubtitlesService.download(results.first.fileId);
-      if (cues == null) throw 'file dei sottotitoli non valido';
       // Evita la doppia scritta spegnendo la traccia incorporata.
       await _session?.engine?.selectSubtitleTrack(null);
       if (mounted) setState(() => _onlineCues = cues);
