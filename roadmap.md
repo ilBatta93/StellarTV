@@ -11,3 +11,8 @@
 - [x] Mostrare subito il catalogo salvato durante l’aggiornamento all’avvio
 - [x] Aggiungere i titoli simili disponibili nella scheda delle serie
 - [x] Salvare le modifiche nella repository GitHub
+- [x] Ridurre proporzioni TV e correggere banner Home e righe Top
+- [x] Aggiornare il banner anche da Continua a guardare
+- [x] Aprire categorie con sinistra e chiuderle con destra ripristinando il focus
+- [x] Rendere visibile il focus nelle schede e raggiungibili i controlli player
+- [x] Verificare analisi Dart e test focus TV/touch (build APK da verificare in Codemagic)

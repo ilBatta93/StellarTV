@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:provider/provider.dart';
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/history_entry.dart';
@@ -544,25 +546,30 @@ class _BannerSlide extends StatelessWidget {
 
 class _HistoryRow extends StatelessWidget {
   final List<ResumeItem> items;
+  final ValueChanged<ResumeItem>? onFocus;
 
-  const _HistoryRow({required this.items});
+  const _HistoryRow({required this.items, this.onFocus});
 
   @override
   Widget build(BuildContext context) {
     final tv = DeviceTypeService.isTv;
     return HorizontalRow(
-      height: tv ? 312 : 200,
+      height: tv ? 212 : 200,
       spacing: tv ? 20 : 12,
       itemCount: items.length,
-      itemBuilder: (context, i) => _HistoryCard(item: items[i]),
+      itemBuilder: (context, i) => _HistoryCard(
+        item: items[i],
+        onFocus: onFocus == null ? null : () => onFocus?.call(items[i]),
+      ),
     );
   }
 }
 
 class _HistoryCard extends StatelessWidget {
   final ResumeItem item;
+  final VoidCallback? onFocus;
 
-  const _HistoryCard({required this.item});
+  const _HistoryCard({required this.item, this.onFocus});
 
   @override
   Widget build(BuildContext context) {
@@ -598,13 +605,14 @@ class _HistoryCard extends StatelessWidget {
         : channel;
     // Resume the exact movie/episode from where it was left.
     return Pressable(
+      onFocus: onFocus,
       onTap: () => playChannel(
         context,
         playable,
         startAt: entry.resumePosition ?? entry.position,
       ),
       child: SizedBox(
-        width: DeviceTypeService.isTv ? 168 : 120,
+        width: DeviceTypeService.isTv ? 112 : 120,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -637,7 +645,7 @@ class _HistoryCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: AppColors.textPrimary,
-                fontSize: DeviceTypeService.isTv ? 17 : 13,
+                fontSize: DeviceTypeService.isTv ? 13 : 13,
                 fontWeight: FontWeight.w600,
                 height: 1.2,
               ),
@@ -759,6 +767,8 @@ class _TvDiscover extends StatefulWidget {
 class _TvDiscoverState extends State<_TvDiscover> {
   late final ValueNotifier<TmdbItem?> _hero;
   Timer? _debounce;
+  int _heroRequest = 0;
+  final Map<String, TmdbItem?> _historyInfo = {};
 
   @override
   void initState() {
@@ -790,9 +800,46 @@ class _TvDiscoverState extends State<_TvDiscover> {
   // Debounced so scrolling quickly with the remote does not load every
   // backdrop on the way.
   void _focus(TmdbItem item) {
+    _heroRequest++;
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 220), () {
       if (mounted) _hero.value = item;
+    });
+  }
+
+  void _focusHistory(ResumeItem resume) {
+    final (entry, channel) = resume;
+    final movie = entry.type == ContentType.movie;
+    final title = movie
+        ? channel.name
+        : (entry.seriesName.isNotEmpty
+              ? entry.seriesName
+              : channel.displaySeriesName);
+    final key = '${movie ? 'movie' : 'tv'}_$title';
+    final request = ++_heroRequest;
+    final tmdb = context.read<DiscoverProvider>().tmdb;
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 220), () async {
+      final item = _historyInfo.containsKey(key)
+          ? _historyInfo[key]
+          : await tmdb
+                .findByTitle(title, isMovie: movie)
+                .catchError((_) => null);
+      _historyInfo[key] = item;
+      if (!mounted || request != _heroRequest) return;
+      _hero.value =
+          item ??
+          TmdbItem(
+            id: -channel.id.hashCode.abs(),
+            mediaType: movie ? 'movie' : 'tv',
+            title: title,
+            overview: channel.group,
+            posterPath: null,
+            backdropPath: null,
+            voteAverage: 0,
+            popularity: 0,
+            releaseDate: '',
+          );
     });
   }
 
@@ -802,7 +849,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
       children: [
         _TvRowTitle(title),
         HorizontalRow(
-          height: 312,
+          height: 212,
           spacing: 20,
           itemCount: items.length,
           itemBuilder: (context, i) => TmdbPosterCard(
@@ -819,7 +866,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final heroHeight = c.maxHeight * 0.5;
+        final heroHeight = (c.maxHeight * 0.48).clamp(250.0, 340.0);
         return Stack(
           children: [
             Positioned.fill(
@@ -841,16 +888,22 @@ class _TvDiscoverState extends State<_TvDiscover> {
                   child: ListView(
                     // Rows are pre-built so pressing Down always finds the
                     // next row instead of stopping on unbuilt content.
-                    cacheExtent: 2400,
+                    scrollCacheExtent: const ScrollCacheExtent.pixels(2400),
                     padding: const EdgeInsets.only(bottom: 48),
                     children: [
                       if (widget.startedSeries.isNotEmpty) ...[
                         const _TvRowTitle('Serie viste di recente'),
-                        _HistoryRow(items: widget.startedSeries),
+                        _HistoryRow(
+                          items: widget.startedSeries,
+                          onFocus: _focusHistory,
+                        ),
                       ],
                       if (widget.startedMovies.isNotEmpty) ...[
                         const _TvRowTitle('Film visti di recente'),
-                        _HistoryRow(items: widget.startedMovies),
+                        _HistoryRow(
+                          items: widget.startedMovies,
+                          onFocus: _focusHistory,
+                        ),
                       ],
                       if (widget.forYou.isNotEmpty)
                         _row(
@@ -902,12 +955,12 @@ class _TvTopRowState extends State<_TvTopRow> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(48, 28, 48, 12),
+          padding: const EdgeInsets.fromLTRB(32, 16, 32, 8),
           child: Row(
             children: [
               Container(
                 width: 5,
-                height: 34,
+                height: 28,
                 decoration: BoxDecoration(
                   color: color,
                   borderRadius: BorderRadius.circular(3),
@@ -924,7 +977,7 @@ class _TvTopRowState extends State<_TvTopRow> {
                       style: const TextStyle(
                         fontFamily: 'Sora',
                         color: AppColors.textPrimary,
-                        fontSize: 24,
+                        fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -933,7 +986,7 @@ class _TvTopRowState extends State<_TvTopRow> {
                         subtitle,
                         style: const TextStyle(
                           color: AppColors.textMuted,
-                          fontSize: 15,
+                          fontSize: 12,
                         ),
                       ),
                   ],
@@ -954,7 +1007,7 @@ class _TvTopRowState extends State<_TvTopRow> {
         ),
         HorizontalRow(
           key: ValueKey('${title}_$showSeries'),
-          height: 240,
+          height: 190,
           spacing: 8,
           itemCount: items.length,
           itemBuilder: (context, i) => RankedPosterCard(
@@ -987,7 +1040,7 @@ class _TvTopRowState extends State<_TvTopRow> {
           label,
           style: TextStyle(
             color: selected ? Colors.white : AppColors.textSecondary,
-            fontSize: 17,
+            fontSize: 13,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -1004,13 +1057,13 @@ class _TvRowTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(48, 20, 48, 12),
+      padding: const EdgeInsets.fromLTRB(32, 14, 32, 8),
       child: Text(
         title,
         style: const TextStyle(
           fontFamily: 'Sora',
           color: AppColors.textPrimary,
-          fontSize: 24,
+          fontSize: 18,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -1029,7 +1082,7 @@ class _TvHeroBackdrop extends StatelessWidget {
       alignment: Alignment.topRight,
       child: FractionallySizedBox(
         widthFactor: 0.7,
-        heightFactor: 0.72,
+        heightFactor: 0.58,
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 350),
           child: item == null
@@ -1087,13 +1140,13 @@ class _TvHeroInfo extends StatelessWidget {
         text,
         style: const TextStyle(
           color: AppColors.textPrimary,
-          fontSize: 15,
+          fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
       ),
     );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(48, 104, 0, 8),
+      padding: const EdgeInsets.fromLTRB(32, 82, 24, 8),
       child: FractionallySizedBox(
         alignment: Alignment.topLeft,
         widthFactor: 0.55,
@@ -1107,25 +1160,25 @@ class _TvHeroInfo extends StatelessWidget {
               style: const TextStyle(
                 fontFamily: 'Sora',
                 color: AppColors.textPrimary,
-                fontSize: 44,
+                fontSize: 30,
                 height: 1.05,
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
             Flexible(
               child: Text(
                 it.overview,
-                maxLines: 3,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: AppColors.textPrimary,
-                  fontSize: 18,
+                  fontSize: 14,
                   height: 1.35,
                 ),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
             Row(
               children: [
                 chip(it.isMovie ? 'Film' : 'Serie TV'),

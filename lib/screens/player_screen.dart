@@ -47,6 +47,7 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen>
     with WidgetsBindingObserver {
   final FocusNode _remoteFocus = FocusNode(debugLabel: 'player remote');
+  final FocusNode _playFocus = FocusNode(debugLabel: 'player play');
   final _settingsService = PlayerSettingsService();
   final _bridge = NativePlayerBridge.instance;
   late final HistoryProvider _history;
@@ -117,7 +118,8 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   KeyEventResult _onRemoteKey(FocusNode node, KeyEvent event) {
-    if (!DeviceTypeService.isTv || event is! KeyDownEvent) {
+    if (!DeviceTypeService.isTv ||
+        (event is! KeyDownEvent && event is! KeyRepeatEvent)) {
       return KeyEventResult.ignored;
     }
     final session = _session;
@@ -150,7 +152,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
       if (isArrow) {
         _onInteraction();
-        _remoteFocus.nextFocus();
+        _playFocus.requestFocus();
         return KeyEventResult.handled;
       }
     }
@@ -161,12 +163,27 @@ class _PlayerScreenState extends State<PlayerScreen>
       if (!_controlsVisible) {
         _onInteraction();
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _controlsVisible) _remoteFocus.nextFocus();
+          if (mounted && _controlsVisible) _playFocus.requestFocus();
         });
       } else {
         session.togglePlay();
         _onInteraction();
       }
+      return KeyEventResult.handled;
+    }
+    if (!_controlsVisible &&
+        (key == LogicalKeyboardKey.arrowLeft ||
+            key == LogicalKeyboardKey.arrowRight ||
+            key == LogicalKeyboardKey.arrowUp ||
+            key == LogicalKeyboardKey.arrowDown)) {
+      _onInteraction();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _controlsVisible) _playFocus.requestFocus();
+      });
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.mediaPlayPause) {
+      session.togglePlay();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowLeft) {
@@ -648,6 +665,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _bridge.resetBrightness();
     _outroTimer?.cancel();
     _remoteFocus.dispose();
+    _playFocus.dispose();
     _activePlayers--;
     if (_activePlayers <= 0) {
       _activePlayers = 0;
@@ -661,12 +679,11 @@ class _PlayerScreenState extends State<PlayerScreen>
           if (_activePlayers == 0) _bridge.setOrientation('landscape');
         });
       } else {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-        ]).then((_) {
-          // Re-check: a new player may have opened meanwhile.
-          if (_activePlayers == 0) _bridge.setOrientation('portrait');
-        });
+        SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp])
+            .then((_) {
+              // Re-check: a new player may have opened meanwhile.
+              if (_activePlayers == 0) _bridge.setOrientation('portrait');
+            });
       }
     }
     super.dispose();
@@ -732,6 +749,7 @@ class _PlayerScreenState extends State<PlayerScreen>
             duration: const Duration(milliseconds: 220),
             child: PlayerControls(
               session: session,
+              playFocusNode: DeviceTypeService.isTv ? _playFocus : null,
               title: widget.channel.name,
               subtitle: _isLive
                   ? (context

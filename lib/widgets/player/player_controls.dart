@@ -4,11 +4,14 @@ import '../../models/channel.dart';
 import '../../player/playback_session.dart';
 import '../../theme/app_theme.dart';
 import '../channel_card.dart';
+import '../tv_focusable.dart';
+import '../../services/device_type_service.dart';
 import 'player_format.dart';
 import 'player_sheets.dart';
 
 class PlayerControls extends StatelessWidget {
   final PlaybackSession session;
+  final FocusNode? playFocusNode;
   final String title;
   final String subtitle;
   final bool locked;
@@ -36,6 +39,7 @@ class PlayerControls extends StatelessWidget {
   const PlayerControls({
     super.key,
     required this.session,
+    this.playFocusNode,
     required this.title,
     required this.subtitle,
     required this.locked,
@@ -72,6 +76,7 @@ class PlayerControls extends StatelessWidget {
             padding: const EdgeInsets.all(24),
             child: _RoundButton(
               icon: Icons.lock_rounded,
+              focusNode: playFocusNode,
               tooltip: 'Sblocca comandi',
               onPressed: onToggleLock,
             ),
@@ -261,6 +266,7 @@ class PlayerControls extends StatelessWidget {
               )
             : _RoundButton(
                 icon: playIcon,
+                focusNode: playFocusNode,
                 size: 72,
                 filled: true,
                 tooltip: v.isPlaying ? 'Pausa' : 'Riproduci',
@@ -452,6 +458,7 @@ class _RoundButton extends StatelessWidget {
   final IconData icon;
   final String? label;
   final String tooltip;
+  final FocusNode? focusNode;
   final double size;
   final bool filled;
   final VoidCallback? onPressed;
@@ -461,13 +468,14 @@ class _RoundButton extends StatelessWidget {
     required this.tooltip,
     required this.onPressed,
     this.label,
+    this.focusNode,
     this.size = 52,
     this.filled = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
+    final button = Tooltip(
       message: tooltip,
       child: Material(
         color: onPressed == null
@@ -508,6 +516,13 @@ class _RoundButton extends StatelessWidget {
         ),
       ),
     );
+    if (!DeviceTypeService.isTv || onPressed == null) return button;
+    return TvFocusable(
+      focusNode: focusNode,
+      onPressed: onPressed ?? () {},
+      borderRadius: BorderRadius.circular(size),
+      child: button,
+    );
   }
 }
 
@@ -524,7 +539,7 @@ class _BarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextButton.icon(
+    final button = TextButton.icon(
       style: TextButton.styleFrom(
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -534,5 +549,6 @@ class _BarButton extends StatelessWidget {
       label: Text(label),
       onPressed: onPressed,
     );
+    return TvFocusable(onPressed: onPressed, child: button);
   }
 }

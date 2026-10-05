@@ -41,7 +41,7 @@ class AppTheme {
       brightness: Brightness.dark,
       useMaterial3: true,
       visualDensity: isTv
-          ? const VisualDensity(horizontal: 1, vertical: 1)
+          ? const VisualDensity(horizontal: -1, vertical: -1)
           : VisualDensity.standard,
       fontFamily: 'Manrope',
       colorScheme: ColorScheme.dark(
@@ -113,16 +113,79 @@ class AppTheme {
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: accent,
-          foregroundColor: onAccent,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+        style:
+            ElevatedButton.styleFrom(
+              backgroundColor: accent,
+              foregroundColor: onAccent,
+              elevation: 0,
+              padding: EdgeInsets.symmetric(
+                horizontal: isTv ? 18 : 24,
+                vertical: isTv ? 10 : 14,
+              ),
+
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ).copyWith(
+              side: isTv
+                  ? WidgetStateProperty.resolveWith(
+                      (states) => BorderSide(
+                        color: states.contains(WidgetState.focused)
+                            ? AppColors.textPrimary
+                            : Colors.transparent,
+                        width: 3,
+                      ),
+                    )
+                  : null,
+            ),
       ),
+      outlinedButtonTheme: isTv
+          ? OutlinedButtonThemeData(
+              style: ButtonStyle(
+                side: WidgetStateProperty.resolveWith(
+                  (states) => BorderSide(
+                    color: states.contains(WidgetState.focused)
+                        ? AppColors.primary
+                        : AppColors.border,
+                    width: states.contains(WidgetState.focused) ? 3 : 1,
+                  ),
+                ),
+                overlayColor: WidgetStateProperty.resolveWith(
+                  (states) => states.contains(WidgetState.focused)
+                      ? accent.withValues(alpha: 0.35)
+                      : null,
+                ),
+              ),
+            )
+          : null,
+      iconButtonTheme: isTv
+          ? IconButtonThemeData(
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.resolveWith(
+                  (states) =>
+                      states.contains(WidgetState.focused) ? accent : null,
+                ),
+                foregroundColor: WidgetStateProperty.resolveWith(
+                  (states) =>
+                      states.contains(WidgetState.focused) ? onAccent : null,
+                ),
+              ),
+            )
+          : null,
+      textButtonTheme: isTv
+          ? TextButtonThemeData(
+              style: ButtonStyle(
+                overlayColor: WidgetStateProperty.resolveWith(
+                  (states) => states.contains(WidgetState.focused)
+                      ? accent.withValues(alpha: 0.55)
+                      : null,
+                ),
+              ),
+            )
+          : null,
+      chipTheme: isTv
+          ? ChipThemeData(surfaceTintColor: Colors.transparent)
+          : null,
       snackBarTheme: const SnackBarThemeData(
         backgroundColor: AppColors.card,
         contentTextStyle: TextStyle(color: AppColors.textPrimary),
@@ -177,7 +240,7 @@ class AppTheme {
       hoverColor: accent.withValues(alpha: 0.12),
       splashColor: accent.withValues(alpha: 0.18),
       listTileTheme: ListTileThemeData(
-        minTileHeight: isTv ? 64 : null,
+        minTileHeight: isTv ? 48 : null,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         selectedTileColor: accent.withValues(alpha: 0.16),
       ),

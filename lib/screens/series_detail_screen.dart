@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/channel.dart';
 import '../models/series_details.dart';
 import '../models/tmdb_item.dart';
@@ -12,6 +13,8 @@ import '../providers/app_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
+import '../services/device_type_service.dart';
+import '../widgets/tv_focusable.dart';
 
 class SeriesDetailScreen extends StatefulWidget {
   final Channel series;
@@ -114,7 +117,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 280,
+            expandedHeight: DeviceTypeService.isTv ? 180 : 280,
             backgroundColor: AppColors.background,
             leading: const BackButton(),
             actions: [
@@ -244,24 +247,29 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                   separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, i) {
                     final selected = i == _selectedSeason;
-                    return ChoiceChip(
-                      label: Text(seasons[i].name),
-                      selected: selected,
-                      onSelected: (_) => setState(() => _selectedSeason = i),
-                      labelStyle: TextStyle(
-                        color: selected
-                            ? Colors.white
-                            : AppColors.textSecondary,
-                        fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.w400,
+                    return TvFocusable(
+                      onPressed: () => setState(() => _selectedSeason = i),
+                      child: ChoiceChip(
+                        label: Text(seasons[i].name),
+                        selected: selected,
+                        onSelected: (_) => setState(() => _selectedSeason = i),
+                        labelStyle: TextStyle(
+                          color: selected
+                              ? Colors.white
+                              : AppColors.textSecondary,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                        selectedColor: AppColors.primary,
+                        backgroundColor: AppColors.surface,
+                        side: BorderSide(
+                          color: selected
+                              ? AppColors.primary
+                              : AppColors.border,
+                        ),
+                        showCheckmark: false,
                       ),
-                      selectedColor: AppColors.primary,
-                      backgroundColor: AppColors.surface,
-                      side: BorderSide(
-                        color: selected ? AppColors.primary : AppColors.border,
-                      ),
-                      showCheckmark: false,
                     );
                   },
                 ),
@@ -351,7 +359,7 @@ class _EpisodeTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ep = episode;
-    return Padding(
+    final tile = Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Material(
         color: AppColors.card,
@@ -469,6 +477,30 @@ class _EpisodeTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+    if (!DeviceTypeService.isTv) return tile;
+    return FocusTraversalGroup(
+      child: Row(
+        children: [
+          Expanded(
+            child: TvFocusable(
+              onPressed: onTap,
+              onLongPress: onToggleWatched,
+              child: tile,
+            ),
+          ),
+          TvFocusable(
+            onPressed: onToggleWatched,
+            child: IconButton(
+              tooltip: watched ? 'Segna come non visto' : 'Segna come visto',
+              onPressed: onToggleWatched,
+              icon: Icon(
+                watched ? Icons.check_circle : Icons.check_circle_outline,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

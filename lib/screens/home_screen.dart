@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+
 import '../models/content_type.dart';
 import '../providers/profile_provider.dart';
 import '../services/profile_service.dart';
@@ -257,7 +258,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _TvTopBar extends StatelessWidget {
-  static const double height = 92;
+  static const double height = 76;
 
   final int selectedIndex;
   final List<FocusNode> tabNodes;

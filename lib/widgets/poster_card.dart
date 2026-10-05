@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/tmdb_item.dart';
 import '../providers/ui_settings.dart';
 import '../theme/app_theme.dart';
@@ -136,7 +137,7 @@ class TmdbPosterCard extends StatelessWidget {
       ),
     );
     final fillsCell = !width.isFinite;
-    final effectiveWidth = DeviceTypeService.isTv && !fillsCell ? 168.0 : width;
+    final effectiveWidth = DeviceTypeService.isTv && !fillsCell ? 112.0 : width;
     return Pressable(
       onTap: onTap,
       onFocus: onFocus,
@@ -156,7 +157,7 @@ class TmdbPosterCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: AppColors.textPrimary,
-                fontSize: DeviceTypeService.isTv ? 17 : 13,
+                fontSize: DeviceTypeService.isTv ? 13 : 13,
                 fontWeight: FontWeight.w600,
                 height: 1.2,
               ),
@@ -189,20 +190,20 @@ class RankedPosterCard extends StatelessWidget {
       onFocus: onFocus,
       child: SizedBox(
         width: DeviceTypeService.isTv
-            ? (rank >= 10 ? 250 : 220)
+            ? (rank >= 10 ? 184 : 158)
             : (rank >= 10 ? 196 : 172),
         child: Stack(
           children: [
             Positioned(
               left: 0,
-              bottom: -18,
+              bottom: DeviceTypeService.isTv ? 0 : -18,
               child: Text(
                 '$rank',
                 style: TextStyle(
-                  fontSize: DeviceTypeService.isTv ? 156 : 128,
+                  fontSize: DeviceTypeService.isTv ? 100 : 128,
                   fontWeight: FontWeight.w700,
                   height: 1.2,
-                  letterSpacing: -10,
+                  letterSpacing: DeviceTypeService.isTv ? 0 : -10,
                   foreground: Paint()
                     ..style = PaintingStyle.stroke
                     ..strokeWidth = 3

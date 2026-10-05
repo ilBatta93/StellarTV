@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
 
@@ -21,7 +22,7 @@ class SectionHeader extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         DeviceTypeService.isTv ? 32 : 16,
-        DeviceTypeService.isTv ? 32 : 24,
+        DeviceTypeService.isTv ? 18 : 24,
         DeviceTypeService.isTv ? 24 : 8,
         DeviceTypeService.isTv ? 16 : 12,
       ),
@@ -78,6 +79,7 @@ class HorizontalRow extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(
           horizontal: DeviceTypeService.isTv ? 32 : 16,
+          vertical: DeviceTypeService.isTv ? 8 : 0,
         ),
         itemCount: itemCount,
         separatorBuilder: (_, _) => SizedBox(width: spacing),

@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 /// press. Holding OK triggers [onLongPress].
 class TvFocusable extends StatefulWidget {
   final Widget child;
+  final FocusNode? focusNode;
   final VoidCallback onPressed;
   final VoidCallback? onLongPress;
   final bool autofocus;
@@ -21,10 +22,11 @@ class TvFocusable extends StatefulWidget {
   const TvFocusable({
     super.key,
     required this.child,
+    this.focusNode,
     required this.onPressed,
     this.onLongPress,
     this.autofocus = false,
-    this.focusedScale = 1.06,
+    this.focusedScale = 1.02,
     this.borderRadius = const BorderRadius.all(Radius.circular(10)),
     this.onFocusChange,
   });
@@ -68,12 +70,23 @@ class _TvFocusableState extends State<TvFocusable> {
   Widget build(BuildContext context) {
     if (!DeviceTypeService.isTv) return widget.child;
     return Focus(
+      focusNode: widget.focusNode,
       autofocus: widget.autofocus,
       onKeyEvent: _onKey,
       onFocusChange: (value) {
         if (value == _focused) return;
         setState(() => _focused = value);
         widget.onFocusChange?.call(value);
+        if (value) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || !_focused) return;
+            Scrollable.ensureVisible(
+              context,
+              duration: const Duration(milliseconds: 120),
+              alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+            );
+          });
+        }
       },
       child: ExcludeFocus(
         child: RepaintBoundary(
@@ -85,7 +98,7 @@ class _TvFocusableState extends State<TvFocusable> {
               foregroundDecoration: BoxDecoration(
                 borderRadius: widget.borderRadius,
                 border: Border.all(
-                  color: _focused ? AppColors.textPrimary : Colors.transparent,
+                  color: _focused ? AppColors.primary : Colors.transparent,
                   width: 3,
                 ),
               ),

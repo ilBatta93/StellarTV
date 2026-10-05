@@ -14,6 +14,7 @@ import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
 import '../widgets/tv_focusable.dart';
+import '../widgets/tv_category_panel.dart';
 import 'epg_settings_screen.dart';
 
 /// "Diretta" tab: channel list with what is on now, a progress bar and what
@@ -26,6 +27,22 @@ class LivePage extends StatefulWidget {
 }
 
 class _LivePageState extends State<LivePage> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  FocusNode? _drawerReturn;
+  void _openCategories() {
+    _drawerReturn = FocusManager.instance.primaryFocus;
+    _scaffoldKey.currentState?.openDrawer();
+  }
+
+  void _drawerChanged(bool opened) {
+    if (opened) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final target = _drawerReturn;
+      if (target != null && target.context != null) target.requestFocus();
+    });
+  }
+
   String _query = '';
   String? _category;
   bool _defaultApplied = false;
@@ -93,7 +110,7 @@ class _LivePageState extends State<LivePage> {
           .toList();
     }
 
-    return Column(
+    final content = Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
@@ -167,16 +184,44 @@ class _LivePageState extends State<LivePage> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   itemCount: channels.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) => _LiveTile(
-                    channel: channels[i],
-                    now: epg.nowFor(channels[i]),
-                    next: epg.nextFor(channels[i]),
-                    isFavorite: app.favoriteIds.contains(channels[i].id),
-                    onFavorite: () => app.toggleFavorite(channels[i]),
-                  ),
+                  itemBuilder: (context, i) {
+                    final tile = _LiveTile(
+                      channel: channels[i],
+                      now: epg.nowFor(channels[i]),
+                      next: epg.nextFor(channels[i]),
+                      isFavorite: app.favoriteIds.contains(channels[i].id),
+                      onFavorite: () => app.toggleFavorite(channels[i]),
+                    );
+                    return DeviceTypeService.isTv
+                        ? TvCategoryEdge(
+                            scaffoldKey: _scaffoldKey,
+                            onOpen: _openCategories,
+                            child: tile,
+                          )
+                        : tile;
+                  },
                 ),
         ),
       ],
+    );
+    if (!DeviceTypeService.isTv) return content;
+    return Scaffold(
+      key: _scaffoldKey,
+      onDrawerChanged: _drawerChanged,
+      drawer: TvCategoryPanel(
+        categories: {
+          'Tutti': groups.fold<int>(
+            0,
+            (count, group) => count + group.entries.length,
+          ),
+          for (final group in groups) group.label: group.entries.length,
+        },
+        selected: _category ?? 'Tutti',
+        onSelected: (category) =>
+            setState(() => _category = category == 'Tutti' ? null : category),
+        onClose: () => _scaffoldKey.currentState?.closeDrawer(),
+      ),
+      body: content,
     );
   }
 

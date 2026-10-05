@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../navigation/app_routes.dart';
@@ -9,6 +10,7 @@ import '../services/catalog_builder.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
+import '../widgets/tv_category_panel.dart';
 import '../widgets/section_row.dart';
 import 'settings_screen.dart';
 
@@ -20,10 +22,10 @@ SliverGridDelegate channelGridDelegate(
   final isLive = type == ContentType.live;
   if (DeviceTypeService.isTv) {
     return SliverGridDelegateWithMaxCrossAxisExtent(
-      maxCrossAxisExtent: isLive ? 240 : 190,
+      maxCrossAxisExtent: isLive ? 180 : 132,
       childAspectRatio: isLive ? 1.05 : 0.6,
-      crossAxisSpacing: 22,
-      mainAxisSpacing: 24,
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
     );
   }
   return SliverGridDelegateWithMaxCrossAxisExtent(
@@ -252,6 +254,22 @@ class CatalogPage extends StatefulWidget {
 }
 
 class _CatalogPageState extends State<CatalogPage> {
+  FocusNode? _drawerReturn;
+  void _openCategories() {
+    _drawerReturn = FocusManager.instance.primaryFocus;
+    _scaffoldKey.currentState?.openDrawer();
+  }
+
+  void _closeCategories() => _scaffoldKey.currentState?.closeDrawer();
+  void _drawerChanged(bool opened) {
+    if (opened || !DeviceTypeService.isTv) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final target = _drawerReturn;
+      if (target != null && target.context != null) target.requestFocus();
+    });
+  }
+
   String _query = '';
   String? _selectedCategory;
   int? _genreId;
@@ -321,21 +339,39 @@ class _CatalogPageState extends State<CatalogPage> {
       key: _scaffoldKey,
       drawerEnableOpenDragGesture: true,
       drawerEdgeDragWidth: 48,
-      drawer: _CategoryDrawer(
-        categories: {
-          _recentLabel: app.recentEntries(widget.type).length,
-          _allLabel: app.allEntries(widget.type).length,
-          for (final g in groups)
-            if (g.label != _allLabel) g.label: g.entries.length,
-        },
-        selected: _selectedCategory,
-        onSelected: (category) {
-          setState(
-            () =>
-                _selectedCategory = category == _recentLabel ? null : category,
-          );
-        },
-      ),
+      onDrawerChanged: _drawerChanged,
+      drawer: DeviceTypeService.isTv
+          ? TvCategoryPanel(
+              categories: {
+                _recentLabel: app.recentEntries(widget.type).length,
+                _allLabel: app.allEntries(widget.type).length,
+                for (final g in groups)
+                  if (g.label != _allLabel) g.label: g.entries.length,
+              },
+              selected: _selectedCategory ?? _recentLabel,
+              onSelected: (category) => setState(
+                () => _selectedCategory = category == _recentLabel
+                    ? null
+                    : category,
+              ),
+              onClose: _closeCategories,
+            )
+          : _CategoryDrawer(
+              categories: {
+                _recentLabel: app.recentEntries(widget.type).length,
+                _allLabel: app.allEntries(widget.type).length,
+                for (final g in groups)
+                  if (g.label != _allLabel) g.label: g.entries.length,
+              },
+              selected: _selectedCategory,
+              onSelected: (category) {
+                setState(
+                  () => _selectedCategory = category == _recentLabel
+                      ? null
+                      : category,
+                );
+              },
+            ),
       body: Column(
         children: [
           Padding(
@@ -355,7 +391,7 @@ class _CatalogPageState extends State<CatalogPage> {
                 IconButton(
                   tooltip: 'Categorie',
                   icon: const Icon(Icons.category_outlined),
-                  onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                  onPressed: _openCategories,
                 ),
               ],
             ),
@@ -557,11 +593,17 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 
   Widget _entryCard(AppProvider app, CatalogEntry entry) {
-    return CatalogEntryCard(
+    final card = CatalogEntryCard(
       entry: entry,
       isFavorite: app.favoriteIds.contains(entry.primary.id),
       onTap: () => _openEntry(context, entry),
       onFavoriteTap: () => app.toggleFavorite(entry.primary),
+    );
+    if (!DeviceTypeService.isTv) return card;
+    return TvCategoryEdge(
+      scaffoldKey: _scaffoldKey,
+      onOpen: _openCategories,
+      child: card,
     );
   }
 

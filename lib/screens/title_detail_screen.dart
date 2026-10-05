@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/tmdb_item.dart';
@@ -13,13 +14,15 @@ import '../theme/app_theme.dart';
 import '../screens/person_detail_screen.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
+import '../services/device_type_service.dart';
+import '../widgets/tv_focusable.dart';
 
 class TitleDetailScreen extends StatefulWidget {
   final TmdbItem? item;
   final Channel? channel;
 
   const TitleDetailScreen({super.key, this.item, this.channel})
-      : assert(item != null || channel != null);
+    : assert(item != null || channel != null);
 
   @override
   State<TitleDetailScreen> createState() => _TitleDetailScreenState();
@@ -49,8 +52,10 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
       var item = _item;
       final channel = widget.channel;
       if (item == null && channel != null) {
-        item = await tmdb.findByTitle(channel.name,
-            isMovie: channel.type == ContentType.movie);
+        item = await tmdb.findByTitle(
+          channel.name,
+          isMovie: channel.type == ContentType.movie,
+        );
         // Series always use the combined page with seasons and episodes.
         if (channel.type == ContentType.series ||
             channel.type == ContentType.anime) {
@@ -59,11 +64,10 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
           return;
         }
       }
-      final similar =
-          item == null ? <TmdbItem>[] : await tmdb.recommendations(item);
-      final cast = item == null
-          ? <TmdbPerson>[]
-          : await tmdb.cast(item);
+      final similar = item == null
+          ? <TmdbItem>[]
+          : await tmdb.recommendations(item);
+      final cast = item == null ? <TmdbPerson>[] : await tmdb.cast(item);
       if (!mounted) return;
       setState(() {
         _item = item;
@@ -97,7 +101,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 280,
+            expandedHeight: DeviceTypeService.isTv ? 180 : 280,
             backgroundColor: AppColors.background,
             actions: [
               if (playable != null)
@@ -127,7 +131,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                         colors: [
                           Color(0x8009090D),
                           Colors.transparent,
-                          AppColors.background
+                          AppColors.background,
                         ],
                         stops: [0, 0.4, 1],
                       ),
@@ -139,26 +143,54 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              padding: EdgeInsets.fromLTRB(
+                DeviceTypeService.isTv ? 32 : 16,
+                0,
+                DeviceTypeService.isTv ? 32 : 16,
+                0,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: Theme.of(context).textTheme.headlineMedium),
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
                   const SizedBox(height: 8),
                   _Meta(item: item, channel: widget.channel),
                   const SizedBox(height: 16),
-                  _Actions(
+                  if (!DeviceTypeService.isTv)
+                    _Actions(
                       item: item,
                       playable: playable,
-                      variants: variants),
+                      variants: variants,
+                    )
+                  else Align(
+                    alignment: Alignment.centerLeft,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: DeviceTypeService.isTv
+                            ? 380
+                            : double.infinity,
+                      ),
+                      child: _Actions(
+                        item: item,
+                        playable: playable,
+                        variants: variants,
+                      ),
+                    ),
+                  ),
                   if (item != null && item.overview.isNotEmpty) ...[
                     const SizedBox(height: 24),
-                    Text('Trama',
-                        style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Trama',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 8),
-                    Text(item.overview,
-                        style: Theme.of(context).textTheme.bodyMedium),
+                    Text(
+                      item.overview,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                   ],
                 ],
               ),
@@ -177,7 +209,10 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: 'Cast', subtitle: 'Tocca un attore per saperne di più'),
+        const SectionHeader(
+          title: 'Cast',
+          subtitle: 'Tocca un attore per saperne di più',
+        ),
         HorizontalRow(
           height: 160,
           itemCount: _cast.length,
@@ -187,7 +222,8 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => PersonDetailScreen(person: person)),
+                  builder: (_) => PersonDetailScreen(person: person),
+                ),
               ),
               child: SizedBox(
                 width: 96,
@@ -225,7 +261,9 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: AppColors.textMuted, fontSize: 11),
+                          color: AppColors.textMuted,
+                          fontSize: 11,
+                        ),
                       ),
                   ],
                 ),
@@ -238,24 +276,28 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
   }
 
   Widget _castFallback(TmdbPerson person) => Container(
-        color: AppColors.card,
-        alignment: Alignment.center,
-        child: Text(
-          person.name.isNotEmpty ? person.name[0].toUpperCase() : '?',
-          style: const TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 24,
-              fontWeight: FontWeight.w700),
-        ),
-      );
+    color: AppColors.card,
+    alignment: Alignment.center,
+    child: Text(
+      person.name.isNotEmpty ? person.name[0].toUpperCase() : '?',
+      style: const TextStyle(
+        color: AppColors.textMuted,
+        fontSize: 24,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 
   Widget _buildSimilar() {
     if (_loading) {
       return Padding(
         padding: EdgeInsets.all(32),
         child: Center(
-            child: CircularProgressIndicator(
-                strokeWidth: 2, color: AppColors.primary)),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppColors.primary,
+          ),
+        ),
       );
     }
     if (_error != null) {
@@ -263,12 +305,18 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            const Icon(Icons.info_outline_rounded,
-                color: AppColors.warning, size: 18),
+            const Icon(
+              Icons.info_outline_rounded,
+              color: AppColors.warning,
+              size: 18,
+            ),
             const SizedBox(width: 8),
             Expanded(
-                child: Text(_error!,
-                    style: Theme.of(context).textTheme.bodyMedium)),
+              child: Text(
+                _error!,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
             TextButton(onPressed: _load, child: const Text('Riprova')),
           ],
         ),
@@ -279,7 +327,9 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SectionHeader(
-            title: 'Titoli simili', subtitle: 'Potrebbero piacerti anche'),
+          title: 'Titoli simili',
+          subtitle: 'Potrebbero piacerti anche',
+        ),
         HorizontalRow(
           height: 210,
           itemCount: _similar.length,
@@ -326,8 +376,10 @@ class _Chip extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(label,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+      child: Text(
+        label,
+        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+      ),
     );
   }
 }
@@ -351,10 +403,13 @@ class _Actions extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (playable != null)
-          ElevatedButton.icon(
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('Guarda ora'),
+          TvFocusable(
             onPressed: () => _play(context),
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('Guarda ora'),
+              onPressed: () => _play(context),
+            ),
           )
         else
           Container(
@@ -365,14 +420,19 @@ class _Actions extends StatelessWidget {
             ),
             child: const Row(
               children: [
-                Icon(Icons.info_outline_rounded,
-                    color: AppColors.textSecondary, size: 18),
+                Icon(
+                  Icons.info_outline_rounded,
+                  color: AppColors.textSecondary,
+                  size: 18,
+                ),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Questo titolo non è presente nella tua playlist.',
-                    style:
-                        TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ],
@@ -380,10 +440,14 @@ class _Actions extends StatelessWidget {
           ),
         if (variants.length > 1) ...[
           const SizedBox(height: 8),
-          const Text('Versioni disponibili',
-              style: TextStyle(
-                  color: AppColors.textSecondary, fontSize: 12,
-                  fontWeight: FontWeight.w600)),
+          const Text(
+            'Versioni disponibili',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 6),
           Wrap(
             spacing: 8,
@@ -407,13 +471,16 @@ class _Actions extends StatelessWidget {
             icon: Icon(inList ? Icons.check_rounded : Icons.add_rounded),
             label: Text(inList ? 'Nella mia lista' : 'Aggiungi alla mia lista'),
             style: OutlinedButton.styleFrom(
-              foregroundColor:
-                  inList ? AppColors.success : AppColors.textPrimary,
+              foregroundColor: inList
+                  ? AppColors.success
+                  : AppColors.textPrimary,
               side: BorderSide(
-                  color: inList ? AppColors.success : AppColors.border),
+                color: inList ? AppColors.success : AppColors.border,
+              ),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: () => app.toggleTmdbFavorite(item!),
           ),
@@ -422,8 +489,11 @@ class _Actions extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.check_circle_rounded,
-                  color: AppColors.success, size: 16),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: AppColors.success,
+                size: 16,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -431,7 +501,9 @@ class _Actions extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 12),
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ],
@@ -444,8 +516,9 @@ class _Actions extends StatelessWidget {
   Future<void> _play(BuildContext context) async {
     if (playable == null) return;
     final entry = CatalogEntry(
-        primary: playable!,
-        variants: variants.isEmpty ? [playable!] : variants);
+      primary: playable!,
+      variants: variants.isEmpty ? [playable!] : variants,
+    );
     final channel = entry.primary;
     if (channel.type == ContentType.series ||
         channel.type == ContentType.anime) {
