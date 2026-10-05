@@ -23,33 +23,46 @@ class SettingsSection extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-            child: Text(title.toUpperCase(),
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.1,
-                )),
+            child: Text(
+              title.toUpperCase(),
+              style: TextStyle(
+                color: AppColors.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.1,
+              ),
+            ),
           ),
           if (description != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
-              child: Text(description!,
-                  style: const TextStyle(
-                      color: AppColors.textMuted, fontSize: 13, height: 1.5)),
+              child: Text(
+                description!,
+                style: const TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                  height: 1.5,
+                ),
+              ),
             ),
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface,
+          // A Material (not a coloured Container) so the focus/tap highlight of
+          // the tiles is painted on top of the card and visible with a remote.
+          Material(
+            color: AppColors.surface,
+            shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
+              side: BorderSide(color: AppColors.border.withValues(alpha: 0.6)),
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
                 for (var i = 0; i < children.length; i++) ...[
                   if (i > 0)
-                    const Divider(height: 1, indent: 56, color: AppColors.border),
+                    const Divider(
+                      height: 1,
+                      indent: 56,
+                      color: AppColors.border,
+                    ),
                   children[i],
                 ],
               ],
@@ -74,24 +87,35 @@ class EngineBadge extends StatelessWidget {
         color: AppColors.accent.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(label,
-          style: const TextStyle(
-              color: AppColors.accent, fontSize: 10, fontWeight: FontWeight.w700)),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: AppColors.accent,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
 
 Widget _title(String title, String? badge) => Row(
-      children: [
-        Flexible(child: Text(title, style: const TextStyle(fontSize: 15))),
-        if (badge != null) EngineBadge(badge),
-      ],
-    );
+  children: [
+    Flexible(child: Text(title, style: const TextStyle(fontSize: 15))),
+    if (badge != null) EngineBadge(badge),
+  ],
+);
 
 Widget? _subtitle(String? text) => text == null
     ? null
-    : Text(text,
-        style: const TextStyle(color: AppColors.textMuted, fontSize: 12, height: 1.4));
+    : Text(
+        text,
+        style: const TextStyle(
+          color: AppColors.textMuted,
+          fontSize: 12,
+          height: 1.4,
+        ),
+      );
 
 class SettingsSwitchTile extends StatelessWidget {
   final IconData icon;
@@ -159,10 +183,15 @@ class SettingsValueTile extends StatelessWidget {
           if (value != null)
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 140),
-              child: Text(value!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+              child: Text(
+                value!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
             ),
           if (onTap != null && color == null) ...[
             const SizedBox(width: 4),
@@ -213,9 +242,13 @@ class SettingsSliderTile extends StatelessWidget {
               Icon(icon, color: AppColors.textSecondary),
               const SizedBox(width: 16),
               Expanded(child: _title(title, badge)),
-              Text(format(value),
-                  style: TextStyle(
-                      color: AppColors.primary, fontWeight: FontWeight.w600)),
+              Text(
+                format(value),
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           if (subtitle != null)
@@ -257,7 +290,9 @@ Future<T?> pickOption<T>(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (ctx) => ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(ctx).size.height * 0.8,
+      ),
       child: SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -273,15 +308,20 @@ Future<T?> pickOption<T>(
                 children: [
                   for (final o in options)
                     ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-                      title: Text(label(o),
-                          style: TextStyle(
-                            color: o == current
-                                ? AppColors.primary
-                                : AppColors.textPrimary,
-                            fontWeight:
-                                o == current ? FontWeight.w600 : FontWeight.w400,
-                          )),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                      ),
+                      title: Text(
+                        label(o),
+                        style: TextStyle(
+                          color: o == current
+                              ? AppColors.primary
+                              : AppColors.textPrimary,
+                          fontWeight: o == current
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
                       subtitle: _subtitle(detail?.call(o)),
                       trailing: o == current
                           ? Icon(Icons.check_rounded, color: AppColors.primary)

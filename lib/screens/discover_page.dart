@@ -15,6 +15,7 @@ import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
+import '../widgets/tv_focusable.dart';
 
 /// A watch-history entry paired with the channel it belongs to.
 typedef ResumeItem = (HistoryEntry, Channel);
@@ -102,21 +103,30 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final banner = [...topMovies.take(6), ...topSeries.take(4)];
 
     if (DeviceTypeService.isTv) {
+      // Same sections as the phone Home (Top 10 with Film / Serie TV switch,
+      // per-platform Top 10, recommendations), laid out for the remote.
       return _TvDiscover(
         banner: banner,
         startedMovies: startedMovies,
         startedSeries: startedSeries,
-        rows: [
+        forYou: discover.forYou.where(app.isAvailable).toList(),
+        forYouSource: discover.forYouSource,
+        tops: [
           (
-            'Consigliati per te',
-            discover.forYou.where(app.isAvailable).toList(),
+            'Top 10 della settimana',
+            'In tendenza e disponibili nella tua playlist',
+            AppColors.primary,
+            topMovies,
+            topSeries,
           ),
-          ('Film in tendenza', topMovies),
-          ('Serie TV in tendenza', topSeries),
-          for (final p in StreamingPlatform.all) ...[
-            ('Film su ${p.name}', available(discover.platformTop(p).movies)),
-            ('Serie su ${p.name}', available(discover.platformTop(p).series)),
-          ],
+          for (final p in StreamingPlatform.all)
+            (
+              'Top 10 su ${p.name}',
+              null,
+              p.color,
+              available(discover.platformTop(p).movies),
+              available(discover.platformTop(p).series),
+            ),
         ],
       );
     }
@@ -717,17 +727,29 @@ class _DiscoverSkeleton extends StatelessWidget {
 // TV-only Home: large hero driven by the focused title, rows below.
 // ---------------------------------------------------------------------------
 
+typedef TvTopSpec = (
+  String title,
+  String? subtitle,
+  Color color,
+  List<TmdbItem> movies,
+  List<TmdbItem> series,
+);
+
 class _TvDiscover extends StatefulWidget {
   final List<TmdbItem> banner;
   final List<ResumeItem> startedMovies;
   final List<ResumeItem> startedSeries;
-  final List<(String, List<TmdbItem>)> rows;
+  final List<TmdbItem> forYou;
+  final String? forYouSource;
+  final List<TvTopSpec> tops;
 
   const _TvDiscover({
     required this.banner,
     required this.startedMovies,
     required this.startedSeries,
-    required this.rows,
+    required this.forYou,
+    required this.forYouSource,
+    required this.tops,
   });
 
   @override
@@ -744,10 +766,13 @@ class _TvDiscoverState extends State<_TvDiscover> {
     TmdbItem? first;
     if (widget.banner.isNotEmpty) {
       first = widget.banner.first;
+    } else if (widget.forYou.isNotEmpty) {
+      first = widget.forYou.first;
     } else {
-      for (final r in widget.rows) {
-        if (r.$2.isNotEmpty) {
-          first = r.$2.first;
+      for (final t in widget.tops) {
+        final items = t.$4.isNotEmpty ? t.$4 : t.$5;
+        if (items.isNotEmpty) {
+          first = items.first;
           break;
         }
       }
@@ -827,8 +852,16 @@ class _TvDiscoverState extends State<_TvDiscover> {
                         const _TvRowTitle('Film visti di recente'),
                         _HistoryRow(items: widget.startedMovies),
                       ],
-                      for (final r in widget.rows)
-                        if (r.$2.isNotEmpty) _row(r.$1, r.$2),
+                      if (widget.forYou.isNotEmpty)
+                        _row(
+                          widget.forYouSource == null
+                              ? 'Consigliati per te'
+                              : 'Consigliati per te · perché hai guardato '
+                                    '${widget.forYouSource}',
+                          widget.forYou,
+                        ),
+                      for (final t in widget.tops)
+                        _TvTopRow(spec: t, onFocusItem: _focus),
                     ],
                   ),
                 ),
@@ -837,6 +870,128 @@ class _TvDiscoverState extends State<_TvDiscover> {
           ],
         );
       },
+    );
+  }
+}
+
+/// TV version of the phone "Top 10" block: title, a Film / Serie TV switch
+/// reachable with the remote (Up from the posters, Left/Right to switch) and
+/// the ranked posters.
+class _TvTopRow extends StatefulWidget {
+  final TvTopSpec spec;
+  final ValueChanged<TmdbItem> onFocusItem;
+
+  const _TvTopRow({required this.spec, required this.onFocusItem});
+
+  @override
+  State<_TvTopRow> createState() => _TvTopRowState();
+}
+
+class _TvTopRowState extends State<_TvTopRow> {
+  bool _showSeries = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final (title, subtitle, color, movies, series) = widget.spec;
+    final hasMovies = movies.isNotEmpty;
+    final hasSeries = series.isNotEmpty;
+    if (!hasMovies && !hasSeries) return const SizedBox.shrink();
+    final showSeries = hasSeries && (_showSeries || !hasMovies);
+    final items = showSeries ? series : movies;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(48, 28, 48, 12),
+          child: Row(
+            children: [
+              Container(
+                width: 5,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Sora',
+                        color: AppColors.textPrimary,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 15,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (hasMovies && hasSeries) ...[
+                const SizedBox(width: 24),
+                _chip('Film', !showSeries, () {
+                  setState(() => _showSeries = false);
+                }),
+                const SizedBox(width: 12),
+                _chip('Serie TV', showSeries, () {
+                  setState(() => _showSeries = true);
+                }),
+              ],
+            ],
+          ),
+        ),
+        HorizontalRow(
+          key: ValueKey('${title}_$showSeries'),
+          height: 240,
+          spacing: 8,
+          itemCount: items.length,
+          itemBuilder: (context, i) => RankedPosterCard(
+            item: items[i],
+            rank: i + 1,
+            onTap: () => openTmdbItem(context, items[i]),
+            onFocus: () => widget.onFocusItem(items[i]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _chip(String label, bool selected, VoidCallback onTap) {
+    return TvFocusable(
+      onPressed: onTap,
+      // Focusing a chip already switches, so Left/Right flips the list.
+      onFocusChange: (f) {
+        if (f && !selected) onTap();
+      },
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : AppColors.textSecondary,
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
     );
   }
 }

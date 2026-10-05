@@ -172,18 +172,21 @@ class RankedPosterCard extends StatelessWidget {
   final TmdbItem item;
   final int rank;
   final VoidCallback onTap;
+  final VoidCallback? onFocus;
 
   const RankedPosterCard({
     super.key,
     required this.item,
     required this.rank,
     required this.onTap,
+    this.onFocus,
   });
 
   @override
   Widget build(BuildContext context) {
     return Pressable(
       onTap: onTap,
+      onFocus: onFocus,
       child: SizedBox(
         width: DeviceTypeService.isTv
             ? (rank >= 10 ? 250 : 220)

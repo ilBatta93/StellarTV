@@ -173,7 +173,7 @@ class AppTheme {
         ),
       ),
       iconTheme: const IconThemeData(color: AppColors.textPrimary),
-      focusColor: accent.withValues(alpha: 0.28),
+      focusColor: accent.withValues(alpha: isTv ? 0.55 : 0.28),
       hoverColor: accent.withValues(alpha: 0.12),
       splashColor: accent.withValues(alpha: 0.18),
       listTileTheme: ListTileThemeData(

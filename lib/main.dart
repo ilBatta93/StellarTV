@@ -13,6 +13,7 @@ import 'providers/ui_settings.dart';
 import 'screens/splash_screen.dart';
 import 'services/profile_service.dart';
 import 'services/device_type_service.dart';
+import 'services/tv_remote_keys.dart';
 import 'services/sync_service.dart';
 import 'services/tmdb_service.dart';
 import 'theme/app_theme.dart';
@@ -29,6 +30,7 @@ Future<void> main() async {
     PaintingBinding.instance.imageCache
       ..maximumSize = 250
       ..maximumSizeBytes = 80 << 20;
+    TvRemoteKeys.install();
   }
   await Supabase.initialize(
     url: SupabaseConfig.url,

@@ -126,8 +126,33 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (key == LogicalKeyboardKey.goBack ||
         key == LogicalKeyboardKey.escape ||
         key == LogicalKeyboardKey.browserBack) {
+      if (_controlsVisible && (session.value.isPlaying)) {
+        setState(() => _controlsVisible = false);
+        _remoteFocus.requestFocus();
+        return KeyEventResult.handled;
+      }
       Navigator.maybePop(context);
       return KeyEventResult.handled;
+    }
+    // Controls visible: the D-Pad moves between the on-screen buttons and OK
+    // activates the focused one, exactly like a tap.
+    if (_controlsVisible) {
+      final primary = FocusManager.instance.primaryFocus;
+      final onButton = primary != null && primary != _remoteFocus;
+      final isArrow =
+          key == LogicalKeyboardKey.arrowLeft ||
+          key == LogicalKeyboardKey.arrowRight ||
+          key == LogicalKeyboardKey.arrowUp ||
+          key == LogicalKeyboardKey.arrowDown;
+      if (onButton) {
+        _onInteraction();
+        return KeyEventResult.ignored;
+      }
+      if (isArrow) {
+        _onInteraction();
+        _remoteFocus.nextFocus();
+        return KeyEventResult.handled;
+      }
     }
     if (key == LogicalKeyboardKey.select ||
         key == LogicalKeyboardKey.enter ||
@@ -135,6 +160,9 @@ class _PlayerScreenState extends State<PlayerScreen>
         key == LogicalKeyboardKey.gameButtonA) {
       if (!_controlsVisible) {
         _onInteraction();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _controlsVisible) _remoteFocus.nextFocus();
+        });
       } else {
         session.togglePlay();
         _onInteraction();
@@ -444,6 +472,10 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   void _applyOrientation(PlayerSettings settings) {
+    if (DeviceTypeService.isTv) {
+      _setOrientation('landscape');
+      return;
+    }
     switch (settings.orientation) {
       case PlayerOrientation.landscape:
         _setOrientation('landscape');
@@ -460,7 +492,8 @@ class _PlayerScreenState extends State<PlayerScreen>
     final v = session.value;
 
     if (v.hasVideoSize) {
-      if (settings.orientation == PlayerOrientation.followVideo &&
+      if (!DeviceTypeService.isTv &&
+          settings.orientation == PlayerOrientation.followVideo &&
           !_orientationApplied) {
         _orientationApplied = true;
         _setOrientation(v.aspectRatio >= 1 ? 'landscape' : 'portrait');
@@ -497,7 +530,8 @@ class _PlayerScreenState extends State<PlayerScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final settings = _settings;
     if (state == AppLifecycleState.resumed && settings != null) {
-      if (settings.orientation == PlayerOrientation.followVideo &&
+      if (!DeviceTypeService.isTv &&
+          settings.orientation == PlayerOrientation.followVideo &&
           _orientationApplied) {
         final v = _session?.value;
         if (v != null && v.hasVideoSize) {
@@ -548,7 +582,10 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (seconds <= 0) return;
     _hideTimer = Timer(Duration(seconds: seconds), () {
       final playing = _session?.value.isPlaying ?? false;
-      if (mounted && playing) setState(() => _controlsVisible = false);
+      if (mounted && playing) {
+        setState(() => _controlsVisible = false);
+        if (DeviceTypeService.isTv) _remoteFocus.requestFocus();
+      }
     });
   }
 
@@ -615,12 +652,22 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (_activePlayers <= 0) {
       _activePlayers = 0;
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-      ]).then((_) {
-        // Re-check: a new player may have opened meanwhile.
-        if (_activePlayers == 0) _bridge.setOrientation('portrait');
-      });
+      if (DeviceTypeService.isTv) {
+        // TVs always stay horizontal, also after leaving the player.
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]).then((_) {
+          if (_activePlayers == 0) _bridge.setOrientation('landscape');
+        });
+      } else {
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+        ]).then((_) {
+          // Re-check: a new player may have opened meanwhile.
+          if (_activePlayers == 0) _bridge.setOrientation('portrait');
+        });
+      }
     }
     super.dispose();
   }
@@ -676,38 +723,45 @@ class _PlayerScreenState extends State<PlayerScreen>
           onInteraction: _onInteraction,
         ),
       if (connecting) _ConnectingView(session: session),
-      IgnorePointer(
-        ignoring: !_controlsVisible,
-        child: AnimatedOpacity(
-          opacity: _controlsVisible ? 1 : 0,
-          duration: const Duration(milliseconds: 220),
-          child: PlayerControls(
-            session: session,
-            title: widget.channel.name,
-            subtitle: _isLive
-                ? (context.watch<EpgProvider>().nowFor(widget.channel)?.title ??
-                      widget.channel.group)
-                : widget.channel.group,
-            locked: _locked,
-            pipSupported: _pipSupported,
-            seekStepSeconds: settings.seekStepSeconds,
-            previousChannel: _adjacentLiveChannel(-1),
-            nextChannel: _adjacentLiveChannel(1),
-            onPreviousChannel: () => _playLiveChannel(_adjacentLiveChannel(-1)),
-            onNextChannel: () => _playLiveChannel(_adjacentLiveChannel(1)),
-            onBack: () => Navigator.pop(context),
-            onOpenTitle: _isLive ? null : _openTitle,
-            onPip: _enterPip,
-            onMenu: _openMenu,
-            onToggleLock: () {
-              setState(() => _locked = !_locked);
-              _scheduleHide();
-            },
-            onInteraction: _onInteraction,
-            onlineSubsActive: _onlineCues != null,
-            onlineSubsLoading: _onlineSubsLoading,
-            onLoadOnlineSubs: _loadOnlineSubtitles,
-            onDisableOnlineSubs: _disableOnlineSubtitles,
+      ExcludeFocus(
+        excluding: DeviceTypeService.isTv && !_controlsVisible,
+        child: IgnorePointer(
+          ignoring: !_controlsVisible,
+          child: AnimatedOpacity(
+            opacity: _controlsVisible ? 1 : 0,
+            duration: const Duration(milliseconds: 220),
+            child: PlayerControls(
+              session: session,
+              title: widget.channel.name,
+              subtitle: _isLive
+                  ? (context
+                            .watch<EpgProvider>()
+                            .nowFor(widget.channel)
+                            ?.title ??
+                        widget.channel.group)
+                  : widget.channel.group,
+              locked: _locked,
+              pipSupported: _pipSupported,
+              seekStepSeconds: settings.seekStepSeconds,
+              previousChannel: _adjacentLiveChannel(-1),
+              nextChannel: _adjacentLiveChannel(1),
+              onPreviousChannel: () =>
+                  _playLiveChannel(_adjacentLiveChannel(-1)),
+              onNextChannel: () => _playLiveChannel(_adjacentLiveChannel(1)),
+              onBack: () => Navigator.pop(context),
+              onOpenTitle: _isLive ? null : _openTitle,
+              onPip: _enterPip,
+              onMenu: _openMenu,
+              onToggleLock: () {
+                setState(() => _locked = !_locked);
+                _scheduleHide();
+              },
+              onInteraction: _onInteraction,
+              onlineSubsActive: _onlineCues != null,
+              onlineSubsLoading: _onlineSubsLoading,
+              onLoadOnlineSubs: _loadOnlineSubtitles,
+              onDisableOnlineSubs: _disableOnlineSubtitles,
+            ),
           ),
         ),
       ),

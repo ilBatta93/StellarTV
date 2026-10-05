@@ -9,9 +9,11 @@ import '../models/epg_program.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/epg_provider.dart';
+import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
+import '../widgets/tv_focusable.dart';
 import 'epg_settings_screen.dart';
 
 /// "Diretta" tab: channel list with what is on now, a progress bar and what
@@ -181,25 +183,29 @@ class _LivePageState extends State<LivePage> {
   Widget _chip(String label, bool selected, VoidCallback onTap) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primary : AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected ? AppColors.primary : AppColors.border,
+      child: TvFocusable(
+        onPressed: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? AppColors.primary : AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selected ? AppColors.primary : AppColors.border,
+              ),
             ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : AppColors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected ? Colors.white : AppColors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),
@@ -235,7 +241,34 @@ class _LiveTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Pressable(
+    // On TV the heart and guide buttons sit outside the tile so the remote can
+    // reach them (Right from the channel); the phone layout is unchanged.
+    final tv = DeviceTypeService.isTv;
+    final actions = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          icon: Icon(
+            isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            size: 20,
+            color: isFavorite ? AppColors.primary : AppColors.textMuted,
+          ),
+          onPressed: onFavorite,
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          tooltip: 'Guida',
+          icon: const Icon(
+            Icons.view_list_rounded,
+            size: 20,
+            color: AppColors.textMuted,
+          ),
+          onPressed: () => showChannelGuide(context, channel),
+        ),
+      ],
+    );
+    final tile = Pressable(
       onTap: () => playChannel(context, channel),
       onLongPress: () => showChannelGuide(context, channel),
       child: Container(
@@ -322,35 +355,18 @@ class _LiveTile extends StatelessWidget {
                 ],
               ),
             ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(
-                    isFavorite
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                    size: 20,
-                    color: isFavorite ? AppColors.primary : AppColors.textMuted,
-                  ),
-                  onPressed: onFavorite,
-                ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Guida',
-                  icon: const Icon(
-                    Icons.view_list_rounded,
-                    size: 20,
-                    color: AppColors.textMuted,
-                  ),
-                  onPressed: () => showChannelGuide(context, channel),
-                ),
-              ],
-            ),
+            if (!tv) actions,
           ],
         ),
       ),
+    );
+    if (!tv) return tile;
+    return Row(
+      children: [
+        Expanded(child: tile),
+        const SizedBox(width: 8),
+        actions,
+      ],
     );
   }
 }
