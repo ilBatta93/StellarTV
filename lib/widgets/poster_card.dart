@@ -30,12 +30,24 @@ class PosterImage extends StatelessWidget {
     // neutral placeholder tile.
     if (!context.watch<UiSettings>().showPosters) return fallback;
     if (url == null || url!.isEmpty) return fallback;
-    return CachedNetworkImage(
-      imageUrl: url!,
-      fit: fit,
-      fadeInDuration: const Duration(milliseconds: 250),
-      placeholder: (_, _) => Container(color: AppColors.card),
-      errorWidget: (_, _, _) => fallback,
+    // Decode images at their on-screen size: full-size decoding of every
+    // poster exhausts memory on TV boxes and makes the app close.
+    return LayoutBuilder(
+      builder: (context, c) {
+        int? cacheWidth;
+        if (c.maxWidth.isFinite && c.maxWidth > 0) {
+          final px = c.maxWidth * MediaQuery.devicePixelRatioOf(context);
+          cacheWidth = ((px / 64).ceil() * 64).clamp(64, 1280);
+        }
+        return CachedNetworkImage(
+          imageUrl: url!,
+          fit: fit,
+          memCacheWidth: cacheWidth,
+          fadeInDuration: const Duration(milliseconds: 200),
+          placeholder: (_, _) => Container(color: AppColors.card),
+          errorWidget: (_, _, _) => fallback,
+        );
+      },
     );
   }
 }
@@ -44,12 +56,14 @@ class Pressable extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+  final VoidCallback? onFocus;
 
   const Pressable({
     super.key,
     required this.child,
     required this.onTap,
     this.onLongPress,
+    this.onFocus,
   });
 
   @override
@@ -80,6 +94,11 @@ class _PressableState extends State<Pressable> {
     return TvFocusable(
       onPressed: widget.onTap,
       onLongPress: widget.onLongPress,
+      onFocusChange: widget.onFocus == null
+          ? null
+          : (f) {
+              if (f) widget.onFocus!();
+            },
       child: gesture,
     );
   }
@@ -89,12 +108,14 @@ class TmdbPosterCard extends StatelessWidget {
   final TmdbItem item;
   final VoidCallback onTap;
   final double width;
+  final VoidCallback? onFocus;
 
   const TmdbPosterCard({
     super.key,
     required this.item,
     required this.onTap,
     this.width = 120,
+    this.onFocus,
   });
 
   @override
@@ -118,6 +139,7 @@ class TmdbPosterCard extends StatelessWidget {
     final effectiveWidth = DeviceTypeService.isTv && !fillsCell ? 168.0 : width;
     return Pressable(
       onTap: onTap,
+      onFocus: onFocus,
       child: SizedBox(
         width: fillsCell ? null : effectiveWidth,
         child: Column(

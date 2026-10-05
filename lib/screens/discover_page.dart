@@ -11,6 +11,7 @@ import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/discover_provider.dart';
 import '../providers/history_provider.dart';
+import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
@@ -60,8 +61,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                         group: e.group,
                         type: e.type,
                         seriesKey: e.seriesKey.isEmpty ? null : e.seriesKey,
-                        seriesName:
-                            e.seriesName.isEmpty ? null : e.seriesName,
+                        seriesName: e.seriesName.isEmpty ? null : e.seriesName,
                       ))
             case final c?)
           (e, c),
@@ -101,6 +101,26 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final topSeries = available(discover.topSeries);
     final banner = [...topMovies.take(6), ...topSeries.take(4)];
 
+    if (DeviceTypeService.isTv) {
+      return _TvDiscover(
+        banner: banner,
+        startedMovies: startedMovies,
+        startedSeries: startedSeries,
+        rows: [
+          (
+            'Consigliati per te',
+            discover.forYou.where(app.isAvailable).toList(),
+          ),
+          ('Film in tendenza', topMovies),
+          ('Serie TV in tendenza', topSeries),
+          for (final p in StreamingPlatform.all) ...[
+            ('Film su ${p.name}', available(discover.platformTop(p).movies)),
+            ('Serie su ${p.name}', available(discover.platformTop(p).series)),
+          ],
+        ],
+      );
+    }
+
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: () => discover.load(force: true),
@@ -111,16 +131,22 @@ class _DiscoverPageState extends State<DiscoverPage> {
           if (startedMovies.isNotEmpty) ...[
             SectionHeader(
               title: 'Film che stai guardando',
-              leading: Icon(Icons.movie_outlined,
-                  color: AppColors.primary, size: 20),
+              leading: Icon(
+                Icons.movie_outlined,
+                color: AppColors.primary,
+                size: 20,
+              ),
             ),
             _HistoryRow(items: startedMovies),
           ],
           if (startedSeries.isNotEmpty) ...[
             const SectionHeader(
               title: 'Serie TV che stai guardando',
-              leading: Icon(Icons.video_library_outlined,
-                  color: AppColors.secondary, size: 20),
+              leading: Icon(
+                Icons.video_library_outlined,
+                color: AppColors.secondary,
+                size: 20,
+              ),
             ),
             _HistoryRow(items: startedSeries),
           ],
@@ -128,8 +154,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
             SectionHeader(
               title: 'Consigliati per te',
               subtitle: 'Perché hai guardato ${discover.forYouSource}',
-              leading: const Icon(Icons.auto_awesome_rounded,
-                  color: AppColors.secondary, size: 20),
+              leading: const Icon(
+                Icons.auto_awesome_rounded,
+                color: AppColors.secondary,
+                size: 20,
+              ),
             ),
             _PosterRow(items: discover.forYou.where(app.isAvailable).toList()),
           ],
@@ -155,7 +184,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   width: 24,
                   height: 24,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: AppColors.primary),
+                    strokeWidth: 2,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
             ),
@@ -214,8 +245,9 @@ class _TopSectionState extends State<_TopSection> {
                     borderRadius: BorderRadius.circular(2),
                     boxShadow: [
                       BoxShadow(
-                          color: widget.color.withValues(alpha: 0.5),
-                          blurRadius: 10),
+                        color: widget.color.withValues(alpha: 0.5),
+                        blurRadius: 10,
+                      ),
                     ],
                   ),
                 ),
@@ -224,16 +256,23 @@ class _TopSectionState extends State<_TopSection> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.title,
-                          style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.2)),
+                      Text(
+                        widget.title,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
                       if (widget.subtitle != null)
-                        Text(widget.subtitle!,
-                            style: const TextStyle(
-                                color: AppColors.textMuted, fontSize: 12)),
+                        Text(
+                          widget.subtitle!,
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -254,10 +293,16 @@ class _TopSectionState extends State<_TopSection> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _segment('Film', !showSeries,
-                        () => setState(() => _showSeries = false)),
-                    _segment('Serie TV', showSeries,
-                        () => setState(() => _showSeries = true)),
+                    _segment(
+                      'Film',
+                      !showSeries,
+                      () => setState(() => _showSeries = false),
+                    ),
+                    _segment(
+                      'Serie TV',
+                      showSeries,
+                      () => setState(() => _showSeries = true),
+                    ),
                   ],
                 ),
               ),
@@ -266,7 +311,9 @@ class _TopSectionState extends State<_TopSection> {
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 250),
             child: _RankedRow(
-                key: ValueKey('${widget.title}_$showSeries'), items: items),
+              key: ValueKey('${widget.title}_$showSeries'),
+              items: items,
+            ),
           ),
         ],
       ),
@@ -288,8 +335,8 @@ class _TopSectionState extends State<_TopSection> {
           style: TextStyle(
             color: selected
                 ? (widget.color.computeLuminance() > 0.6
-                    ? Colors.black
-                    : Colors.white)
+                      ? Colors.black
+                      : Colors.white)
                 : AppColors.textSecondary,
             fontSize: 13,
             fontWeight: FontWeight.w700,
@@ -347,10 +394,8 @@ class _Top10BannerState extends State<_Top10Banner> {
             controller: _controller,
             itemCount: widget.items.length,
             onPageChanged: (i) => setState(() => _page = i),
-            itemBuilder: (context, i) => _BannerSlide(
-              item: widget.items[i],
-              rank: i + 1,
-            ),
+            itemBuilder: (context, i) =>
+                _BannerSlide(item: widget.items[i], rank: i + 1),
           ),
         ),
         const SizedBox(height: 10),
@@ -398,7 +443,11 @@ class _BannerSlide extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Color(0xCC09090D), AppColors.background],
+                colors: [
+                  Colors.transparent,
+                  Color(0xCC09090D),
+                  AppColors.background,
+                ],
                 stops: [0.35, 0.75, 1],
               ),
             ),
@@ -411,8 +460,10 @@ class _BannerSlide extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     gradient: AppColors.brandGradient,
                     borderRadius: BorderRadius.circular(6),
@@ -461,9 +512,12 @@ class _BannerSlide extends StatelessWidget {
                         foregroundColor: AppColors.textPrimary,
                         side: const BorderSide(color: AppColors.border),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 14),
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       onPressed: () => openTmdbItem(context, item),
                     ),
@@ -485,8 +539,10 @@ class _HistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tv = DeviceTypeService.isTv;
     return HorizontalRow(
-      height: 200,
+      height: tv ? 312 : 200,
+      spacing: tv ? 20 : 12,
       itemCount: items.length,
       itemBuilder: (context, i) => _HistoryCard(item: items[i]),
     );
@@ -518,7 +574,8 @@ class _HistoryCard extends StatelessWidget {
       channel.logo,
       entry.posterUrl,
     ].firstWhere((u) => u.isNotEmpty, orElse: () => '');
-    final seriesName = folder?.displaySeriesName ??
+    final seriesName =
+        folder?.displaySeriesName ??
         (entry.seriesName.isNotEmpty ? entry.seriesName : null);
     final code = channel.season != null && channel.episode != null
         ? ' · S${channel.season} E${channel.episode}'
@@ -531,10 +588,13 @@ class _HistoryCard extends StatelessWidget {
         : channel;
     // Resume the exact movie/episode from where it was left.
     return Pressable(
-      onTap: () =>
-          playChannel(context, playable, startAt: entry.resumePosition ?? entry.position),
+      onTap: () => playChannel(
+        context,
+        playable,
+        startAt: entry.resumePosition ?? entry.position,
+      ),
       child: SizedBox(
-        width: 120,
+        width: DeviceTypeService.isTv ? 168 : 120,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -553,8 +613,7 @@ class _HistoryCard extends StatelessWidget {
                         value: progress,
                         minHeight: 3,
                         backgroundColor: Colors.black45,
-                        valueColor: AlwaysStoppedAnimation(
-                            AppColors.primary),
+                        valueColor: AlwaysStoppedAnimation(AppColors.primary),
                       ),
                     ),
                   ],
@@ -566,9 +625,9 @@ class _HistoryCard extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textPrimary,
-                fontSize: 13,
+                fontSize: DeviceTypeService.isTv ? 17 : 13,
                 fontWeight: FontWeight.w600,
                 height: 1.2,
               ),
@@ -624,13 +683,13 @@ class _DiscoverSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget block(double w, double h) => Container(
-          width: w,
-          height: h,
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(10),
-          ),
-        );
+      width: w,
+      height: h,
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(10),
+      ),
+    );
     return ListView(
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
@@ -640,14 +699,289 @@ class _DiscoverSkeleton extends StatelessWidget {
           const SizedBox(height: 24),
           block(140, 16),
           const SizedBox(height: 12),
-          Row(children: [
-            for (var i = 0; i < 3; i++) ...[
-              Expanded(child: block(double.infinity, 170)),
-              if (i < 2) const SizedBox(width: 12),
+          Row(
+            children: [
+              for (var i = 0; i < 3; i++) ...[
+                Expanded(child: block(double.infinity, 170)),
+                if (i < 2) const SizedBox(width: 12),
+              ],
             ],
-          ]),
+          ),
         ],
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TV-only Home: large hero driven by the focused title, rows below.
+// ---------------------------------------------------------------------------
+
+class _TvDiscover extends StatefulWidget {
+  final List<TmdbItem> banner;
+  final List<ResumeItem> startedMovies;
+  final List<ResumeItem> startedSeries;
+  final List<(String, List<TmdbItem>)> rows;
+
+  const _TvDiscover({
+    required this.banner,
+    required this.startedMovies,
+    required this.startedSeries,
+    required this.rows,
+  });
+
+  @override
+  State<_TvDiscover> createState() => _TvDiscoverState();
+}
+
+class _TvDiscoverState extends State<_TvDiscover> {
+  late final ValueNotifier<TmdbItem?> _hero;
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    TmdbItem? first;
+    if (widget.banner.isNotEmpty) {
+      first = widget.banner.first;
+    } else {
+      for (final r in widget.rows) {
+        if (r.$2.isNotEmpty) {
+          first = r.$2.first;
+          break;
+        }
+      }
+    }
+    _hero = ValueNotifier(first);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _hero.dispose();
+    super.dispose();
+  }
+
+  // Debounced so scrolling quickly with the remote does not load every
+  // backdrop on the way.
+  void _focus(TmdbItem item) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 220), () {
+      if (mounted) _hero.value = item;
+    });
+  }
+
+  Widget _row(String title, List<TmdbItem> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _TvRowTitle(title),
+        HorizontalRow(
+          height: 312,
+          spacing: 20,
+          itemCount: items.length,
+          itemBuilder: (context, i) => TmdbPosterCard(
+            item: items[i],
+            onTap: () => openTmdbItem(context, items[i]),
+            onFocus: () => _focus(items[i]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        final heroHeight = c.maxHeight * 0.5;
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: ValueListenableBuilder<TmdbItem?>(
+                valueListenable: _hero,
+                builder: (_, item, _) => _TvHeroBackdrop(item: item),
+              ),
+            ),
+            Column(
+              children: [
+                SizedBox(
+                  height: heroHeight,
+                  child: ValueListenableBuilder<TmdbItem?>(
+                    valueListenable: _hero,
+                    builder: (_, item, _) => _TvHeroInfo(item: item),
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    // Rows are pre-built so pressing Down always finds the
+                    // next row instead of stopping on unbuilt content.
+                    cacheExtent: 2400,
+                    padding: const EdgeInsets.only(bottom: 48),
+                    children: [
+                      if (widget.startedSeries.isNotEmpty) ...[
+                        const _TvRowTitle('Serie viste di recente'),
+                        _HistoryRow(items: widget.startedSeries),
+                      ],
+                      if (widget.startedMovies.isNotEmpty) ...[
+                        const _TvRowTitle('Film visti di recente'),
+                        _HistoryRow(items: widget.startedMovies),
+                      ],
+                      for (final r in widget.rows)
+                        if (r.$2.isNotEmpty) _row(r.$1, r.$2),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _TvRowTitle extends StatelessWidget {
+  final String title;
+
+  const _TvRowTitle(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(48, 20, 48, 12),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontFamily: 'Sora',
+          color: AppColors.textPrimary,
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _TvHeroBackdrop extends StatelessWidget {
+  final TmdbItem? item;
+
+  const _TvHeroBackdrop({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topRight,
+      child: FractionallySizedBox(
+        widthFactor: 0.7,
+        heightFactor: 0.72,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          child: item == null
+              ? const SizedBox.expand()
+              : Stack(
+                  key: ValueKey(item!.key),
+                  fit: StackFit.expand,
+                  children: [
+                    PosterImage(url: item!.backdropUrl),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [AppColors.background, Colors.transparent],
+                          stops: [0, 0.55],
+                        ),
+                      ),
+                    ),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [AppColors.background, Colors.transparent],
+                          stops: [0, 0.45],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TvHeroInfo extends StatelessWidget {
+  final TmdbItem? item;
+
+  const _TvHeroInfo({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final it = item;
+    if (it == null) return const SizedBox.shrink();
+    Widget chip(String text) => Container(
+      margin: const EdgeInsets.only(right: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.textSecondary, width: 1.5),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(48, 104, 0, 8),
+      child: FractionallySizedBox(
+        alignment: Alignment.topLeft,
+        widthFactor: 0.55,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              it.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Sora',
+                color: AppColors.textPrimary,
+                fontSize: 44,
+                height: 1.05,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Flexible(
+              child: Text(
+                it.overview,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 18,
+                  height: 1.35,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                chip(it.isMovie ? 'Film' : 'Serie TV'),
+                if (it.year.isNotEmpty) chip(it.year),
+                if (it.voteAverage > 0)
+                  chip('★ ${it.voteAverage.toStringAsFixed(1)}'),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

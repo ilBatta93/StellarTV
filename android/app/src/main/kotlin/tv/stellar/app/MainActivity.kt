@@ -28,6 +28,7 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "isTv" -> result.success(isTelevision())
+                    "moveToBack" -> result.success(moveTaskToBack(true))
                     else -> result.notImplemented()
                 }
             }

@@ -18,4 +18,13 @@ class DeviceTypeService {
       _isTv = false;
     }
   }
+
+  /// Sends the app to the background (keeps it running) instead of closing.
+  static Future<void> moveToBackground() async {
+    try {
+      await _channel.invokeMethod('moveToBack');
+    } on PlatformException {
+      await SystemNavigator.pop();
+    }
+  }
 }

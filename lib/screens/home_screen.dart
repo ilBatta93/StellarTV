@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/content_type.dart';
 import '../providers/profile_provider.dart';
@@ -110,46 +111,81 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  final FocusScopeNode _tvNavScope = FocusScopeNode(debugLabel: 'tvNav');
+
+  @override
+  void dispose() {
+    _tvNavScope.dispose();
+    super.dispose();
+  }
+
+  void _selectTab(int i) => setState(() {
+    _currentIndex = i;
+    _visited.add(i);
+  });
+
+  // Back on TV: content -> top menu -> Home tab -> app to background (it keeps
+  // running, like other TV apps, instead of closing).
+  void _onTvBack() {
+    if (!_tvNavScope.hasFocus) {
+      _tvNavScope.requestFocus();
+      return;
+    }
+    if (_currentIndex != 0) {
+      _selectTab(0);
+      return;
+    }
+    DeviceTypeService.moveToBackground();
+  }
+
   Widget _buildTv(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        children: [
-          _TvNavigationRail(
-            selectedIndex: _currentIndex,
-            onSelected: (i) => setState(() {
-              _currentIndex = i;
-              _visited.add(i);
-            }),
-            onSearch: () => _push(const SearchScreen()),
-            onProfile: () => _push(const ProfilePickerScreen()),
-            onSettings: () => _push(const SettingsScreen()),
-          ),
-          Expanded(
-            child: SafeArea(
-              left: false,
-              child: IndexedStack(
-                index: _currentIndex,
-                children: [
-                  for (var i = 0; i < _pages.length; i++)
-                    _visited.contains(i) ? _pages[i] : const SizedBox.shrink(),
-                ],
+    final content = IndexedStack(
+      index: _currentIndex,
+      children: [
+        for (var i = 0; i < _pages.length; i++)
+          _visited.contains(i) ? _pages[i] : const SizedBox.shrink(),
+      ],
+    );
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _onTvBack();
+      },
+      child: Scaffold(
+        body: Stack(
+          children: [
+            // Home draws its hero under the menu; other tabs start below it.
+            Positioned.fill(top: _currentIndex == 0 ? 0 : 92, child: content),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              child: FocusScope(
+                node: _tvNavScope,
+                child: _TvTopBar(
+                  selectedIndex: _currentIndex,
+                  onSelected: _selectTab,
+                  onSearch: () => _push(const SearchScreen()),
+                  onProfile: () => _push(const ProfilePickerScreen()),
+                  onSettings: () => _push(const SettingsScreen()),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _TvNavigationRail extends StatefulWidget {
+class _TvTopBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final VoidCallback onSearch;
   final VoidCallback onProfile;
   final VoidCallback onSettings;
 
-  const _TvNavigationRail({
+  const _TvTopBar({
     required this.selectedIndex,
     required this.onSelected,
     required this.onSearch,
@@ -157,115 +193,122 @@ class _TvNavigationRail extends StatefulWidget {
     required this.onSettings,
   });
 
-  @override
-  State<_TvNavigationRail> createState() => _TvNavigationRailState();
-}
-
-class _TvNavigationRailState extends State<_TvNavigationRail> {
-  bool _expanded = false;
-
-  static const _destinations = [
-    (Icons.home_rounded, 'Home'),
-    (Icons.live_tv_rounded, 'Diretta'),
-    (Icons.movie_rounded, 'Film'),
-    (Icons.video_library_rounded, 'Serie TV'),
-    (Icons.favorite_rounded, 'Preferiti'),
-  ];
+  static const _tabs = ['Home', 'Diretta', 'Film', 'Serie TV', 'Preferiti'];
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      onFocusChange: (focused) => setState(() => _expanded = focused),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: _expanded ? 220 : 88,
-        color: AppColors.surface,
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 22),
-                child: BrandLogo(size: _expanded ? 30 : 26),
-              ),
-              for (var i = 0; i < _destinations.length; i++)
-                _TvRailItem(
-                  icon: _destinations[i].$1,
-                  label: _destinations[i].$2,
-                  selected: widget.selectedIndex == i,
-                  expanded: _expanded,
-                  autofocus: i == 0,
-                  onPressed: () => widget.onSelected(i),
-                ),
-              const Spacer(),
-              _TvRailItem(
-                icon: Icons.search_rounded,
-                label: 'Cerca',
-                expanded: _expanded,
-                onPressed: widget.onSearch,
-              ),
-              _TvRailItem(
-                icon: Icons.person_rounded,
-                label: 'Profilo',
-                expanded: _expanded,
-                onPressed: widget.onProfile,
-              ),
-              _TvRailItem(
-                icon: Icons.settings_rounded,
-                label: 'Impostazioni',
-                expanded: _expanded,
-                onPressed: widget.onSettings,
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
+    return Container(
+      height: 92,
+      padding: const EdgeInsets.symmetric(horizontal: 40),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xE60B0D10), Color(0x000B0D10)],
         ),
+      ),
+      child: Row(
+        children: [
+          const BrandLogo(size: 26),
+          const SizedBox(width: 32),
+          _TvNavPill(
+            label: 'Cerca',
+            icon: Icons.search_rounded,
+            onPressed: onSearch,
+          ),
+          for (var i = 0; i < _tabs.length; i++)
+            _TvNavPill(
+              label: _tabs[i],
+              selected: selectedIndex == i,
+              autofocus: i == 0,
+              onPressed: () => onSelected(i),
+            ),
+          const Spacer(),
+          _TvNavPill(icon: Icons.person_rounded, onPressed: onProfile),
+          _TvNavPill(icon: Icons.settings_rounded, onPressed: onSettings),
+        ],
       ),
     );
   }
 }
 
-class _TvRailItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
+class _TvNavPill extends StatefulWidget {
+  final String? label;
+  final IconData? icon;
   final bool selected;
-  final bool expanded;
   final bool autofocus;
   final VoidCallback onPressed;
 
-  const _TvRailItem({
-    required this.icon,
-    required this.label,
-    required this.expanded,
-    required this.onPressed,
+  const _TvNavPill({
+    this.label,
+    this.icon,
     this.selected = false,
     this.autofocus = false,
+    required this.onPressed,
   });
 
   @override
+  State<_TvNavPill> createState() => _TvNavPillState();
+}
+
+class _TvNavPillState extends State<_TvNavPill> {
+  bool _focused = false;
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    final k = event.logicalKey;
+    final ok =
+        k == LogicalKeyboardKey.select ||
+        k == LogicalKeyboardKey.enter ||
+        k == LogicalKeyboardKey.numpadEnter ||
+        k == LogicalKeyboardKey.gameButtonA;
+    if (!ok) return KeyEventResult.ignored;
+    if (event is KeyUpEvent) widget.onPressed();
+    return KeyEventResult.handled;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      child: ListTile(
-        autofocus: autofocus,
-        selected: selected,
-        leading: Icon(
-          icon,
-          color: selected ? AppColors.primary : AppColors.textSecondary,
-        ),
-        title: expanded
-            ? Text(
-                label,
-                maxLines: 1,
-                style: TextStyle(
-                  color: selected
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
-                  fontSize: 17,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+    final fg = _focused
+        ? AppColors.background
+        : widget.selected
+        ? AppColors.primary
+        : AppColors.textPrimary;
+    return Focus(
+      autofocus: widget.autofocus,
+      onKeyEvent: _onKey,
+      onFocusChange: (v) => setState(() => _focused = v),
+      child: GestureDetector(
+        onTap: widget.onPressed,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: EdgeInsets.symmetric(
+            horizontal: widget.label == null ? 12 : 20,
+            vertical: 10,
+          ),
+          decoration: BoxDecoration(
+            color: _focused ? AppColors.textPrimary : Colors.transparent,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.icon != null) Icon(widget.icon, color: fg, size: 24),
+              if (widget.icon != null && widget.label != null)
+                const SizedBox(width: 8),
+              if (widget.label != null)
+                Text(
+                  widget.label!,
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 19,
+                    fontWeight: widget.selected || _focused
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                  ),
                 ),
-              )
-            : null,
-        onTap: onPressed,
+            ],
+          ),
+        ),
       ),
     );
   }

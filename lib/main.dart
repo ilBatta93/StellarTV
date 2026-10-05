@@ -24,6 +24,12 @@ Future<void> main() async {
   ErrorWidget.builder = (details) => _StartupErrorView(details: details);
   MediaKit.ensureInitialized();
   await DeviceTypeService.initialize();
+  if (DeviceTypeService.isTv) {
+    // TV boxes have little RAM: cap decoded images to avoid being killed.
+    PaintingBinding.instance.imageCache
+      ..maximumSize = 250
+      ..maximumSizeBytes = 80 << 20;
+  }
   await Supabase.initialize(
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.anonKey,
