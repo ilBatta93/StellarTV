@@ -30,6 +30,9 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
 
   PlayerSettingsScope get _scope => DeviceTypeService.isTv
       ? widget.scope ?? PlayerSettingsScope.shared : PlayerSettingsScope.shared;
+  bool _mpv(PlayerSettings s) => !_tvProfile || s.primaryEngine == PlayerEngineType.mediakit;
+  bool _exo(PlayerSettings s) => !_tvProfile || s.primaryEngine == PlayerEngineType.exo;
+
   bool get _live => _scope == PlayerSettingsScope.liveTv;
   bool get _tvProfile => DeviceTypeService.isTv && widget.scope != null;
 
@@ -94,7 +97,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
                 ..._playbackSection(s),
                 ..._audioSection(s),
                 ..._subtitleSection(s),
-                ..._videoSection(s),
+                if (_mpv(s)) ..._videoSection(s),
                 ..._networkSection(s),
                 ..._systemSection(s),
                 _capabilitiesSection(),
@@ -159,7 +162,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               onTap: () => _pick('Formato immagine', VideoFitMode.values,
                   s.fitMode, (m) => m.label, (s, v) => s.fitMode = v),
             ),
-            SettingsValueTile(
+            if (!_tvProfile) SettingsValueTile(
               icon: Icons.screen_rotation_rounded,
               title: 'Orientamento',
               value: s.orientation.label,
@@ -188,14 +191,14 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
                   s.controlsHideSeconds, (v) => v == 0 ? 'Mai' : '$v secondi',
                   (s, v) => s.controlsHideSeconds = v),
             ),
-            SettingsSwitchTile(
+            if (!_tvProfile) SettingsSwitchTile(
               icon: Icons.swipe_rounded,
               title: 'Gesti a schermo',
               subtitle: 'Scorri a sinistra per la luminosità, a destra per il volume, in orizzontale per avanzare',
               value: s.gesturesEnabled,
               onChanged: (v) => _update((s) => s.gesturesEnabled = v),
             ),
-            SettingsSwitchTile(
+            if (!_tvProfile) SettingsSwitchTile(
               icon: Icons.touch_app_outlined,
               title: 'Doppio tocco per saltare',
               subtitle: 'Ai lati per andare avanti o indietro, al centro per pausa',
@@ -218,7 +221,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
                   s.preferredAudioLanguage, (c) => kLanguageOptions[c]!,
                   (s, v) => s.preferredAudioLanguage = v),
             ),
-            SettingsSwitchTile(
+            if (_mpv(s)) SettingsSwitchTile(
               icon: Icons.surround_sound_outlined,
               title: 'Passthrough Dolby / DTS',
               subtitle: 'Invia l\'audio originale a soundbar o ricevitore compatibili tramite HDMI',
@@ -226,7 +229,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               value: s.audioPassthrough,
               onChanged: (v) => _update((s) => s.audioPassthrough = v),
             ),
-            SettingsSwitchTile(
+            if (_mpv(s)) SettingsSwitchTile(
               icon: Icons.graphic_eq_rounded,
               title: 'Mantieni il tono a velocità diverse',
               subtitle: 'Evita voci troppo acute o gravi quando cambi velocità',
@@ -234,7 +237,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               value: s.audioTimeStretch,
               onChanged: (v) => _update((s) => s.audioTimeStretch = v),
             ),
-            SettingsSliderTile(
+            if (_mpv(s)) SettingsSliderTile(
               icon: Icons.sync_rounded,
               title: 'Ritardo audio predefinito',
               badge: 'mpv',
@@ -256,7 +259,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               'I sottotitoli incorporati nei flussi IPTV vengono mostrati con il motore mpv.',
           children: [
             _SubtitlePreview(settings: s),
-            SettingsSwitchTile(
+            if (_mpv(s)) SettingsSwitchTile(
               icon: Icons.subtitles_outlined,
               title: 'Attiva automaticamente',
               subtitle: 'Seleziona i sottotitoli nella lingua preferita quando disponibili',
@@ -318,7 +321,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           description:
               'HDR10, HLG e Dolby Vision vengono riprodotti tramite la decodifica hardware del dispositivo, se lo schermo li supporta.',
           children: [
-            SettingsValueTile(
+            if (_mpv(s)) SettingsValueTile(
               icon: Icons.developer_board_rounded,
               title: 'Decodifica hardware',
               badge: 'mpv',
@@ -332,7 +335,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
                         HardwareDecoding.disabled => 'Usa il processore: più lento, risolve artefatti',
                       }),
             ),
-            SettingsSwitchTile(
+            if (_mpv(s)) SettingsSwitchTile(
               icon: Icons.slow_motion_video_rounded,
               title: 'Scarta fotogrammi in ritardo',
               subtitle: 'Mantiene audio e video sincronizzati su dispositivi lenti',
@@ -340,7 +343,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               value: s.dropLateFrames,
               onChanged: (v) => _update((s) => s.dropLateFrames = v),
             ),
-            SettingsSwitchTile(
+            if (_mpv(s)) SettingsSwitchTile(
               icon: Icons.skip_next_outlined,
               title: 'Salta fotogrammi',
               subtitle: 'Riduce gli scatti con flussi pesanti (4K, HEVC)',
@@ -358,7 +361,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           description:
               'Valori più alti riducono le interruzioni su connessioni instabili ma aumentano il tempo di avvio.',
           children: [
-            if (!_tvProfile || !_live) SettingsSliderTile(
+            if (!_tvProfile || !_live) if (_mpv(s)) SettingsSliderTile(
               icon: Icons.cloud_download_outlined,
               title: 'Buffer film e serie',
               badge: 'mpv',
@@ -370,7 +373,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               onChanged: (v) =>
                   _update((s) => s.networkCachingMs = (v / 100).round() * 100),
             ),
-            if (!_tvProfile || _live) SettingsSliderTile(
+            if (!_tvProfile || _live) if (_mpv(s)) SettingsSliderTile(
               icon: Icons.live_tv_rounded,
               title: 'Buffer dirette',
               badge: 'mpv',
@@ -382,7 +385,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               onChanged: (v) =>
                   _update((s) => s.liveCachingMs = (v / 100).round() * 100),
             ),
-            SettingsSliderTile(
+            if (_exo(s)) SettingsSliderTile(
               icon: Icons.replay_circle_filled_outlined,
               title: 'Buffer all\'indietro',
               subtitle: 'Secondi già visti tenuti in memoria per tornare indietro subito',
@@ -394,7 +397,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               format: (v) => '${v.round()} s',
               onChanged: (v) => _update((s) => s.backBufferSeconds = v.round()),
             ),
-            SettingsSwitchTile(
+            if (_mpv(s)) SettingsSwitchTile(
               icon: Icons.wifi_protected_setup_rounded,
               title: 'Riconnessione automatica',
               subtitle: 'Riprova da solo se il flusso si interrompe',

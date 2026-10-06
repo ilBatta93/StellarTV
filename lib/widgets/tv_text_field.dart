@@ -63,6 +63,15 @@ class TvTextField extends StatefulWidget {
     } catch (_) {}
   }
 
+  /// Returns true only when Back has just left an active editor.
+  static bool dismissKeyboard(FocusNode node) {
+    final state = _TvTextFieldState._registry[node];
+    if (state == null || !state.mounted || !state._editing) return false;
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    state._stopEditing();
+    return true;
+  }
+
   static const _device = MethodChannel('stellartv/device');
 
   /// Android TV fallback: asks the system input manager directly.

@@ -7,6 +7,7 @@ import '../providers/profile_provider.dart';
 import '../services/profile_service.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/tv_catalog_toolbar.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/tv_catalog_navigation.dart';
 import '../widgets/catalog_status_indicator.dart';
@@ -230,6 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Back on TV: content -> top menu -> Home tab -> app to background (it keeps
   // running, like other TV apps, instead of closing).
   void _onTvBack() {
+    if (TvCatalogToolbar.handleBack(FocusManager.instance.primaryFocus)) return;
     if (!_tvNavScope.hasFocus) {
       _focusNav();
       return;

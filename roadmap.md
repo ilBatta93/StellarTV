@@ -31,3 +31,11 @@
 - [x] Cataloghi TV: ricerca a scomparsa e ordinamento nella categoria
 - [x] Cataloghi TV: ritorno alla barra superiore e voti locandine
 - [x] Scheda attore TV coerente con schede titolo
+
+- [x] TV: doppio Indietro durante una serie ritorna alla scheda titolo anche da Home/cronologia
+- [x] TV Film/Serie: icona generi e pannello senza categorie playlist; Indietro ripristina l’icona
+- [x] TV ricerca cataloghi: primo Indietro chiude tastiera, secondo chiude barra e ripristina lente
+- [x] TV impostazioni player: opzioni filtrate per motore scelto, impostazioni touch invariate
+- [x] TV locandine: titoli con margini interni laterali e inferiori
+- [x] 22 test selezionati superati con Flutter 3.38.3/Dart 3.10.1 su copia di verifica
+- [ ] Build completa con SDK richiesto e verifica telecomando su TV reale

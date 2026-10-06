@@ -457,6 +457,10 @@ class _PlayerScreenState extends State<PlayerScreen>
   void _exitPlayer() {
     _exitTimer?.cancel();
     if (!mounted) return;
+    if (DeviceTypeService.isTv && _isEpisode) {
+      _openTitle();
+      return;
+    }
     // Navigator.pop ignores the PopScope that blocks the first Back.
     Navigator.of(context).pop();
   }

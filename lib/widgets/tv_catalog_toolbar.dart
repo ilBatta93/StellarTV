@@ -71,6 +71,7 @@ class TvCatalogToolbar extends StatefulWidget {
     this.trailing,
     this.category,
     this.filters,
+    this.genresOnly = false,
   });
   final TextEditingController controller;
   final String hint;
@@ -82,6 +83,15 @@ class TvCatalogToolbar extends StatefulWidget {
   final Widget? trailing;
   final String? category;
   final WidgetBuilder? filters;
+  final bool genresOnly;
+
+  /// Shared by key events and Android system Back (Home owns the route).
+  static bool handleBack(FocusNode? focus) {
+    final state = focus?.context
+        ?.findAncestorStateOfType<_TvCatalogToolbarState>();
+    return state?._back() ?? false;
+  }
+
   @override
   State<TvCatalogToolbar> createState() => _TvCatalogToolbarState();
 }
@@ -123,6 +133,20 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
     if (!_expanded) return;
     SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
     setState(() => _expanded = false);
+  }
+
+  bool _back() {
+    if (_expanded) {
+      if (TvTextField.dismissKeyboard(_field)) return true;
+      _collapse();
+      _search.requestFocus();
+      return true;
+    }
+    if (_filtersOpen) {
+      _toggleFilters();
+      return true;
+    }
+    return false;
   }
 
   void _toggleFilters() {
@@ -179,6 +203,16 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   Widget build(BuildContext context) {
     return Focus(
       canRequestFocus: false,
+      onKeyEvent: (_, event) {
+        if (event is KeyDownEvent &&
+            (event.logicalKey == LogicalKeyboardKey.goBack ||
+                event.logicalKey == LogicalKeyboardKey.escape ||
+                event.logicalKey == LogicalKeyboardKey.browserBack) &&
+            _back()) {
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
       onFocusChange: (focused) {
         if (!focused && _expanded) _collapse();
         if (!focused && _filtersOpen) {
@@ -256,12 +290,16 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
                 child: IconButton(
                   tooltip: _filtersOpen
                       ? 'Chiudi filtri'
-                      : 'Filtri e categorie',
+                      : (widget.genresOnly
+                            ? 'Filtri per genere'
+                            : 'Filtri e categorie'),
                   onPressed: _toggleFilters,
                   icon: Icon(
                     _filtersOpen
                         ? Icons.close_rounded
-                        : Icons.filter_list_rounded,
+                        : (widget.genresOnly
+                              ? Icons.style_outlined
+                              : Icons.filter_list_rounded),
                   ),
                 ),
               ),

@@ -96,4 +96,101 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     controller.dispose();
   });
+  testWidgets('TV Back closes keyboard then search and restores lens focus', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('stellartv/device'),
+          (_) async => true,
+        );
+    await DeviceTypeService.initialize();
+    debugDefaultTargetPlatformOverride = null;
+    final controller = TextEditingController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TvCatalogToolbar(
+            controller: controller,
+            hint: 'Cerca',
+            onChanged: (_) {},
+            onSort: (_) {},
+            sort: null,
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Cerca'));
+    await tester.pumpAndSettle(const Duration(seconds: 2));
+    expect(tester.testTextInput.isVisible, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(tester.testTextInput.isVisible, isFalse);
+    expect(find.byType(TextField), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'catalogSearch');
+    // System Back goes through Home's PopScope rather than a key event.
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    await tester.pumpAndSettle(const Duration(seconds: 2));
+    expect(
+      TvCatalogToolbar.handleBack(FocusManager.instance.primaryFocus),
+      isTrue,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsOneWidget);
+    expect(
+      TvCatalogToolbar.handleBack(FocusManager.instance.primaryFocus),
+      isTrue,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'catalogSearch');
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
+
+  testWidgets(
+    'TV genre panel Back restores its icon with key and system Back',
+    (tester) async {
+      final controller = TextEditingController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TvCatalogToolbar(
+              controller: controller,
+              hint: 'Cerca',
+              onChanged: (_) {},
+              onSort: (_) {},
+              sort: null,
+              genresOnly: true,
+              filters: (_) =>
+                  TextButton(onPressed: () {}, child: const Text('Azione')),
+            ),
+          ),
+        ),
+      );
+      expect(find.byIcon(Icons.style_outlined), findsOneWidget);
+      await tester.tap(find.byTooltip('Filtri per genere'));
+      await tester.pumpAndSettle();
+      expect(find.text('Azione'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.text('Azione'), findsNothing);
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'catalogFilters');
+      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      await tester.pumpAndSettle();
+      expect(
+        TvCatalogToolbar.handleBack(FocusManager.instance.primaryFocus),
+        isTrue,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Azione'), findsNothing);
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'catalogFilters');
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    },
+  );
 }

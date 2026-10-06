@@ -441,6 +441,7 @@ class _CatalogPageState extends State<CatalogPage> {
               sort: _sort,
               onSort: (value) => setState(() => _sort = value),
               scaffoldKey: _scaffoldKey,
+              genresOnly: true,
               filters: (_) => _buildTvFilters(app, groups),
             )
           else
@@ -514,23 +515,6 @@ class _CatalogPageState extends State<CatalogPage> {
       ..sort((a, b) => (names[a] ?? '').compareTo(names[b] ?? ''));
     return TvFilterPanel(
       options: [
-        TvFilterOption(
-          _recentLabel,
-          _selectedCategory == null,
-          () => setState(() => _selectedCategory = null),
-        ),
-        TvFilterOption(
-          _allLabel,
-          _selectedCategory == _allLabel,
-          () => setState(() => _selectedCategory = _allLabel),
-        ),
-        for (final group in groups)
-          if (group.label != _allLabel)
-            TvFilterOption(
-              group.label,
-              _selectedCategory == group.label,
-              () => setState(() => _selectedCategory = group.label),
-            ),
         TvFilterOption(
           'Tutti i generi',
           _genreId == null,
