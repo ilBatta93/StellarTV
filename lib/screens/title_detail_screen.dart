@@ -340,7 +340,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
           subtitle: 'Potrebbero piacerti anche',
         ),
         HorizontalRow(
-          height: 210,
+          height: tmdbPosterRowHeight(context),
           itemCount: similar.length,
           itemBuilder: (context, i) => TmdbPosterCard(
             item: similar[i],

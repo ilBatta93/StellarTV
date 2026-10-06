@@ -154,6 +154,29 @@ class XtreamService {
     return '$base/player_api.php?username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}';
   }
 
+  /// Raw account details from the provider (`user_info` + `server_info` of
+  /// player_api.php): expiry, connections, status, server time zone...
+  Future<Map<String, dynamic>> accountInfo({
+    required String server,
+    required String username,
+    required String password,
+  }) async {
+    final apiUrl = _buildApiUrl(server, username, password);
+    final response = await http
+        .get(Uri.parse(apiUrl), headers: _headers)
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Il provider ha risposto con errore ${response.statusCode}.',
+      );
+    }
+    final data = jsonDecode(response.body);
+    if (data is! Map<String, dynamic> || data['user_info'] is! Map) {
+      throw Exception('Il provider non fornisce informazioni sull\'account.');
+    }
+    return data;
+  }
+
   Future<bool> authenticate({
     required String server,
     required String username,

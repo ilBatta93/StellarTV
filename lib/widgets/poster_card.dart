@@ -285,3 +285,12 @@ class RatingBadge extends StatelessWidget {
     );
   }
 }
+
+/// Height of a horizontal row of [TmdbPosterCard]s that never clips the
+/// two-line title, including the TV focus padding and system text scaling.
+double tmdbPosterRowHeight(BuildContext context, {double mobile = 210}) {
+  if (!DeviceTypeService.isTv) return mobile;
+  final line = MediaQuery.textScalerOf(context).scale(14) * 1.2;
+  // 112px poster (2:3) + title padding + two lines + list vertical padding.
+  return 112 * 3 / 2 + 17 + line * 2 + 16 + 6;
+}

@@ -30,6 +30,11 @@ List<T> sortCatalog<T>(
   final names = <String, String>{};
   String name(Channel c) =>
       names.putIfAbsent(c.id, () => c.displaySeriesName.toLowerCase());
+  final ratings = <String, double>{};
+  double rating(Channel c) => ratings.putIfAbsent(
+    c.id,
+    () => ratingOf?.call(c) ?? CatalogRatingService.instance.ratingOf(c) ?? 0,
+  );
   list.sort((a, b) {
     final ca = channel(a), cb = channel(b);
     final alpha = name(ca).compareTo(name(cb));
@@ -42,13 +47,7 @@ List<T> sortCatalog<T>(
             ? (ca.addedAt == 0 ? 1 : -1)
             : ca.addedAt.compareTo(cb.addedAt),
       CatalogSort.dateDesc => cb.addedAt.compareTo(ca.addedAt),
-      CatalogSort.rating =>
-        (ratingOf?.call(cb) ?? CatalogRatingService.instance.ratingOf(cb) ?? 0)
-            .compareTo(
-              ratingOf?.call(ca) ??
-                  CatalogRatingService.instance.ratingOf(ca) ??
-                  0,
-            ),
+      CatalogSort.rating => rating(cb).compareTo(rating(ca)),
     };
     if (ca.addedAt == 0 && cb.addedAt == 0 && order == CatalogSort.dateAsc) {
       return alpha;

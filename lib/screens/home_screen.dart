@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -399,6 +400,84 @@ class _TvTopBar extends StatelessWidget {
             icon: Icons.settings_rounded,
             compact: compact,
             onPressed: onSettings,
+          ),
+          _TvClock(compact: compact),
+        ],
+      ),
+    );
+  }
+}
+
+/// Digital clock (hours:minutes) from the device's system time, refreshed
+/// exactly on each minute change. Not focusable: purely informative.
+class _TvClock extends StatefulWidget {
+  final bool compact;
+  const _TvClock({required this.compact});
+
+  @override
+  State<_TvClock> createState() => _TvClockState();
+}
+
+class _TvClockState extends State<_TvClock> {
+  Timer? _timer;
+  DateTime _now = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  void _schedule() {
+    final now = DateTime.now();
+    final next = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute,
+    ).add(const Duration(minutes: 1));
+    _timer = Timer(next.difference(now) + const Duration(milliseconds: 50), () {
+      if (!mounted) return;
+      setState(() => _now = DateTime.now());
+      _schedule();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    final compact = widget.compact;
+    return Padding(
+      padding: EdgeInsets.only(left: compact ? 8 : 14),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 1.5,
+            height: compact ? 22 : 28,
+            margin: EdgeInsets.only(right: compact ? 12 : 18),
+            decoration: BoxDecoration(
+              color: AppColors.textMuted.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(1),
+            ),
+          ),
+          Text(
+            '${two(_now.hour)}:${two(_now.minute)}',
+            semanticsLabel: 'Ore ${_now.hour} e ${_now.minute} minuti',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: compact ? 19 : 23,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
         ],
       ),

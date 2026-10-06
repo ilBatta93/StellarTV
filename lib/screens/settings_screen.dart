@@ -14,6 +14,7 @@ import 'epg_settings_screen.dart';
 import 'player_settings_screen.dart';
 import 'profile_picker_screen.dart';
 import 'sync_settings_screen.dart';
+import 'xtream_account_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -122,22 +123,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   String _accentLabel(String key) => switch (key) {
-        'arancio' => 'Arancione',
-        'verde' => 'Verde',
-        'azzurro' => 'Azzurro',
-        'rosso' => 'Rosso',
-        'giallo' => 'Giallo',
-        'ciano' => 'Ciano',
-        'rosa' => 'Rosa',
-        _ => key,
-      };
+    'arancio' => 'Arancione',
+    'verde' => 'Verde',
+    'azzurro' => 'Azzurro',
+    'rosso' => 'Rosso',
+    'giallo' => 'Giallo',
+    'ciano' => 'Ciano',
+    'rosa' => 'Rosa',
+    _ => key,
+  };
 
   String _gridLabel(String key) => switch (key) {
-        'piccola' => 'Piccola',
-        'media' => 'Media',
-        'grande' => 'Grande',
-        _ => key,
-      };
+    'piccola' => 'Piccola',
+    'media' => 'Media',
+    'grande' => 'Grande',
+    _ => key,
+  };
 
   String _connectionLabel(AppProvider provider) =>
       switch (provider.authMethod.name) {
@@ -155,6 +156,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Stato di Diretta, Film e Serie TV: tocca una sezione per ricaricare solo quella.',
       children: [
         if (provider.authMethod.name == 'xtream') const PlaylistStatusList(),
+        if (provider.authMethod.name == 'xtream')
+          SettingsValueTile(
+            icon: Icons.sync_rounded,
+            title: 'Aggiorna tutto ora',
+            subtitle: provider.isRefreshingAny
+                ? 'Aggiornamento in corso...'
+                : 'Ricarica Diretta, Film e Serie TV insieme',
+            onTap: provider.isRefreshingAny
+                ? null
+                : () async {
+                    await provider.refreshAllSections();
+                    if (!mounted) return;
+                    await _loadRefreshState();
+                  },
+          ),
         SettingsValueTile(
           icon: Icons.update_rounded,
           title: 'Frequenza aggiornamento',
@@ -199,28 +215,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SettingsValueTile(
                 icon: Icons.play_circle_outline_rounded,
                 title: 'Player video',
-                subtitle: 'Motori, audio, sottotitoli, buffer, HDR e Picture-in-Picture',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => const PlayerSettingsScreen())),
+                subtitle:
+                    'Motori, audio, sottotitoli, buffer, HDR e Picture-in-Picture',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const PlayerSettingsScreen(),
+                  ),
+                ),
               ),
               SettingsValueTile(
                 icon: Icons.history_rounded,
                 title: 'Cronologia',
-                subtitle: 'Gestisci i contenuti visti e le posizioni di ripresa',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => const HistorySettingsScreen())),
+                subtitle:
+                    'Gestisci i contenuti visti e le posizioni di ripresa',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const HistorySettingsScreen(),
+                  ),
+                ),
               ),
               SettingsValueTile(
                 icon: Icons.visibility_off_outlined,
                 title: 'Categorie nascoste',
                 subtitle: 'Nascondi le categorie che non ti interessano',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => const HiddenCategoriesScreen())),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const HiddenCategoriesScreen(),
+                  ),
+                ),
               ),
               SettingsSwitchTile(
                 icon: Icons.no_adult_content_outlined,
                 title: 'Mostra contenuti per adulti',
-                subtitle: 'Canali, film e serie XXX o "for adults" (nascosti di base)',
+                subtitle:
+                    'Canali, film e serie XXX o "for adults" (nascosti di base)',
                 value: provider.showAdult,
                 onChanged: provider.setShowAdult,
               ),
@@ -228,14 +256,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SettingsSection(
             title: 'Account',
-            description: 'Playlist, profili, cronologia e preferiti sincronizzati su tutti i dispositivi.',
+            description:
+                'Playlist, profili, cronologia e preferiti sincronizzati su tutti i dispositivi.',
             children: [
               SettingsValueTile(
                 icon: Icons.cloud_sync_outlined,
                 title: 'Backup e sincronizzazione',
                 subtitle: 'Email, sincronizzazione e uscita dall\'account',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => const SyncSettingsScreen())),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SyncSettingsScreen()),
+                ),
               ),
             ],
           ),
@@ -247,9 +277,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SettingsValueTile(
                 icon: Icons.people_outline_rounded,
                 title: 'Gestisci profili',
-                subtitle: 'Cambia profilo, creane uno nuovo o imposta il predefinito',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => const ProfilePickerScreen())),
+                subtitle:
+                    'Cambia profilo, creane uno nuovo o imposta il predefinito',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ProfilePickerScreen(),
+                  ),
+                ),
               ),
             ],
           ),
@@ -261,9 +295,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SettingsValueTile(
                 icon: Icons.calendar_view_day_rounded,
                 title: 'Guida TV (EPG)',
-                subtitle: 'Fonti, aggiornamento automatico (ogni 12 ore di base)',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => const EpgSettingsScreen())),
+                subtitle:
+                    'Fonti, aggiornamento automatico (ogni 12 ore di base)',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const EpgSettingsScreen()),
+                ),
               ),
             ],
           ),
@@ -275,6 +311,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Metodo di connessione',
                 value: _connectionLabel(provider),
               ),
+              if (provider.authMethod.name == 'xtream')
+                SettingsValueTile(
+                  icon: Icons.badge_outlined,
+                  title: 'Account playlist',
+                  subtitle: 'Scadenza, stato, connessioni e dati del provider',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const XtreamAccountScreen(),
+                    ),
+                  ),
+                ),
               if (provider.allChannels.isNotEmpty)
                 SettingsValueTile(
                   icon: Icons.tv_rounded,
@@ -326,7 +373,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Disconnetti', style: TextStyle(color: AppColors.error)),
+            child: const Text(
+              'Disconnetti',
+              style: TextStyle(color: AppColors.error),
+            ),
           ),
         ],
       ),

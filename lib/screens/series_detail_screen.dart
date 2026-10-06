@@ -411,7 +411,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
           subtitle: 'Disponibili nella tua playlist',
         ),
         HorizontalRow(
-          height: 210,
+          height: tmdbPosterRowHeight(context),
           itemCount: similar.length,
           itemBuilder: (context, index) {
             final item = similar[index];

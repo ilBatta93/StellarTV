@@ -45,9 +45,27 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final app = context.watch<AppProvider>();
     final discover = context.watch<DiscoverProvider>();
     final history = context.watch<HistoryProvider>();
+    // Episodes may not be indexed after a restart: rebuild them from the
+    // history entry so watched series still feed "Serie consigliate".
     final watched = history.entries
-        .map((e) => app.channelById(e.contentId))
+        .map(
+          (e) =>
+              app.channelById(e.contentId) ??
+              (e.type == ContentType.series || e.type == ContentType.anime
+                  ? Channel(
+                      id: e.contentId,
+                      name: e.title,
+                      url: e.url,
+                      logo: e.posterUrl,
+                      group: e.group,
+                      type: e.type,
+                      seriesKey: e.seriesKey.isEmpty ? null : e.seriesKey,
+                      seriesName: e.seriesName.isEmpty ? null : e.seriesName,
+                    )
+                  : null),
+        )
         .whereType<Channel>()
+        .where((c) => !app.kidsMode || app.isKidsContent(c))
         .toList();
     // Resolve each started item to its playlist channel; when the channel is
     // not indexed (e.g. series episodes after a restart) rebuild it from the
@@ -119,6 +137,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
             .where((item) => app.isAvailable(item) && app.isTmdbAllowed(item))
             .toList(),
         forYouSource: discover.forYouSource,
+        forYouSeries: discover.forYouSeries
+            .where((item) => app.isAvailable(item) && app.isTmdbAllowed(item))
+            .toList(),
+        forYouSeriesSource: discover.forYouSeriesSource,
         tops: [
           (
             'Top 10 della settimana',
@@ -182,6 +204,26 @@ class _DiscoverPageState extends State<DiscoverPage> {
             ),
             _PosterRow(
               items: discover.forYou
+                  .where(
+                    (item) => app.isAvailable(item) && app.isTmdbAllowed(item),
+                  )
+                  .toList(),
+            ),
+          ],
+          if (discover.forYouSeries
+              .where((item) => app.isAvailable(item) && app.isTmdbAllowed(item))
+              .isNotEmpty) ...[
+            SectionHeader(
+              title: 'Serie consigliate per te',
+              subtitle: 'Perché hai guardato ${discover.forYouSeriesSource}',
+              leading: const Icon(
+                Icons.auto_awesome_rounded,
+                color: AppColors.secondary,
+                size: 20,
+              ),
+            ),
+            _PosterRow(
+              items: discover.forYouSeries
                   .where(
                     (item) => app.isAvailable(item) && app.isTmdbAllowed(item),
                   )
@@ -764,6 +806,8 @@ class _TvDiscover extends StatefulWidget {
   final List<ResumeItem> startedSeries;
   final List<TmdbItem> forYou;
   final String? forYouSource;
+  final List<TmdbItem> forYouSeries;
+  final String? forYouSeriesSource;
   final List<TvTopSpec> tops;
 
   const _TvDiscover({
@@ -773,6 +817,8 @@ class _TvDiscover extends StatefulWidget {
     required this.startedSeries,
     required this.forYou,
     required this.forYouSource,
+    required this.forYouSeries,
+    required this.forYouSeriesSource,
     required this.tops,
   });
 
@@ -798,6 +844,8 @@ class _TvDiscoverState extends State<_TvDiscover> {
       first = widget.banner.first;
     } else if (widget.forYou.isNotEmpty) {
       first = widget.forYou.first;
+    } else if (widget.forYouSeries.isNotEmpty) {
+      first = widget.forYouSeries.first;
     } else {
       for (final t in widget.tops) {
         final items = t.$4.isNotEmpty ? t.$4 : t.$5;
@@ -942,6 +990,14 @@ class _TvDiscoverState extends State<_TvDiscover> {
                               : 'Consigliati per te · perché hai guardato '
                                     '${widget.forYouSource}',
                           widget.forYou,
+                        ),
+                      if (widget.forYouSeries.isNotEmpty)
+                        _row(
+                          widget.forYouSeriesSource == null
+                              ? 'Serie consigliate per te'
+                              : 'Serie consigliate per te · perché hai '
+                                    'guardato ${widget.forYouSeriesSource}',
+                          widget.forYouSeries,
                         ),
                       for (final t in widget.tops)
                         _TvTopRow(spec: t, onFocusItem: _focus),

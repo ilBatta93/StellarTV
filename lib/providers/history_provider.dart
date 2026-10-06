@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/history_entry.dart';
+import '../services/player_settings_service.dart';
 import '../services/settings_service.dart';
 import 'app_provider.dart';
 import 'sync_provider.dart';
@@ -24,6 +25,11 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   final AppProvider? _favorites;
   final SyncProvider? _syncProvider;
   final SettingsService _settingsService = SettingsService();
+
+  /// Deletion markers (content id -> deletion time). They are saved and
+  /// synced with the history so a removed title is not brought back by an
+  /// older cloud or device copy; a newer real view wins over the marker.
+  final Map<String, DateTime> _deleted = {};
   Future<void>? _loadFuture;
 
   /// Reloads the app after credentials were restored from the cloud.
@@ -75,10 +81,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Movies and episodes started but not finished (newest first).
   List<HistoryEntry> get continueWatching => _entries.where((e) {
-        if (e.isLive || e.position < const Duration(seconds: 5)) return false;
-        if (e.duration <= Duration.zero) return true;
-        return !e.isWatched;
-      }).toList();
+    if (e.isLive || e.position < const Duration(seconds: 5)) return false;
+    if (e.duration <= Duration.zero) return true;
+    return !e.isWatched;
+  }).toList();
 
   bool isWatched(String contentId) => entryFor(contentId)?.isWatched ?? false;
 
@@ -109,7 +115,8 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Clears the watched mark and the resume point.
-  Future<void> markUnwatched(String contentId) => remove(contentId);
+  Future<void> markUnwatched(String contentId) =>
+      remove(contentId, cascade: false);
 
   /// Poster of the series folder an episode belongs to (not the episode
   /// still), so "Continua a guardare" shows the standard series artwork.
@@ -131,8 +138,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _loadLocal() async {
     final local = await _sync.loadLocalHistory(profileId: _profileId);
     final entries = <HistoryEntry>[];
+    _deleted.clear();
     for (final value in local.values) {
       if (value is! Map<String, dynamic>) continue;
+      _readTombstone(value);
       final entry = _entryFromLocal(value);
       if (entry != null) entries.add(entry);
     }
@@ -143,7 +152,20 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     _notify();
   }
 
+  /// Records a deletion marker; returns true when [map] is one.
+  bool _readTombstone(Map<String, dynamic> map) {
+    if (map['deleted'] != true) return false;
+    final id = map['id'];
+    final at = DateTime.tryParse(map['watched']?.toString() ?? '');
+    if (id is String && at != null) {
+      final known = _deleted[id];
+      if (known == null || at.isAfter(known)) _deleted[id] = at;
+    }
+    return true;
+  }
+
   HistoryEntry? _entryFromLocal(Map<String, dynamic> map) {
+    if (map['deleted'] == true) return null;
     final id = map['id'];
     final title = map['title'];
     if (id is! String || title is! String) return null;
@@ -168,23 +190,35 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
-  Map<String, dynamic> _localMap() => {
-        for (final e in _entries)
-          e.contentId: {
-            'id': e.contentId,
-            'type': e.type.name,
-            'title': e.title,
-            'poster': e.posterUrl,
-            'group': e.group,
-            'url': e.url,
-            'pos': e.position.inSeconds,
-            'dur': e.duration.inSeconds,
-            'watched': e.lastWatchedAt.toIso8601String(),
-            if (e.seriesKey.isNotEmpty) 'skey': e.seriesKey,
-            if (e.seriesName.isNotEmpty) 'sname': e.seriesName,
-            if (e.seriesPoster.isNotEmpty) 'sposter': e.seriesPoster,
-          }
-      };
+  Map<String, dynamic> _localMap() {
+    final cutoff = DateTime.now().subtract(const Duration(days: 120));
+    _deleted.removeWhere((_, at) => at.isBefore(cutoff));
+    final live = {for (final e in _entries) e.contentId};
+    return {
+      for (final d in _deleted.entries)
+        if (!live.contains(d.key))
+          d.key: {
+            'id': d.key,
+            'deleted': true,
+            'watched': d.value.toIso8601String(),
+          },
+      for (final e in _entries)
+        e.contentId: {
+          'id': e.contentId,
+          'type': e.type.name,
+          'title': e.title,
+          'poster': e.posterUrl,
+          'group': e.group,
+          'url': e.url,
+          'pos': e.position.inSeconds,
+          'dur': e.duration.inSeconds,
+          'watched': e.lastWatchedAt.toIso8601String(),
+          if (e.seriesKey.isNotEmpty) 'skey': e.seriesKey,
+          if (e.seriesName.isNotEmpty) 'sname': e.seriesName,
+          if (e.seriesPoster.isNotEmpty) 'sposter': e.seriesPoster,
+        },
+    };
+  }
 
   Future<void> _persistLocal() async {
     await _sync.saveLocalHistory(_localMap(), profileId: _profileId);
@@ -222,8 +256,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       // Other profiles' histories are merged straight into local storage.
       for (final e in payload.profileHistories.entries) {
         if (e.key == _profileId || e.value is! Map<String, dynamic>) continue;
-        await _sync.mergeHistoryInto(e.value as Map<String, dynamic>,
-            profileId: e.key);
+        await _sync.mergeHistoryInto(
+          e.value as Map<String, dynamic>,
+          profileId: e.key,
+        );
       }
       if (_profileId == null) {
         await _sync.mergeHistoryInto(payload.history);
@@ -231,14 +267,20 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       final remoteCurrent = _profileId == null
           ? payload.history
           : (payload.profileHistories[_profileId] as Map<String, dynamic>?) ??
-              const <String, dynamic>{};
+                const <String, dynamic>{};
       final merged = <String, HistoryEntry>{
         for (final e in _entries) e.contentId: e,
       };
       for (final value in remoteCurrent.values) {
         if (value is! Map<String, dynamic>) continue;
+        _readTombstone(value);
+      }
+      for (final value in remoteCurrent.values) {
+        if (value is! Map<String, dynamic>) continue;
         final remote = _entryFromLocal(value);
         if (remote == null) continue;
+        final gone = _deleted[remote.contentId];
+        if (gone != null && !remote.lastWatchedAt.isAfter(gone)) continue;
         final existing = merged[remote.contentId];
         if (existing == null ||
             remote.lastWatchedAt.isAfter(existing.lastWatchedAt)) {
@@ -246,12 +288,18 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
       final lastPush = await _sync.lastPush();
-      final cloudIsNewer = updatedAt != null &&
+      final cloudIsNewer =
+          updatedAt != null &&
           (lastPush == null || updatedAt.isAfter(lastPush.toUtc()));
-      _entries = merged.values
-          .where((e) => e.type != ContentType.live)
-          .toList()
-        ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
+      _entries =
+          merged.values
+              .where((e) {
+                final gone = _deleted[e.contentId];
+                return gone == null || e.lastWatchedAt.isAfter(gone);
+              })
+              .where((e) => e.type != ContentType.live)
+              .toList()
+            ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
       if (_favorites != null && payload.favoriteIds.isNotEmpty) {
         await _favorites.importFavorites({
           'ids': payload.favoriteIds,
@@ -261,8 +309,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       // Settings and credentials: fill in what the device does not have yet
       // (never overwrite local values with older cloud copies).
       final settingsChanged = await _sync.applySnapshotSettings(
-          payload.settings,
-          overwrite: cloudIsNewer);
+        payload.settings,
+        overwrite: cloudIsNewer,
+      );
       if (settingsChanged) await onSettingsRestored?.call();
       final needsCredentials = await _settingsService.getAuthMethod() == null;
       if (needsCredentials && _sync.hasCredentials(payload.settings)) {
@@ -359,7 +408,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> updatePosition(
-      String contentId, Duration position, Duration duration) async {
+    String contentId,
+    Duration position,
+    Duration duration,
+  ) async {
     if (duration <= Duration.zero) return;
     await _loadFuture;
     final index = _entries.indexWhere((e) => e.contentId == contentId);
@@ -371,17 +423,43 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
     _entries = [..._entries]
       ..[index] = current.copyWith(
-          position: position, duration: duration, lastWatchedAt: DateTime.now());
+        position: position,
+        duration: duration,
+        lastWatchedAt: DateTime.now(),
+      );
     _notify();
     await _persistLocal();
   }
 
-  Future<bool> remove(String contentId) async {
+  /// Removes a title from the history together with everything tied to it:
+  /// for a series episode every episode of that series (watched marks and
+  /// positions), plus the player's own resume points for those videos.
+  /// [cascade] false touches only [contentId] (used by "segna come non
+  /// visto" on a single episode).
+  Future<bool> remove(String contentId, {bool cascade = true}) async {
+    await _loadFuture;
     final before = _entries;
-    _entries = _entries.where((e) => e.contentId != contentId).toList();
+    final target = entryFor(contentId);
+    final seriesKey = target?.seriesKey ?? '';
+    bool related(HistoryEntry e) =>
+        e.contentId == contentId ||
+        (cascade &&
+            seriesKey.isNotEmpty &&
+            (e.seriesKey == seriesKey || e.contentId == seriesKey));
+    final removed = _entries.where(related).toList();
+    _entries = _entries.where((e) => !related(e)).toList();
+    final now = DateTime.now();
+    _deleted[contentId] = now;
+    for (final e in removed) {
+      _deleted[e.contentId] = now;
+    }
     _notify();
     try {
       await _persistLocal();
+      final player = PlayerSettingsService();
+      for (final e in removed) {
+        if (e.url.isNotEmpty) await player.saveResumePosition(e.url, null);
+      }
       return true;
     } catch (_) {
       _entries = before;
@@ -392,10 +470,15 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<bool> clear() async {
     final before = _entries;
+    final now = DateTime.now();
+    for (final e in _entries) {
+      _deleted[e.contentId] = now;
+    }
     _entries = [];
     _notify();
     try {
       await _persistLocal();
+      await PlayerSettingsService().clearResumePositions();
       return true;
     } catch (_) {
       _entries = before;

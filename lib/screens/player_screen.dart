@@ -61,6 +61,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   int _tvOutroCol = 0;
   DateTime? _exitArmedAt;
   DateTime _lastBackAt = DateTime(2000);
+  bool _exiting = false;
   Timer? _exitTimer;
   bool _exitPrompt = false;
   bool _failureFocused = false;
@@ -429,6 +430,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       return;
     }
     _lastBackAt = now;
+    if (_exiting) return;
     if (_session?.status == SessionStatus.failed) {
       _exitPlayer();
       return;
@@ -457,8 +459,29 @@ class _PlayerScreenState extends State<PlayerScreen>
   void _exitPlayer() {
     _exitTimer?.cancel();
     if (!mounted) return;
-    if (DeviceTypeService.isTv && _isEpisode) {
-      _openTitle();
+    if (DeviceTypeService.isTv && !_isLive) {
+      // Back is handled on key DOWN, while Android delivers its own "back"
+      // on key UP: navigating at once let that trailing back close the title
+      // page too (it flashed, then the Film/Serie tab came back). Wait for
+      // the key release, keep swallowing Backs here, then open the title.
+      if (_exiting) return;
+      _exiting = true;
+      final started = DateTime.now();
+      Timer.periodic(const Duration(milliseconds: 40), (t) {
+        final released = HardwareKeyboard.instance.logicalKeysPressed.isEmpty;
+        final waited = DateTime.now().difference(started);
+        if (!mounted) {
+          t.cancel();
+          return;
+        }
+        if ((released && waited >= const Duration(milliseconds: 250)) ||
+            waited >= const Duration(milliseconds: 1200)) {
+          t.cancel();
+          Future.delayed(const Duration(milliseconds: 120), () {
+            if (mounted) _openTitle();
+          });
+        }
+      });
       return;
     }
     // Navigator.pop ignores the PopScope that blocks the first Back.

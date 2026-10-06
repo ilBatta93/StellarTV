@@ -954,6 +954,25 @@ class AppProvider extends ChangeNotifier {
     _finishIfIdle();
   }
 
+  /// Manual "aggiorna tutto": reloads Diretta, Film and Serie TV one after
+  /// the other (same queue as single retries, so memory stays bounded) and
+  /// restarts the automatic-refresh timer from now.
+  Future<void> refreshAllSections() async {
+    if (_xtreamCredentials == null) return;
+    await Future.wait([
+      for (final t in const [
+        ContentType.live,
+        ContentType.movie,
+        ContentType.series,
+      ])
+        retrySection(t),
+    ]);
+    if (_loadFailures.isEmpty) await _refreshService.markRun();
+    await _refreshService.schedule();
+  }
+
+  bool get isRefreshingAny => _anyPending;
+
   Future<void> _enqueue(ContentType type, Map<String, String> credentials) {
     final run = _sectionQueue.then((_) => _loadSection(type, credentials));
     _sectionQueue = run.catchError((_) {});

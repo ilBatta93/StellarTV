@@ -514,6 +514,7 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                     ),
                   ),
                   ElevatedButton.icon(
+                    autofocus: DeviceTypeService.isTv,
                     icon: const Icon(Icons.play_arrow_rounded),
                     label: const Text('Guarda'),
                     onPressed: () {
@@ -543,83 +544,96 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                       itemBuilder: (ctx, i) {
                         final p = list[i];
                         final live = p.isNow;
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: live
-                                ? AppColors.primary.withValues(alpha: 0.12)
-                                : AppColors.card,
+                        // TV: every programme is a focus stop so the remote
+                        // can scroll the whole guide; OK on the live one plays.
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: TvFocusable(
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: live
-                                  ? AppColors.primary
-                                  : AppColors.border,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
+                            focusedScale: 1.0,
+                            onPressed: () {
+                              if (!live) return;
+                              Navigator.pop(ctx);
+                              playChannel(context, channel);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: live
+                                    ? AppColors.primary.withValues(alpha: 0.12)
+                                    : AppColors.card,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: live
+                                      ? AppColors.primary
+                                      : AppColors.border,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        p.timeRange,
+                                        style: TextStyle(
+                                          color: live
+                                              ? AppColors.primary
+                                              : AppColors.textMuted,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      if (live) ...[
+                                        const SizedBox(width: 8),
+                                        const Text(
+                                          'IN ONDA',
+                                          style: TextStyle(
+                                            color: AppColors.error,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 0.8,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
                                   Text(
-                                    p.timeRange,
-                                    style: TextStyle(
-                                      color: live
-                                          ? AppColors.primary
-                                          : AppColors.textMuted,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
+                                    p.title,
+                                    style: const TextStyle(
+                                      color: AppColors.textPrimary,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
+                                  if (p.description.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      p.description,
+                                      maxLines: live ? 4 : 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
                                   if (live) ...[
-                                    const SizedBox(width: 8),
-                                    const Text(
-                                      'IN ONDA',
-                                      style: TextStyle(
-                                        color: AppColors.error,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: 0.8,
+                                    const SizedBox(height: 8),
+                                    LinearProgressIndicator(
+                                      value: _progressOf(p),
+                                      minHeight: 3,
+                                      backgroundColor: AppColors.border,
+                                      valueColor: AlwaysStoppedAnimation(
+                                        AppColors.primary,
                                       ),
                                     ),
                                   ],
                                 ],
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                p.title,
-                                style: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (p.description.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  p.description,
-                                  maxLines: live ? 4 : 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 12,
-                                    height: 1.35,
-                                  ),
-                                ),
-                              ],
-                              if (live) ...[
-                                const SizedBox(height: 8),
-                                LinearProgressIndicator(
-                                  value: _progressOf(p),
-                                  minHeight: 3,
-                                  backgroundColor: AppColors.border,
-                                  valueColor: AlwaysStoppedAnimation(
-                                    AppColors.primary,
-                                  ),
-                                ),
-                              ],
-                            ],
+                            ),
                           ),
                         );
                       },

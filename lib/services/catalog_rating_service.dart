@@ -23,7 +23,19 @@ class CatalogRatingService extends ChangeNotifier {
   final Map<String, DateTime> _failed = {};
   Future<void>? _loading;
   Timer? _saveTimer;
+  Timer? _notifyTimer;
   int version = 0;
+
+  /// Batches UI updates: a large catalog can resolve hundreds of ratings, and
+  /// notifying per result forced a full re-sort/rebuild for each one.
+  void _scheduleNotify() {
+    _notifyTimer ??= Timer(const Duration(milliseconds: 2500), () {
+      _notifyTimer = null;
+      version++;
+      notifyListeners();
+    });
+  }
+
   final Expando<String> _keys = Expando('tvRating');
 
   String _key(Channel c) => _keys[c] ??=
@@ -86,8 +98,7 @@ class CatalogRatingService extends ChangeNotifier {
         isMovie: c.type == ContentType.movie,
       );
       _ratings[key] = item?.voteAverage ?? 0;
-      version++;
-      notifyListeners();
+      _scheduleNotify();
       _saveTimer ??= Timer(const Duration(seconds: 10), () {
         _saveTimer = null;
         unawaited(_save());

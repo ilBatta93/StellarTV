@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -27,11 +28,14 @@ SliverGridDelegateWithMaxCrossAxisExtent channelGridDelegate(
 }) {
   final isLive = type == ContentType.live;
   if (DeviceTypeService.isTv) {
+    // TV honours "Dimensione griglia" (relative to the 'media' size) and
+    // "Modalità compatta" too, on top of its larger remote-friendly base.
+    final scale = (maxExtent / 140) * (compact ? 0.86 : 1);
     return SliverGridDelegateWithMaxCrossAxisExtent(
-      maxCrossAxisExtent: isLive ? 180 : 132,
-      childAspectRatio: isLive ? 1.05 : 0.6,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
+      maxCrossAxisExtent: (isLive ? 180 : 132) * scale,
+      childAspectRatio: isLive ? 1.05 : (compact ? 0.62 : 0.6),
+      crossAxisSpacing: compact ? 10 : 16,
+      mainAxisSpacing: compact ? 10 : 16,
     );
   }
   return SliverGridDelegateWithMaxCrossAxisExtent(
@@ -321,15 +325,30 @@ class _CatalogPageState extends State<CatalogPage> {
     CatalogRatingService.instance.addListener(_ratingsChanged);
   }
 
+  Timer? _ratingsTimer;
+  DateTime _lastRatingsSort = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Re-sorts at most every few seconds while ratings stream in, so the grid
+  /// does not rebuild and reshuffle continuously under the remote focus.
   void _ratingsChanged() {
-    if (mounted && DeviceTypeService.isTv && _sort == CatalogSort.rating) {
-      setState(() {});
+    if (!mounted || !DeviceTypeService.isTv || _sort != CatalogSort.rating) {
+      return;
     }
+    if (_ratingsTimer != null) return;
+    final wait =
+        const Duration(seconds: 6) -
+        DateTime.now().difference(_lastRatingsSort);
+    _ratingsTimer = Timer(wait.isNegative ? Duration.zero : wait, () {
+      _ratingsTimer = null;
+      _lastRatingsSort = DateTime.now();
+      if (mounted && _sort == CatalogSort.rating) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     CatalogRatingService.instance.removeListener(_ratingsChanged);
+    _ratingsTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -730,7 +749,8 @@ class _CatalogPageState extends State<CatalogPage> {
   List<CatalogEntry> _ordered(List<CatalogEntry> entries) {
     if (!DeviceTypeService.isTv || _sort == null) return entries;
     final service = CatalogRatingService.instance;
-    if (_sort == CatalogSort.rating) {
+    if (_sort == CatalogSort.rating &&
+        (!identical(entries, _sortedSource) || _sortedOrder != _sort)) {
       service.request(entries.map((e) => e.primary));
     }
     if (identical(entries, _sortedSource) &&
@@ -752,7 +772,12 @@ class _CatalogPageState extends State<CatalogPage> {
       );
 
   int _columns() {
-    final delegate = channelGridDelegate(widget.type);
+    final ui = context.read<UiSettings>();
+    final delegate = channelGridDelegate(
+      widget.type,
+      maxExtent: ui.gridMaxExtent,
+      compact: ui.compact,
+    );
     final width = MediaQuery.sizeOf(context).width - 32;
     return (width / (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
         .ceil()
