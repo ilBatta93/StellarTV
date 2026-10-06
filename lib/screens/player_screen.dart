@@ -882,7 +882,13 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   Future<void> _init() async {
-    final settings = await _settingsService.load();
+    final settings = await _settingsService.load(
+      scope: !DeviceTypeService.isTv
+          ? PlayerSettingsScope.shared
+          : _isLive
+          ? PlayerSettingsScope.liveTv
+          : PlayerSettingsScope.filmSeriesTv,
+    );
     final pipSupported = await _bridge.isPipSupported();
     Duration? startAt = _isLive ? null : widget.startAt;
     if (startAt == null && !_isLive && settings.resumePlayback) {

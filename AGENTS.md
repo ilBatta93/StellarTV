@@ -9,8 +9,10 @@ Kids certification is warmed in the background after playlist loading and cached
 - The playlist opens from the device copy at every start; only sections never saved are downloaded immediately, and a full refresh runs only when the chosen interval has elapsed since the last complete download.
 - Large derived caches (kids verdicts, playlist sections) are persisted to files through background isolates with batched writes, never to preferences or the main thread.
 
-- TV catalogs use three explicit remote focus regions (tools, filters, items): vertical boundary keys follow their order and return to the top menu only above tools; default sorting preserves provider order and category drawers retain left-edge access.
+- TV catalogs keep filters/categories in a lazy inline panel shared by live and VOD: remote movement stays inside open panels until their vertical boundary, returns to tools above the first row and enters content below the last; default sorting preserves provider order and category drawers retain left-edge access.
 - TV poster ratings use a shared two-request queue and an isolate-written device cache; unknown ratings sort last, and only the selected category is queued for vote sorting.
 - TV person details reuse the fixed title backdrop and compact poster grid; the touch person layout stays unchanged.
 
 - MPV receives live/VOD state before opening and applies native tuning serially before playback, so live buffering differs from VOD without racing stream initialization.
+
+- TV player settings persist independent live and film/series scopes, initialized from legacy preferences; playback selects its content scope and touch continues using the shared legacy scope.

@@ -215,7 +215,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return KeyEventResult.ignored;
     }
     final primary = FocusManager.instance.primaryFocus;
-    if (_currentIndex >= 1 && _currentIndex <= 3) {
+    if (_currentIndex >= 1 && _currentIndex <= 4) {
       return KeyEventResult.ignored;
     }
     if (primary != null &&

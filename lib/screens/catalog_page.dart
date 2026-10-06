@@ -11,6 +11,7 @@ import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
 import '../widgets/tv_catalog_toolbar.dart';
+import '../widgets/tv_filter_panel.dart';
 import '../widgets/tv_catalog_navigation.dart';
 import '../widgets/tv_focusable.dart';
 import '../services/catalog_rating_service.dart';
@@ -19,7 +20,7 @@ import '../widgets/tv_text_field.dart';
 import '../widgets/section_row.dart';
 import 'settings_screen.dart';
 
-SliverGridDelegate channelGridDelegate(
+SliverGridDelegateWithMaxCrossAxisExtent channelGridDelegate(
   ContentType type, {
   double maxExtent = 140,
   bool compact = false,
@@ -198,12 +199,24 @@ class ChannelGrid extends StatelessWidget {
       itemCount: channels.length,
       itemBuilder: (context, i) {
         final c = channels[i];
-        return ChannelCard(
+        final card = ChannelCard(
           channel: c,
           isFavorite: app.favoriteIds.contains(c.id),
           onTap: () => openChannel(context, c),
           onFavoriteTap: () => app.toggleFavorite(c),
         );
+        if (!DeviceTypeService.isTv) return card;
+        final delegate = channelGridDelegate(
+          type,
+          maxExtent: ui.gridMaxExtent,
+          compact: ui.compact,
+        );
+        final usable = MediaQuery.sizeOf(context).width - padding.horizontal;
+        final columns =
+            (usable / (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
+                .ceil()
+                .clamp(1, 100);
+        return TvCatalogItem(index: i, columns: columns, child: card);
       },
     );
   }
@@ -428,6 +441,7 @@ class _CatalogPageState extends State<CatalogPage> {
               sort: _sort,
               onSort: (value) => setState(() => _sort = value),
               scaffoldKey: _scaffoldKey,
+              filters: (_) => _buildTvFilters(app, groups),
             )
           else
             Padding(
@@ -453,7 +467,7 @@ class _CatalogPageState extends State<CatalogPage> {
                 ],
               ),
             ),
-          _buildGenreBar(app, groups),
+          if (!DeviceTypeService.isTv) _buildGenreBar(app, groups),
           Expanded(
             child: _query.isNotEmpty
                 ? _buildSearchResults(app)
@@ -478,6 +492,60 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 
   /// One-genre chip bar; only genres that exist in the playlist are shown.
+  Widget _buildTvFilters(AppProvider app, List<CatalogGroup> groups) {
+    final names = widget.type == ContentType.movie ? _movieGenres : _tvGenres;
+    var counts = _genreCounts;
+    if (counts == null ||
+        !identical(_genreCountsGroups, groups) ||
+        _genreCountsVersion != app.titleInfoVersion) {
+      counts = <int, int>{};
+      for (final group in groups) {
+        for (final entry in group.entries) {
+          for (final id in app.genresOf(entry.primary) ?? const <int>[]) {
+            if (names.containsKey(id)) counts[id] = (counts[id] ?? 0) + 1;
+          }
+        }
+      }
+      _genreCounts = counts;
+      _genreCountsGroups = groups;
+      _genreCountsVersion = app.titleInfoVersion;
+    }
+    final present = counts.keys.toList()
+      ..sort((a, b) => (names[a] ?? '').compareTo(names[b] ?? ''));
+    return TvFilterPanel(
+      options: [
+        TvFilterOption(
+          _recentLabel,
+          _selectedCategory == null,
+          () => setState(() => _selectedCategory = null),
+        ),
+        TvFilterOption(
+          _allLabel,
+          _selectedCategory == _allLabel,
+          () => setState(() => _selectedCategory = _allLabel),
+        ),
+        for (final group in groups)
+          if (group.label != _allLabel)
+            TvFilterOption(
+              group.label,
+              _selectedCategory == group.label,
+              () => setState(() => _selectedCategory = group.label),
+            ),
+        TvFilterOption(
+          'Tutti i generi',
+          _genreId == null,
+          () => setState(() => _genreId = null),
+        ),
+        for (final id in present)
+          TvFilterOption(
+            names[id] ?? '',
+            _genreId == id,
+            () => setState(() => _genreId = _genreId == id ? null : id),
+          ),
+      ],
+    );
+  }
+
   Widget _buildGenreBar(AppProvider app, List<CatalogGroup> groups) {
     final names = _genreNames;
     // Counting genres walks the whole catalog: only redo it when the catalog
@@ -702,12 +770,9 @@ class _CatalogPageState extends State<CatalogPage> {
   int _columns() {
     final delegate = channelGridDelegate(widget.type);
     final width = MediaQuery.sizeOf(context).width - 32;
-    if (delegate is SliverGridDelegateWithMaxCrossAxisExtent) {
-      return (width / (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
-          .ceil()
-          .clamp(1, 100);
-    }
-    return 1;
+    return (width / (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
+        .ceil()
+        .clamp(1, 100);
   }
 
   Widget _entryCard(AppProvider app, CatalogEntry entry) {

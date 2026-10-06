@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/player_settings.dart';
 import '../services/native_player_bridge.dart';
+import '../services/device_type_service.dart';
 import '../services/player_settings_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/player/player_format.dart';
@@ -9,7 +10,8 @@ import '../widgets/player/video_surface.dart';
 import '../widgets/settings_tiles.dart';
 
 class PlayerSettingsScreen extends StatefulWidget {
-  const PlayerSettingsScreen({super.key});
+  const PlayerSettingsScreen({super.key, this.scope});
+  final PlayerSettingsScope? scope;
 
   @override
   State<PlayerSettingsScreen> createState() => _PlayerSettingsScreenState();
@@ -26,8 +28,14 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     _load();
   }
 
+  PlayerSettingsScope get _scope => DeviceTypeService.isTv
+      ? widget.scope ?? PlayerSettingsScope.shared : PlayerSettingsScope.shared;
+  bool get _live => _scope == PlayerSettingsScope.liveTv;
+  bool get _tvProfile => DeviceTypeService.isTv && widget.scope != null;
+
   Future<void> _load() async {
-    final settings = await _service.load();
+    if (DeviceTypeService.isTv && widget.scope == null) return;
+    final settings = await _service.load(scope: _scope);
     final caps = await NativePlayerBridge.instance.getCapabilities();
     if (!mounted) return;
     setState(() {
@@ -40,7 +48,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     final s = _s;
     if (s == null) return;
     setState(() => change(s));
-    _service.save(s);
+    _service.save(s, scope: _scope);
   }
 
   Future<void> _pick<T>(String title, List<T> options, T current,
@@ -62,8 +70,21 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final s = _s;
+    if (DeviceTypeService.isTv && widget.scope == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Player video')),
+        body: ListView(padding: const EdgeInsets.all(16), children: [
+          SettingsValueTile(icon: Icons.live_tv_rounded, title: 'Dirette TV',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) =>
+              const PlayerSettingsScreen(scope: PlayerSettingsScope.liveTv)))),
+          SettingsValueTile(icon: Icons.movie_outlined, title: 'Film/Serie',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) =>
+              const PlayerSettingsScreen(scope: PlayerSettingsScope.filmSeriesTv)))),
+        ]),
+      );
+    }
     return Scaffold(
-      appBar: AppBar(title: const Text('Player video')),
+      appBar: AppBar(title: Text(_tvProfile ? (_live ? 'Dirette TV' : 'Film/Serie') : 'Player video')),
       body: s == null
           ? Center(child: CircularProgressIndicator(color: AppColors.primary))
           : ListView(
@@ -123,7 +144,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
         SettingsSection(
           title: 'Riproduzione',
           children: [
-            SettingsValueTile(
+            if (!_tvProfile || !_live) SettingsValueTile(
               icon: Icons.speed_rounded,
               title: 'Velocità predefinita',
               subtitle: 'Per film e serie; le dirette restano a velocità normale',
@@ -145,7 +166,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               onTap: () => _pick('Orientamento', PlayerOrientation.values,
                   s.orientation, (o) => o.label, (s, v) => s.orientation = v),
             ),
-            SettingsSwitchTile(
+            if (!_tvProfile || !_live) SettingsSwitchTile(
               icon: Icons.history_rounded,
               title: 'Riprendi da dove avevi lasciato',
               subtitle: 'Per film ed episodi',
@@ -337,7 +358,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           description:
               'Valori più alti riducono le interruzioni su connessioni instabili ma aumentano il tempo di avvio.',
           children: [
-            SettingsSliderTile(
+            if (!_tvProfile || !_live) SettingsSliderTile(
               icon: Icons.cloud_download_outlined,
               title: 'Buffer film e serie',
               badge: 'mpv',
@@ -349,7 +370,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               onChanged: (v) =>
                   _update((s) => s.networkCachingMs = (v / 100).round() * 100),
             ),
-            SettingsSliderTile(
+            if (!_tvProfile || _live) SettingsSliderTile(
               icon: Icons.live_tv_rounded,
               title: 'Buffer dirette',
               badge: 'mpv',
@@ -504,7 +525,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text('Ripristinare le impostazioni?'),
-        content: const Text('Tutte le impostazioni del player torneranno ai valori iniziali.'),
+        content: Text(_tvProfile ? 'Le impostazioni di questa categoria torneranno ai valori iniziali.' : 'Tutte le impostazioni del player torneranno ai valori iniziali.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annulla')),
           TextButton(
@@ -515,7 +536,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
       ),
     );
     if (ok != true) return;
-    await _service.reset();
+    await _service.reset(scope: _scope);
     if (mounted) setState(() => _s = PlayerSettings());
   }
 }

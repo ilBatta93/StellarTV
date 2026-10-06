@@ -17,6 +17,7 @@ import '../widgets/tv_focusable.dart';
 import '../widgets/tv_category_panel.dart';
 import '../widgets/tv_text_field.dart';
 import '../widgets/tv_catalog_toolbar.dart';
+import '../widgets/tv_filter_panel.dart';
 import '../widgets/tv_catalog_navigation.dart';
 import 'epg_settings_screen.dart';
 
@@ -131,6 +132,21 @@ class _LivePageState extends State<LivePage> {
             onChanged: (v) => setState(() => _query = v),
             sort: _sort,
             allowRating: false,
+            filters: (_) => TvFilterPanel(
+              options: [
+                TvFilterOption(
+                  'Tutti',
+                  _category == null,
+                  () => setState(() => _category = null),
+                ),
+                for (final group in groups)
+                  TvFilterOption(
+                    group.label,
+                    _category == group.label,
+                    () => setState(() => _category = group.label),
+                  ),
+              ],
+            ),
             onSort: (value) => setState(() => _sort = value),
             scaffoldKey: _scaffoldKey,
             trailing: TvFocusable(
@@ -179,30 +195,31 @@ class _LivePageState extends State<LivePage> {
               ],
             ),
           ),
-        SizedBox(
-          height: 44,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            children: [
-              TvCategoryEdge(
-                scaffoldKey: _scaffoldKey,
-                onOpen: _openCategories,
-                child: _chip(
-                  'Tutti',
-                  _category == null,
-                  () => setState(() => _category = null),
+        if (!DeviceTypeService.isTv)
+          SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              children: [
+                TvCategoryEdge(
+                  scaffoldKey: _scaffoldKey,
+                  onOpen: _openCategories,
+                  child: _chip(
+                    'Tutti',
+                    _category == null,
+                    () => setState(() => _category = null),
+                  ),
                 ),
-              ),
-              for (final g in groups)
-                _chip(
-                  g.label,
-                  _category == g.label,
-                  () => setState(() => _category = g.label),
-                ),
-            ],
+                for (final g in groups)
+                  _chip(
+                    g.label,
+                    _category == g.label,
+                    () => setState(() => _category = g.label),
+                  ),
+              ],
+            ),
           ),
-        ),
         if (!epg.hasData && !epg.isLoading)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),

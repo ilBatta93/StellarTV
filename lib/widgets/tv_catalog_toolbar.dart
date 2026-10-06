@@ -70,6 +70,7 @@ class TvCatalogToolbar extends StatefulWidget {
     this.allowRating = true,
     this.trailing,
     this.category,
+    this.filters,
   });
   final TextEditingController controller;
   final String hint;
@@ -80,17 +81,23 @@ class TvCatalogToolbar extends StatefulWidget {
   final bool allowRating;
   final Widget? trailing;
   final String? category;
+  final WidgetBuilder? filters;
   @override
   State<TvCatalogToolbar> createState() => _TvCatalogToolbarState();
 }
 
 class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   bool _expanded = false;
+  bool _filtersOpen = false;
+  final _filterButton = FocusNode(debugLabel: 'catalogFilters');
+  final _panel = FocusScopeNode(debugLabel: 'catalog panel');
   final _field = FocusNode();
   final _search = FocusNode(debugLabel: 'catalogSearch');
   final _sort = FocusNode();
   @override
   void dispose() {
+    _filterButton.dispose();
+    _panel.dispose();
     _field.dispose();
     _search.dispose();
     _sort.dispose();
@@ -103,7 +110,10 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
       _search.requestFocus();
       return;
     }
-    setState(() => _expanded = true);
+    setState(() {
+      _filtersOpen = false;
+      _expanded = true;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) TvTextField.focusWithKeyboard(_field);
     });
@@ -113,6 +123,22 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
     if (!_expanded) return;
     SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
     setState(() => _expanded = false);
+  }
+
+  void _toggleFilters() {
+    _collapse();
+    setState(() => _filtersOpen = !_filtersOpen);
+    if (_filtersOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_filtersOpen) return;
+        final nodes = _panel.traversalDescendants.where(
+          (n) => n.canRequestFocus && !n.skipTraversal,
+        );
+        if (nodes.isNotEmpty) nodes.first.requestFocus();
+      });
+    } else {
+      _filterButton.requestFocus();
+    }
   }
 
   Future<void> _choose() async {
@@ -155,12 +181,35 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
       canRequestFocus: false,
       onFocusChange: (focused) {
         if (!focused && _expanded) _collapse();
+        if (!focused && _filtersOpen) {
+          setState(() => _filtersOpen = false);
+        }
       },
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (_expanded)
+            if (_filtersOpen && widget.filters != null)
+              Expanded(
+                child: FocusScope(
+                  node: _panel,
+                  onKeyEvent: (_, event) {
+                    if (event is KeyDownEvent &&
+                        (event.logicalKey == LogicalKeyboardKey.goBack ||
+                            event.logicalKey == LogicalKeyboardKey.escape ||
+                            event.logicalKey ==
+                                LogicalKeyboardKey.browserBack)) {
+                      _toggleFilters();
+                      return KeyEventResult.handled;
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child:
+                      widget.filters?.call(context) ?? const SizedBox.shrink(),
+                ),
+              )
+            else if (_expanded)
               Expanded(
                 child: TvTextField(
                   controller: widget.controller,
@@ -176,10 +225,16 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
               )
             else
               Expanded(
-                child: Text(
-                  widget.category ?? '',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: SizedBox(
+                  height: 48,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      widget.category ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
               ),
             const SizedBox(width: 8),
@@ -194,6 +249,22 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
                 ),
               ),
             ),
+            if (widget.filters != null)
+              TvFocusable(
+                focusNode: _filterButton,
+                onPressed: _toggleFilters,
+                child: IconButton(
+                  tooltip: _filtersOpen
+                      ? 'Chiudi filtri'
+                      : 'Filtri e categorie',
+                  onPressed: _toggleFilters,
+                  icon: Icon(
+                    _filtersOpen
+                        ? Icons.close_rounded
+                        : Icons.filter_list_rounded,
+                  ),
+                ),
+              ),
             TvFocusable(
               focusNode: _sort,
               onPressed: _choose,

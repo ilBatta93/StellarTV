@@ -73,7 +73,11 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
     final nodes = _tools.traversalDescendants.where(
       (n) => n.debugLabel == 'catalogSearch',
     );
-    if (nodes.isNotEmpty) nodes.first.requestFocus();
+    if (nodes.isNotEmpty) {
+      nodes.first.requestFocus();
+    } else {
+      _first(_tools);
+    }
   }
 
   bool _key(KeyEvent event) {
@@ -86,6 +90,10 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
     }
     final primary = FocusManager.instance.primaryFocus;
     if (primary == null) return false;
+    if (!primary.ancestors.contains(_tools) &&
+        !primary.ancestors.contains(_filters) &&
+        !primary.ancestors.contains(_items))
+      return false;
     if (primary.context
             ?.findAncestorStateOfType<ScaffoldState>()
             ?.isDrawerOpen ==
@@ -95,11 +103,41 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
     final up = event.logicalKey == LogicalKeyboardKey.arrowUp;
     final down = event.logicalKey == LogicalKeyboardKey.arrowDown;
     if (!up && !down) return false;
+    final panel = primary.ancestors
+        .where((n) => n.debugLabel == 'catalog panel')
+        .firstOrNull;
+    if (panel != null) {
+      final nodes = panel.traversalDescendants
+          .where((n) => n.canRequestFocus && !n.skipTraversal)
+          .toList();
+      final y = primary.rect.center.dy;
+      final hasRow = nodes.any(
+        (n) => up ? n.rect.center.dy < y - 5 : n.rect.center.dy > y + 5,
+      );
+      if (hasRow) return false;
+      if (up) {
+        _search();
+      } else {
+        _first(_items);
+      }
+      return true;
+    }
     if (primary.ancestors.contains(_tools)) {
       if (up) {
-        TvCatalogMenu.focus(context);
+        if (context.getInheritedWidgetOfExactType<TvCatalogMenu>() != null) {
+          TvCatalogMenu.focus(context);
+        } else {
+          return false;
+        }
       } else {
-        _first(_filters.traversalDescendants.isEmpty ? _items : _filters);
+        final panels = _tools.descendants.whereType<FocusScopeNode>().where(
+          (n) => n.debugLabel == 'catalog panel',
+        );
+        if (panels.isNotEmpty) {
+          _first(panels.first);
+        } else {
+          _first(_filters.traversalDescendants.isEmpty ? _items : _filters);
+        }
       }
       return true;
     }
