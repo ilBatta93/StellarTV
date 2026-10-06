@@ -11,16 +11,22 @@ import '../screens/title_detail_screen.dart';
 
 /// Plays a channel. For series episodes [queue] is the ordered episode list
 /// used by "Episodio successivo"; when omitted the player loads it itself.
-void playChannel(BuildContext context, Channel channel,
-    {Duration? startAt, List<Channel>? queue, bool replace = false}) {
+void playChannel(
+  BuildContext context,
+  Channel channel, {
+  Duration? startAt,
+  List<Channel>? queue,
+  bool replace = false,
+}) {
   if (channel.isSeriesFolder) {
     openChannel(context, channel);
     return;
   }
   context.read<HistoryProvider>().recordStart(channel);
   final route = MaterialPageRoute(
-      builder: (_) =>
-          PlayerScreen(channel: channel, startAt: startAt, queue: queue));
+    builder: (_) =>
+        PlayerScreen(channel: channel, startAt: startAt, queue: queue),
+  );
   if (replace) {
     Navigator.pushReplacement(context, route);
   } else {
@@ -29,10 +35,16 @@ void playChannel(BuildContext context, Channel channel,
 }
 
 /// Opens the combined series page (plot, cast and seasons/episodes).
-void openSeries(BuildContext context, Channel channel,
-    {TmdbItem? item, bool replace = false}) {
+void openSeries(
+  BuildContext context,
+  Channel channel, {
+  TmdbItem? item,
+  bool replace = false,
+}) {
   final route = MaterialPageRoute(
-    settings: RouteSettings(name: titleRouteName(channel.seriesKey ?? channel.id)),
+    settings: RouteSettings(
+      name: titleRouteName(channel.seriesKey ?? channel.id),
+    ),
     builder: (_) => SeriesDetailScreen(
       series: channel.copyWith(
         isSeriesFolder: true,
@@ -48,20 +60,23 @@ void openSeries(BuildContext context, Channel channel,
   }
 }
 
-void openChannel(BuildContext context, Channel channel, {bool replace = false}) {
+void openChannel(
+  BuildContext context,
+  Channel channel, {
+  bool replace = false,
+}) {
   if (channel.type == ContentType.live) {
     playChannel(context, channel);
     return;
   }
-  if (channel.type == ContentType.series ||
-      channel.type == ContentType.anime) {
+  if (channel.type == ContentType.series || channel.type == ContentType.anime) {
     openSeries(context, channel, replace: replace);
     return;
   }
   final route = MaterialPageRoute(
-      settings: RouteSettings(name: titleRouteName(channel.id)),
-      builder: (_) => TitleDetailScreen(channel: channel),
-    );
+    settings: RouteSettings(name: titleRouteName(channel.id)),
+    builder: (_) => TitleDetailScreen(channel: channel),
+  );
   if (replace) {
     Navigator.pushReplacement(context, route);
   } else {
@@ -72,6 +87,41 @@ void openChannel(BuildContext context, Channel channel, {bool replace = false}) 
 /// Route name of a title page, used by the player's "Scheda titolo" button
 /// to go back to the page it was opened from instead of opening a copy.
 String titleRouteName(String id) => 'title:$id';
+
+/// Keeps track of the pages currently open, so the player can go back to a
+/// title page that is already there (instant) instead of rebuilding it.
+class OpenRoutesObserver extends NavigatorObserver {
+  OpenRoutesObserver._();
+  static final OpenRoutesObserver instance = OpenRoutesObserver._();
+
+  final List<Route<dynamic>> _routes = [];
+
+  bool containsNamed(String name) =>
+      _routes.any((r) => r.settings.name == name && r.isActive);
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _routes.add(route);
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _routes.remove(route);
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _routes.remove(route);
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    final i = oldRoute == null ? -1 : _routes.indexOf(oldRoute);
+    if (i >= 0 && newRoute != null) {
+      _routes[i] = newRoute;
+    } else {
+      if (oldRoute != null) _routes.remove(oldRoute);
+      if (newRoute != null) _routes.add(newRoute);
+    }
+  }
+}
 
 void openTmdbItem(BuildContext context, TmdbItem item) {
   if (item.contentType != ContentType.movie) {

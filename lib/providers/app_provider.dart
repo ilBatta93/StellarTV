@@ -152,8 +152,15 @@ class AppProvider extends ChangeNotifier {
 
   Channel? channelById(String id) {
     final index = _channelIndex ??= {for (final c in _allChannels) c.id: c};
-    return index[id];
+    return index[id] ?? _episodeIndex[id];
   }
+
+  /// Episodes loaded when a series page opens. Kept apart from the catalog:
+  /// adding them to the full channel list re-filtered and re-grouped the whole
+  /// playlist at every series opening (slow, and it made TV boxes run out of
+  /// memory and close).
+  final Map<String, Channel> _episodeIndex = {};
+  static const _maxIndexedEpisodes = 4000;
 
   Timer? _warmUpTimer;
 
@@ -168,7 +175,47 @@ class AppProvider extends ChangeNotifier {
       });
     }
     _applyAdultFilter();
+    _schedulePrewarm();
   }
+
+  Timer? _prewarmTimer;
+
+  /// Builds the Film/Serie TV lists in small steps while the user is still on
+  /// the Home, so opening those tabs (above all right after launch) no longer
+  /// waits for the whole playlist to be grouped.
+  void _schedulePrewarm() {
+    _prewarmTimer?.cancel();
+    if (_rawChannels.isEmpty) return;
+    _prewarmTimer = Timer(
+      const Duration(seconds: 4),
+      () => unawaited(_prewarm()),
+    );
+  }
+
+  Future<void> _prewarm() async {
+    final snapshot = _allChannels;
+    if (snapshot.isEmpty) return;
+    final steps = <void Function()>[
+      () => groupedCatalog(ContentType.movie),
+      () => recentEntries(ContentType.movie),
+      () => catalogOf(ContentType.series),
+      () => groupedCatalog(ContentType.series),
+      () => recentEntries(ContentType.series),
+      () => _titleIndex ??= _buildTitleIndex(),
+      () => allEntries(ContentType.movie),
+      () => allEntries(ContentType.series),
+    ];
+    for (final step in steps) {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      if (!identical(snapshot, _allChannels)) return;
+      step();
+    }
+  }
+
+  /// Bumped when new TMDB genres arrive, so pages can cache what they derive
+  /// from them (e.g. the genre bar) between two updates.
+  int _titleInfoVersion = 0;
+  int get titleInfoVersion => _titleInfoVersion;
 
   void _applyAdultFilter() {
     if (_kidsMode) _kids.request(_rawChannels);
@@ -196,6 +243,7 @@ class AppProvider extends ChangeNotifier {
       });
     }
     _applyAdultFilter();
+    _schedulePrewarm();
     notifyListeners();
   }
 
@@ -211,6 +259,7 @@ class AppProvider extends ChangeNotifier {
     _kidsRefresh = Timer(
       _kidsMode ? const Duration(seconds: 3) : const Duration(seconds: 30),
       () {
+        _titleInfoVersion++;
         if (_kidsMode) _applyAdultFilter();
         notifyListeners();
       },
@@ -499,11 +548,15 @@ class AppProvider extends ChangeNotifier {
 
   void indexEpisodes(List<Channel> episodes) {
     if (episodes.isEmpty) return;
-    final ids = {for (final e in episodes) e.id};
-    _setChannels([
-      ..._rawChannels.where((c) => !ids.contains(c.id)),
-      ...episodes,
-    ]);
+    for (final e in episodes) {
+      _episodeIndex.remove(e.id);
+      _episodeIndex[e.id] = e;
+    }
+    // Oldest series first out: the map keeps insertion order.
+    while (_episodeIndex.length > _maxIndexedEpisodes) {
+      _episodeIndex.remove(_episodeIndex.keys.first);
+    }
+    _favoritesCache = null;
   }
 
   Future<SeriesDetails> loadSeriesDetails(Channel series) async {
@@ -1033,5 +1086,13 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
     await _favoritesService.saveFavoriteIds(ids);
     unawaited(_mirrorChannelFavorite(channel).catchError((_) {}));
+  }
+
+  @override
+  void dispose() {
+    _prewarmTimer?.cancel();
+    _warmUpTimer?.cancel();
+    _kidsRefresh?.cancel();
+    super.dispose();
   }
 }

@@ -663,6 +663,15 @@ class _PlayerScreenState extends State<PlayerScreen>
     final key = _isEpisode
         ? (widget.channel.seriesKey ?? widget.channel.id)
         : widget.channel.id;
+    // The title page is still open below the player: just go back to it,
+    // without rebuilding it (and reloading its episodes and pictures).
+    final name = titleRouteName(key);
+    if (OpenRoutesObserver.instance.containsNamed(name)) {
+      navigator.popUntil(
+        (route) => route.settings.name == name || route.isFirst,
+      );
+      return;
+    }
     final target = _isEpisode
         ? (app.seriesFolderFor(key) ??
               Channel(

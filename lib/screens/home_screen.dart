@@ -402,6 +402,7 @@ class _TvNavPill extends StatefulWidget {
 
 class _TvNavPillState extends State<_TvNavPill> {
   bool _focused = false;
+  bool _pressed = false;
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     final k = event.logicalKey;
@@ -411,7 +412,13 @@ class _TvNavPillState extends State<_TvNavPill> {
         k == LogicalKeyboardKey.numpadEnter ||
         k == LogicalKeyboardKey.gameButtonA;
     if (!ok) return KeyEventResult.ignored;
-    if (event is KeyUpEvent) widget.onPressed();
+    // Only a full press on this pill: a key up left over from a closed
+    // panel or page must not switch tab.
+    if (event is KeyDownEvent) _pressed = true;
+    if (event is KeyUpEvent) {
+      if (_pressed) widget.onPressed();
+      _pressed = false;
+    }
     return KeyEventResult.handled;
   }
 
@@ -427,7 +434,10 @@ class _TvNavPillState extends State<_TvNavPill> {
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
       onKeyEvent: _onKey,
-      onFocusChange: (v) => setState(() => _focused = v),
+      onFocusChange: (v) => setState(() {
+        _focused = v;
+        if (!v) _pressed = false;
+      }),
       child: GestureDetector(
         onTap: widget.onPressed,
         child: Container(

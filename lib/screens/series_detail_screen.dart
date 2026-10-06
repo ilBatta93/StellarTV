@@ -15,6 +15,7 @@ import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
 import '../services/device_type_service.dart';
 import '../widgets/tv_focusable.dart';
+import '../widgets/tv_detail_backdrop.dart';
 
 class SeriesDetailScreen extends StatefulWidget {
   final Channel series;
@@ -112,12 +113,16 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         ? seasons[_selectedSeason]
         : null;
 
-    return Scaffold(
-      body: CustomScrollView(
-        // TV: every section stays built, so going up always reaches the
-        // title and the buttons at the top of the page.
-        cacheExtent: DeviceTypeService.isTv ? 4000 : null,
-        slivers: [
+    final scroll = CustomScrollView(
+      // TV: every section stays built, so going up always reaches the
+      // title and the buttons at the top of the page.
+      cacheExtent: DeviceTypeService.isTv ? 1200 : null,
+      slivers: [
+        if (DeviceTypeService.isTv)
+          SliverToBoxAdapter(
+            child: SizedBox(height: TvDetailBackdrop.topSpace(context)),
+          )
+        else
           SliverAppBar(
             pinned: !DeviceTypeService.isTv,
             automaticallyImplyLeading: !DeviceTypeService.isTv,
@@ -160,170 +165,168 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
               ),
             ),
           ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  series.displaySeriesName,
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _Chip(label: 'Serie TV'),
+                    if (seasons.isNotEmpty)
+                      _Chip(label: '${seasons.length} stagioni'),
+                    if (series.episodeCount > 0)
+                      _Chip(label: '${series.episodeCount} episodi'),
+                    _Chip(label: series.group),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (DeviceTypeService.isTv) ...[
+                  _buildTvActions(context, isFav),
+                  const SizedBox(height: 16),
+                ],
+                if (plot.trim().isNotEmpty) ...[
+                  Text('Trama', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  Text(plot, style: Theme.of(context).textTheme.bodyMedium),
+                  const SizedBox(height: 8),
+                ],
+              ],
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(child: CastRow(cast: _cast)),
+        const SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Text(
+              'Stagioni ed episodi',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+        if (_loading)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    series.displaySeriesName,
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _Chip(label: 'Serie TV'),
-                      if (seasons.isNotEmpty)
-                        _Chip(label: '${seasons.length} stagioni'),
-                      if (series.episodeCount > 0)
-                        _Chip(label: '${series.episodeCount} episodi'),
-                      _Chip(label: series.group),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  if (DeviceTypeService.isTv) ...[
-                    _buildTvActions(context, isFav),
-                    const SizedBox(height: 16),
-                  ],
-                  if (plot.trim().isNotEmpty) ...[
-                    Text(
-                      'Trama',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(plot, style: Theme.of(context).textTheme.bodyMedium),
-                    const SizedBox(height: 8),
-                  ],
-                ],
+              padding: const EdgeInsets.all(32),
+              child: Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
               ),
             ),
-          ),
-          SliverToBoxAdapter(child: CastRow(cast: _cast)),
+          )
+        else if (_error != null)
+          SliverToBoxAdapter(
+            child: EmptyState(
+              icon: Icons.error_outline_rounded,
+              title: _error!,
+              message: 'Controlla la connessione e riprova.',
+              action: ElevatedButton.icon(
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Riprova'),
+                onPressed: _load,
+              ),
+            ),
+          )
+        else if (currentSeason == null)
           const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: Text(
-                'Stagioni ed episodi',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
+            child: EmptyState(
+              icon: Icons.tv_off_rounded,
+              title: 'Nessun episodio',
+              message: 'Questa serie non ha episodi disponibili.',
+            ),
+          )
+        else ...[
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 44,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                scrollDirection: Axis.horizontal,
+                itemCount: seasons.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final selected = i == _selectedSeason;
+                  return TvFocusable(
+                    onPressed: () => setState(() => _selectedSeason = i),
+                    child: ChoiceChip(
+                      label: Text(seasons[i].name),
+                      selected: selected,
+                      onSelected: (_) => setState(() => _selectedSeason = i),
+                      labelStyle: TextStyle(
+                        color: selected
+                            ? Colors.white
+                            : AppColors.textSecondary,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                      selectedColor: AppColors.primary,
+                      backgroundColor: AppColors.surface,
+                      side: BorderSide(
+                        color: selected ? AppColors.primary : AppColors.border,
+                      ),
+                      showCheckmark: false,
+                    ),
+                  );
+                },
               ),
             ),
           ),
-          if (_loading)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
+          SliverList.builder(
+            itemCount: currentSeason.episodes.length,
+            itemBuilder: (context, i) {
+              final ep = currentSeason.episodes[i];
+              final history = context.watch<HistoryProvider>();
+              final entry = history.entryFor(ep.channel.id);
+              return _EpisodeTile(
+                episode: ep,
+                progress: entry?.isWatched == true ? null : entry?.progress,
+                watched: entry?.isWatched ?? false,
+                onToggleWatched: () {
+                  final h = context.read<HistoryProvider>();
+                  if (entry?.isWatched ?? false) {
+                    h.markUnwatched(ep.channel.id);
+                  } else {
+                    h.markWatched(ep.channel, duration: ep.duration);
+                  }
+                },
+                onTap: () => playChannel(
+                  context,
+                  ep.channel,
+                  queue: [
+                    for (final e in _details?.allEpisodes ?? const [])
+                      e.channel,
+                  ],
+                  startAt: context
+                      .read<HistoryProvider>()
+                      .entryFor(ep.channel.id)
+                      ?.resumePosition,
                 ),
-              ),
-            )
-          else if (_error != null)
-            SliverToBoxAdapter(
-              child: EmptyState(
-                icon: Icons.error_outline_rounded,
-                title: _error!,
-                message: 'Controlla la connessione e riprova.',
-                action: ElevatedButton.icon(
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Riprova'),
-                  onPressed: _load,
-                ),
-              ),
-            )
-          else if (currentSeason == null)
-            const SliverToBoxAdapter(
-              child: EmptyState(
-                icon: Icons.tv_off_rounded,
-                title: 'Nessun episodio',
-                message: 'Questa serie non ha episodi disponibili.',
-              ),
-            )
-          else ...[
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 44,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: seasons.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (context, i) {
-                    final selected = i == _selectedSeason;
-                    return TvFocusable(
-                      onPressed: () => setState(() => _selectedSeason = i),
-                      child: ChoiceChip(
-                        label: Text(seasons[i].name),
-                        selected: selected,
-                        onSelected: (_) => setState(() => _selectedSeason = i),
-                        labelStyle: TextStyle(
-                          color: selected
-                              ? Colors.white
-                              : AppColors.textSecondary,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                        ),
-                        selectedColor: AppColors.primary,
-                        backgroundColor: AppColors.surface,
-                        side: BorderSide(
-                          color: selected
-                              ? AppColors.primary
-                              : AppColors.border,
-                        ),
-                        showCheckmark: false,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            SliverList.builder(
-              itemCount: currentSeason.episodes.length,
-              itemBuilder: (context, i) {
-                final ep = currentSeason.episodes[i];
-                final history = context.watch<HistoryProvider>();
-                final entry = history.entryFor(ep.channel.id);
-                return _EpisodeTile(
-                  episode: ep,
-                  progress: entry?.isWatched == true ? null : entry?.progress,
-                  watched: entry?.isWatched ?? false,
-                  onToggleWatched: () {
-                    final h = context.read<HistoryProvider>();
-                    if (entry?.isWatched ?? false) {
-                      h.markUnwatched(ep.channel.id);
-                    } else {
-                      h.markWatched(ep.channel, duration: ep.duration);
-                    }
-                  },
-                  onTap: () => playChannel(
-                    context,
-                    ep.channel,
-                    queue: [
-                      for (final e in _details?.allEpisodes ?? const [])
-                        e.channel,
-                    ],
-                    startAt: context
-                        .read<HistoryProvider>()
-                        .entryFor(ep.channel.id)
-                        ?.resumePosition,
-                  ),
-                );
-              },
-            ),
-          ],
-          if (_similar.isNotEmpty)
-            SliverToBoxAdapter(child: _buildSimilar(context)),
-          const SliverToBoxAdapter(child: SizedBox(height: 32)),
+              );
+            },
+          ),
         ],
-      ),
+        if (_similar.isNotEmpty)
+          SliverToBoxAdapter(child: _buildSimilar(context)),
+        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+      ],
     );
+    if (DeviceTypeService.isTv) {
+      return TvDetailBackdrop(image: image, child: scroll);
+    }
+    return Scaffold(body: scroll);
   }
 
   /// Episode to start from: the one in progress, otherwise the first one

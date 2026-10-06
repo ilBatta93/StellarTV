@@ -7,6 +7,7 @@ import '../providers/profile_provider.dart';
 import '../services/profile_service.dart';
 import '../widgets/pin_dialog.dart';
 import '../theme/app_theme.dart';
+import '../widgets/settings_tiles.dart';
 import '../widgets/brand_logo.dart';
 import '../services/device_type_service.dart';
 import '../widgets/tv_focusable.dart';
@@ -414,15 +415,18 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
             ],
           ),
           const SizedBox(height: 12),
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            value: _isKids,
-            activeThumbColor: AppColors.primary,
-            onChanged: (v) => setState(() => _isKids = v),
-            title: const Text('Profilo bambini'),
-            subtitle: const Text(
-              'Mostra solo canali, film e serie per bambini (cartoni, animazione, famiglia).',
-              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+          tvSettingsRow(
+            onPressed: () => setState(() => _isKids = !_isKids),
+            child: SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              value: _isKids,
+              activeThumbColor: AppColors.primary,
+              onChanged: (v) => setState(() => _isKids = v),
+              title: const Text('Profilo bambini'),
+              subtitle: const Text(
+                'Mostra solo canali, film e serie per bambini (cartoni, animazione, famiglia).',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -501,21 +505,26 @@ class _IconOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
+    return TvFocusable(
+      onPressed: onTap,
+      focusedScale: 1.12,
       borderRadius: BorderRadius.circular(10),
-      child: Container(
-        width: 46,
-        height: 46,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? AppColors.primary : Colors.transparent,
-            width: 2,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? AppColors.primary : Colors.transparent,
+              width: 2,
+            ),
           ),
+          child: Icon(icon, color: color, size: 24),
         ),
-        child: Icon(icon, color: color, size: 24),
       ),
     );
   }
@@ -534,18 +543,23 @@ class _ColorOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: selected ? Colors.white : Colors.transparent,
-            width: 3,
+    return TvFocusable(
+      onPressed: onTap,
+      focusedScale: 1.12,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? Colors.white : Colors.transparent,
+              width: 3,
+            ),
           ),
         ),
       ),

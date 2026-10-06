@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'navigation/app_routes.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -190,6 +191,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
               isTv: DeviceTypeService.isTv,
             ),
             themeMode: ThemeMode.dark,
+            navigatorObservers: [OpenRoutesObserver.instance],
             home: const SplashScreen(),
           );
         },

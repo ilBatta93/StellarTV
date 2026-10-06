@@ -289,6 +289,10 @@ class _CatalogPageState extends State<CatalogPage> {
     ContentType.anime => 'anime',
   };
 
+  Map<int, int>? _genreCounts;
+  List<CatalogGroup>? _genreCountsGroups;
+  int _genreCountsVersion = -1;
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -339,7 +343,13 @@ class _CatalogPageState extends State<CatalogPage> {
 
     if (!_infoRequested) {
       _infoRequested = true;
-      app.requestTitleInfo(app.catalogOf(widget.type));
+      // After the first frames: the tab opens first, the genre check
+      // (which walks the whole catalog) starts a moment later.
+      Future<void>.delayed(const Duration(seconds: 2), () {
+        if (!mounted) return;
+        final provider = context.read<AppProvider>();
+        provider.requestTitleInfo(provider.catalogOf(widget.type));
+      });
     }
 
     final selected = _selectedCategory;
@@ -437,13 +447,23 @@ class _CatalogPageState extends State<CatalogPage> {
   /// One-genre chip bar; only genres that exist in the playlist are shown.
   Widget _buildGenreBar(AppProvider app, List<CatalogGroup> groups) {
     final names = _genreNames;
-    final counts = <int, int>{};
-    for (final g in groups) {
-      for (final e in g.entries) {
-        for (final id in app.genresOf(e.primary) ?? const <int>[]) {
-          if (names.containsKey(id)) counts[id] = (counts[id] ?? 0) + 1;
+    // Counting genres walks the whole catalog: only redo it when the catalog
+    // or the TMDB genres changed, not at every rebuild of the page.
+    var counts = _genreCounts;
+    if (counts == null ||
+        !identical(_genreCountsGroups, groups) ||
+        _genreCountsVersion != app.titleInfoVersion) {
+      counts = <int, int>{};
+      for (final g in groups) {
+        for (final e in g.entries) {
+          for (final id in app.genresOf(e.primary) ?? const <int>[]) {
+            if (names.containsKey(id)) counts[id] = (counts[id] ?? 0) + 1;
+          }
         }
       }
+      _genreCounts = counts;
+      _genreCountsGroups = groups;
+      _genreCountsVersion = app.titleInfoVersion;
     }
     if (counts.isEmpty) return const SizedBox.shrink();
     final ids = counts.keys.toList()

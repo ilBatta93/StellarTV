@@ -44,6 +44,21 @@ class AppTheme {
           ? const VisualDensity(horizontal: -1, vertical: -1)
           : VisualDensity.standard,
       fontFamily: 'Manrope',
+      // TV: pages change instantly. The animated zoom painted the old and the
+      // new page together, which on TV boxes was slow, left both visible for
+      // a moment (e.g. the Home behind the player) and wasted memory.
+      pageTransitionsTheme: isTv
+          ? const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.android: _InstantPageTransitionsBuilder(),
+                TargetPlatform.iOS: _InstantPageTransitionsBuilder(),
+                TargetPlatform.fuchsia: _InstantPageTransitionsBuilder(),
+                TargetPlatform.linux: _InstantPageTransitionsBuilder(),
+                TargetPlatform.macOS: _InstantPageTransitionsBuilder(),
+                TargetPlatform.windows: _InstantPageTransitionsBuilder(),
+              },
+            )
+          : null,
       colorScheme: ColorScheme.dark(
         primary: accent,
         secondary: AppColors.secondary,
@@ -247,4 +262,24 @@ class AppTheme {
       dividerTheme: const DividerThemeData(color: AppColors.card, thickness: 1),
     );
   }
+}
+
+/// TV only: no page animation at all.
+class _InstantPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _InstantPageTransitionsBuilder();
+
+  @override
+  Duration get transitionDuration => Duration.zero;
+
+  @override
+  Duration get reverseTransitionDuration => Duration.zero;
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => child;
 }

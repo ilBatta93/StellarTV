@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/content_type.dart';
 import '../providers/app_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/settings_tiles.dart';
 import '../widgets/section_row.dart';
 
 /// Per-type category visibility editor: switch a category off and it
@@ -84,30 +85,55 @@ class _TypeTab extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         for (final c in categories)
-          SwitchListTile(
-            value: !hidden.contains(c),
-            onChanged: (visible) async {
-              final next = [...app.hiddenCategoriesOf(type)];
-              if (visible) {
-                next.remove(c);
-              } else if (!next.contains(c)) {
-                next.add(c);
-              }
-              await context.read<AppProvider>().setHiddenCategories(type, next);
-            },
-            title: Text(
-              c,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14),
+          tvSettingsRow(
+            onPressed: () => _toggle(context, app, c, hidden.contains(c)),
+            child: SwitchListTile(
+              value: !hidden.contains(c),
+              onChanged: (visible) async {
+                final next = [...app.hiddenCategoriesOf(type)];
+                if (visible) {
+                  next.remove(c);
+                } else if (!next.contains(c)) {
+                  next.add(c);
+                }
+                await context.read<AppProvider>().setHiddenCategories(
+                  type,
+                  next,
+                );
+              },
+              title: Text(
+                c,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14),
+              ),
+              subtitle: hidden.contains(c)
+                  ? const Text(
+                      'Nascosta',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                      ),
+                    )
+                  : null,
             ),
-            subtitle: hidden.contains(c)
-                ? const Text('Nascosta',
-                    style: TextStyle(
-                        color: AppColors.textMuted, fontSize: 11))
-                : null,
           ),
       ],
     );
+  }
+
+  Future<void> _toggle(
+    BuildContext context,
+    AppProvider app,
+    String category,
+    bool visible,
+  ) async {
+    final next = [...app.hiddenCategoriesOf(type)];
+    if (visible) {
+      next.remove(category);
+    } else if (!next.contains(category)) {
+      next.add(category);
+    }
+    await app.setHiddenCategories(type, next);
   }
 }

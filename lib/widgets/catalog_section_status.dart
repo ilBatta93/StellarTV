@@ -8,6 +8,7 @@ import '../services/device_type_service.dart';
 import '../services/xtream_downloader.dart';
 import '../theme/app_theme.dart';
 import 'tv_focusable.dart';
+import 'settings_tiles.dart';
 
 /// Wraps a Diretta / Film / Serie TV page: shows live download progress
 /// while the section is empty, a retry screen when it failed and a slim
@@ -28,7 +29,10 @@ class CatalogSectionFrame extends StatelessWidget {
       (app) => app.catalogState(type),
     );
     if (state.isPending && !state.hasContent) {
-      return CatalogLoadingView(type: type, queued: state.phase == CatalogLoadPhase.queued);
+      return CatalogLoadingView(
+        type: type,
+        queued: state.phase == CatalogLoadPhase.queued,
+      );
     }
     if (state.phase == CatalogLoadPhase.failed && !state.hasContent) {
       return CatalogFailureView(type: type, message: state.error);
@@ -57,7 +61,11 @@ String _sectionName(ContentType type) => switch (type) {
 class CatalogLoadingView extends StatelessWidget {
   final ContentType type;
   final bool queued;
-  const CatalogLoadingView({super.key, required this.type, this.queued = false});
+  const CatalogLoadingView({
+    super.key,
+    required this.type,
+    this.queued = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +105,13 @@ class CatalogLoadingView extends StatelessWidget {
                         : label.isEmpty
                         ? 'In attesa della risposta del server…'
                         : label,
-                    key: ValueKey(queued ? 'q' : label.isEmpty ? 'w' : 'p'),
+                    key: ValueKey(
+                      queued
+                          ? 'q'
+                          : label.isEmpty
+                          ? 'w'
+                          : 'p',
+                    ),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: AppColors.textMuted,
@@ -193,7 +207,11 @@ class CatalogStaleBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.cloud_off_rounded, size: 16, color: AppColors.primaryLight),
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 16,
+              color: AppColors.primaryLight,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Tooltip(
@@ -223,7 +241,11 @@ class CatalogStaleBar extends StatelessWidget {
 class CatalogRetryButton extends StatelessWidget {
   final ContentType type;
   final bool prominent;
-  const CatalogRetryButton({super.key, required this.type, this.prominent = false});
+  const CatalogRetryButton({
+    super.key,
+    required this.type,
+    this.prominent = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -239,10 +261,15 @@ class CatalogRetryButton extends StatelessWidget {
         ? SizedBox(
             width: 14,
             height: 14,
-            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.primary,
+            ),
           )
         : const Icon(Icons.refresh_rounded, size: 18);
-    final label = Text(pending ? 'Caricamento…' : 'Riprova ${_sectionName(type)}');
+    final label = Text(
+      pending ? 'Caricamento…' : 'Riprova ${_sectionName(type)}',
+    );
     final button = prominent
         ? FilledButton.icon(
             onPressed: pending ? null : retry,
@@ -252,7 +279,9 @@ class CatalogRetryButton extends StatelessWidget {
               backgroundColor: AppColors.primary,
               foregroundColor: AppColors.background,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           )
         : TextButton.icon(
@@ -285,7 +314,8 @@ class PlaylistStatusList extends StatelessWidget {
           (ContentType.movie, Icons.movie_outlined),
           (ContentType.series, Icons.video_library_outlined),
         ].indexed) ...[
-          if (i > 0) const Divider(height: 1, indent: 56, color: AppColors.border),
+          if (i > 0)
+            const Divider(height: 1, indent: 56, color: AppColors.border),
           _SectionTile(type: entry.$1, icon: entry.$2),
         ],
       ],
@@ -317,7 +347,9 @@ class _SectionTile extends StatelessWidget {
                 : 'Caricamento…',
           CatalogLoadPhase.queued => 'In coda',
           CatalogLoadPhase.ready =>
-            count > 0 ? '${CatalogProgress.formatCount(count)} titoli · aggiornata' : 'Nessun contenuto',
+            count > 0
+                ? '${CatalogProgress.formatCount(count)} titoli · aggiornata'
+                : 'Nessun contenuto',
           CatalogLoadPhase.cached =>
             'Copia salvata · ${state.error ?? 'aggiornamento non riuscito'}',
           CatalogLoadPhase.failed => state.error ?? 'Non disponibile',
@@ -328,23 +360,35 @@ class _SectionTile extends StatelessWidget {
           CatalogLoadPhase.cached => AppColors.primaryLight,
           _ => AppColors.textSecondary,
         };
-        return ListTile(
-          leading: Icon(icon, color: color),
-          title: Text(_sectionName(type), style: const TextStyle(fontSize: 15)),
-          subtitle: Text(
-            subtitle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 12.5),
+        return tvSettingsRow(
+          onPressed: state.isPending ? null : () => app.retrySection(type),
+          child: ListTile(
+            leading: Icon(icon, color: color),
+            title: Text(
+              _sectionName(type),
+              style: const TextStyle(fontSize: 15),
+            ),
+            subtitle: Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 12.5,
+              ),
+            ),
+            trailing: state.isPending
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
+                  )
+                : Icon(Icons.refresh_rounded, color: AppColors.primary),
+            onTap: state.isPending ? null : () => app.retrySection(type),
           ),
-          trailing: state.isPending
-              ? SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                )
-              : Icon(Icons.refresh_rounded, color: AppColors.primary),
-          onTap: state.isPending ? null : () => app.retrySection(type),
         );
       },
     );

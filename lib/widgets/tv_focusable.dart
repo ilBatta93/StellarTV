@@ -39,6 +39,12 @@ class _TvFocusableState extends State<TvFocusable> {
   bool _focused = false;
   bool _longFired = false;
 
+  /// OK went down on THIS item. A key up alone is ignored: when OK opens a
+  /// panel or a page on key down (player buttons, lists), the key up lands
+  /// on the first item of the new panel and used to select it at once,
+  /// closing the panel unless OK was held.
+  bool _pressed = false;
+
   static bool _isOk(LogicalKeyboardKey key) =>
       key == LogicalKeyboardKey.select ||
       key == LogicalKeyboardKey.enter ||
@@ -49,9 +55,11 @@ class _TvFocusableState extends State<TvFocusable> {
     if (!_isOk(event.logicalKey)) return KeyEventResult.ignored;
     if (event is KeyDownEvent) {
       _longFired = false;
+      _pressed = true;
       return KeyEventResult.handled;
     }
     if (event is KeyRepeatEvent) {
+      if (!_pressed) return KeyEventResult.handled;
       if (!_longFired && widget.onLongPress != null) {
         _longFired = true;
         widget.onLongPress!();
@@ -59,7 +67,9 @@ class _TvFocusableState extends State<TvFocusable> {
       return KeyEventResult.handled;
     }
     if (event is KeyUpEvent) {
-      if (!_longFired) widget.onPressed();
+      final pressed = _pressed;
+      _pressed = false;
+      if (pressed && !_longFired) widget.onPressed();
       _longFired = false;
       return KeyEventResult.handled;
     }
@@ -74,6 +84,7 @@ class _TvFocusableState extends State<TvFocusable> {
       autofocus: widget.autofocus,
       onKeyEvent: _onKey,
       onFocusChange: (value) {
+        if (!value) _pressed = false;
         if (value == _focused) return;
         setState(() => _focused = value);
         widget.onFocusChange?.call(value);

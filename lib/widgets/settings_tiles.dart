@@ -1,6 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
+import 'tv_focusable.dart';
+
+/// TV: one focus stop per settings row with the orange focus ring, scrolled
+/// into view; the row's own controls never take the focus. Touch: unchanged.
+Widget tvSettingsRow({required Widget child, VoidCallback? onPressed}) {
+  if (!DeviceTypeService.isTv || onPressed == null) return child;
+  return TvFocusable(
+    onPressed: onPressed,
+    focusedScale: 1,
+    borderRadius: BorderRadius.circular(12),
+    child: child,
+  );
+}
 
 class SettingsSection extends StatelessWidget {
   final String title;
@@ -137,14 +152,17 @@ class SettingsSwitchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SwitchListTile(
-      secondary: Icon(icon, color: AppColors.textSecondary),
-      title: _title(title, badge),
-      subtitle: _subtitle(subtitle),
-      value: value,
-      activeThumbColor: Colors.white,
-      activeTrackColor: AppColors.primary,
-      onChanged: onChanged,
+    return tvSettingsRow(
+      onPressed: () => onChanged(!value),
+      child: SwitchListTile(
+        secondary: Icon(icon, color: AppColors.textSecondary),
+        title: _title(title, badge),
+        subtitle: _subtitle(subtitle),
+        value: value,
+        activeThumbColor: Colors.white,
+        activeTrackColor: AppColors.primary,
+        onChanged: onChanged,
+      ),
     );
   }
 }
@@ -171,35 +189,41 @@ class SettingsValueTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, color: color ?? AppColors.textSecondary),
-      title: color == null
-          ? _title(title, badge)
-          : Text(title, style: TextStyle(fontSize: 15, color: color)),
-      subtitle: _subtitle(subtitle),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (value != null)
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 140),
-              child: Text(
-                value!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
+    return tvSettingsRow(
+      onPressed: onTap,
+      child: ListTile(
+        leading: Icon(icon, color: color ?? AppColors.textSecondary),
+        title: color == null
+            ? _title(title, badge)
+            : Text(title, style: TextStyle(fontSize: 15, color: color)),
+        subtitle: _subtitle(subtitle),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (value != null)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 140),
+                child: Text(
+                  value!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
                 ),
               ),
-            ),
-          if (onTap != null && color == null) ...[
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+            if (onTap != null && color == null) ...[
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textMuted,
+              ),
+            ],
           ],
-        ],
+        ),
+        onTap: onTap,
       ),
-      onTap: onTap,
     );
   }
 }
@@ -232,6 +256,19 @@ class SettingsSliderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final content = _content();
+    if (!DeviceTypeService.isTv) return content;
+    final step = divisions > 0 ? (max - min) / divisions : (max - min) / 20;
+    return _TvSliderFocus(
+      onStep: (direction) {
+        final next = (value + step * direction).clamp(min, max).toDouble();
+        if (next != value) onChanged(next);
+      },
+      child: ExcludeFocus(child: content),
+    );
+  }
+
+  Widget _content() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Column(
@@ -274,6 +311,66 @@ class SettingsSliderTile extends StatelessWidget {
   }
 }
 
+/// TV: Left/Right change the value, Up/Down move to the next setting
+/// (the plain slider used Up/Down to change the value too, so the remote
+/// could not leave it).
+class _TvSliderFocus extends StatefulWidget {
+  final Widget child;
+  final ValueChanged<int> onStep;
+  const _TvSliderFocus({required this.child, required this.onStep});
+
+  @override
+  State<_TvSliderFocus> createState() => _TvSliderFocusState();
+}
+
+class _TvSliderFocusState extends State<_TvSliderFocus> {
+  bool _focused = false;
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowLeft) {
+      widget.onStep(-1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowRight) {
+      widget.onStep(1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onKeyEvent: _onKey,
+      onFocusChange: (value) {
+        setState(() => _focused = value);
+        if (value) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || !_focused) return;
+            Scrollable.ensureVisible(
+              context,
+              duration: const Duration(milliseconds: 120),
+              alignment: 0.5,
+            );
+          });
+        }
+      },
+      child: Container(
+        foregroundDecoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _focused ? AppColors.primary : Colors.transparent,
+            width: 3,
+          ),
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 Future<T?> pickOption<T>(
   BuildContext context, {
   required String title,
@@ -307,26 +404,33 @@ Future<T?> pickOption<T>(
                 shrinkWrap: true,
                 children: [
                   for (final o in options)
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                      ),
-                      title: Text(
-                        label(o),
-                        style: TextStyle(
-                          color: o == current
-                              ? AppColors.primary
-                              : AppColors.textPrimary,
-                          fontWeight: o == current
-                              ? FontWeight.w600
-                              : FontWeight.w400,
+                    _tvOption(
+                      autofocus: o == current,
+                      onPressed: () => Navigator.pop(ctx, o),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 24,
                         ),
+                        title: Text(
+                          label(o),
+                          style: TextStyle(
+                            color: o == current
+                                ? AppColors.primary
+                                : AppColors.textPrimary,
+                            fontWeight: o == current
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
+                        ),
+                        subtitle: _subtitle(detail?.call(o)),
+                        trailing: o == current
+                            ? Icon(
+                                Icons.check_rounded,
+                                color: AppColors.primary,
+                              )
+                            : null,
+                        onTap: () => Navigator.pop(ctx, o),
                       ),
-                      subtitle: _subtitle(detail?.call(o)),
-                      trailing: o == current
-                          ? Icon(Icons.check_rounded, color: AppColors.primary)
-                          : null,
-                      onTap: () => Navigator.pop(ctx, o),
                     ),
                 ],
               ),
@@ -336,5 +440,22 @@ Future<T?> pickOption<T>(
         ),
       ),
     ),
+  );
+}
+
+/// TV: list option with focus ring; the current choice is highlighted as
+/// soon as the list opens.
+Widget _tvOption({
+  required bool autofocus,
+  required VoidCallback onPressed,
+  required Widget child,
+}) {
+  if (!DeviceTypeService.isTv) return child;
+  return TvFocusable(
+    autofocus: autofocus,
+    onPressed: onPressed,
+    focusedScale: 1,
+    borderRadius: BorderRadius.circular(10),
+    child: child,
   );
 }

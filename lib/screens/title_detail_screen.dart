@@ -16,6 +16,7 @@ import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
 import '../services/device_type_service.dart';
 import '../widgets/tv_focusable.dart';
+import '../widgets/tv_detail_backdrop.dart';
 
 class TitleDetailScreen extends StatefulWidget {
   final TmdbItem? item;
@@ -96,12 +97,16 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
     final title = item?.title ?? widget.channel!.name;
     final image = item?.backdropUrl ?? widget.channel?.logo;
 
-    return Scaffold(
-      body: CustomScrollView(
-        // TV: keep every section built so the remote can always move back
-        // up to "Guarda ora", even after scrolling far down.
-        cacheExtent: DeviceTypeService.isTv ? 4000 : null,
-        slivers: [
+    final scroll = CustomScrollView(
+      // TV: keep every section built so the remote can always move back
+      // up to "Guarda ora", even after scrolling far down.
+      cacheExtent: DeviceTypeService.isTv ? 1200 : null,
+      slivers: [
+        if (DeviceTypeService.isTv)
+          SliverToBoxAdapter(
+            child: SizedBox(height: TvDetailBackdrop.topSpace(context)),
+          )
+        else
           SliverAppBar(
             // TV: no pinned bar with a back arrow above the content (Back is
             // on the remote); going up always lands on "Guarda ora".
@@ -147,64 +152,61 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
               ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                DeviceTypeService.isTv ? 32 : 16,
-                0,
-                DeviceTypeService.isTv ? 32 : 16,
-                0,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  _Meta(item: item, channel: widget.channel),
-                  const SizedBox(height: 16),
-                  if (!DeviceTypeService.isTv)
-                    _Actions(item: item, playable: playable, variants: variants)
-                  else
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: DeviceTypeService.isTv
-                              ? 380
-                              : double.infinity,
-                        ),
-                        child: _Actions(
-                          item: item,
-                          playable: playable,
-                          variants: variants,
-                        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              DeviceTypeService.isTv ? 32 : 16,
+              0,
+              DeviceTypeService.isTv ? 32 : 16,
+              0,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 8),
+                _Meta(item: item, channel: widget.channel),
+                const SizedBox(height: 16),
+                if (!DeviceTypeService.isTv)
+                  _Actions(item: item, playable: playable, variants: variants)
+                else
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: DeviceTypeService.isTv
+                            ? 380
+                            : double.infinity,
+                      ),
+                      child: _Actions(
+                        item: item,
+                        playable: playable,
+                        variants: variants,
                       ),
                     ),
-                  if (item != null && item.overview.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Text(
-                      'Trama',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      item.overview,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
+                  ),
+                if (item != null && item.overview.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Text('Trama', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  Text(
+                    item.overview,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
-          SliverToBoxAdapter(child: _buildCast()),
-          SliverToBoxAdapter(child: _buildSimilar()),
-          const SliverToBoxAdapter(child: SizedBox(height: 32)),
-        ],
-      ),
+        ),
+        SliverToBoxAdapter(child: _buildCast()),
+        SliverToBoxAdapter(child: _buildSimilar()),
+        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+      ],
     );
+    if (DeviceTypeService.isTv) {
+      return TvDetailBackdrop(image: image, child: scroll);
+    }
+    return Scaffold(body: scroll);
   }
 
   Widget _buildCast() {
