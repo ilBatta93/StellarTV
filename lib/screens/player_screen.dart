@@ -440,7 +440,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
     _exitArmedAt = now;
     _exitTimer?.cancel();
-    setState(() => _exitPrompt = true);
+    _hideTimer?.cancel();
+    setState(() {
+      _exitPrompt = true;
+      _controlsVisible = false;
+    });
     _exitTimer = Timer(const Duration(seconds: 3), () {
       if (!mounted) return;
       setState(() {

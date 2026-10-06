@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/channel.dart';
 import '../services/catalog_rating_service.dart';
@@ -7,6 +8,7 @@ import 'tv_text_field.dart';
 
 /// Date means the provider's addition date, not the theatrical release date.
 enum CatalogSort {
+  provider('Predefinito'),
   nameAsc('A–Z'),
   nameDesc('Z–A'),
   dateAsc('Data crescente'),
@@ -24,7 +26,7 @@ List<T> sortCatalog<T>(
   double? Function(Channel)? ratingOf,
 }) {
   final list = items.toList();
-  if (order == null) return list;
+  if (order == null || order == CatalogSort.provider) return list;
   final names = <String, String>{};
   String name(Channel c) =>
       names.putIfAbsent(c.id, () => c.displaySeriesName.toLowerCase());
@@ -32,6 +34,7 @@ List<T> sortCatalog<T>(
     final ca = channel(a), cb = channel(b);
     final alpha = name(ca).compareTo(name(cb));
     final value = switch (order) {
+      CatalogSort.provider => 0,
       CatalogSort.nameAsc => alpha,
       CatalogSort.nameDesc => -alpha,
       CatalogSort.dateAsc =>
@@ -63,6 +66,7 @@ class TvCatalogToolbar extends StatefulWidget {
     required this.onChanged,
     required this.onSort,
     required this.sort,
+    this.scaffoldKey,
     this.allowRating = true,
     this.trailing,
     this.category,
@@ -72,6 +76,7 @@ class TvCatalogToolbar extends StatefulWidget {
   final ValueChanged<String> onChanged;
   final ValueChanged<CatalogSort> onSort;
   final CatalogSort? sort;
+  final GlobalKey<ScaffoldState>? scaffoldKey;
   final bool allowRating;
   final Widget? trailing;
   final String? category;
@@ -82,7 +87,7 @@ class TvCatalogToolbar extends StatefulWidget {
 class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   bool _expanded = false;
   final _field = FocusNode();
-  final _search = FocusNode();
+  final _search = FocusNode(debugLabel: 'catalogSearch');
   final _sort = FocusNode();
   @override
   void dispose() {
@@ -94,7 +99,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
 
   void _toggle() {
     if (_expanded) {
-      setState(() => _expanded = false);
+      _collapse();
       _search.requestFocus();
       return;
     }
@@ -102,6 +107,12 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) TvTextField.focusWithKeyboard(_field);
     });
+  }
+
+  void _collapse() {
+    if (!_expanded) return;
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    setState(() => _expanded = false);
   }
 
   Future<void> _choose() async {
@@ -117,12 +128,12 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
               for (final order in CatalogSort.values)
                 if (widget.allowRating || order != CatalogSort.rating)
                   TvFocusable(
-                    autofocus: order == (widget.sort ?? CatalogSort.nameAsc),
+                    autofocus: order == (widget.sort ?? CatalogSort.provider),
                     focusedScale: 1,
                     onPressed: () => Navigator.pop(ctx, order),
                     child: ListTile(
                       title: Text(order.label),
-                      trailing: widget.sort == order
+                      trailing: (widget.sort ?? CatalogSort.provider) == order
                           ? const Icon(Icons.check)
                           : null,
                       onTap: () => Navigator.pop(ctx, order),
@@ -139,51 +150,64 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-    child: Row(
-      children: [
-        if (_expanded)
-          Expanded(
-            child: TvTextField(
-              controller: widget.controller,
-              focusNode: _field,
-              onChanged: widget.onChanged,
-              decoration: InputDecoration(
-                hintText: widget.hint,
-                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+  Widget build(BuildContext context) {
+    return Focus(
+      canRequestFocus: false,
+      onFocusChange: (focused) {
+        if (!focused && _expanded) _collapse();
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+        child: Row(
+          children: [
+            if (_expanded)
+              Expanded(
+                child: TvTextField(
+                  controller: widget.controller,
+                  focusNode: _field,
+                  onChanged: widget.onChanged,
+                  clearable: true,
+                  onMoveDown: _collapse,
+                  decoration: InputDecoration(
+                    hintText: widget.hint,
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: Text(
+                  widget.category ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            const SizedBox(width: 8),
+            TvFocusable(
+              focusNode: _search,
+              onPressed: _toggle,
+              child: IconButton(
+                tooltip: _expanded ? 'Chiudi ricerca' : 'Cerca',
+                onPressed: _toggle,
+                icon: Icon(
+                  _expanded ? Icons.close_rounded : Icons.search_rounded,
+                ),
               ),
             ),
-          )
-        else
-          Expanded(
-            child: Text(
-              widget.category ?? '',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            TvFocusable(
+              focusNode: _sort,
+              onPressed: _choose,
+              child: IconButton(
+                tooltip: 'Ordina: ${widget.sort?.label ?? "Predefinito"}',
+                onPressed: _choose,
+                icon: const Icon(Icons.sort_rounded),
+              ),
             ),
-          ),
-        const SizedBox(width: 8),
-        TvFocusable(
-          focusNode: _search,
-          onPressed: _toggle,
-          child: IconButton(
-            tooltip: _expanded ? 'Chiudi ricerca' : 'Cerca',
-            onPressed: _toggle,
-            icon: Icon(_expanded ? Icons.close_rounded : Icons.search_rounded),
-          ),
+            if (widget.trailing != null)
+              widget.trailing ?? const SizedBox.shrink(),
+          ],
         ),
-        TvFocusable(
-          focusNode: _sort,
-          onPressed: _choose,
-          child: IconButton(
-            tooltip: 'Ordina: ${widget.sort?.label ?? "Predefinito"}',
-            onPressed: _choose,
-            icon: const Icon(Icons.sort_rounded),
-          ),
-        ),
-        if (widget.trailing != null) widget.trailing ?? const SizedBox.shrink(),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }

@@ -153,13 +153,22 @@ class TmdbPosterCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               item.title,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: AppColors.textPrimary,
-                fontSize: DeviceTypeService.isTv ? 13 : 13,
-                fontWeight: FontWeight.w600,
-                height: 1.2,
+                fontSize: DeviceTypeService.isTv ? 14 : 12,
+                fontWeight: DeviceTypeService.isTv
+                    ? FontWeight.w700
+                    : FontWeight.w600,
+                height: DeviceTypeService.isTv ? 1.2 : 1.1,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    offset: const Offset(0, 1),
+                    blurRadius: 2,
+                  ),
+                ],
               ),
             ),
           ],

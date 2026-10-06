@@ -11,16 +11,19 @@ import 'playback_engine.dart';
 /// mpv-backed engine (media_kit): full subtitle and multi-audio-track
 /// support for IPTV streams, far more tolerant than the old VLC engine.
 class MediaKitEngine extends PlaybackEngine {
-  MediaKitEngine({required this.url, required PlayerSettings settings})
-    : _settings = settings,
-      _player = Player(
-        configuration: PlayerConfiguration(
-          // The old value (network caching ms * 1 KB, ~1.5 MB) held about a
-          // second of HD video: any network hiccup stuttered. 32 MB minimum.
-          bufferSize: _bufferBytes(settings),
-          logLevel: MPVLogLevel.warn,
-        ),
-      ) {
+  MediaKitEngine({
+    required this.url,
+    required PlayerSettings settings,
+    this.isLive = false,
+  }) : _settings = settings,
+       _player = Player(
+         configuration: PlayerConfiguration(
+           // The old value (network caching ms * 1 KB, ~1.5 MB) held about a
+           // second of HD video: any network hiccup stuttered. 32 MB minimum.
+           bufferSize: _bufferBytes(settings, isLive),
+           logLevel: MPVLogLevel.warn,
+         ),
+       ) {
     _videoController = VideoController(
       _player,
       configuration: VideoControllerConfiguration(
@@ -29,7 +32,6 @@ class MediaKitEngine extends PlaybackEngine {
         vo: null,
       ),
     );
-    if (DeviceTypeService.isTv) unawaited(_tuneForTv());
     _player.stream.error.listen(_onError);
     _player.stream.completed.listen(_onCompleted);
     _player.stream.playing.listen((_) => _sync());
@@ -40,9 +42,10 @@ class MediaKitEngine extends PlaybackEngine {
     _sync();
   }
 
-  static int _bufferBytes(PlayerSettings settings) {
+  static int _bufferBytes(PlayerSettings settings, bool isLive) {
     const minimum = 32 * 1024 * 1024;
-    final configured = settings.networkCachingMs * 1024;
+    final configured =
+        (isLive ? settings.liveCachingMs : settings.networkCachingMs) * 1024;
     return configured < minimum ? minimum : configured;
   }
 
@@ -52,7 +55,7 @@ class MediaKitEngine extends PlaybackEngine {
   Future<void> _tuneForTv() async {
     final platform = _player.platform;
     if (platform is! NativePlayer) return;
-    const options = {
+    final options = {
       'scale': 'bilinear',
       'dscale': 'bilinear',
       'cscale': 'bilinear',
@@ -64,7 +67,7 @@ class MediaKitEngine extends PlaybackEngine {
       'interpolation': 'no',
       'video-sync': 'audio',
       'cache': 'yes',
-      'demuxer-readahead-secs': '20',
+      'demuxer-readahead-secs': isLive ? '1' : '20',
       'cache-pause-initial': 'no',
       'vd-lavc-threads': '0',
     };
@@ -75,6 +78,7 @@ class MediaKitEngine extends PlaybackEngine {
     }
   }
 
+  final bool isLive;
   final PlayerSettings _settings;
   final String url;
   late final Player _player;
@@ -154,6 +158,7 @@ class MediaKitEngine extends PlaybackEngine {
 
   @override
   Future<void> open() async {
+    if (DeviceTypeService.isTv) await _tuneForTv();
     _playing = Completer<void>();
     try {
       final configured = _settings.userAgent.trim();
@@ -165,7 +170,7 @@ class MediaKitEngine extends PlaybackEngine {
     } catch (e) {
       throw PlaybackException('$e');
     }
-    await _player.setRate(_settings.defaultSpeed);
+    await _player.setRate(isLive ? 1.0 : _settings.defaultSpeed);
     await _playing!.future.timeout(
       Duration(seconds: _settings.startTimeoutSeconds + 5),
       onTimeout: () =>

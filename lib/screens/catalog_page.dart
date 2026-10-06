@@ -11,6 +11,7 @@ import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
 import '../widgets/tv_catalog_toolbar.dart';
+import '../widgets/tv_catalog_navigation.dart';
 import '../widgets/tv_focusable.dart';
 import '../services/catalog_rating_service.dart';
 import '../widgets/tv_category_panel.dart';
@@ -275,7 +276,7 @@ class _CatalogPageState extends State<CatalogPage> {
     });
   }
 
-  CatalogSort? _sort;
+  CatalogSort? _sort = CatalogSort.provider;
   List<CatalogEntry>? _sortedSource;
   List<CatalogEntry>? _sortedEntries;
   CatalogSort? _sortedOrder;
@@ -416,7 +417,7 @@ class _CatalogPageState extends State<CatalogPage> {
                 );
               },
             ),
-      body: Column(
+      body: catalogColumn(
         children: [
           if (DeviceTypeService.isTv)
             TvCatalogToolbar(
@@ -426,6 +427,7 @@ class _CatalogPageState extends State<CatalogPage> {
               onChanged: (v) => setState(() => _query = v),
               sort: _sort,
               onSort: (value) => setState(() => _sort = value),
+              scaffoldKey: _scaffoldKey,
             )
           else
             Padding(
@@ -580,7 +582,7 @@ class _CatalogPageState extends State<CatalogPage> {
         compact: ui.compact,
       ),
       itemCount: entries.length,
-      itemBuilder: (context, i) => _entryCard(app, entries[i]),
+      itemBuilder: (context, i) => _gridItem(app, entries[i], i),
     );
   }
 
@@ -604,7 +606,7 @@ class _CatalogPageState extends State<CatalogPage> {
         compact: ui.compact,
       ),
       itemCount: entries.length,
-      itemBuilder: (context, i) => _entryCard(app, entries[i]),
+      itemBuilder: (context, i) => _gridItem(app, entries[i], i),
     );
   }
 
@@ -628,7 +630,7 @@ class _CatalogPageState extends State<CatalogPage> {
         compact: ui.compact,
       ),
       itemCount: entries.length,
-      itemBuilder: (context, i) => _entryCard(app, entries[i]),
+      itemBuilder: (context, i) => _gridItem(app, entries[i], i),
     );
   }
 
@@ -669,7 +671,7 @@ class _CatalogPageState extends State<CatalogPage> {
         compact: ui.compact,
       ),
       itemCount: matches.length,
-      itemBuilder: (context, i) => _entryCard(app, matches[i]),
+      itemBuilder: (context, i) => _gridItem(app, matches[i], i),
     );
   }
 
@@ -688,6 +690,24 @@ class _CatalogPageState extends State<CatalogPage> {
     _sortedOrder = _sort;
     _sortedVersion = service.version;
     return _sortedEntries = sortCatalog(entries, _sort, (e) => e.primary);
+  }
+
+  Widget _gridItem(AppProvider app, CatalogEntry entry, int index) =>
+      TvCatalogItem(
+        index: index,
+        columns: _columns(),
+        child: _entryCard(app, entry),
+      );
+
+  int _columns() {
+    final delegate = channelGridDelegate(widget.type);
+    final width = MediaQuery.sizeOf(context).width - 32;
+    if (delegate is SliverGridDelegateWithMaxCrossAxisExtent) {
+      return (width / (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
+          .ceil()
+          .clamp(1, 100);
+    }
+    return 1;
   }
 
   Widget _entryCard(AppProvider app, CatalogEntry entry) {

@@ -16,11 +16,11 @@ class PlaybackSession extends ChangeNotifier {
     required this.isLive,
     required this.settings,
     this.startAt,
-  })  : _candidates = liveCandidates(url, isLive),
-        speed = isLive ? 1.0 : settings.defaultSpeed,
-        fitMode = settings.fitMode,
-        subtitleDelay = Duration(milliseconds: settings.subtitleDelayMs),
-        audioDelay = Duration(milliseconds: settings.audioDelayMs);
+  }) : _candidates = liveCandidates(url, isLive),
+       speed = isLive ? 1.0 : settings.defaultSpeed,
+       fitMode = settings.fitMode,
+       subtitleDelay = Duration(milliseconds: settings.subtitleDelayMs),
+       audioDelay = Duration(milliseconds: settings.audioDelayMs);
 
   final String url;
   final bool isLive;
@@ -33,7 +33,8 @@ class PlaybackSession extends ChangeNotifier {
   String get currentUrl => _candidates[_urlIndex];
 
   static final _xtreamLive = RegExp(
-      r'^(https?://[^/]+)/(?:live/)?([^/]+)/([^/]+)/(\d+)(?:\.(m3u8|ts))?$');
+    r'^(https?://[^/]+)/(?:live/)?([^/]+)/([^/]+)/(\d+)(?:\.(m3u8|ts))?$',
+  );
 
   static List<String> liveCandidates(String url, bool isLive) {
     if (!isLive) return [url];
@@ -44,6 +45,7 @@ class PlaybackSession extends ChangeNotifier {
     final base = '${m[1]}/live/${m[2]}/${m[3]}/${m[4]}';
     return {'$base.m3u8', '$base.ts', url}.toList();
   }
+
   final PlayerSettings settings;
   final Duration? startAt;
 
@@ -92,10 +94,13 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   PlaybackEngine _create(PlayerEngineType type) => switch (type) {
-        PlayerEngineType.exo => ExoEngine(url: currentUrl, settings: settings),
-        PlayerEngineType.mediakit =>
-          MediaKitEngine(url: currentUrl, settings: settings),
-      };
+    PlayerEngineType.exo => ExoEngine(url: currentUrl, settings: settings),
+    PlayerEngineType.mediakit => MediaKitEngine(
+      url: currentUrl,
+      settings: settings,
+      isLive: isLive,
+    ),
+  };
 
   Future<void> _open(PlayerEngineType type, {Duration? resumeAt}) async {
     final gen = ++_generation;
@@ -110,10 +115,11 @@ class PlaybackSession extends ChangeNotifier {
 
     try {
       await engine.open().timeout(
-            Duration(seconds: settings.startTimeoutSeconds),
-            onTimeout: () => throw PlaybackException(
-                'Nessuna risposta dopo ${settings.startTimeoutSeconds} secondi'),
-          );
+        Duration(seconds: settings.startTimeoutSeconds),
+        onTimeout: () => throw PlaybackException(
+          'Nessuna risposta dopo ${settings.startTimeoutSeconds} secondi',
+        ),
+      );
       if (gen != _generation) return;
     } catch (e) {
       if (gen != _generation) return;
@@ -138,7 +144,10 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> _applyInitialState(
-      PlaybackEngine engine, Duration? resumeAt, int gen) async {
+    PlaybackEngine engine,
+    Duration? resumeAt,
+    int gen,
+  ) async {
     if (resumeAt != null && resumeAt > Duration.zero) {
       await _seekWhenReady(engine, resumeAt, gen);
     }
@@ -160,7 +169,10 @@ class PlaybackSession extends ChangeNotifier {
   /// ExoPlayer ignore a seek issued before the duration is known, which made
   /// "Continua a guardare" restart from the beginning; retry until it lands.
   Future<void> _seekWhenReady(
-      PlaybackEngine engine, Duration target, int gen) async {
+    PlaybackEngine engine,
+    Duration target,
+    int gen,
+  ) async {
     for (var i = 0; i < 40; i++) {
       if (gen != _generation || _disposed) return;
       if (engine.value.duration > Duration.zero) break;
@@ -180,7 +192,9 @@ class PlaybackSession extends ChangeNotifier {
       if (engine.supportsAudioTracks) {
         final audio = await engine.getAudioTracks();
         final preferred = audio
-            .where((t) => trackMatchesLanguage(t, settings.preferredAudioLanguage))
+            .where(
+              (t) => trackMatchesLanguage(t, settings.preferredAudioLanguage),
+            )
             .firstOrNull;
         if (preferred != null && !preferred.selected) {
           await engine.selectAudioTrack(preferred);
@@ -192,8 +206,10 @@ class PlaybackSession extends ChangeNotifier {
         } else {
           final subs = await engine.getSubtitleTracks();
           final preferred = subs
-              .where((t) =>
-                  trackMatchesLanguage(t, settings.preferredSubtitleLanguage))
+              .where(
+                (t) =>
+                    trackMatchesLanguage(t, settings.preferredSubtitleLanguage),
+              )
               .firstOrNull;
           if (preferred != null) await engine.selectSubtitleTrack(preferred);
         }
@@ -219,9 +235,13 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   Future<void> _handleFailure(
-      PlayerEngineType failed, String reason, Duration? resumeAt) async {
+    PlayerEngineType failed,
+    String reason,
+    Duration? resumeAt,
+  ) async {
     final lower = reason.toLowerCase();
-    final serverRefused = lower.contains('458') ||
+    final serverRefused =
+        lower.contains('458') ||
         lower.contains('-16845') ||
         lower.contains('http 403') ||
         lower.contains('forbidden');
@@ -242,7 +262,8 @@ class PlaybackSession extends ChangeNotifier {
         return;
       }
       _status = SessionStatus.failed;
-      _error = 'Il server TV ha rifiutato la connessione. Verifica che non ci '
+      _error =
+          'Il server TV ha rifiutato la connessione. Verifica che non ci '
           'siano altri dispositivi collegati con lo stesso abbonamento e riprova.';
       _notify();
       return;
@@ -315,8 +336,7 @@ class PlaybackSession extends ChangeNotifier {
     await engine.seekTo(target);
   }
 
-  Future<void> seekBy(Duration offset) =>
-      seekTo(value.position + offset);
+  Future<void> seekBy(Duration offset) => seekTo(value.position + offset);
 
   Future<void> setSpeed(double value) async {
     speed = value;

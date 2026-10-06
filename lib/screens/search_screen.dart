@@ -95,6 +95,7 @@ class _SearchScreenState extends State<SearchScreen> {
           padding: const EdgeInsets.only(right: 16),
           child: TvTextField(
             controller: _controller,
+            clearable: DeviceTypeService.isTv,
             autofocus: !DeviceTypeService.isTv,
             textInputAction: TextInputAction.search,
             onChanged: _onChanged,

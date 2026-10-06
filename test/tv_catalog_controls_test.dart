@@ -34,6 +34,7 @@ void main() {
           ? 6
           : null,
     ).map((c) => c.id).toList();
+    expect(ids(CatalogSort.provider), ['b', 'a', 'c']);
     expect(ids(CatalogSort.nameAsc), ['a', 'b', 'c']);
     expect(ids(CatalogSort.nameDesc), ['c', 'b', 'a']);
     expect(ids(CatalogSort.dateAsc), ['a', 'b', 'c']);
@@ -87,7 +88,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.select, platform: 'android');
     await tester.pumpAndSettle();
-    expect(selected, CatalogSort.nameDesc);
+    expect(selected, CatalogSort.nameAsc);
     expect(find.text('Ordina'), findsNothing);
     await tester.sendKeyEvent(LogicalKeyboardKey.select, platform: 'android');
     await tester.pumpAndSettle();

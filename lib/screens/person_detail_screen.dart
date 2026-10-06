@@ -27,6 +27,13 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
   bool _loading = true;
   String? _error;
   bool _bioExpanded = false;
+  final _tvScroll = ScrollController();
+
+  @override
+  void dispose() {
+    _tvScroll.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -229,7 +236,34 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
       child: Stack(
         children: [
           CustomScrollView(
+            controller: _tvScroll,
+            cacheExtent: 1200,
             slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 0, 0),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: TvFocusable(
+                      autofocus: true,
+                      onFocusChange: (focused) {
+                        if (!focused) return;
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted && _tvScroll.hasClients) {
+                            _tvScroll.animateTo(
+                              0,
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOut,
+                            );
+                          }
+                        });
+                      },
+                      onPressed: () => Navigator.pop(context),
+                      child: const BackButton(),
+                    ),
+                  ),
+                ),
+              ),
               SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
@@ -365,15 +399,6 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                 ),
               ],
             ],
-          ),
-          Positioned(
-            top: 12,
-            left: 20,
-            child: TvFocusable(
-              autofocus: true,
-              onPressed: () => Navigator.pop(context),
-              child: const BackButton(),
-            ),
           ),
         ],
       ),

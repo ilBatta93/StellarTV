@@ -8,6 +8,7 @@ import '../services/profile_service.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/tv_catalog_navigation.dart';
 import '../widgets/catalog_status_indicator.dart';
 import '../widgets/catalog_section_status.dart';
 import 'catalog_page.dart';
@@ -61,6 +62,11 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Cerca',
             icon: const Icon(Icons.search_rounded),
             onPressed: () => _push(const SearchScreen()),
+          ),
+          IconButton(
+            tooltip: 'Preferiti',
+            icon: Icon(Icons.favorite_rounded, color: AppColors.primary),
+            onPressed: () => _push(const FavoritesPage()),
           ),
           const _ProfileButton(),
           IconButton(
@@ -150,38 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
   );
 
   @override
-  void initState() {
-    super.initState();
-    HardwareKeyboard.instance.addHandler(_catalogUpKey);
-  }
-
-  // Runs before descendant scrollables/field shells consume Arrow Up.
-  // Open dialogs, category drawers, player routes and IME keep their keys.
-  bool _catalogUpKey(KeyEvent event) {
-    if (!DeviceTypeService.isTv ||
-        !_isKeyPress(event) ||
-        event.logicalKey != LogicalKeyboardKey.arrowUp ||
-        _currentIndex < 1 ||
-        _currentIndex > 3 ||
-        ModalRoute.of(context)?.isCurrent != true ||
-        MediaQuery.viewInsetsOf(context).bottom > 0) {
-      return false;
-    }
-    final primary = FocusManager.instance.primaryFocus;
-    if (primary == null || !primary.ancestors.contains(_tvContentScope)) {
-      return false;
-    }
-    final scaffold = primary.context?.findAncestorStateOfType<ScaffoldState>();
-    if (scaffold?.isDrawerOpen == true) {
-      return false;
-    }
-    _focusNav();
-    return true;
-  }
-
-  @override
   void dispose() {
-    HardwareKeyboard.instance.removeHandler(_catalogUpKey);
     _tvNavScope.dispose();
     _tvContentScope.dispose();
     for (final n in _tabNodes) {
@@ -199,6 +174,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Moves focus from the top menu to the first item of the visible tab.
   void _focusContent() {
+    if (_currentIndex >= 1 && _currentIndex <= 3) {
+      final searches = _tvContentScope.traversalDescendants.where(
+        (n) => n.debugLabel == 'catalogSearch' && n.canRequestFocus,
+      );
+      if (searches.isNotEmpty) {
+        searches.first.requestFocus();
+        return;
+      }
+    }
     _tvContentScope.requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final primary = FocusManager.instance.primaryFocus;
@@ -232,8 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final primary = FocusManager.instance.primaryFocus;
     if (_currentIndex >= 1 && _currentIndex <= 3) {
-      _focusNav();
-      return KeyEventResult.handled;
+      return KeyEventResult.ignored;
     }
     if (primary != null &&
         primary != _tvContentScope &&
@@ -286,7 +269,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 canRequestFocus: false,
                 skipTraversal: true,
                 onKeyEvent: _onContentKey,
-                child: FocusScope(node: _tvContentScope, child: content),
+                child: TvCatalogMenu(
+                  onMenu: _focusNav,
+                  child: FocusScope(node: _tvContentScope, child: content),
+                ),
               ),
             ),
             Positioned(
@@ -319,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _TvTopBar extends StatelessWidget {
-  static const double height = 76;
+  static const double height = 60;
 
   final int selectedIndex;
   final List<FocusNode> tabNodes;
@@ -337,7 +323,7 @@ class _TvTopBar extends StatelessWidget {
     required this.onSettings,
   });
 
-  static const _tabs = ['Home', 'Diretta', 'Film', 'Serie TV', 'Preferiti'];
+  static const _tabs = ['Home', 'Diretta', 'Film', 'Serie TV'];
 
   @override
   Widget build(BuildContext context) {
@@ -352,6 +338,7 @@ class _TvTopBar extends StatelessWidget {
   }
 
   Widget _buildBar(BuildContext context, bool compact) {
+    final name = context.watch<ProfileProvider>().selected?.name.trim() ?? '';
     return Container(
       height: height,
       padding: EdgeInsets.symmetric(horizontal: compact ? 20 : 40),
@@ -395,7 +382,14 @@ class _TvTopBar extends StatelessWidget {
             ),
           const Spacer(),
           _TvNavPill(
-            icon: Icons.person_rounded,
+            icon: Icons.favorite_rounded,
+            focusNode: tabNodes[4],
+            selected: selectedIndex == 4,
+            compact: compact,
+            onPressed: () => onSelected(4),
+          ),
+          _TvNavPill(
+            label: name.isEmpty ? '?' : name.characters.first.toUpperCase(),
             compact: compact,
             onPressed: onProfile,
           ),
@@ -504,7 +498,7 @@ class _TvNavPillState extends State<_TvNavPill> {
                 SizedBox(width: widget.compact ? 6 : 8),
               if (widget.label != null)
                 Text(
-                  widget.label!,
+                  widget.label!.toUpperCase(),
                   style: TextStyle(
                     color: fg,
                     fontSize: widget.compact ? 16 : 19,
@@ -555,10 +549,15 @@ class _ProfileButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(9),
             border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
           ),
-          child: Icon(
-            ProfileAvatars.iconOf(profile.avatarKey),
-            color: color,
-            size: 18,
+          child: Center(
+            child: Text(
+              profile.name.isNotEmpty ? profile.name[0].toUpperCase() : '?',
+              style: TextStyle(
+                color: color,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
         ),
       ),

@@ -1,7 +1,7 @@
+import "package:cached_network_image/cached_network_image.dart";
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
-import 'poster_card.dart';
 
 /// TV only: movie/series page with the backdrop filling the whole screen and
 /// staying still behind the content (no picture cut at the top while
@@ -32,7 +32,14 @@ class TvDetailBackdrop extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 if (url != null && url.isNotEmpty)
-                  PosterImage(url: url, fallbackIcon: Icons.movie_outlined),
+                  CachedNetworkImage(
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    memCacheWidth: 1280,
+                    placeholder: (_, _) => const SizedBox.expand(),
+                    errorWidget: (_, _, _) => const SizedBox.expand(),
+                    fadeInDuration: const Duration(milliseconds: 300),
+                  ),
                 const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/device_type_service.dart';
 import '../services/tv_remote_keys.dart';
+import 'tv_focusable.dart';
 
 /// TextField usable with a TV remote (Fire TV / Google TV).
 ///
@@ -33,6 +34,8 @@ class TvTextField extends StatefulWidget {
     this.autofillHints,
     this.autofocus = false,
     this.openOnFocus = false,
+    this.clearable = false,
+    this.onMoveDown,
   });
 
   final TextEditingController controller;
@@ -46,6 +49,8 @@ class TvTextField extends StatefulWidget {
   final InputDecoration? decoration;
   final Iterable<String>? autofillHints;
   final bool autofocus;
+  final bool clearable;
+  final VoidCallback? onMoveDown;
 
   /// TV: open the keyboard as soon as the D-Pad reaches the field (login
   /// and account forms), instead of waiting for OK. After Back closes the
@@ -104,12 +109,17 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
     super.initState();
     _attach(widget.focusNode ?? _own);
     _shell.addListener(_onShellFocus);
+    widget.controller.addListener(_rebuild);
     WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void didUpdateWidget(covariant TvTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_rebuild);
+      widget.controller.addListener(_rebuild);
+    }
     final next = widget.focusNode ?? _own;
     if (next != _node) {
       _detach();
@@ -237,6 +247,10 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
       return KeyEventResult.handled;
     }
     if (k == LogicalKeyboardKey.arrowDown) {
+      if (widget.onMoveDown != null) {
+        widget.onMoveDown?.call();
+        return KeyEventResult.ignored;
+      }
       node.nextFocus();
       return KeyEventResult.handled;
     }
@@ -257,6 +271,10 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
       }
       if (k == LogicalKeyboardKey.arrowDown) {
         _stopEditing();
+        if (widget.onMoveDown != null) {
+          widget.onMoveDown?.call();
+          return KeyEventResult.ignored;
+        }
         _shell.nextFocus();
         return KeyEventResult.handled;
       }
@@ -278,6 +296,7 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    widget.controller.removeListener(_rebuild);
     WidgetsBinding.instance.removeObserver(this);
     _detach();
     _shell.removeListener(_onShellFocus);
@@ -320,6 +339,24 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
     final theme = Theme.of(context);
     final highlighted = _shell.hasPrimaryFocus;
     var decoration = widget.decoration ?? const InputDecoration();
+    if (widget.clearable && widget.controller.text.isNotEmpty) {
+      void clear() {
+        widget.controller.clear();
+        widget.onChanged?.call('');
+      }
+
+      decoration = decoration.copyWith(
+        suffixIcon: TvFocusable(
+          focusedScale: 1,
+          onPressed: clear,
+          child: IconButton(
+            tooltip: 'Cancella ricerca',
+            onPressed: clear,
+            icon: const Icon(Icons.close_rounded, size: 20),
+          ),
+        ),
+      );
+    }
     if (highlighted) {
       final border =
           theme.inputDecorationTheme.focusedBorder ??

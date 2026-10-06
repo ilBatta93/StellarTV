@@ -17,6 +17,7 @@ import '../widgets/tv_focusable.dart';
 import '../widgets/tv_category_panel.dart';
 import '../widgets/tv_text_field.dart';
 import '../widgets/tv_catalog_toolbar.dart';
+import '../widgets/tv_catalog_navigation.dart';
 import 'epg_settings_screen.dart';
 
 /// "Diretta" tab: channel list with what is on now, a progress bar and what
@@ -46,7 +47,7 @@ class _LivePageState extends State<LivePage> {
     });
   }
 
-  CatalogSort? _sort;
+  CatalogSort? _sort = CatalogSort.provider;
   String _query = '';
   String? _category;
   bool _defaultApplied = false;
@@ -120,7 +121,7 @@ class _LivePageState extends State<LivePage> {
       channels = sortCatalog(channels, _sort, (c) => c);
     }
 
-    final content = Column(
+    final content = catalogColumn(
       children: [
         if (DeviceTypeService.isTv)
           TvCatalogToolbar(
@@ -131,6 +132,7 @@ class _LivePageState extends State<LivePage> {
             sort: _sort,
             allowRating: false,
             onSort: (value) => setState(() => _sort = value),
+            scaffoldKey: _scaffoldKey,
             trailing: TvFocusable(
               onPressed: _openEpg,
               child: IconButton(
@@ -183,10 +185,14 @@ class _LivePageState extends State<LivePage> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             children: [
-              _chip(
-                'Tutti',
-                _category == null,
-                () => setState(() => _category = null),
+              TvCategoryEdge(
+                scaffoldKey: _scaffoldKey,
+                onOpen: _openCategories,
+                child: _chip(
+                  'Tutti',
+                  _category == null,
+                  () => setState(() => _category = null),
+                ),
               ),
               for (final g in groups)
                 _chip(
@@ -231,7 +237,7 @@ class _LivePageState extends State<LivePage> {
                             )
                           : null,
                     );
-                    return tile;
+                    return TvCatalogItem(index: i, columns: 1, child: tile);
                   },
                 ),
         ),
