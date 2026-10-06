@@ -659,8 +659,9 @@ class _CatalogPageState extends State<CatalogPage> {
 
   Widget _buildAllGrid(AppProvider app) {
     final ui = context.watch<UiSettings>();
+    final all = app.allEntries(widget.type);
     final entries = _ordered(
-      app.allEntries(widget.type).where((e) => _matchesGenre(app, e)).toList(),
+      _filtered(app, all, 'all', () => all.where((e) => _matchesGenre(app, e)).toList()),
     );
     if (entries.isEmpty) {
       return EmptyState(
@@ -684,7 +685,8 @@ class _CatalogPageState extends State<CatalogPage> {
   Widget _buildGroupGrid(AppProvider app, CatalogGroup group) {
     final ui = context.watch<UiSettings>();
     final entries = _ordered(
-      group.entries.where((e) => _matchesGenre(app, e)).toList(),
+      _filtered(app, group.entries, 'group:${group.label}',
+          () => group.entries.where((e) => _matchesGenre(app, e)).toList()),
     );
     if (entries.isEmpty) {
       return EmptyState(
@@ -744,6 +746,36 @@ class _CatalogPageState extends State<CatalogPage> {
       itemCount: matches.length,
       itemBuilder: (context, i) => _gridItem(app, matches[i], i),
     );
+  }
+
+  // Remembers the last filtered list so rebuilds (focus moves, rating
+  // batches) reuse the same list instance: no re-filtering of huge catalogs
+  // and the sort cache in [_ordered] keeps hitting.
+  Object? _filterSource;
+  String? _filterTag;
+  int? _filterGenre;
+  int? _filterInfoVersion;
+  List<CatalogEntry>? _filterResult;
+
+  List<CatalogEntry> _filtered(
+    AppProvider app,
+    Object source,
+    String tag,
+    List<CatalogEntry> Function() compute,
+  ) {
+    if (_genreId == null && source is List<CatalogEntry>) return source;
+    if (_filterResult != null &&
+        identical(_filterSource, source) &&
+        _filterTag == tag &&
+        _filterGenre == _genreId &&
+        _filterInfoVersion == app.titleInfoVersion) {
+      return _filterResult!;
+    }
+    _filterSource = source;
+    _filterTag = tag;
+    _filterGenre = _genreId;
+    _filterInfoVersion = app.titleInfoVersion;
+    return _filterResult = compute();
   }
 
   List<CatalogEntry> _ordered(List<CatalogEntry> entries) {

@@ -89,7 +89,29 @@ class SyncProvider extends ChangeNotifier {
   void schedulePush() {
     if (_code == null) return;
     _debounce?.cancel();
-    _debounce = Timer(const Duration(seconds: 4), () => pushNow(silent: true));
+    // Instant: Duration.zero only coalesces changes from the same frame.
+    _debounce = Timer(Duration.zero, _autoPush);
+  }
+
+  bool _autoPushing = false;
+  bool _autoPending = false;
+
+  /// One automatic push at a time; a change during it triggers exactly one
+  /// follow-up push, so nothing is lost and requests never overlap.
+  Future<void> _autoPush() async {
+    if (_autoPushing) {
+      _autoPending = true;
+      return;
+    }
+    _autoPushing = true;
+    try {
+      do {
+        _autoPending = false;
+        await pushNow(silent: true);
+      } while (_autoPending);
+    } finally {
+      _autoPushing = false;
+    }
   }
 
   Future<bool> pushNow({bool silent = false}) async {

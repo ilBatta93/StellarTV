@@ -1,5 +1,7 @@
 # Roadmap
 
+- [x] Promemoria scadenza Xtream, sync cloud istantanea, cache voti condivisa, cache immagini unica, filtri memorizzati
+
 - [x] Profilo Bambino: generi rigorosi, rating, cache aggiornata e tutte le sezioni protette
 - [x] Test regressione Bambino: 18 test Flutter e 5 test policy cloud superati
 - [x] Analisi dei file modificati pulita, salvo API ScrollCacheExtent già presente e non supportata dall’SDK locale

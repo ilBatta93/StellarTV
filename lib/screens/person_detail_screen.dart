@@ -1,3 +1,5 @@
+import '../services/image_cache_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -89,10 +91,13 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                 fit: StackFit.expand,
                 children: [
                   if (person.profileUrl.isNotEmpty)
-                    Image.network(
-                      person.profileUrl,
+                    CachedNetworkImage(
+                      cacheManager: AppImageCache.manager,
+                      imageUrl: person.profileUrl,
+                      memCacheWidth: 720,
+                      fadeInDuration: const Duration(milliseconds: 150),
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _headerFallback(person),
+                      errorWidget: (_, _, _) => _headerFallback(person),
                     )
                   else
                     _headerFallback(person),

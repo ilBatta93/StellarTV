@@ -1,3 +1,4 @@
+import '../services/image_cache_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -41,6 +42,7 @@ class PosterImage extends StatelessWidget {
           cacheWidth = ((px / 64).ceil() * 64).clamp(64, 1280);
         }
         return CachedNetworkImage(
+          cacheManager: AppImageCache.manager,
           imageUrl: url!,
           fit: fit,
           memCacheWidth: cacheWidth,

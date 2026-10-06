@@ -1,3 +1,5 @@
+import '../services/image_cache_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -240,11 +242,13 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(48),
                         child: person.profileUrl.isNotEmpty
-                            ? Image.network(
-                                person.profileUrl,
+                            ? CachedNetworkImage(
+                                cacheManager: AppImageCache.manager,
+                                imageUrl: person.profileUrl,
+                                fadeInDuration: const Duration(milliseconds: 150),
                                 fit: BoxFit.cover,
-                                cacheWidth: 256,
-                                errorBuilder: (_, _, _) =>
+                                memCacheWidth: 256,
+                                errorWidget: (_, _, _) =>
                                     _castFallback(person),
                               )
                             : _castFallback(person),

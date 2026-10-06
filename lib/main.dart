@@ -14,6 +14,7 @@ import 'providers/ui_settings.dart';
 import 'screens/splash_screen.dart';
 import 'services/profile_service.dart';
 import 'services/device_type_service.dart';
+import 'services/expiry_reminder_service.dart';
 import 'services/tv_remote_keys.dart';
 import 'services/sync_service.dart';
 import 'services/tmdb_service.dart';
@@ -32,6 +33,11 @@ Future<void> main() async {
       ..maximumSize = 250
       ..maximumSizeBytes = 80 << 20;
     TvRemoteKeys.install();
+  } else {
+    // Phones: generous but bounded decoded-image memory.
+    PaintingBinding.instance.imageCache
+      ..maximumSize = 400
+      ..maximumSizeBytes = 150 << 20;
   }
   await Supabase.initialize(
     url: SupabaseConfig.url,
@@ -129,6 +135,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
     _historyProvider.onCredentialsRestored = _appProvider.reloadFromStorage;
     _historyProvider.onSettingsRestored = () async {
       await _appProvider.reloadSettings();
+      await ExpiryReminderService.instance.reloadSettings();
       await _uiSettings.load();
     };
     // Profiles created/edited on other devices show up automatically.
@@ -148,11 +155,29 @@ class _StellarTvAppState extends State<StellarTvApp> {
       await _profileProvider.load(silent: true);
     };
     _appProvider.addListener(_onAppChanged);
+    // Reminders are not needed for the first frame: start after it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(seconds: 8), () {
+        ExpiryReminderService.instance.start(_appProvider.xtreamCredentials);
+      });
+    });
     _syncProvider.load();
   }
 
   /// Any change to favorites schedules a cloud push (debounced).
-  void _onAppChanged() => _syncProvider.schedulePush();
+  String _favSignature = '';
+
+  /// Any real change to favorites is pushed to the cloud instantly; other
+  /// app notifications (loading progress etc.) do not trigger uploads.
+  void _onAppChanged() {
+    final sig = '${_appProvider.favoriteIds.length}:'
+        '${Object.hashAllUnordered(_appProvider.favoriteIds)}:'
+        '${Object.hashAll(_appProvider.tmdbFavorites.map((e) => e.key))}';
+    if (sig == _favSignature) return;
+    final first = _favSignature.isEmpty;
+    _favSignature = sig;
+    if (!first) _syncProvider.schedulePush();
+  }
 
   @override
   void dispose() {

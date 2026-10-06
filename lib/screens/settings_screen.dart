@@ -14,6 +14,7 @@ import 'epg_settings_screen.dart';
 import 'player_settings_screen.dart';
 import 'profile_picker_screen.dart';
 import 'sync_settings_screen.dart';
+import 'expiry_reminder_screen.dart';
 import 'xtream_account_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -319,6 +320,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => const XtreamAccountScreen(),
+                    ),
+                  ),
+                ),
+              if (provider.authMethod.name == 'xtream')
+                SettingsValueTile(
+                  icon: Icons.notifications_active_outlined,
+                  title: 'Promemoria scadenza',
+                  subtitle: 'Avvisi prima della scadenza dell\'abbonamento',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ExpiryReminderScreen(),
                     ),
                   ),
                 ),

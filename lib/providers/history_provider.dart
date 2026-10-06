@@ -227,7 +227,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void _scheduleCloudPush() {
     _pushDebounce?.cancel();
-    _pushDebounce = Timer(const Duration(seconds: 3), () {
+    _pushDebounce = Timer(Duration.zero, () {
       _syncProvider?.schedulePush();
     });
   }

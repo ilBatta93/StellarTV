@@ -1,3 +1,5 @@
+import '../services/image_cache_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../models/tmdb_person.dart';
 import '../screens/person_detail_screen.dart';
@@ -43,11 +45,13 @@ class CastRow extends StatelessWidget {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(48),
                         child: person.profileUrl.isNotEmpty
-                            ? Image.network(
-                                person.profileUrl,
-                                cacheWidth: 256,
+                            ? CachedNetworkImage(
+                                cacheManager: AppImageCache.manager,
+                                imageUrl: person.profileUrl,
+                                fadeInDuration: const Duration(milliseconds: 150),
+                                memCacheWidth: 256,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => _fallback(person),
+                                errorWidget: (_, _, _) => _fallback(person),
                               )
                             : _fallback(person),
                       ),

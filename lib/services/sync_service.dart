@@ -77,6 +77,7 @@ class SyncService {
     'epg_use_playlist',
     'epg_sources',
     'epg_refresh_minutes',
+    'expiry_reminders_v1',
   ];
   static const _syncedKeys = [
     ..._credentialsKeys,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:provider/provider.dart';
 
+import '../widgets/expiry_banner.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/history_entry.dart';
@@ -167,6 +168,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       child: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
+          const ExpiryBanner(),
           if (banner.isNotEmpty) _Top10Banner(items: banner),
           if (startedMovies.isNotEmpty) ...[
             SectionHeader(
@@ -969,6 +971,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
                     scrollCacheExtent: const ScrollCacheExtent.pixels(2400),
                     padding: const EdgeInsets.only(bottom: 48),
                     children: [
+                      const ExpiryBanner(),
                       if (widget.startedSeries.isNotEmpty) ...[
                         const _TvRowTitle('Serie viste di recente'),
                         _HistoryRow(

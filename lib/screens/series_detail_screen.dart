@@ -1,3 +1,5 @@
+import '../services/image_cache_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -464,11 +466,13 @@ class _EpisodeTile extends StatelessWidget {
                     fit: StackFit.expand,
                     children: [
                       ep.image != null && ep.image!.isNotEmpty
-                          ? Image.network(
-                              ep.image!,
+                          ? CachedNetworkImage(
+                              cacheManager: AppImageCache.manager,
+                              imageUrl: ep.image!,
+                              fadeInDuration: const Duration(milliseconds: 150),
                               fit: BoxFit.cover,
-                              cacheWidth: 320,
-                              errorBuilder: (_, _, _) => _placeholder(),
+                              memCacheWidth: 320,
+                              errorWidget: (_, _, _) => _placeholder(),
                             )
                           : _placeholder(),
                       if (watched)

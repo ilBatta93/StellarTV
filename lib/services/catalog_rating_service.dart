@@ -5,10 +5,12 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/channel.dart';
 import '../models/content_type.dart';
+import '../config/supabase_config.dart';
 import 'tmdb_service.dart';
 
 /// Shared TV presentation metadata: only two requests in flight, visible
@@ -81,13 +83,84 @@ class CatalogRatingService extends ChangeNotifier {
     _drain(priority: priority);
   }
 
+  static const _batch = 40;
+  bool _cloudDown = false;
+  DateTime? _cloudDownAt;
+
+  /// Up to two requests in flight, each resolving a group of 40 titles from
+  /// the shared cloud cache (direct TMDB only if the cloud is unreachable).
   void _drain({bool priority = false}) {
-    while (_active.length < 2 && _queue.isNotEmpty) {
-      final key = priority ? _queue.keys.last : _queue.keys.first;
-      final channel = _queue.remove(key);
-      if (channel == null) continue;
-      _active.add(key);
-      unawaited(_fetch(key, channel));
+    if (_cloudDown &&
+        _cloudDownAt != null &&
+        DateTime.now().difference(_cloudDownAt!).inMinutes >= 5) {
+      _cloudDown = false;
+    }
+    while (_active.length < (_cloudDown ? 2 : 2 * _batch) &&
+        _queue.isNotEmpty) {
+      if (_cloudDown) {
+        final key = priority ? _queue.keys.last : _queue.keys.first;
+        final channel = _queue.remove(key);
+        if (channel == null) continue;
+        _active.add(key);
+        unawaited(_fetch(key, channel));
+        continue;
+      }
+      final keys = (priority ? _queue.keys.toList().reversed : _queue.keys)
+          .take(_batch)
+          .toList();
+      final group = <String, Channel>{};
+      for (final k in keys) {
+        final c = _queue.remove(k);
+        if (c != null) group[k] = c;
+      }
+      _active.addAll(group.keys);
+      unawaited(_fetchGroup(group));
+    }
+  }
+
+  Future<void> _fetchGroup(Map<String, Channel> group) async {
+    final entries = group.entries.toList();
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${SupabaseConfig.apiBase}/ratings'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'items': [
+                for (final e in entries)
+                  {
+                    'title': e.value.displaySeriesName,
+                    'type': e.value.type == ContentType.movie ? 'movie' : 'tv',
+                  },
+              ],
+            }),
+          )
+          .timeout(const Duration(seconds: 25));
+      if (res.statusCode != 200) throw Exception('ratings ${res.statusCode}');
+      final list = (jsonDecode(res.body) as Map)['results'] as List;
+      for (var i = 0; i < entries.length && i < list.length; i++) {
+        final v = list[i];
+        if (v is num) {
+          _ratings[entries[i].key] = v.toDouble();
+        } else {
+          _failed[entries[i].key] = DateTime.now();
+        }
+      }
+      _scheduleNotify();
+      _saveTimer ??= Timer(const Duration(seconds: 10), () {
+        _saveTimer = null;
+        unawaited(_save());
+      });
+    } catch (_) {
+      // Cloud unreachable: put the titles back and use direct TMDB lookups.
+      _cloudDown = true;
+      _cloudDownAt = DateTime.now();
+      for (final e in entries) {
+        _queue[e.key] = e.value;
+      }
+    } finally {
+      _active.removeAll(group.keys);
+      _drain();
     }
   }
 

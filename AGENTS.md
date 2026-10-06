@@ -16,3 +16,9 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - MPV receives live/VOD state before opening and applies native tuning serially before playback, so live buffering differs from VOD without racing stream initialization.
 
 - TV player settings persist independent live and film/series scopes, initialized from legacy preferences; playback selects its content scope and touch continues using the shared legacy scope.
+
+- Xtream expiry reminders compute schedules in a pure planner from the provider's exp_date, deliver them as local notifications plus an in-app Home banner (Google TV hides notifications), and fire each threshold once per expiry date.
+- Cloud sync pushes on every change with zero delay; a single in-flight guard coalesces changes made during an upload into one follow-up push, and favorites pushes trigger only on real favorite changes.
+- Poster ratings resolve in groups through the backend's shared TMDB rating cache, falling back to direct TMDB lookups while the backend is unreachable.
+- Every network image goes through one shared disk cache manager and is decoded at display size.
+- Catalog grids memoize filtered lists by source instance, genre and metadata version so rebuilds reuse the same list and the sort cache keeps hitting.

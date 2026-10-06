@@ -1,3 +1,4 @@
+import '../services/image_cache_service.dart';
 import "package:cached_network_image/cached_network_image.dart";
 import 'package:flutter/material.dart';
 
@@ -33,6 +34,7 @@ class TvDetailBackdrop extends StatelessWidget {
               children: [
                 if (url != null && url.isNotEmpty)
                   CachedNetworkImage(
+                    cacheManager: AppImageCache.manager,
                     imageUrl: url,
                     fit: BoxFit.cover,
                     memCacheWidth: 1280,

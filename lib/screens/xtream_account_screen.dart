@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
 import '../services/device_type_service.dart';
+import '../services/expiry_reminder_service.dart';
 import '../services/xtream_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_tiles.dart';
@@ -31,11 +32,17 @@ class _XtreamAccountScreenState extends State<XtreamAccountScreen> {
     if (c == null) {
       return Future.error(Exception('Nessuna playlist Xtream collegata.'));
     }
-    return XtreamService().accountInfo(
-      server: c['server']!,
-      username: c['username']!,
-      password: c['password']!,
-    );
+    return XtreamService()
+        .accountInfo(
+          server: c['server']!,
+          username: c['username']!,
+          password: c['password']!,
+        )
+        .then((info) {
+          ExpiryReminderService.instance
+              .applyAccountInfo('${c['server']}|${c['username']}', info);
+          return info;
+        });
   }
 
   static String _date(Object? unix) {
