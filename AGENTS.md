@@ -8,3 +8,7 @@ Kids certification is warmed in the background after playlist loading and cached
 - Playlist sections download in a background isolate with a streaming JSON parser (truncation-tolerant, bounded timeouts), run one at a time through a shared queue, publish and cache per section, and can be retried individually; pages are wrapped by a shared section frame that shows real progress, retry and saved-copy states on touch and TV, so huge playlists never block the UI or reload unrelated sections.
 - The playlist opens from the device copy at every start; only sections never saved are downloaded immediately, and a full refresh runs only when the chosen interval has elapsed since the last complete download.
 - Large derived caches (kids verdicts, playlist sections) are persisted to files through background isolates with batched writes, never to preferences or the main thread.
+
+- TV catalogs use a shared collapsible-search/sort toolbar; Arrow Up returns to the active top-menu tab, while category drawers retain left-edge access.
+- TV poster ratings use a shared two-request queue and an isolate-written device cache; unknown ratings sort last, and only the selected category is queued for vote sorting.
+- TV person details reuse the fixed title backdrop and compact poster grid; the touch person layout stays unchanged.

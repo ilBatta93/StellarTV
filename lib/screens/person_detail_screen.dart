@@ -8,6 +8,9 @@ import '../providers/discover_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
+import '../services/device_type_service.dart';
+import '../widgets/tv_detail_backdrop.dart';
+import '../widgets/tv_focusable.dart';
 
 class PersonDetailScreen extends StatefulWidget {
   final TmdbPerson person;
@@ -38,8 +41,10 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
     });
     try {
       final tmdb = context.read<DiscoverProvider>().tmdb;
-      final details = await tmdb.personDetails(widget.person.id);
-      final credits = await tmdb.personCredits(widget.person.id);
+      final detailsFuture = tmdb.personDetails(widget.person.id);
+      final creditsFuture = tmdb.personCredits(widget.person.id);
+      final details = await detailsFuture;
+      final credits = await creditsFuture;
       if (!mounted) return;
       setState(() {
         _details = details ?? widget.person;
@@ -59,6 +64,7 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
   Widget build(BuildContext context) {
     final person = _details ?? widget.person;
 
+    if (DeviceTypeService.isTv) return _buildTv(person);
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -87,7 +93,7 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                         colors: [
                           Color(0x8009090D),
                           Colors.transparent,
-                          AppColors.background
+                          AppColors.background,
                         ],
                         stops: [0, 0.4, 1],
                       ),
@@ -103,8 +109,10 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(person.name,
-                      style: Theme.of(context).textTheme.headlineMedium),
+                  Text(
+                    person.name,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -114,7 +122,9 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                         _Chip(label: '${person.knownForCount} contenuti'),
                       if (person.birthday != null &&
                           person.birthday!.isNotEmpty)
-                        _Chip(label: 'Nato il ${_formatDate(person.birthday!)}'),
+                        _Chip(
+                          label: 'Nato il ${_formatDate(person.birthday!)}',
+                        ),
                       if (person.placeOfBirth != null &&
                           person.placeOfBirth!.isNotEmpty)
                         _Chip(label: person.placeOfBirth!),
@@ -123,8 +133,10 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                   if (person.biography != null &&
                       person.biography!.trim().isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    Text('Biografia',
-                        style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Biografia',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       person.biography!,
@@ -143,9 +155,13 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                   if (widget.person.character != null &&
                       widget.person.character!.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    Text('Interpreta: ${widget.person.character}',
-                        style: const TextStyle(
-                            color: AppColors.textSecondary, fontSize: 13)),
+                    Text(
+                      'Interpreta: ${widget.person.character}',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -186,16 +202,13 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 16,
                 ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, i) {
-                    final item = _credits[i];
-                    return TmdbPosterCard(
-                      item: item,
-                      onTap: () => openTmdbItem(context, item),
-                    );
-                  },
-                  childCount: _credits.length,
-                ),
+                delegate: SliverChildBuilderDelegate((context, i) {
+                  final item = _credits[i];
+                  return TmdbPosterCard(
+                    item: item,
+                    onTap: () => openTmdbItem(context, item),
+                  );
+                }, childCount: _credits.length),
               ),
             ),
           ],
@@ -204,19 +217,182 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
     );
   }
 
-  Widget _headerFallback(TmdbPerson person) => Container(
-        color: AppColors.card,
-        child: Center(
-          child: Text(
-            person.name.isNotEmpty ? person.name[0].toUpperCase() : '?',
-            style: const TextStyle(
-              color: AppColors.textMuted,
-              fontSize: 48,
-              fontWeight: FontWeight.w700,
+  Widget _buildTv(TmdbPerson person) {
+    final backdrop = _credits
+        .where((item) => item.backdropPath != null)
+        .firstOrNull;
+    final birthday = person.birthday;
+    final place = person.placeOfBirth;
+    final biography = person.biography;
+    return TvDetailBackdrop(
+      image: backdrop?.backdropUrl,
+      child: Stack(
+        children: [
+          CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    32,
+                    TvDetailBackdrop.topSpace(context),
+                    32,
+                    24,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          width: 128,
+                          height: 176,
+                          child: PosterImage(
+                            url: person.profileUrl.replaceFirst(
+                              '/w185',
+                              '/w342',
+                            ),
+                            fallbackIcon: Icons.person_outline_rounded,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              person.name,
+                              style: Theme.of(context).textTheme.headlineLarge,
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _Chip(label: '${_credits.length} contenuti'),
+                                if (birthday != null && birthday.isNotEmpty)
+                                  _Chip(
+                                    label: 'Nato il ${_formatDate(birthday)}',
+                                  ),
+                                if (place != null && place.isNotEmpty)
+                                  _Chip(label: place),
+                              ],
+                            ),
+                            if (biography != null &&
+                                biography.trim().isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              Text(
+                                biography,
+                                maxLines: _bioExpanded ? null : 4,
+                                overflow: _bioExpanded
+                                    ? TextOverflow.visible
+                                    : TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                              TvFocusable(
+                                focusedScale: 1,
+                                onPressed: () => setState(
+                                  () => _bioExpanded = !_bioExpanded,
+                                ),
+                                child: TextButton(
+                                  onPressed: () => setState(
+                                    () => _bioExpanded = !_bioExpanded,
+                                  ),
+                                  child: Text(
+                                    _bioExpanded
+                                        ? 'Mostra meno'
+                                        : 'Leggi tutto',
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (widget.person.character?.isNotEmpty ==
+                                true) ...[
+                              const SizedBox(height: 8),
+                              Text('Interpreta: ${widget.person.character}'),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_loading)
+                const SliverToBoxAdapter(
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_error != null)
+                SliverToBoxAdapter(
+                  child: TvFocusable(
+                    onPressed: _load,
+                    child: TextButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Riprova'),
+                    ),
+                  ),
+                )
+              else ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
+                    child: Text(
+                      'Contenuti con ${person.name}',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+                  sliver: SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 132,
+                          childAspectRatio: 0.6,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                        ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) => TmdbPosterCard(
+                        width: double.infinity,
+                        item: _credits[i],
+                        onTap: () => openTmdbItem(context, _credits[i]),
+                      ),
+                      childCount: _credits.length,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          Positioned(
+            top: 12,
+            left: 20,
+            child: TvFocusable(
+              autofocus: true,
+              onPressed: () => Navigator.pop(context),
+              child: const BackButton(),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerFallback(TmdbPerson person) => Container(
+    color: AppColors.card,
+    child: Center(
+      child: Text(
+        person.name.isNotEmpty ? person.name[0].toUpperCase() : '?',
+        style: const TextStyle(
+          color: AppColors.textMuted,
+          fontSize: 48,
+          fontWeight: FontWeight.w700,
         ),
-      );
+      ),
+    ),
+  );
 
   String _formatDate(String iso) {
     final parts = iso.split('-');
@@ -238,8 +414,10 @@ class _Chip extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(label,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+      child: Text(
+        label,
+        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+      ),
     );
   }
 }

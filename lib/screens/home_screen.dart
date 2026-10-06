@@ -150,7 +150,38 @@ class _HomeScreenState extends State<HomeScreen> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_catalogUpKey);
+  }
+
+  // Runs before descendant scrollables/field shells consume Arrow Up.
+  // Open dialogs, category drawers, player routes and IME keep their keys.
+  bool _catalogUpKey(KeyEvent event) {
+    if (!DeviceTypeService.isTv ||
+        !_isKeyPress(event) ||
+        event.logicalKey != LogicalKeyboardKey.arrowUp ||
+        _currentIndex < 1 ||
+        _currentIndex > 3 ||
+        ModalRoute.of(context)?.isCurrent != true ||
+        MediaQuery.viewInsetsOf(context).bottom > 0) {
+      return false;
+    }
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary == null || !primary.ancestors.contains(_tvContentScope)) {
+      return false;
+    }
+    final scaffold = primary.context?.findAncestorStateOfType<ScaffoldState>();
+    if (scaffold?.isDrawerOpen == true) {
+      return false;
+    }
+    _focusNav();
+    return true;
+  }
+
+  @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_catalogUpKey);
     _tvNavScope.dispose();
     _tvContentScope.dispose();
     for (final n in _tabNodes) {
@@ -200,6 +231,10 @@ class _HomeScreenState extends State<HomeScreen> {
       return KeyEventResult.ignored;
     }
     final primary = FocusManager.instance.primaryFocus;
+    if (_currentIndex >= 1 && _currentIndex <= 3) {
+      _focusNav();
+      return KeyEventResult.handled;
+    }
     if (primary != null &&
         primary != _tvContentScope &&
         primary.focusInDirection(TraversalDirection.up)) {

@@ -10,6 +10,9 @@ import '../services/catalog_builder.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
+import '../widgets/tv_catalog_toolbar.dart';
+import '../widgets/tv_focusable.dart';
+import '../services/catalog_rating_service.dart';
 import '../widgets/tv_category_panel.dart';
 import '../widgets/tv_text_field.dart';
 import '../widgets/section_row.dart';
@@ -272,6 +275,11 @@ class _CatalogPageState extends State<CatalogPage> {
     });
   }
 
+  CatalogSort? _sort;
+  List<CatalogEntry>? _sortedSource;
+  List<CatalogEntry>? _sortedEntries;
+  CatalogSort? _sortedOrder;
+  int _sortedVersion = -1;
   String _query = '';
   String? _selectedCategory;
   int? _genreId;
@@ -294,7 +302,20 @@ class _CatalogPageState extends State<CatalogPage> {
   int _genreCountsVersion = -1;
 
   @override
+  void initState() {
+    super.initState();
+    CatalogRatingService.instance.addListener(_ratingsChanged);
+  }
+
+  void _ratingsChanged() {
+    if (mounted && DeviceTypeService.isTv && _sort == CatalogSort.rating) {
+      setState(() {});
+    }
+  }
+
+  @override
   void dispose() {
+    CatalogRatingService.instance.removeListener(_ratingsChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -347,7 +368,7 @@ class _CatalogPageState extends State<CatalogPage> {
       // (which walks the whole catalog) starts a moment later.
       Future<void>.delayed(const Duration(seconds: 2), () {
         if (!mounted) return;
-        final provider = context.read<AppProvider>();
+        final provider = this.context.read<AppProvider>();
         provider.requestTitleInfo(provider.catalogOf(widget.type));
       });
     }
@@ -397,29 +418,39 @@ class _CatalogPageState extends State<CatalogPage> {
             ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TvTextField(
-                    controller: _searchController,
-                    onChanged: (v) => setState(() => _query = v),
-                    decoration: InputDecoration(
-                      hintText: 'Cerca tra $_noun',
-                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+          if (DeviceTypeService.isTv)
+            TvCatalogToolbar(
+              controller: _searchController,
+              hint: 'Cerca tra $_noun',
+              category: _selectedCategory ?? _recentLabel,
+              onChanged: (v) => setState(() => _query = v),
+              sort: _sort,
+              onSort: (value) => setState(() => _sort = value),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TvTextField(
+                      controller: _searchController,
+                      onChanged: (v) => setState(() => _query = v),
+                      decoration: InputDecoration(
+                        hintText: 'Cerca tra $_noun',
+                        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Categorie',
-                  icon: const Icon(Icons.category_outlined),
-                  onPressed: _openCategories,
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Categorie',
+                    icon: const Icon(Icons.category_outlined),
+                    onPressed: _openCategories,
+                  ),
+                ],
+              ),
             ),
-          ),
           _buildGenreBar(app, groups),
           Expanded(
             child: _query.isNotEmpty
@@ -468,26 +499,34 @@ class _CatalogPageState extends State<CatalogPage> {
     if (counts.isEmpty) return const SizedBox.shrink();
     final ids = counts.keys.toList()
       ..sort((a, b) => names[a]!.compareTo(names[b]!));
-    Widget chip(String label, bool selected, VoidCallback onTap) => Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => onTap(),
-        showCheckmark: false,
-        selectedColor: AppColors.primary.withValues(alpha: 0.22),
-        backgroundColor: AppColors.card,
-        side: BorderSide(
-          color: selected ? AppColors.primary : Colors.transparent,
+    Widget chip(String label, bool selected, VoidCallback onTap) {
+      final control = Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: ChoiceChip(
+          label: Text(label),
+          selected: selected,
+          onSelected: (_) => onTap(),
+          showCheckmark: false,
+          selectedColor: AppColors.primary.withValues(alpha: 0.22),
+          backgroundColor: AppColors.card,
+          side: BorderSide(
+            color: selected ? AppColors.primary : Colors.transparent,
+          ),
+          labelStyle: TextStyle(
+            fontSize: 13,
+            color: selected ? AppColors.primary : AppColors.textSecondary,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
         ),
-        labelStyle: TextStyle(
-          fontSize: 13,
-          color: selected ? AppColors.primary : AppColors.textSecondary,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      ),
-    );
+      );
+      return DeviceTypeService.isTv
+          ? TvFocusable(onPressed: onTap, focusedScale: 1, child: control)
+          : control;
+    }
+
     return SizedBox(
       height: 44,
       child: ListView(
@@ -522,9 +561,9 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 
   Widget _buildRecentGrid(AppProvider app) {
-    final entries = _genreId != null
-        ? _allOfGenre(app)
-        : app.recentEntries(widget.type);
+    final entries = _ordered(
+      _genreId != null ? _allOfGenre(app) : app.recentEntries(widget.type),
+    );
     if (entries.isEmpty) {
       return EmptyState(
         icon: Icons.search_off_rounded,
@@ -547,10 +586,9 @@ class _CatalogPageState extends State<CatalogPage> {
 
   Widget _buildAllGrid(AppProvider app) {
     final ui = context.watch<UiSettings>();
-    final entries = app
-        .allEntries(widget.type)
-        .where((e) => _matchesGenre(app, e))
-        .toList();
+    final entries = _ordered(
+      app.allEntries(widget.type).where((e) => _matchesGenre(app, e)).toList(),
+    );
     if (entries.isEmpty) {
       return EmptyState(
         icon: Icons.search_off_rounded,
@@ -572,7 +610,9 @@ class _CatalogPageState extends State<CatalogPage> {
 
   Widget _buildGroupGrid(AppProvider app, CatalogGroup group) {
     final ui = context.watch<UiSettings>();
-    final entries = group.entries.where((e) => _matchesGenre(app, e)).toList();
+    final entries = _ordered(
+      group.entries.where((e) => _matchesGenre(app, e)).toList(),
+    );
     if (entries.isEmpty) {
       return EmptyState(
         icon: Icons.search_off_rounded,
@@ -594,9 +634,15 @@ class _CatalogPageState extends State<CatalogPage> {
 
   Widget _buildSearchResults(AppProvider app) {
     final q = _query.toLowerCase();
-    final matches = <CatalogEntry>[];
+    var matches = <CatalogEntry>[];
     final seen = <String>{};
     for (final g in app.groupedCatalog(widget.type)) {
+      if (DeviceTypeService.isTv &&
+          _selectedCategory != null &&
+          _selectedCategory != _allLabel &&
+          g.label != _selectedCategory) {
+        continue;
+      }
       for (final e in g.entries) {
         if (!e.primary.name.toLowerCase().contains(q)) continue;
         if (!_matchesGenre(app, e)) continue;
@@ -606,6 +652,7 @@ class _CatalogPageState extends State<CatalogPage> {
         matches.add(e);
       }
     }
+    matches = _ordered(matches);
     if (matches.isEmpty) {
       return EmptyState(
         icon: Icons.search_off_rounded,
@@ -624,6 +671,23 @@ class _CatalogPageState extends State<CatalogPage> {
       itemCount: matches.length,
       itemBuilder: (context, i) => _entryCard(app, matches[i]),
     );
+  }
+
+  List<CatalogEntry> _ordered(List<CatalogEntry> entries) {
+    if (!DeviceTypeService.isTv || _sort == null) return entries;
+    final service = CatalogRatingService.instance;
+    if (_sort == CatalogSort.rating) {
+      service.request(entries.map((e) => e.primary));
+    }
+    if (identical(entries, _sortedSource) &&
+        _sort == _sortedOrder &&
+        (_sort != CatalogSort.rating || _sortedVersion == service.version)) {
+      return _sortedEntries ?? entries;
+    }
+    _sortedSource = entries;
+    _sortedOrder = _sort;
+    _sortedVersion = service.version;
+    return _sortedEntries = sortCatalog(entries, _sort, (e) => e.primary);
   }
 
   Widget _entryCard(AppProvider app, CatalogEntry entry) {

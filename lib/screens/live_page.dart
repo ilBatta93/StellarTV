@@ -16,6 +16,7 @@ import '../widgets/section_row.dart';
 import '../widgets/tv_focusable.dart';
 import '../widgets/tv_category_panel.dart';
 import '../widgets/tv_text_field.dart';
+import '../widgets/tv_catalog_toolbar.dart';
 import 'epg_settings_screen.dart';
 
 /// "Diretta" tab: channel list with what is on now, a progress bar and what
@@ -45,6 +46,7 @@ class _LivePageState extends State<LivePage> {
     });
   }
 
+  CatalogSort? _sort;
   String _query = '';
   String? _category;
   bool _defaultApplied = false;
@@ -114,42 +116,67 @@ class _LivePageState extends State<LivePage> {
           .toList();
     }
 
+    if (DeviceTypeService.isTv) {
+      channels = sortCatalog(channels, _sort, (c) => c);
+    }
+
     final content = Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: TvTextField(
-                  controller: _searchController,
-                  onChanged: (v) => setState(() => _query = v),
-                  decoration: const InputDecoration(
-                    hintText: 'Cerca canale o programma',
-                    prefixIcon: Icon(Icons.search_rounded, size: 20),
+        if (DeviceTypeService.isTv)
+          TvCatalogToolbar(
+            controller: _searchController,
+            hint: 'Cerca canale o programma',
+            category: _category ?? 'Tutti',
+            onChanged: (v) => setState(() => _query = v),
+            sort: _sort,
+            allowRating: false,
+            onSort: (value) => setState(() => _sort = value),
+            trailing: TvFocusable(
+              onPressed: _openEpg,
+              child: IconButton(
+                tooltip: 'Guida TV (EPG)',
+                icon: const Icon(Icons.calendar_view_day_rounded),
+                onPressed: _openEpg,
+              ),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TvTextField(
+                    controller: _searchController,
+                    onChanged: (v) => setState(() => _query = v),
+                    decoration: const InputDecoration(
+                      hintText: 'Cerca canale o programma',
+                      prefixIcon: Icon(Icons.search_rounded, size: 20),
+                    ),
                   ),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Guida TV (EPG)',
-                icon: epg.isLoading
-                    ? SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.primary,
-                        ),
-                      )
-                    : const Icon(Icons.calendar_view_day_rounded),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const EpgSettingsScreen()),
+                IconButton(
+                  tooltip: 'Guida TV (EPG)',
+                  icon: epg.isLoading
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.primary,
+                          ),
+                        )
+                      : const Icon(Icons.calendar_view_day_rounded),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const EpgSettingsScreen(),
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         SizedBox(
           height: 44,
           child: ListView(
@@ -230,6 +257,11 @@ class _LivePageState extends State<LivePage> {
       body: content,
     );
   }
+
+  void _openEpg() => Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => const EpgSettingsScreen()),
+  );
 
   Widget _chip(String label, bool selected, VoidCallback onTap) {
     return Padding(

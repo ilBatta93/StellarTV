@@ -219,7 +219,18 @@ class RankedPosterCard extends StatelessWidget {
                 aspectRatio: 2 / 3,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: PosterImage(url: item.posterUrl),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      PosterImage(url: item.posterUrl),
+                      if (DeviceTypeService.isTv && item.voteAverage > 0)
+                        Positioned(
+                          top: 6,
+                          left: 6,
+                          child: RatingBadge(value: item.voteAverage),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),

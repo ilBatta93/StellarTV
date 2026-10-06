@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
 import 'poster_card.dart';
+import '../services/catalog_rating_service.dart';
 
 class ChannelCard extends StatelessWidget {
   final Channel channel;
@@ -23,6 +25,16 @@ class ChannelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (DeviceTypeService.isTv && !_isLive) {
+      return _TvRatedPoster(
+        channel: channel,
+        builder: (rating) => _card(context, rating),
+      );
+    }
+    return _card(context, null);
+  }
+
+  Widget _card(BuildContext context, double? rating) {
     return Pressable(
       onTap: onTap,
       onLongPress: onFavoriteTap,
@@ -67,6 +79,12 @@ class ChannelCard extends StatelessWidget {
                         onTap: onFavoriteTap,
                       ),
                     ),
+                    if (rating != null && rating > 0)
+                      Positioned(
+                        left: 6,
+                        bottom: 6,
+                        child: RatingBadge(value: rating),
+                      ),
                     if (_isLive)
                       const Positioned(left: 6, bottom: 6, child: LiveBadge()),
                   ],
@@ -146,4 +164,47 @@ class LiveBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TvRatedPoster extends StatefulWidget {
+  final Channel channel;
+  final Widget Function(double?) builder;
+  const _TvRatedPoster({required this.channel, required this.builder});
+  @override
+  State<_TvRatedPoster> createState() => _TvRatedPosterState();
+}
+
+class _TvRatedPosterState extends State<_TvRatedPoster> {
+  double? _rating;
+  @override
+  void initState() {
+    super.initState();
+    CatalogRatingService.instance.addListener(_changed);
+    _request();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TvRatedPoster oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.channel.id != widget.channel.id) _request();
+  }
+
+  void _request() {
+    _rating = CatalogRatingService.instance.ratingOf(widget.channel);
+    CatalogRatingService.instance.request([widget.channel], priority: true);
+  }
+
+  void _changed() {
+    final value = CatalogRatingService.instance.ratingOf(widget.channel);
+    if (mounted && value != _rating) setState(() => _rating = value);
+  }
+
+  @override
+  void dispose() {
+    CatalogRatingService.instance.removeListener(_changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(_rating);
 }

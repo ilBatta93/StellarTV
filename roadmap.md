@@ -27,3 +27,7 @@
 - [x] Riprova per singola sezione su mobile e TV (schermata sezione, barra copia salvata, Impostazioni)
 - [x] Test scaricamento, riprova singola e analisi Dart
 - [ ] Verifica APK su dispositivo (Codemagic)
+
+- [x] Cataloghi TV: ricerca a scomparsa e ordinamento nella categoria
+- [x] Cataloghi TV: ritorno alla barra superiore e voti locandine
+- [x] Scheda attore TV coerente con schede titolo
