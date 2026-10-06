@@ -68,7 +68,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                         seriesName: e.seriesName.isEmpty ? null : e.seriesName,
                       ))
             case final c?)
-          (e, c),
+          if (!app.kidsMode || app.isKidsContent(c)) (e, c),
     ];
     final startedMovies = <ResumeItem>[
       for (final it in started)
@@ -99,8 +99,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
     if (!discover.hasData) return const _DiscoverSkeleton();
 
     // Only titles that can actually be watched with the playlist.
-    List<TmdbItem> available(List<TmdbItem> items) =>
-        items.where(app.isAvailable).take(10).toList();
+    List<TmdbItem> available(List<TmdbItem> items) => items
+        .where((item) => app.isAvailable(item) && app.isTmdbAllowed(item))
+        .take(10)
+        .toList();
     final topMovies = available(discover.topMovies);
     final topSeries = available(discover.topSeries);
     final banner = [...topMovies.take(6), ...topSeries.take(4)];
@@ -113,7 +115,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
         banner: banner,
         startedMovies: startedMovies,
         startedSeries: startedSeries,
-        forYou: discover.forYou.where(app.isAvailable).toList(),
+        forYou: discover.forYou
+            .where((item) => app.isAvailable(item) && app.isTmdbAllowed(item))
+            .toList(),
         forYouSource: discover.forYouSource,
         tops: [
           (
@@ -164,7 +168,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
             ),
             _HistoryRow(items: startedSeries),
           ],
-          if (discover.forYou.where(app.isAvailable).isNotEmpty) ...[
+          if (discover.forYou
+              .where((item) => app.isAvailable(item) && app.isTmdbAllowed(item))
+              .isNotEmpty) ...[
             SectionHeader(
               title: 'Consigliati per te',
               subtitle: 'Perché hai guardato ${discover.forYouSource}',
@@ -174,7 +180,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 size: 20,
               ),
             ),
-            _PosterRow(items: discover.forYou.where(app.isAvailable).toList()),
+            _PosterRow(
+              items: discover.forYou
+                  .where(
+                    (item) => app.isAvailable(item) && app.isTmdbAllowed(item),
+                  )
+                  .toList(),
+            ),
           ],
           _TopSection(
             title: 'Top 10 della settimana',

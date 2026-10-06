@@ -18,6 +18,25 @@ class HistorySettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final history = context.watch<HistoryProvider>();
+    final app = context.watch<AppProvider>();
+    final entries = history.entries
+        .where(
+          (e) =>
+              !app.kidsMode ||
+              app.isKidsContent(
+                app.channelById(e.contentId) ??
+                    Channel(
+                      id: e.contentId,
+                      name: e.title,
+                      url: e.url,
+                      logo: e.posterUrl,
+                      group: e.group,
+                      type: e.type,
+                      seriesName: e.seriesName.isEmpty ? null : e.seriesName,
+                    ),
+              ),
+        )
+        .toList();
 
     if (!history.hasLoaded && history.isLoading) {
       return Scaffold(
@@ -26,7 +45,7 @@ class HistorySettingsScreen extends StatelessWidget {
       );
     }
 
-    if (history.entries.isEmpty) {
+    if (entries.isEmpty) {
       final failed = history.error != null;
       return Scaffold(
         appBar: AppBar(title: const Text('Cronologia')),
@@ -38,7 +57,9 @@ class HistorySettingsScreen extends StatelessWidget {
               child: SizedBox(
                 height: constraints.maxHeight,
                 child: EmptyState(
-                  icon: failed ? Icons.cloud_off_rounded : Icons.history_rounded,
+                  icon: failed
+                      ? Icons.cloud_off_rounded
+                      : Icons.history_rounded,
                   title: failed
                       ? 'Impossibile caricare la cronologia'
                       : 'Nessuna visione recente',
@@ -60,7 +81,6 @@ class HistorySettingsScreen extends StatelessWidget {
       );
     }
 
-    final entries = history.entries;
     return Scaffold(
       appBar: AppBar(title: const Text('Cronologia')),
       body: RefreshIndicator(
@@ -98,7 +118,8 @@ class _Header extends StatelessWidget {
         backgroundColor: AppColors.surface,
         title: const Text('Svuotare la cronologia?'),
         content: const Text(
-            'Tutti i contenuti visti e le posizioni di riproduzione salvate verranno eliminati da tutti i tuoi dispositivi.'),
+          'Tutti i contenuti visti e le posizioni di riproduzione salvate verranno eliminati da tutti i tuoi dispositivi.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -115,8 +136,10 @@ class _Header extends StatelessWidget {
     if (confirmed != true || !context.mounted) return;
     final ok = await context.read<HistoryProvider>().clear();
     if (!context.mounted) return;
-    _showMessage(context,
-        ok ? 'Cronologia svuotata' : 'Impossibile svuotare la cronologia');
+    _showMessage(
+      context,
+      ok ? 'Cronologia svuotata' : 'Impossibile svuotare la cronologia',
+    );
   }
 
   @override
@@ -127,13 +150,17 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Cronologia',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+              const Text(
+                'Cronologia',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 4),
               Text(
                 count == 1 ? '1 contenuto' : '$count contenuti',
                 style: const TextStyle(
-                    color: AppColors.textSecondary, fontSize: 13),
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
               ),
             ],
           ),
@@ -211,7 +238,8 @@ class _HistoryTile extends StatelessWidget {
       _showMessage(context, 'Contenuto non disponibile nella playlist attuale');
       return;
     }
-    if (channel.type == ContentType.series || channel.type == ContentType.anime) {
+    if (channel.type == ContentType.series ||
+        channel.type == ContentType.anime) {
       openChannel(context, channel);
     } else {
       playChannel(context, channel, startAt: entry.resumePosition);
@@ -250,9 +278,13 @@ class _HistoryTile extends StatelessWidget {
           children: [
             Icon(Icons.delete_outline_rounded, color: AppColors.error),
             SizedBox(width: 8),
-            Text('Rimuovi',
-                style: TextStyle(
-                    color: AppColors.error, fontWeight: FontWeight.w600)),
+            Text(
+              'Rimuovi',
+              style: TextStyle(
+                color: AppColors.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
       ),
@@ -293,30 +325,44 @@ class _HistoryTile extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(entry.title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.2)),
+                                Text(
+                                  entry.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.2,
+                                  ),
+                                ),
                                 const SizedBox(height: 4),
-                                Text(subtitle,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 12)),
+                                Text(
+                                  subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
                                 const SizedBox(height: 4),
-                                Row(children: [
-                                  const Icon(Icons.schedule_rounded,
-                                      size: 13, color: AppColors.textMuted),
-                                  const SizedBox(width: 4),
-                                  Text(_when(entry.lastWatchedAt),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.schedule_rounded,
+                                      size: 13,
+                                      color: AppColors.textMuted,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _when(entry.lastWatchedAt),
                                       style: const TextStyle(
-                                          color: AppColors.textMuted,
-                                          fontSize: 12)),
-                                ]),
+                                        color: AppColors.textMuted,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                                 if (progress != null) ...[
                                   const SizedBox(height: 8),
                                   ClipRRect(
@@ -329,10 +375,13 @@ class _HistoryTile extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(height: 4),
-                                  Text(_remaining(entry),
-                                      style: const TextStyle(
-                                          color: AppColors.textMuted,
-                                          fontSize: 11)),
+                                  Text(
+                                    _remaining(entry),
+                                    style: const TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontSize: 11,
+                                    ),
+                                  ),
                                 ],
                               ],
                             ),
@@ -340,8 +389,10 @@ class _HistoryTile extends StatelessWidget {
                           if (!DeviceTypeService.isTv)
                             IconButton(
                               tooltip: 'Rimuovi dalla cronologia',
-                              icon: const Icon(Icons.close_rounded,
-                                  color: AppColors.textSecondary),
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                color: AppColors.textSecondary,
+                              ),
                               onPressed: () => _remove(context),
                             ),
                         ],
@@ -358,8 +409,10 @@ class _HistoryTile extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
                 child: IconButton(
                   tooltip: 'Rimuovi dalla cronologia',
-                  icon: const Icon(Icons.close_rounded,
-                      color: AppColors.textSecondary),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: AppColors.textSecondary,
+                  ),
                   onPressed: () => _remove(context),
                 ),
               ),

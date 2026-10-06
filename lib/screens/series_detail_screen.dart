@@ -400,6 +400,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   }
 
   Widget _buildSimilar(BuildContext context) {
+    final similar = _similar
+        .where(context.watch<AppProvider>().isTmdbAllowed)
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -409,9 +412,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         ),
         HorizontalRow(
           height: 210,
-          itemCount: _similar.length,
+          itemCount: similar.length,
           itemBuilder: (context, index) {
-            final item = _similar[index];
+            final item = similar[index];
             return TmdbPosterCard(
               item: item,
               onTap: () => openTmdbItem(context, item),

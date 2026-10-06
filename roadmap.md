@@ -1,5 +1,10 @@
 # Roadmap
 
+- [x] Profilo Bambino: generi rigorosi, rating, cache aggiornata e tutte le sezioni protette
+- [x] Test regressione Bambino: 18 test Flutter e 5 test policy cloud superati
+- [x] Analisi dei file modificati pulita, salvo API ScrollCacheExtent già presente e non supportata dall’SDK locale
+- [ ] Build Codemagic con SDK richiesto e verifica catalogo Bambino su dispositivo
+
 - [x] Rinominare app e riferimenti visivi in StellarTV su tutte le piattaforme
 - [x] Integrare logo, logo testuale e icone app
 - [x] Mostrare il totale contenuti allineato a destra nelle categorie Film e Serie

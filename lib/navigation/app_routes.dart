@@ -18,6 +18,11 @@ void playChannel(
   List<Channel>? queue,
   bool replace = false,
 }) {
+  final app = context.read<AppProvider>();
+  if (app.kidsMode && !app.isKidsContent(channel)) return;
+  if (app.kidsMode && queue != null) {
+    queue = queue.where(app.isKidsContent).toList();
+  }
   if (channel.isSeriesFolder) {
     openChannel(context, channel);
     return;
@@ -41,6 +46,8 @@ void openSeries(
   TmdbItem? item,
   bool replace = false,
 }) {
+  final app = context.read<AppProvider>();
+  if (app.kidsMode && !app.isKidsContent(channel)) return;
   final route = MaterialPageRoute(
     settings: RouteSettings(
       name: titleRouteName(channel.seriesKey ?? channel.id),
@@ -65,6 +72,8 @@ void openChannel(
   Channel channel, {
   bool replace = false,
 }) {
+  final app = context.read<AppProvider>();
+  if (app.kidsMode && !app.isKidsContent(channel)) return;
   if (channel.type == ContentType.live) {
     playChannel(context, channel);
     return;
@@ -124,6 +133,7 @@ class OpenRoutesObserver extends NavigatorObserver {
 }
 
 void openTmdbItem(BuildContext context, TmdbItem item) {
+  if (!context.read<AppProvider>().isTmdbAllowed(item)) return;
   if (item.contentType != ContentType.movie) {
     final folder = context.read<AppProvider>().findChannelFor(item);
     if (folder != null) {

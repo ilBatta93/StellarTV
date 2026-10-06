@@ -328,7 +328,10 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
         ),
       );
     }
-    if (_similar.isEmpty) return const SizedBox.shrink();
+    final similar = _similar
+        .where(context.watch<AppProvider>().isTmdbAllowed)
+        .toList();
+    if (similar.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -338,10 +341,10 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
         ),
         HorizontalRow(
           height: 210,
-          itemCount: _similar.length,
+          itemCount: similar.length,
           itemBuilder: (context, i) => TmdbPosterCard(
-            item: _similar[i],
-            onTap: () => openTmdbItem(context, _similar[i]),
+            item: similar[i],
+            onTap: () => openTmdbItem(context, similar[i]),
           ),
         ),
       ],

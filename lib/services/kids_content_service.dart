@@ -10,11 +10,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/supabase_config.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
+import 'kids_policy.dart';
 
-/// Kids profile filter based on TMDB age certifications (G, PG, TV-Y,
-/// TV-Y7...) checked by the app server, plus a list of banned keywords.
-/// Verdicts are cached on the device; unknown titles stay hidden until
-/// they are checked.
+/// Strict genre/category + age policy. Unknown titles stay hidden except
+/// explicitly labelled Animation/Kids groups; known safety vetoes win.
 class KidsContentService {
   static const _cacheKey = 'kids_verdicts_v1';
   static const _genresKey = 'tmdb_genres_v1';
@@ -29,6 +28,7 @@ class KidsContentService {
   );
 
   final Map<String, bool> _verdicts = {};
+  final Map<String, String> _certifications = {};
 
   /// TMDB genre ids per title, filled by the same background scan.
   final Map<String, List<int>> _genres = {};
@@ -55,7 +55,7 @@ class KidsContentService {
       c.seriesName?.isNotEmpty == true ? c.seriesName! : c.name;
 
   Future<File> _file() async => File(
-    '${(await getApplicationSupportDirectory()).path}/stellartv_kids_v2.json',
+    '${(await getApplicationSupportDirectory()).path}/stellartv_kids_v3.json',
   );
 
   Future<void> load() async {
@@ -70,6 +70,7 @@ class KidsContentService {
       final data = await Isolate.run(() => _readStore(path));
       _verdicts.addAll(data.verdicts);
       _genres.addAll(data.genres);
+      _certifications.addAll(data.certifications);
     } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -77,7 +78,7 @@ class KidsContentService {
       final raw = prefs.getString(_cacheKey);
       if (raw != null || rawGenres != null) {
         final legacy = await Isolate.run(() => _decodeLegacy(raw, rawGenres));
-        legacy.verdicts.forEach((k, v) => _verdicts.putIfAbsent(k, () => v));
+        // Old rating-only approvals must never authorize the strict policy.
         legacy.genres.forEach((k, v) => _genres.putIfAbsent(k, () => v));
         await _persist();
         await prefs.remove(_cacheKey);
@@ -93,10 +94,21 @@ class KidsContentService {
 
   bool isKidsContent(Channel item) {
     final banned = _banned[item] ??= bannedKeywords.hasMatch(
-      '${item.name} ${item.seriesName ?? ''} ${item.plot ?? ''}',
+      '${item.name} ${item.group} ${item.seriesName ?? ''} ${item.plot ?? ''}',
     );
     if (banned) return false;
-    return _verdicts[keyOf(item)] == true;
+    final key = keyOf(item);
+    final genres = _genres[key] ?? const <int>[];
+    if (!KidsPolicy.allows(
+      category: item.group,
+      genres: genres,
+      certification: _certifications[key] ?? '',
+    )) {
+      return false;
+    }
+    // Known cloud vetoes (matched title, overview, rating) always win.
+    if (_verdicts[key] == false) return false;
+    return true;
   }
 
   bool isKnown(Channel item) => _verdicts.containsKey(keyOf(item));
@@ -114,9 +126,17 @@ class KidsContentService {
   /// Queues unknown titles and checks them in the background.
   void request(Iterable<Channel> items) {
     for (final c in items) {
-      if (c.type != ContentType.movie && c.type != ContentType.series) continue;
+      if (c.type != ContentType.movie &&
+          c.type != ContentType.series &&
+          c.type != ContentType.anime) {
+        continue;
+      }
       final key = keyOf(c);
-      if (_verdicts.containsKey(key) && _genres.containsKey(key)) continue;
+      if (_verdicts.containsKey(key) &&
+          _genres.containsKey(key) &&
+          _certifications.containsKey(key)) {
+        continue;
+      }
       _pending.add('${key.split(':').first}\u0000${_titleOf(c)}');
     }
     if (!_running) unawaited(_run());
@@ -154,11 +174,15 @@ class KidsContentService {
         if (res.statusCode != 200) return;
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         for (final r in (body['results'] as List? ?? const [])) {
-          if (r is! Map || r['is_kids'] is! bool || r['key'] is! String) {
+          if (r is! Map ||
+              r['is_kids'] is! bool ||
+              r['key'] is! String ||
+              r['certification'] is! String) {
             continue;
           }
           final key = r['key'] as String;
           _verdicts[key] = r['is_kids'] as bool;
+          _certifications[key] = r['certification'] as String;
           final g = r['genre_ids'];
           _genres[key] = g is List ? g.whereType<int>().toList() : const [];
           final p = keys[key];
@@ -200,13 +224,18 @@ class KidsContentService {
           }
           final body = jsonDecode(res.body) as Map<String, dynamic>;
           for (final r in (body['results'] as List? ?? const [])) {
-            if (r is! Map || r['is_kids'] is! bool) continue;
+            if (r is! Map ||
+                r['is_kids'] is! bool ||
+                r['certification'] is! String) {
+              continue;
+            }
             final norm = (r['title'] as String)
                 .toLowerCase()
                 .replaceAll(_nonWord, ' ')
                 .trim();
             final key = '${r['type']}:$norm';
             _verdicts[key] = r['is_kids'] as bool;
+            _certifications[key] = r['certification'] as String;
             final g = r['genre_ids'];
             _genres[key] = g is List ? g.whereType<int>().toList() : const [];
           }
@@ -237,7 +266,10 @@ class KidsContentService {
       final path = file.path;
       final verdicts = Map<String, bool>.of(_verdicts);
       final genres = Map<String, List<int>>.of(_genres);
-      await Isolate.run(() => _writeStore(path, verdicts, genres));
+      final certifications = Map<String, String>.of(_certifications);
+      await Isolate.run(
+        () => _writeStore(path, verdicts, genres, certifications),
+      );
     } catch (_) {}
   }
 }
@@ -245,7 +277,12 @@ class KidsContentService {
 class _KidsStore {
   final Map<String, bool> verdicts;
   final Map<String, List<int>> genres;
-  const _KidsStore(this.verdicts, this.genres);
+  final Map<String, String> certifications;
+  const _KidsStore(
+    this.verdicts,
+    this.genres, [
+    this.certifications = const {},
+  ]);
 }
 
 _KidsStore _readStore(String path) {
@@ -270,7 +307,14 @@ _KidsStore _readStore(String path) {
         }
       });
     }
-    return _KidsStore(verdicts, genres);
+    final certifications = <String, String>{};
+    final c = map['c'];
+    if (c is Map) {
+      c.forEach((k, v) {
+        if (k is String && v is String) certifications[k] = v;
+      });
+    }
+    return _KidsStore(verdicts, genres, certifications);
   } catch (_) {
     return const _KidsStore({}, {});
   }
@@ -300,10 +344,11 @@ void _writeStore(
   String path,
   Map<String, bool> verdicts,
   Map<String, List<int>> genres,
+  Map<String, String> certifications,
 ) {
   final temporary = File('$path.tmp');
   temporary.writeAsStringSync(
-    jsonEncode({'v': verdicts, 'g': genres}),
+    jsonEncode({'v': verdicts, 'g': genres, 'c': certifications}),
     flush: true,
   );
   temporary.renameSync(path);

@@ -68,7 +68,8 @@ class AppProvider extends ChangeNotifier {
 
   List<Channel> get allChannels => _allChannels;
   Set<String> get favoriteIds => _favoriteIds;
-  List<TmdbItem> get tmdbFavorites => _tmdbFavorites;
+  List<TmdbItem> get tmdbFavorites =>
+      _kidsMode ? _tmdbFavorites.where(isTmdbAllowed).toList() : _tmdbFavorites;
   bool get isLoading => _isLoading;
   final Map<ContentType, CatalogLoadState> _catalogStates = {};
   CatalogLoadState catalogState(ContentType type) =>
@@ -152,7 +153,10 @@ class AppProvider extends ChangeNotifier {
 
   Channel? channelById(String id) {
     final index = _channelIndex ??= {for (final c in _allChannels) c.id: c};
-    return index[id] ?? _episodeIndex[id];
+    final channel = index[id] ?? _episodeIndex[id];
+    return channel != null && (!_kidsMode || isKidsContent(channel))
+        ? channel
+        : null;
   }
 
   /// Episodes loaded when a series page opens. Kept apart from the catalog:
@@ -266,31 +270,14 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
-  /// Kids profile rule: films and series need a children's TMDB age
-  /// certification (G, PG, TV-Y, TV-Y7...) and no banned keywords; Xtream
-  /// categories are not trusted. Live channels have no TMDB rating, so
-  /// they still use the kids channel/category names.
+  /// One strict policy for all content types, including live channels.
   bool isKidsContent(Channel c) {
     if (isAdult(c)) return false;
     if (KidsContentService.bannedKeywords.hasMatch('${c.name} ${c.group}')) {
       return false;
     }
-    if (c.type == ContentType.live) return isKidsFriendly(c);
     return _kids.isKidsContent(c);
   }
-
-  static final _kidsPattern = RegExp(
-    r'\bkids?\b|bambin|\bbimbi|cartoon|cartoni|animazione|animation|'
-    r'animat|\bfamily\b|famiglia|junior|ragazzi|disney|pixar|dreamworks|'
-    r'nick\s*jr|nickelodeon|\bboing\b|\bk2\b|frisbee|yoyo|rai\s*gulp|'
-    r'cartoonito|\bbaby|infanzia|\bteen|deakids|super!|\bpeppa|\bkinder',
-    caseSensitive: false,
-  );
-
-  /// True for content suitable for a kids profile (by category or title).
-  static bool isKidsFriendly(Channel c) =>
-      _kidsPattern.hasMatch(c.group) ||
-      (c.type == ContentType.live && _kidsPattern.hasMatch(c.name));
 
   /// Adult content is hidden by default; the user can show it in Settings.
   bool get showAdult => _showAdult;
@@ -492,6 +479,17 @@ class AppProvider extends ChangeNotifier {
   /// True when the TMDB title can actually be watched with the playlist.
   bool isAvailable(TmdbItem item) => findChannelFor(item) != null;
 
+  /// External search/credits cannot bypass the verified playlist catalog.
+  bool isTmdbAllowed(TmdbItem item) {
+    if (!_kidsMode) return true;
+    final channel = findChannelFor(item);
+    return channel != null &&
+        isKidsContent(channel) &&
+        !KidsContentService.bannedKeywords.hasMatch(
+          '${item.title} ${item.overview}',
+        );
+  }
+
   /// Finds the playlist title for a TMDB item. Movies need an exact title
   /// match and, when both sides have a year, the same year: this avoids
   /// opening a different film with the same name (remakes, sequels).
@@ -572,14 +570,41 @@ class AppProvider extends ChangeNotifier {
           series: series,
         );
         indexEpisodes(details.allEpisodes.map((e) => e.channel).toList());
-        return details;
+        return _safeSeriesDetails(details);
       } catch (_) {
         final local = SeriesGrouping.detailsFromEpisodes(series, _rawChannels);
-        if (local.seasons.isNotEmpty) return local;
+        if (local.seasons.isNotEmpty) return _safeSeriesDetails(local);
         rethrow;
       }
     }
-    return SeriesGrouping.detailsFromEpisodes(series, _rawChannels);
+    return _safeSeriesDetails(
+      SeriesGrouping.detailsFromEpisodes(series, _rawChannels),
+    );
+  }
+
+  SeriesDetails _safeSeriesDetails(SeriesDetails details) {
+    if (!_kidsMode) return details;
+    if (!isKidsContent(details.series)) {
+      return SeriesDetails(
+        series: details.series,
+        overview: '',
+        seasons: const [],
+      );
+    }
+    return SeriesDetails(
+      series: details.series,
+      overview: details.overview,
+      seasons: [
+        for (final season in details.seasons)
+          SeriesSeason(
+            number: season.number,
+            name: season.name,
+            episodes: season.episodes
+                .where((e) => isKidsContent(e.channel))
+                .toList(),
+          ),
+      ],
+    );
   }
 
   static String _normalize(String s) => s

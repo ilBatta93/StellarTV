@@ -85,7 +85,7 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    if (_localSource != app || _computedFor != _localQuery) {
+    if (_localSource != app.allChannels || _computedFor != _localQuery) {
       _computeLocal(app);
     }
     return Scaffold(
@@ -131,7 +131,7 @@ class _SearchScreenState extends State<SearchScreen> {
   /// Playlist results are computed once per (debounced) query, not on
   /// every keystroke / rebuild.
   void _computeLocal(AppProvider app) {
-    _localSource = app;
+    _localSource = app.allChannels;
     _computedFor = _localQuery;
     _local = {
       for (final type in const [
@@ -147,6 +147,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildResults(AppProvider app) {
+    final tmdbResults = _tmdbResults.where(app.isTmdbAllowed).toList();
     final sections = [
       (ContentType.live, 'TV in Diretta'),
       (ContentType.movie, 'Film nella tua playlist'),
@@ -188,7 +189,7 @@ class _SearchScreenState extends State<SearchScreen> {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           )
-        else if (_tmdbResults.isEmpty)
+        else if (tmdbResults.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
@@ -207,11 +208,11 @@ class _SearchScreenState extends State<SearchScreen> {
               crossAxisSpacing: 12,
               mainAxisSpacing: 16,
             ),
-            itemCount: _tmdbResults.length,
+            itemCount: tmdbResults.length,
             itemBuilder: (context, i) => TmdbPosterCard(
-              item: _tmdbResults[i],
+              item: tmdbResults[i],
               width: double.infinity,
-              onTap: () => openTmdbItem(context, _tmdbResults[i]),
+              onTap: () => openTmdbItem(context, tmdbResults[i]),
             ),
           ),
       ],

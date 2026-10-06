@@ -5,6 +5,7 @@ import '../models/tmdb_item.dart';
 import '../models/tmdb_person.dart';
 import '../navigation/app_routes.dart';
 import '../providers/discover_provider.dart';
+import '../providers/app_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
@@ -70,8 +71,11 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final person = _details ?? widget.person;
+    final credits = _credits
+        .where(context.watch<AppProvider>().isTmdbAllowed)
+        .toList();
 
-    if (DeviceTypeService.isTv) return _buildTv(person);
+    if (DeviceTypeService.isTv) return _buildTv(person, credits);
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -210,12 +214,12 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                   mainAxisSpacing: 16,
                 ),
                 delegate: SliverChildBuilderDelegate((context, i) {
-                  final item = _credits[i];
+                  final item = credits[i];
                   return TmdbPosterCard(
                     item: item,
                     onTap: () => openTmdbItem(context, item),
                   );
-                }, childCount: _credits.length),
+                }, childCount: credits.length),
               ),
             ),
           ],
@@ -224,8 +228,8 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
     );
   }
 
-  Widget _buildTv(TmdbPerson person) {
-    final backdrop = _credits
+  Widget _buildTv(TmdbPerson person, List<TmdbItem> credits) {
+    final backdrop = credits
         .where((item) => item.backdropPath != null)
         .firstOrNull;
     final birthday = person.birthday;
@@ -303,7 +307,7 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                _Chip(label: '${_credits.length} contenuti'),
+                                _Chip(label: '${credits.length} contenuti'),
                                 if (birthday != null && birthday.isNotEmpty)
                                   _Chip(
                                     label: 'Nato il ${_formatDate(birthday)}',
@@ -390,10 +394,10 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                     delegate: SliverChildBuilderDelegate(
                       (context, i) => TmdbPosterCard(
                         width: double.infinity,
-                        item: _credits[i],
-                        onTap: () => openTmdbItem(context, _credits[i]),
+                        item: credits[i],
+                        onTap: () => openTmdbItem(context, credits[i]),
                       ),
-                      childCount: _credits.length,
+                      childCount: credits.length,
                     ),
                   ),
                 ),
