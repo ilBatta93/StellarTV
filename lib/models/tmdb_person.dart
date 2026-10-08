@@ -22,7 +22,7 @@ class TmdbPerson {
   });
 
   String get profileUrl =>
-      profilePath == null ? '' : 'https://image.tmdb.org/t/p/w185$profilePath';
+      profilePath == null ? '' : 'https://image.tmdb.org/t/p/w342$profilePath';
 
   static TmdbPerson? tryParse(Map<String, dynamic> json) {
     final id = json['id'];

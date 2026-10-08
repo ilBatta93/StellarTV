@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../models/content_type.dart';
 import '../providers/profile_provider.dart';
+import '../providers/ui_settings.dart';
 import '../services/profile_service.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
@@ -30,29 +31,66 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
-  // Tabs are built only once visited, so opening Home does not build every
-  // catalog at the same time.
-  final Set<int> _visited = {0};
+  final Set<AppSection> _visited = {AppSection.home};
+  List<AppSection> _order = List.of(AppSection.values);
+  bool _layoutInitialized = false;
+  bool _startSectionApplied = false;
 
-  static const _pages = [
-    DiscoverPage(),
-    CatalogSectionFrame(type: ContentType.live, child: LivePage()),
-    CatalogSectionFrame(
-      type: ContentType.movie,
-      child: CatalogPage(type: ContentType.movie),
-    ),
-    CatalogSectionFrame(
-      type: ContentType.series,
-      child: CatalogPage(type: ContentType.series),
-    ),
-    FavoritesPage(),
-  ];
+  AppSection? get _currentSection =>
+      _currentIndex >= 0 && _currentIndex < _order.length
+          ? _order[_currentIndex]
+          : null;
+
+  Widget _pageFor(AppSection section) => switch (section) {
+        AppSection.home => const DiscoverPage(),
+        AppSection.live => const CatalogSectionFrame(
+            type: ContentType.live,
+            child: LivePage(),
+          ),
+        AppSection.movies => const CatalogSectionFrame(
+            type: ContentType.movie,
+            child: CatalogPage(type: ContentType.movie),
+          ),
+        AppSection.series => const CatalogSectionFrame(
+            type: ContentType.series,
+            child: CatalogPage(type: ContentType.series),
+          ),
+      };
+
+  void _syncLayout(UiSettings ui) {
+    final next = ui.sectionOrder;
+    if (!_layoutInitialized) {
+      _order = next;
+      _layoutInitialized = true;
+    }
+    if (ui.loaded && !_startSectionApplied) {
+      _order = next;
+      _currentIndex = next.indexOf(ui.startSection);
+      _visited.add(ui.startSection);
+      _startSectionApplied = true;
+      return;
+    }
+    if (_order.map((e) => e.id).join(',') ==
+        next.map((e) => e.id).join(',')) {
+      return;
+    }
+    final selected = _currentSection;
+    final favorites = _currentIndex == _order.length;
+    _order = next;
+    if (favorites) {
+      _currentIndex = _order.length;
+    } else {
+      final selectedIndex = selected == null ? 0 : _order.indexOf(selected);
+      _currentIndex = selectedIndex < 0 ? 0 : selectedIndex;
+    }
+  }
 
   void _push(Widget screen) =>
       Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
 
   @override
   Widget build(BuildContext context) {
+    _syncLayout(context.watch<UiSettings>());
     if (DeviceTypeService.isTv) return _buildTv(context);
     return Scaffold(
       appBar: AppBar(
@@ -82,8 +120,9 @@ class _HomeScreenState extends State<HomeScreen> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          for (var i = 0; i < _pages.length; i++)
-            _visited.contains(i) ? _pages[i] : const SizedBox.shrink(),
+          for (final section in _order)
+            _visited.contains(section) ? _pageFor(section) : const SizedBox.shrink(),
+          const FavoritesPage(),
         ],
       ),
       bottomNavigationBar: Container(
@@ -94,48 +133,11 @@ class _HomeScreenState extends State<HomeScreen> {
           selectedIndex: _currentIndex,
           onDestinationSelected: (i) => setState(() {
             _currentIndex = i;
-            _visited.add(i);
+            if (i >= 0 && i < _order.length) _visited.add(_order[i]);
           }),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
-              label: 'Home',
-            ),
-            NavigationDestination(
-              icon: CatalogNavigationIcon(
-                icon: Icons.live_tv_outlined,
-                type: ContentType.live,
-              ),
-              selectedIcon: CatalogNavigationIcon(
-                icon: Icons.live_tv_rounded,
-                type: ContentType.live,
-              ),
-              label: 'Diretta',
-            ),
-            NavigationDestination(
-              icon: CatalogNavigationIcon(
-                icon: Icons.movie_outlined,
-                type: ContentType.movie,
-              ),
-              selectedIcon: CatalogNavigationIcon(
-                icon: Icons.movie_rounded,
-                type: ContentType.movie,
-              ),
-              label: 'Film',
-            ),
-            NavigationDestination(
-              icon: CatalogNavigationIcon(
-                icon: Icons.video_library_outlined,
-                type: ContentType.series,
-              ),
-              selectedIcon: CatalogNavigationIcon(
-                icon: Icons.video_library_rounded,
-                type: ContentType.series,
-              ),
-              label: 'Serie TV',
-            ),
-            NavigationDestination(
+          destinations: [
+            for (final section in _order) _mobileDestination(section),
+            const NavigationDestination(
               icon: Icon(Icons.favorite_border_rounded),
               selectedIcon: Icon(Icons.favorite_rounded),
               label: 'Preferiti',
@@ -146,6 +148,23 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  NavigationDestination _mobileDestination(AppSection section) => switch (section) {
+        AppSection.home => const NavigationDestination(
+            icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+        AppSection.live => const NavigationDestination(
+            icon: CatalogNavigationIcon(icon: Icons.live_tv_outlined, type: ContentType.live),
+            selectedIcon: CatalogNavigationIcon(icon: Icons.live_tv_rounded, type: ContentType.live),
+            label: 'Diretta'),
+        AppSection.movies => const NavigationDestination(
+            icon: CatalogNavigationIcon(icon: Icons.movie_outlined, type: ContentType.movie),
+            selectedIcon: CatalogNavigationIcon(icon: Icons.movie_rounded, type: ContentType.movie),
+            label: 'Film'),
+        AppSection.series => const NavigationDestination(
+            icon: CatalogNavigationIcon(icon: Icons.video_library_outlined, type: ContentType.series),
+            selectedIcon: CatalogNavigationIcon(icon: Icons.video_library_rounded, type: ContentType.series),
+            label: 'Serie TV'),
+      };
+
   final FocusScopeNode _tvNavScope = FocusScopeNode(debugLabel: 'tvNav');
   final FocusScopeNode _tvContentScope = FocusScopeNode(
     debugLabel: 'tvContent',
@@ -153,7 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // One node per tab pill, so the white focus oval always follows the tab that
   // is actually selected (e.g. after Back returns to Home).
   final List<FocusNode> _tabNodes = List.generate(
-    _pages.length,
+    AppSection.values.length + 1,
     (i) => FocusNode(debugLabel: 'tvTab$i'),
   );
 
@@ -169,14 +188,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _selectTab(int i) => setState(() {
     _currentIndex = i;
-    _visited.add(i);
+    if (i >= 0 && i < _order.length) _visited.add(_order[i]);
   });
 
   void _focusNav() => _tabNodes[_currentIndex].requestFocus();
 
   /// Moves focus from the top menu to the first item of the visible tab.
   void _focusContent() {
-    if (_currentIndex >= 1 && _currentIndex <= 3) {
+    if (_currentSection != AppSection.home && _currentSection != null) {
       final searches = _tvContentScope.traversalDescendants.where(
         (n) => n.debugLabel == 'catalogSearch' && n.canRequestFocus,
       );
@@ -217,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return KeyEventResult.ignored;
     }
     final primary = FocusManager.instance.primaryFocus;
-    if (_currentIndex >= 1 && _currentIndex <= 4) {
+    if (_currentSection != AppSection.home) {
       return KeyEventResult.ignored;
     }
     if (primary != null &&
@@ -237,9 +256,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _focusNav();
       return;
     }
-    if (_currentIndex != 0) {
-      _selectTab(0);
-      _tabNodes[0].requestFocus();
+    final homeIndex = _order.indexOf(AppSection.home);
+    if (_currentIndex != homeIndex) {
+      _selectTab(homeIndex);
+      _tabNodes[homeIndex].requestFocus();
       return;
     }
     DeviceTypeService.moveToBackground();
@@ -249,11 +269,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final content = IndexedStack(
       index: _currentIndex,
       children: [
-        for (var i = 0; i < _pages.length; i++)
+        for (var i = 0; i < _order.length + 1; i++)
           // Hidden tabs must never receive D-Pad focus.
           ExcludeFocus(
             excluding: i != _currentIndex,
-            child: _visited.contains(i) ? _pages[i] : const SizedBox.shrink(),
+            child: i == _order.length
+                ? const FavoritesPage()
+                : (_visited.contains(_order[i])
+                    ? _pageFor(_order[i])
+                    : const SizedBox.shrink()),
           ),
       ],
     );
@@ -267,7 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             // Home draws its hero under the menu; other tabs start below it.
             Positioned.fill(
-              top: _currentIndex == 0 ? 0 : _TvTopBar.height,
+              top: _currentSection == AppSection.home ? 0 : _TvTopBar.height,
               child: Focus(
                 canRequestFocus: false,
                 skipTraversal: true,
@@ -291,6 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   autofocus: true,
                   child: _TvTopBar(
                     selectedIndex: _currentIndex,
+                    sections: _order,
                     tabNodes: _tabNodes,
                     onSelected: _selectTab,
                     onSearch: () => _push(const SearchScreen()),
@@ -311,6 +336,7 @@ class _TvTopBar extends StatelessWidget {
   static const double height = 60;
 
   final int selectedIndex;
+  final List<AppSection> sections;
   final List<FocusNode> tabNodes;
   final ValueChanged<int> onSelected;
   final VoidCallback onSearch;
@@ -319,14 +345,13 @@ class _TvTopBar extends StatelessWidget {
 
   const _TvTopBar({
     required this.selectedIndex,
+    required this.sections,
     required this.tabNodes,
     required this.onSelected,
     required this.onSearch,
     required this.onProfile,
     required this.onSettings,
   });
-
-  static const _tabs = ['Home', 'Diretta', 'Film', 'Serie TV'];
 
   @override
   Widget build(BuildContext context) {
@@ -368,14 +393,14 @@ class _TvTopBar extends StatelessWidget {
             compact: compact,
             onPressed: onSearch,
           ),
-          for (var i = 0; i < _tabs.length; i++)
+          for (var i = 0; i < sections.length; i++)
             _TvNavPill(
-              label: _tabs[i],
-              contentType: switch (i) {
-                1 => ContentType.live,
-                2 => ContentType.movie,
-                3 => ContentType.series,
-                _ => null,
+              label: sections[i].label,
+              contentType: switch (sections[i]) {
+                AppSection.live => ContentType.live,
+                AppSection.movies => ContentType.movie,
+                AppSection.series => ContentType.series,
+                AppSection.home => null,
               },
               focusNode: tabNodes[i],
               selected: selectedIndex == i,
@@ -386,10 +411,10 @@ class _TvTopBar extends StatelessWidget {
           const Spacer(),
           _TvNavPill(
             icon: Icons.favorite_rounded,
-            focusNode: tabNodes[4],
-            selected: selectedIndex == 4,
+            focusNode: tabNodes[sections.length],
+            selected: selectedIndex == sections.length,
             compact: compact,
-            onPressed: () => onSelected(4),
+            onPressed: () => onSelected(sections.length),
           ),
           _TvNavPill(
             label: name.isEmpty ? '?' : name.characters.first.toUpperCase(),

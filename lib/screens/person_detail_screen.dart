@@ -93,7 +93,10 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                   if (person.profileUrl.isNotEmpty)
                     CachedNetworkImage(
                       cacheManager: AppImageCache.manager,
-                      imageUrl: person.profileUrl,
+                      imageUrl: person.profileUrl.replaceFirst(
+                        '/w342',
+                        '/w780',
+                      ),
                       memCacheWidth: 720,
                       fadeInDuration: const Duration(milliseconds: 150),
                       fit: BoxFit.cover,
@@ -290,10 +293,7 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                           width: 128,
                           height: 176,
                           child: PosterImage(
-                            url: person.profileUrl.replaceFirst(
-                              '/w185',
-                              '/w342',
-                            ),
+                            url: person.profileUrl,
                             fallbackIcon: Icons.person_outline_rounded,
                           ),
                         ),

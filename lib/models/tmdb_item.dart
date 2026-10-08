@@ -29,10 +29,10 @@ class TmdbItem {
   String get year => releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '';
 
   String? get posterUrl =>
-      posterPath == null ? null : 'https://image.tmdb.org/t/p/w342$posterPath';
+      posterPath == null ? null : 'https://image.tmdb.org/t/p/w500$posterPath';
   String? get backdropUrl => backdropPath == null
       ? posterUrl
-      : 'https://image.tmdb.org/t/p/w780$backdropPath';
+      : 'https://image.tmdb.org/t/p/w1280$backdropPath';
 
   static TmdbItem? tryParse(Map<String, dynamic> json, {String? fallbackType}) {
     final type = json['media_type'] as String? ?? fallbackType;

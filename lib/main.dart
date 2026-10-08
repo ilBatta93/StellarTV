@@ -155,6 +155,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
       await _profileProvider.load(silent: true);
     };
     _appProvider.addListener(_onAppChanged);
+    _uiSettings.addListener(_onUiSettingsChanged);
     // Reminders are not needed for the first frame: start after it.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future.delayed(const Duration(seconds: 8), () {
@@ -162,6 +163,18 @@ class _StellarTvAppState extends State<StellarTvApp> {
       });
     });
     _syncProvider.load();
+  }
+
+  String _uiSignature = '';
+
+  void _onUiSettingsChanged() {
+    if (!_uiSettings.loaded) return;
+    final sig = '${_uiSettings.sectionOrder.map((e) => e.id).join(',')}:'
+        '${_uiSettings.startSection.id}';
+    if (sig == _uiSignature) return;
+    final first = _uiSignature.isEmpty;
+    _uiSignature = sig;
+    if (!first) _syncProvider.schedulePush();
   }
 
   /// Any change to favorites schedules a cloud push (debounced).
@@ -182,6 +195,8 @@ class _StellarTvAppState extends State<StellarTvApp> {
   @override
   void dispose() {
     _appProvider.removeListener(_onAppChanged);
+    _uiSettings.removeListener(_onUiSettingsChanged);
+    _uiSettings.dispose();
     _appProvider.dispose();
     _historyProvider.dispose();
     _syncProvider.dispose();

@@ -22,3 +22,5 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Poster ratings resolve in groups through the backend's shared TMDB rating cache, falling back to direct TMDB lookups while the backend is unreachable.
 - Every network image goes through one shared disk cache manager and is decoded at display size.
 - Catalog grids memoize filtered lists by source instance, genre and metadata version so rebuilds reuse the same list and the sort cache keeps hitting.
+
+- Primary section order and startup section are owned by UiSettings and identified by stable AppSection ids, so mobile/TV navigation and cloud sync never depend on positional indexes.

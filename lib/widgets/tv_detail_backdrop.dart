@@ -21,7 +21,12 @@ class TvDetailBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = image?.replaceFirst('/t/p/w780/', '/t/p/w1280/');
+    final width = MediaQuery.sizeOf(context).width;
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final decodeWidth = (width * pixelRatio).round().clamp(1280, 1920);
+    final url = image
+        ?.replaceFirst('/t/p/w780/', '/t/p/w1280/')
+        .replaceFirst('/t/p/w500/', '/t/p/w1280/');
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
@@ -37,7 +42,7 @@ class TvDetailBackdrop extends StatelessWidget {
                     cacheManager: AppImageCache.manager,
                     imageUrl: url,
                     fit: BoxFit.cover,
-                    memCacheWidth: 1280,
+                    memCacheWidth: decodeWidth,
                     placeholder: (_, _) => const SizedBox.expand(),
                     errorWidget: (_, _, _) => const SizedBox.expand(),
                     fadeInDuration: const Duration(milliseconds: 300),

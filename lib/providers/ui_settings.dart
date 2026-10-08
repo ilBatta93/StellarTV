@@ -3,12 +3,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme/app_theme.dart';
 
+enum AppSection { home, live, movies, series }
+
+extension AppSectionInfo on AppSection {
+  String get id => name;
+  String get label => switch (this) {
+        AppSection.home => 'Home',
+        AppSection.live => 'Diretta',
+        AppSection.movies => 'Film',
+        AppSection.series => 'Serie TV',
+      };
+}
+
 class UiSettings extends ChangeNotifier {
   static const _accentKey = 'ui_accent';
   static const _gridSizeKey = 'ui_grid_size';
   static const _postersKey = 'ui_show_posters';
   static const _animationsKey = 'ui_animations';
   static const _compactKey = 'ui_compact';
+  static const sectionOrderKey = 'ui_section_order';
+  static const startSectionKey = 'ui_start_section';
 
   static const accents = {
     'arancio': Color(0xFFFF5A1F),
@@ -27,6 +41,9 @@ class UiSettings extends ChangeNotifier {
   bool _showPosters = true;
   bool _animations = true;
   bool _compact = false;
+  bool _loaded = false;
+  List<AppSection> _sectionOrder = List.of(AppSection.values);
+  AppSection _startSection = AppSection.home;
 
   Color get accent => _accent;
   String get gridSize => _gridSize;
@@ -34,6 +51,9 @@ class UiSettings extends ChangeNotifier {
   bool get showPosters => _showPosters;
   bool get animations => _animations;
   bool get compact => _compact;
+  bool get loaded => _loaded;
+  List<AppSection> get sectionOrder => List.unmodifiable(_sectionOrder);
+  AppSection get startSection => _startSection;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -45,6 +65,9 @@ class UiSettings extends ChangeNotifier {
     _showPosters = prefs.getBool(_postersKey) ?? true;
     _animations = prefs.getBool(_animationsKey) ?? true;
     _compact = prefs.getBool(_compactKey) ?? false;
+    _sectionOrder = _parseSectionOrder(prefs.getStringList(sectionOrderKey));
+    _startSection = _parseSection(prefs.getString(startSectionKey)) ?? AppSection.home;
+    _loaded = true;
     AppColors.primary = _accent;
     notifyListeners();
   }
@@ -84,6 +107,61 @@ class UiSettings extends ChangeNotifier {
     _animations = value;
     await _save(_animationsKey, value);
     notifyListeners();
+  }
+
+  Future<void> setSectionOrder(List<AppSection> value) async {
+    if (value.length != AppSection.values.length ||
+        value.toSet().length != AppSection.values.length) return;
+    _sectionOrder = List.of(value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(sectionOrderKey, value.map((e) => e.id).toList());
+    notifyListeners();
+  }
+
+  Future<void> moveSection(int oldIndex, int newIndex) async {
+    if (oldIndex < 0 ||
+        oldIndex >= _sectionOrder.length ||
+        newIndex < 0 ||
+        newIndex >= _sectionOrder.length ||
+        oldIndex == newIndex) {
+      return;
+    }
+    final next = List<AppSection>.of(_sectionOrder);
+    final item = next.removeAt(oldIndex);
+    next.insert(newIndex, item);
+    await setSectionOrder(next);
+  }
+
+  Future<void> setStartSection(AppSection value) async {
+    _startSection = value;
+    await _save(startSectionKey, value.id);
+    notifyListeners();
+  }
+
+  Future<void> resetSectionLayout() async {
+    _sectionOrder = List.of(AppSection.values);
+    _startSection = AppSection.home;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(sectionOrderKey);
+    await prefs.remove(startSectionKey);
+    notifyListeners();
+  }
+
+  static AppSection? _parseSection(String? id) {
+    for (final section in AppSection.values) {
+      if (section.id == id) return section;
+    }
+    return null;
+  }
+
+  static List<AppSection> _parseSectionOrder(List<String>? ids) {
+    if (ids == null) return List.of(AppSection.values);
+    final parsed = ids.map(_parseSection).whereType<AppSection>().toList();
+    if (parsed.length != AppSection.values.length ||
+        parsed.toSet().length != AppSection.values.length) {
+      return List.of(AppSection.values);
+    }
+    return parsed;
   }
 
   Future<void> setCompact(bool value) async {

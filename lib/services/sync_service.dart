@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../providers/ui_settings.dart';
+
 /// A snapshot of everything the user cares about, serializable to JSON.
 class SyncPayload {
   final Map<String, dynamic> history;
@@ -71,6 +73,8 @@ class SyncService {
     'ui_animations',
     'ui_show_posters',
     'ui_compact',
+    UiSettings.sectionOrderKey,
+    UiSettings.startSectionKey,
     'show_adult_content',
     'hidden_categories',
     'playlist_refresh_minutes',

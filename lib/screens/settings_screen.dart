@@ -16,6 +16,7 @@ import 'profile_picker_screen.dart';
 import 'sync_settings_screen.dart';
 import 'expiry_reminder_screen.dart';
 import 'xtream_account_screen.dart';
+import 'section_layout_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -82,6 +83,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             );
             if (chosen != null) await ui.setAccent(chosen);
           },
+        ),
+        SettingsValueTile(
+          icon: Icons.view_week_outlined,
+          title: 'Ordine delle sezioni',
+          subtitle: 'Riordina Home, Diretta, Film e Serie TV',
+          value: ui.startSection.label,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SectionLayoutScreen()),
+          ),
         ),
         SettingsValueTile(
           icon: Icons.grid_view_outlined,
