@@ -46,3 +46,8 @@
 - [x] TV locandine: titoli con margini interni laterali e inferiori
 - [x] 22 test selezionati superati con Flutter 3.38.3/Dart 3.10.1 su copia di verifica
 - [ ] Build completa con SDK richiesto e verifica telecomando su TV reale
+
+- [x] Ordine sezioni navigabile col telecomando (OK prende, Su/Giù sposta, OK/Back conferma)
+- [x] Rilascio B: download offline di film ed episodi (file diretti non protetti)
+- [ ] Rilascio C: timeshift e pulsante LIVE
+- [ ] Rilascio D: registrazioni

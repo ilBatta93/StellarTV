@@ -17,6 +17,7 @@ import 'sync_settings_screen.dart';
 import 'expiry_reminder_screen.dart';
 import 'xtream_account_screen.dart';
 import 'section_layout_screen.dart';
+import 'downloads_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -83,6 +84,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             );
             if (chosen != null) await ui.setAccent(chosen);
           },
+        ),
+        SettingsValueTile(
+          icon: Icons.download_for_offline_outlined,
+          title: 'Download',
+          subtitle: 'Film ed episodi da guardare senza connessione',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const DownloadsScreen()),
+          ),
         ),
         SettingsValueTile(
           icon: Icons.view_week_outlined,

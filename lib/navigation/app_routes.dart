@@ -8,6 +8,7 @@ import '../providers/history_provider.dart';
 import '../screens/player_screen.dart';
 import '../screens/series_detail_screen.dart';
 import '../screens/title_detail_screen.dart';
+import '../services/download_service.dart';
 
 /// Plays a channel. For series episodes [queue] is the ordered episode list
 /// used by "Episodio successivo"; when omitted the player loads it itself.
@@ -28,6 +29,10 @@ void playChannel(
     return;
   }
   context.read<HistoryProvider>().recordStart(channel);
+  // Offline copies play from the device; history keeps the same ids.
+  final offline = DownloadService.instance;
+  channel = offline.playable(channel);
+  queue = queue?.map(offline.playable).toList();
   final route = MaterialPageRoute(
     builder: (_) =>
         PlayerScreen(channel: channel, startAt: startAt, queue: queue),

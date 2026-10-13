@@ -19,6 +19,8 @@ import '../widgets/section_row.dart';
 import '../services/device_type_service.dart';
 import '../widgets/tv_focusable.dart';
 import '../widgets/tv_detail_backdrop.dart';
+import '../widgets/download_button.dart';
+import '../services/download_service.dart';
 
 class TitleDetailScreen extends StatefulWidget {
   final TmdbItem? item;
@@ -425,6 +427,12 @@ class _Actions extends StatelessWidget {
               onPressed: () => _play(context),
             ),
           )
+        if (playable != null &&
+            playable!.type == ContentType.movie &&
+            DownloadService.canDownload(playable!)) ...[
+          const SizedBox(height: 8),
+          DownloadButton(channel: playable!, expanded: true),
+        ],
         else
           Container(
             padding: const EdgeInsets.all(12),

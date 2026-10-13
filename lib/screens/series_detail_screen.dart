@@ -18,6 +18,7 @@ import '../widgets/section_row.dart';
 import '../services/device_type_service.dart';
 import '../widgets/tv_focusable.dart';
 import '../widgets/tv_detail_backdrop.dart';
+import '../widgets/download_button.dart';
 
 class SeriesDetailScreen extends StatefulWidget {
   final Channel series;
@@ -549,6 +550,8 @@ class _EpisodeTile extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               if (!DeviceTypeService.isTv)
+                DownloadButton(channel: ep.channel),
+              if (!DeviceTypeService.isTv)
                 IconButton(
                   tooltip: watched
                       ? 'Segna come non visto'
@@ -589,6 +592,7 @@ class _EpisodeTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
+            DownloadButton(channel: episode.channel),
             TvFocusable(
               onPressed: onToggleWatched,
               focusedScale: 1.0,

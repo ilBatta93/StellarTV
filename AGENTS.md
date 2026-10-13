@@ -24,3 +24,6 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Catalog grids memoize filtered lists by source instance, genre and metadata version so rebuilds reuse the same list and the sort cache keeps hitting.
 
 - Primary section order and startup section are owned by UiSettings and identified by stable AppSection ids, so mobile/TV navigation and cloud sync never depend on positional indexes.
+
+- Offline downloads live in DownloadService (one at a time, HTTP Range resume, device-only files) and playChannel swaps in the local file: history/resume ids stay unchanged.
+- Every new TV control must be a TvFocusable stop reachable with the D-Pad: the app is used with a remote only.
