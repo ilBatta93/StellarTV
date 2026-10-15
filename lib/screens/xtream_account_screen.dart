@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/apple_page_scaffold.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
@@ -39,8 +40,10 @@ class _XtreamAccountScreenState extends State<XtreamAccountScreen> {
           password: c['password']!,
         )
         .then((info) {
-          ExpiryReminderService.instance
-              .applyAccountInfo('${c['server']}|${c['username']}', info);
+          ExpiryReminderService.instance.applyAccountInfo(
+            '${c['server']}|${c['username']}',
+            info,
+          );
           return info;
         });
   }
@@ -103,8 +106,8 @@ class _XtreamAccountScreenState extends State<XtreamAccountScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Account playlist')),
+    return ApplePageScaffold(
+      title: 'Account playlist',
       body: FutureBuilder<Map<String, dynamic>>(
         future: _future,
         builder: (context, snap) {

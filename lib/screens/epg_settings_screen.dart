@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/apple_page_scaffold.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/epg_provider.dart';
@@ -32,15 +33,18 @@ class EpgSettingsScreen extends StatelessWidget {
           autofocus: true,
           keyboardType: TextInputType.url,
           decoration: const InputDecoration(
-              hintText: 'https://.../guida.xml o .xml.gz'),
+            hintText: 'https://.../guida.xml o .xml.gz',
+          ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Annulla')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annulla'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, controller.text),
-              child: const Text('Aggiungi')),
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('Aggiungi'),
+          ),
         ],
       ),
     );
@@ -48,8 +52,11 @@ class EpgSettingsScreen extends StatelessWidget {
     final clean = url.trim();
     if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Inserisci un indirizzo che inizia con http')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Inserisci un indirizzo che inizia con http'),
+          ),
+        );
       }
       return;
     }
@@ -60,8 +67,8 @@ class EpgSettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final epg = context.watch<EpgProvider>();
     final interval = PlaylistRefreshInterval.fromMinutes(epg.intervalMinutes);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Guida TV (EPG)')),
+    return ApplePageScaffold(
+      title: 'Guida TV (EPG)',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
@@ -73,9 +80,10 @@ class EpgSettingsScreen extends StatelessWidget {
                 title: epg.isLoading
                     ? 'Aggiornamento in corso...'
                     : epg.hasData
-                        ? '${epg.channelCount} canali, ${epg.programmeCount} programmi'
-                        : 'Nessuna guida caricata',
-                subtitle: epg.error ??
+                    ? '${epg.channelCount} canali, ${epg.programmeCount} programmi'
+                    : 'Nessuna guida caricata',
+                subtitle:
+                    epg.error ??
                     'Ultimo aggiornamento: ${_ago(epg.lastUpdate)}',
               ),
               SettingsValueTile(
@@ -131,7 +139,8 @@ class EpgSettingsScreen extends StatelessWidget {
                     current: interval,
                     label: (v) => v.label,
                   );
-                  if (chosen != null) await epg.setIntervalMinutes(chosen.minutes);
+                  if (chosen != null)
+                    await epg.setIntervalMinutes(chosen.minutes);
                 },
               ),
             ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/apple_page_scaffold.dart';
 import 'package:provider/provider.dart';
 
 import '../navigation/app_routes.dart';
@@ -27,8 +28,8 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    return Scaffold(
-      appBar: AppBar(title: const Text('Registrazioni')),
+    return ApplePageScaffold(
+      title: 'Registrazioni',
       body: ListenableBuilder(
         listenable: RecordingService.instance,
         builder: (context, _) {
@@ -89,16 +90,16 @@ class _RecordingRow extends StatelessWidget {
   const _RecordingRow({super.key, required this.item, required this.autofocus});
 
   String get _status => switch (item.status) {
-        RecordingStatus.scheduled =>
-          'Programmata · ${_when(item.start)} – ${_two(item.end.hour)}:${_two(item.end.minute)}',
-        RecordingStatus.recording =>
-          'In registrazione · ${formatRecordingBytes(item.bytes)} · fino alle '
-              '${_two(item.end.hour)}:${_two(item.end.minute)}',
-        RecordingStatus.completed =>
-          'Registrata ${_when(item.start)} · ${formatRecordingBytes(item.bytes)}',
-        RecordingStatus.failed => item.error ?? 'Registrazione non riuscita',
-        RecordingStatus.cancelled => 'Annullata',
-      };
+    RecordingStatus.scheduled =>
+      'Programmata · ${_when(item.start)} – ${_two(item.end.hour)}:${_two(item.end.minute)}',
+    RecordingStatus.recording =>
+      'In registrazione · ${formatRecordingBytes(item.bytes)} · fino alle '
+          '${_two(item.end.hour)}:${_two(item.end.minute)}',
+    RecordingStatus.completed =>
+      'Registrata ${_when(item.start)} · ${formatRecordingBytes(item.bytes)}',
+    RecordingStatus.failed => item.error ?? 'Registrazione non riuscita',
+    RecordingStatus.cancelled => 'Annullata',
+  };
 
   Widget _action(IconData icon, String tip, VoidCallback onPressed) {
     final b = IconButton(tooltip: tip, onPressed: onPressed, icon: Icon(icon));
@@ -132,10 +133,10 @@ class _RecordingRow extends StatelessWidget {
         running
             ? Icons.fiber_manual_record_rounded
             : scheduled
-                ? Icons.schedule_rounded
-                : done
-                    ? Icons.video_library_rounded
-                    : Icons.error_outline_rounded,
+            ? Icons.schedule_rounded
+            : done
+            ? Icons.video_library_rounded
+            : Icons.error_outline_rounded,
         color: running ? AppColors.error : AppColors.textSecondary,
       ),
       title: Text(
@@ -149,11 +150,19 @@ class _RecordingRow extends StatelessWidget {
     final actions = <Widget>[
       if (done) _action(Icons.play_arrow_rounded, 'Riproduci', play),
       if (running)
-        _action(Icons.stop_rounded, 'Ferma registrazione', () => s.stop(item.id)),
+        _action(
+          Icons.stop_rounded,
+          'Ferma registrazione',
+          () => s.stop(item.id),
+        ),
       if (scheduled)
         _action(Icons.close_rounded, 'Annulla', () => s.stop(item.id)),
       if (!scheduled)
-        _action(Icons.delete_outline_rounded, 'Elimina', () => s.remove(item.id)),
+        _action(
+          Icons.delete_outline_rounded,
+          'Elimina',
+          () => s.remove(item.id),
+        ),
     ];
     final Widget main = DeviceTypeService.isTv
         ? TvFocusable(
@@ -168,7 +177,12 @@ class _RecordingRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         child: FocusTraversalGroup(
-          child: Row(children: [Expanded(child: main), ...actions]),
+          child: Row(
+            children: [
+              Expanded(child: main),
+              ...actions,
+            ],
+          ),
         ),
       ),
     );

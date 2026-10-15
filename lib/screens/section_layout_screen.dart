@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/apple_page_scaffold.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -16,8 +17,8 @@ class SectionLayoutScreen extends StatelessWidget {
     if (DeviceTypeService.isTv) return const _TvSectionLayout();
     final ui = context.watch<UiSettings>();
     final order = ui.sectionOrder;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Ordine delle sezioni')),
+    return ApplePageScaffold(
+      title: 'Ordine delle sezioni',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
@@ -88,22 +89,22 @@ class SectionLayoutScreen extends StatelessWidget {
 }
 
 IconData sectionIcon(AppSection section) => switch (section) {
-      AppSection.home => Icons.home_rounded,
-      AppSection.live => Icons.live_tv_rounded,
-      AppSection.movies => Icons.movie_rounded,
-      AppSection.series => Icons.video_library_rounded,
-    };
+  AppSection.home => Icons.home_rounded,
+  AppSection.live => Icons.live_tv_rounded,
+  AppSection.movies => Icons.movie_rounded,
+  AppSection.series => Icons.video_library_rounded,
+};
 
 class _OrderLabel extends StatelessWidget {
   const _OrderLabel();
   @override
   Widget build(BuildContext context) => Text(
-        'ORDINE',
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppColors.textMuted,
-              fontWeight: FontWeight.w700,
-            ),
-      );
+    'ORDINE',
+    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: AppColors.textMuted,
+      fontWeight: FontWeight.w700,
+    ),
+  );
 }
 
 class _StartSectionTile extends StatelessWidget {
@@ -112,26 +113,26 @@ class _StartSectionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SettingsSection(
-        title: 'Sezione iniziale',
-        description: 'Scegli cosa mostrare quando apri StellarTV.',
-        children: [
-          SettingsValueTile(
-            icon: Icons.start_rounded,
+    title: 'Sezione iniziale',
+    description: 'Scegli cosa mostrare quando apri StellarTV.',
+    children: [
+      SettingsValueTile(
+        icon: Icons.start_rounded,
+        title: 'Apri l\'app su',
+        value: ui.startSection.label,
+        onTap: () async {
+          final chosen = await pickOption<AppSection>(
+            context,
             title: 'Apri l\'app su',
-            value: ui.startSection.label,
-            onTap: () async {
-              final chosen = await pickOption<AppSection>(
-                context,
-                title: 'Apri l\'app su',
-                options: ui.sectionOrder,
-                current: ui.startSection,
-                label: (value) => value.label,
-              );
-              if (chosen != null) await ui.setStartSection(chosen);
-            },
-          ),
-        ],
-      );
+            options: ui.sectionOrder,
+            current: ui.startSection,
+            label: (value) => value.label,
+          );
+          if (chosen != null) await ui.setStartSection(chosen);
+        },
+      ),
+    ],
+  );
 }
 
 /// TV: one focus stop per section. OK picks the section up, Su/Giù move it,
@@ -195,8 +196,8 @@ class _TvSectionLayoutState extends State<_TvSectionLayout> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && _moving != null) setState(() => _moving = null);
       },
-      child: Scaffold(
-        appBar: AppBar(title: const Text('Ordine delle sezioni')),
+      child: ApplePageScaffold(
+        title: 'Ordine delle sezioni',
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
           children: [

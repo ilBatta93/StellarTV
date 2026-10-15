@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
+import '../providers/ui_settings.dart';
+import 'package:provider/provider.dart';
 
 /// Adds remote activation and a consistent TV-only focus ring to custom taps.
 ///
@@ -79,6 +81,11 @@ class _TvFocusableState extends State<TvFocusable> {
   @override
   Widget build(BuildContext context) {
     if (!DeviceTypeService.isTv) return widget.child;
+    final ui = context.select<UiSettings?, bool>(
+      (settings) => settings?.animations ?? true,
+    );
+    final motion = ui && !MediaQuery.disableAnimationsOf(context);
+    final duration = motion ? const Duration(milliseconds: 150) : Duration.zero;
     return Focus(
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
@@ -93,7 +100,7 @@ class _TvFocusableState extends State<TvFocusable> {
             if (!mounted || !_focused) return;
             Scrollable.ensureVisible(
               context,
-              duration: const Duration(milliseconds: 120),
+              duration: duration,
               // Keep context above and below the focused control visible. On
               // TV this avoids clipping row headings when navigating upward.
               alignment: 0.55,
@@ -107,24 +114,24 @@ class _TvFocusableState extends State<TvFocusable> {
           // tvOS-style focus: the item lifts with a soft shadow and a glow
           // in the StellarTV accent, instead of a flat thick frame.
           child: AnimatedScale(
-            scale: _focused ? widget.focusedScale : 1,
-            duration: const Duration(milliseconds: 180),
+            scale: _focused && motion ? widget.focusedScale : 1,
+            duration: duration,
             curve: Curves.easeOutCubic,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
+              duration: duration,
               curve: Curves.easeOutCubic,
               decoration: BoxDecoration(
                 borderRadius: widget.borderRadius,
                 boxShadow: _focused
                     ? [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          blurRadius: 22,
+                          color: AppColors.overlay,
+                          blurRadius: 16,
                           offset: const Offset(0, 12),
                         ),
                         BoxShadow(
                           color: AppColors.primary.withValues(alpha: 0.28),
-                          blurRadius: 18,
+                          blurRadius: 10,
                           spreadRadius: 1,
                         ),
                       ]
@@ -133,7 +140,7 @@ class _TvFocusableState extends State<TvFocusable> {
               foregroundDecoration: BoxDecoration(
                 borderRadius: widget.borderRadius,
                 border: Border.all(
-                  color: _focused ? AppColors.primary : Colors.transparent,
+                  color: _focused ? AppColors.textPrimary : AppColors.clear,
                   width: 2.5,
                 ),
               ),

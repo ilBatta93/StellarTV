@@ -37,25 +37,6 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // A restrained projection glow gives the mark depth without
-          // turning the sign-in screen into a logo panel.
-          Positioned(
-            top: -120,
-            left: -80,
-            right: -80,
-            child: Container(
-              height: 260,
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.14),
-                    Colors.transparent,
-                  ],
-                  radius: 0.9,
-                ),
-              ),
-            ),
-          ),
           SafeArea(
             child: SingleChildScrollView(
               child: ConstrainedBox(
@@ -73,7 +54,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 36),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: _buildCard(),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 460),
+                        child: _buildCard(),
+                      ),
                     ),
                     const SizedBox(height: 32),
                   ],
@@ -92,7 +76,8 @@ class _LoginScreenState extends State<LoginScreen> {
         const BrandLogo(size: 52),
         const SizedBox(height: 8),
         const Text(
-          'Collega il tuo account Xtream per iniziare a guardare',
+          'Account Xtream',
+          textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
       ],
@@ -100,16 +85,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(22),
-        child: _buildXtreamForm(),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: _buildXtreamForm(),
     );
   }
 
@@ -177,7 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                     ),
                   )
                 : const Icon(Icons.login),

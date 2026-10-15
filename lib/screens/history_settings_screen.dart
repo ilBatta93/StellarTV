@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/apple_page_scaffold.dart';
 import 'package:provider/provider.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
@@ -39,16 +40,16 @@ class HistorySettingsScreen extends StatelessWidget {
         .toList();
 
     if (!history.hasLoaded && history.isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Cronologia')),
+      return ApplePageScaffold(
+        title: 'Cronologia',
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (entries.isEmpty) {
       final failed = history.error != null;
-      return Scaffold(
-        appBar: AppBar(title: const Text('Cronologia')),
+      return ApplePageScaffold(
+        title: 'Cronologia',
         body: RefreshIndicator(
           onRefresh: history.refresh,
           child: LayoutBuilder(
@@ -81,8 +82,8 @@ class HistorySettingsScreen extends StatelessWidget {
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Cronologia')),
+    return ApplePageScaffold(
+      title: 'Cronologia',
       body: RefreshIndicator(
         onRefresh: history.refresh,
         child: ListView.separated(

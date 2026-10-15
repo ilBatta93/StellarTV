@@ -31,3 +31,6 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Reactions use timestamped per-profile entries with neutral tombstones inside the existing authenticated settings snapshot, so cloud merges preserve reversals and profile privacy without a second sync path.
 - Episode presentation is a shared fixed-width horizontal card with separate playback/download/watched stops; the player episode picker owns modal focus and retires the old connection before episode replacement.
 - Live previews are muted, focus-debounced, active-tab gated and stopped synchronously on route pushes or app backgrounding, so hidden tabs cannot compete with the full-screen player.
+
+- Secondary pages share ApplePageScaffold with bounded readable widths and their original scroll/focus bodies; shared theme and controls own Apple styling so no playback or sync logic is duplicated.
+- TV focus respects the animation setting and system reduced motion, uses one high-contrast stop per action, and avoids blur filters on video or catalog surfaces to preserve low-powered TV performance.

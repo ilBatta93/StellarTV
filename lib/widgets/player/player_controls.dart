@@ -104,10 +104,10 @@ class PlayerControls extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Color(0xCC000000),
-                  Color(0x00000000),
-                  Color(0x00000000),
-                  Color(0xE6000000),
+                  AppColors.overlay,
+                  AppColors.clear,
+                  AppColors.clear,
+                  AppColors.overlay,
                 ],
                 stops: [0, 0.3, 0.6, 1],
               ),
@@ -154,7 +154,7 @@ class PlayerControls extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.onOverlay,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                     height: 1.2,
@@ -165,7 +165,10 @@ class PlayerControls extends StatelessWidget {
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    style: const TextStyle(
+                      color: AppColors.onOverlaySecondary,
+                      fontSize: 12,
+                    ),
                   ),
               ],
             ),
@@ -443,7 +446,7 @@ class _ScrubBarState extends State<_ScrubBar> {
         ? Duration(milliseconds: (_dragValue! * total).round())
         : widget.position;
     const timeStyle = TextStyle(
-      color: Colors.white,
+      color: AppColors.onOverlay,
       fontSize: 12,
       fontFeatures: [FontFeature.tabularFigures()],
     );
@@ -458,8 +461,8 @@ class _ScrubBarState extends State<_ScrubBar> {
               data: SliderTheme.of(context).copyWith(
                 trackHeight: 3,
                 activeTrackColor: AppColors.primary,
-                inactiveTrackColor: Colors.white24,
-                secondaryActiveTrackColor: Colors.white54,
+                inactiveTrackColor: AppColors.track,
+                secondaryActiveTrackColor: AppColors.bufferedTrack,
                 thumbColor: AppColors.primary,
                 overlayColor: AppColors.primary.withValues(alpha: 0.2),
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
@@ -506,7 +509,7 @@ class _TopButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final button = IconButton(
       tooltip: tooltip,
-      icon: Icon(icon, color: Colors.white),
+      icon: Icon(icon, color: AppColors.onOverlay),
       onPressed: onPressed,
     );
     if (!DeviceTypeService.isTv) return button;
@@ -533,14 +536,14 @@ class _TopChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final chip = ActionChip(
       onPressed: onPressed,
-      avatar: Icon(icon, size: 16, color: Colors.white),
+      avatar: Icon(icon, size: 16, color: AppColors.onOverlay),
       label: Text(label),
       labelStyle: const TextStyle(
-        color: Colors.white,
+        color: AppColors.onOverlay,
         fontSize: 12,
         fontWeight: FontWeight.w600,
       ),
-      backgroundColor: Colors.white.withValues(alpha: 0.12),
+      backgroundColor: AppColors.overlayControl,
       side: BorderSide.none,
       shape: const StadiumBorder(),
       visualDensity: VisualDensity.compact,
@@ -579,10 +582,10 @@ class _RoundButton extends StatelessWidget {
       message: tooltip,
       child: Material(
         color: onPressed == null
-            ? Colors.black.withValues(alpha: 0.16)
+            ? AppColors.overlayControl
             : filled
             ? AppColors.primary
-            : Colors.black.withValues(alpha: 0.35),
+            : AppColors.overlayControl,
         shape: const CircleBorder(),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -595,7 +598,9 @@ class _RoundButton extends StatelessWidget {
               children: [
                 Icon(
                   icon,
-                  color: onPressed == null ? Colors.white30 : Colors.white,
+                  color: onPressed == null
+                      ? AppColors.onOverlayDisabled
+                      : AppColors.onOverlay,
                   size: size * 0.55,
                 ),
                 if (label != null)
@@ -604,7 +609,7 @@ class _RoundButton extends StatelessWidget {
                     child: Text(
                       label!,
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: AppColors.onOverlay,
                         fontSize: 9,
                         fontWeight: FontWeight.w700,
                       ),
@@ -641,7 +646,7 @@ class _BarButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final button = TextButton.icon(
       style: TextButton.styleFrom(
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.onOverlay,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
       ),

@@ -26,6 +26,7 @@ class TvTextField extends StatefulWidget {
     this.focusNode,
     this.nextFocus,
     this.keyboardType,
+    this.maxLength,
     this.obscureText = false,
     this.textInputAction,
     this.onSubmitted,
@@ -42,6 +43,7 @@ class TvTextField extends StatefulWidget {
   final FocusNode? focusNode;
   final FocusNode? nextFocus;
   final TextInputType? keyboardType;
+  final int? maxLength;
   final bool obscureText;
   final TextInputAction? textInputAction;
   final ValueChanged<String>? onSubmitted;
@@ -328,6 +330,7 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
     return TextField(
       autofocus: autofocus,
       controller: widget.controller,
+      maxLength: widget.maxLength,
       focusNode: _node,
       keyboardType: widget.keyboardType,
       obscureText: widget.obscureText,

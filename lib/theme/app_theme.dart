@@ -6,6 +6,15 @@ class AppColors {
   static const background = Color(0xFF000000);
   static const surface = Color(0xFF1C1C1E);
   static const card = Color(0xFF2C2C2E);
+  static const glass = Color(0xE61C1C1E);
+  static const overlay = Color(0x99000000);
+  static const clear = Color(0x00000000);
+  static const onOverlay = textPrimary;
+  static const onOverlaySecondary = Color(0xFFCCCCD0);
+  static const onOverlayDisabled = Color(0xFF77777B);
+  static const overlayControl = Color(0xB32C2C2E);
+  static const track = Color(0xFF4A4A4E);
+  static const bufferedTrack = Color(0xFF929296);
   static const border = Color(0xFF38383A);
 
   /// The accent currently chosen in settings. Updated by UiSettings; widgets
@@ -93,24 +102,24 @@ class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
-          letterSpacing: -0.4,
+          letterSpacing: 0,
           color: AppColors.textPrimary,
           fontFamily: _headingFamily,
-          fontSize: 20,
+          fontSize: isTv ? 26 : 22,
           fontWeight: FontWeight.w700,
           height: 1.2,
         ),
         iconTheme: IconThemeData(color: AppColors.textPrimary),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.card,
+        color: AppColors.surface,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
       navigationBarTheme: NavigationBarThemeData(
         // iOS tab bar: translucent, no pill, tinted icon when selected.
-        backgroundColor: const Color(0xF01C1C1E),
+        backgroundColor: AppColors.glass,
         surfaceTintColor: Colors.transparent,
         indicatorColor: Colors.transparent,
         height: 68,
@@ -172,53 +181,89 @@ class AppTheme {
                   : null,
             ),
       ),
-      outlinedButtonTheme: isTv
-          ? OutlinedButtonThemeData(
-              style: ButtonStyle(
-                side: WidgetStateProperty.resolveWith(
-                  (states) => BorderSide(
-                    color: states.contains(WidgetState.focused)
-                        ? AppColors.primary
-                        : AppColors.border,
-                    width: states.contains(WidgetState.focused) ? 3 : 1,
-                  ),
-                ),
-                overlayColor: WidgetStateProperty.resolveWith(
-                  (states) => states.contains(WidgetState.focused)
-                      ? accent.withValues(alpha: 0.35)
-                      : null,
-                ),
-              ),
-            )
-          : null,
-      iconButtonTheme: isTv
-          ? IconButtonThemeData(
-              style: ButtonStyle(
-                backgroundColor: WidgetStateProperty.resolveWith(
-                  (states) =>
-                      states.contains(WidgetState.focused) ? accent : null,
-                ),
-                foregroundColor: WidgetStateProperty.resolveWith(
-                  (states) =>
-                      states.contains(WidgetState.focused) ? onAccent : null,
+      filledButtonTheme: FilledButtonThemeData(
+        style:
+            FilledButton.styleFrom(
+              backgroundColor: accent,
+              foregroundColor: onAccent,
+              minimumSize: const Size(48, 48),
+              shape: const StadiumBorder(),
+            ).copyWith(
+              side: WidgetStateProperty.resolveWith(
+                (states) => BorderSide(
+                  color: isTv && states.contains(WidgetState.focused)
+                      ? AppColors.textPrimary
+                      : AppColors.clear,
+                  width: 3,
                 ),
               ),
-            )
-          : null,
-      textButtonTheme: isTv
-          ? TextButtonThemeData(
-              style: ButtonStyle(
-                overlayColor: WidgetStateProperty.resolveWith(
-                  (states) => states.contains(WidgetState.focused)
-                      ? accent.withValues(alpha: 0.55)
-                      : null,
+            ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style:
+            OutlinedButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              backgroundColor: AppColors.surface,
+              minimumSize: const Size(48, 44),
+              shape: const StadiumBorder(),
+            ).copyWith(
+              side: WidgetStateProperty.resolveWith(
+                (states) => BorderSide(
+                  color: isTv && states.contains(WidgetState.focused)
+                      ? accent
+                      : AppColors.border,
+                  width: isTv && states.contains(WidgetState.focused) ? 3 : 1,
                 ),
               ),
-            )
-          : null,
-      chipTheme: isTv
-          ? ChipThemeData(surfaceTintColor: Colors.transparent)
-          : null,
+            ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(
+          shape: const WidgetStatePropertyAll(CircleBorder()),
+          minimumSize: const WidgetStatePropertyAll(Size(44, 44)),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => isTv && states.contains(WidgetState.focused)
+                ? AppColors.textPrimary
+                : null,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => isTv && states.contains(WidgetState.focused)
+                ? AppColors.background
+                : AppColors.textPrimary,
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style:
+            TextButton.styleFrom(
+              foregroundColor: accent,
+              shape: const StadiumBorder(),
+              minimumSize: const Size(44, 44),
+            ).copyWith(
+              overlayColor: WidgetStateProperty.resolveWith(
+                (states) => isTv && states.contains(WidgetState.focused)
+                    ? accent.withValues(alpha: 0.3)
+                    : null,
+              ),
+            ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.surface,
+        selectedColor: accent.withValues(alpha: 0.2),
+        surfaceTintColor: AppColors.clear,
+        side: const BorderSide(color: AppColors.border),
+        shape: const StadiumBorder(),
+        labelStyle: const TextStyle(
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: accent,
+        unselectedLabelColor: AppColors.textSecondary,
+        indicatorColor: accent,
+        dividerColor: AppColors.border,
+      ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -231,7 +276,14 @@ class AppTheme {
           fontFamily: _headingFamily,
           fontSize: 34,
           fontWeight: FontWeight.w700,
-          letterSpacing: -0.8,
+          letterSpacing: 0,
+          height: 1.2,
+        ),
+        headlineSmall: TextStyle(
+          color: AppColors.textPrimary,
+          fontFamily: _headingFamily,
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
           height: 1.2,
         ),
         headlineMedium: TextStyle(
@@ -239,7 +291,7 @@ class AppTheme {
           fontFamily: _headingFamily,
           fontSize: 26,
           fontWeight: FontWeight.w700,
-          letterSpacing: -0.5,
+          letterSpacing: 0,
           height: 1.2,
         ),
         titleLarge: TextStyle(
@@ -288,9 +340,8 @@ class AppTheme {
       ),
       switchTheme: SwitchThemeData(
         trackColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected)
-              ? accent
-              : const Color(0xFF39393D),
+          (states) =>
+              states.contains(WidgetState.selected) ? accent : AppColors.track,
         ),
         thumbColor: const WidgetStatePropertyAll(Colors.white),
         trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),

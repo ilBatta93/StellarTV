@@ -11,9 +11,10 @@ import '../widgets/settings_tiles.dart';
 import '../widgets/brand_logo.dart';
 import '../services/device_type_service.dart';
 import '../widgets/tv_focusable.dart';
+import '../widgets/tv_text_field.dart';
 import 'home_screen.dart';
 
-/// Netflix-style profile picker shown after login. Lets the user pick an
+/// Apple-inspired profile picker shown after login. Lets the user pick an
 /// existing profile, create a new one with a custom icon and color, or edit
 /// and delete existing ones.
 class ProfilePickerScreen extends StatefulWidget {
@@ -52,7 +53,7 @@ class _ProfilePickerScreenState extends State<ProfilePickerScreen> {
                     Text(
                       'Chi sta guardando?',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineSmall,
+                      style: Theme.of(context).textTheme.headlineMedium,
                     ),
                     const SizedBox(height: 32),
                     if (profiles.error != null)
@@ -143,21 +144,29 @@ class _ProfilePickerScreenState extends State<ProfilePickerScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.edit_rounded),
-              title: const Text('Modifica profilo'),
-              onTap: () => Navigator.pop(ctx, 'edit'),
+            TvFocusable(
+              autofocus: DeviceTypeService.isTv,
+              focusedScale: 1,
+              onPressed: () => Navigator.pop(ctx, 'edit'),
+              child: ListTile(
+                leading: const Icon(Icons.edit_rounded),
+                title: const Text('Modifica profilo'),
+                onTap: () => Navigator.pop(ctx, 'edit'),
+              ),
             ),
-            ListTile(
-              leading: const Icon(
-                Icons.delete_outline_rounded,
-                color: AppColors.error,
+            tvSettingsRow(
+              onPressed: () => Navigator.pop(ctx, 'delete'),
+              child: ListTile(
+                leading: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.error,
+                ),
+                title: const Text(
+                  'Elimina profilo',
+                  style: TextStyle(color: AppColors.error),
+                ),
+                onTap: () => Navigator.pop(ctx, 'delete'),
               ),
-              title: const Text(
-                'Elimina profilo',
-                style: TextStyle(color: AppColors.error),
-              ),
-              onTap: () => Navigator.pop(ctx, 'delete'),
             ),
           ],
         ),
@@ -207,7 +216,7 @@ class _ProfileAvatar extends StatelessWidget {
       onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(16),
       child: SizedBox(
-        width: 92,
+        width: DeviceTypeService.isTv ? 116 : 92,
         child: Column(
           children: [
             AnimatedContainer(
@@ -220,8 +229,8 @@ class _ProfileAvatar extends StatelessWidget {
                 ),
               ),
               child: Container(
-                width: 84,
-                height: 84,
+                width: DeviceTypeService.isTv ? 104 : 84,
+                height: DeviceTypeService.isTv ? 104 : 84,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(14),
@@ -245,7 +254,7 @@ class _ProfileAvatar extends StatelessWidget {
               ),
             Text(
               profile.name,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: AppColors.textSecondary,
@@ -260,6 +269,7 @@ class _ProfileAvatar extends StatelessWidget {
     return TvFocusable(
       onPressed: onTap,
       onLongPress: onLongPress,
+      focusedScale: 1.06,
       autofocus: DeviceTypeService.isTv && selected,
       borderRadius: BorderRadius.circular(16),
       child: tile,
@@ -278,12 +288,12 @@ class _AddProfileTile extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: SizedBox(
-        width: 92,
+        width: DeviceTypeService.isTv ? 116 : 92,
         child: Column(
           children: [
             Container(
-              width: 84,
-              height: 84,
+              width: DeviceTypeService.isTv ? 104 : 84,
+              height: DeviceTypeService.isTv ? 104 : 84,
               decoration: BoxDecoration(
                 color: AppColors.card,
                 borderRadius: BorderRadius.circular(14),
@@ -349,7 +359,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         24,
         24,
@@ -365,10 +375,10 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 16),
-          TextField(
+          TvTextField(
+            openOnFocus: true,
             controller: _nameController,
             maxLength: 20,
-            autofocus: widget.existing == null,
             decoration: const InputDecoration(
               labelText: 'Nome',
               counterText: '',
@@ -437,7 +447,7 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                     ),
                   )
                 : const Icon(Icons.check_rounded),

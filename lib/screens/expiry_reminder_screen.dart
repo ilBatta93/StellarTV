@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/apple_page_scaffold.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
@@ -18,8 +19,8 @@ class ExpiryReminderScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final svc = ExpiryReminderService.instance;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Promemoria scadenza')),
+    return ApplePageScaffold(
+      title: 'Promemoria scadenza',
       body: ListenableBuilder(
         listenable: svc,
         builder: (context, _) {
@@ -37,8 +38,8 @@ class ExpiryReminderScreen extends StatelessWidget {
                     value: exp != null
                         ? _date(exp)
                         : svc.providerHasNoDate
-                            ? 'Data non fornita dal provider'
-                            : 'Non ancora verificata',
+                        ? 'Data non fornita dal provider'
+                        : 'Non ancora verificata',
                   ),
                   SettingsValueTile(
                     icon: Icons.refresh_rounded,
@@ -60,7 +61,8 @@ class ExpiryReminderScreen extends StatelessWidget {
                     icon: Icons.notifications_active_outlined,
                     title: 'Promemoria attivi',
                     value: s.enabled,
-                    onChanged: (v) => svc.updateSettings(s.copyWith(enabled: v)),
+                    onChanged: (v) =>
+                        svc.updateSettings(s.copyWith(enabled: v)),
                   ),
                   for (final d in ExpiryReminderSettings.allThresholds)
                     SettingsSwitchTile(
@@ -69,7 +71,9 @@ class ExpiryReminderScreen extends StatelessWidget {
                       value: s.thresholds.contains(d),
                       onChanged: (v) => svc.updateSettings(
                         s.copyWith(
-                          thresholds: {...s.thresholds}..remove(d)..addAll(v ? [d] : []),
+                          thresholds: {...s.thresholds}
+                            ..remove(d)
+                            ..addAll(v ? [d] : []),
                         ),
                       ),
                     ),

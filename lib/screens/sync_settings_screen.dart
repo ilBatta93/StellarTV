@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/apple_page_scaffold.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/history_provider.dart';
@@ -28,8 +29,8 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
     final sync = context.watch<SyncProvider>();
     final history = context.watch<HistoryProvider>();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Account e sincronizzazione')),
+    return ApplePageScaffold(
+      title: 'Account e sincronizzazione',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
@@ -53,7 +54,8 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
               SettingsValueTile(
                 icon: Icons.upload_rounded,
                 title: 'Invia al cloud',
-                subtitle: 'Ultimo invio: ${_fmtDate(sync.lastPush)} · automatico ad ogni modifica',
+                subtitle:
+                    'Ultimo invio: ${_fmtDate(sync.lastPush)} · automatico ad ogni modifica',
                 onTap: sync.isBusy ? null : () => _pushAll(context),
               ),
               SettingsValueTile(
@@ -94,7 +96,9 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
                     child: Text(
                       sync.message!,
                       style: TextStyle(
-                        color: sync.success ? AppColors.success : AppColors.textSecondary,
+                        color: sync.success
+                            ? AppColors.success
+                            : AppColors.textSecondary,
                         fontSize: 13,
                       ),
                     ),
@@ -127,12 +131,16 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
     final history = context.read<HistoryProvider>();
     final ok = await history.pushAllNow();
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      behavior: SnackBarBehavior.floating,
-      content: Text(ok
-          ? 'Dati inviati al cloud'
-          : 'Invio non riuscito. Controlla la connessione.'),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(
+          ok
+              ? 'Dati inviati al cloud'
+              : 'Invio non riuscito. Controlla la connessione.',
+        ),
+      ),
+    );
   }
 
   Future<void> _pull(BuildContext context) async {
@@ -143,17 +151,22 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
     if (!context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     if (history.error != null) {
-      messenger.showSnackBar(SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text(history.error!),
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(history.error!),
+        ),
+      );
     } else {
-      messenger.showSnackBar(const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text(
+      messenger.showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
             'Dati scaricati e uniti. Se è arrivata la playlist da un altro '
-            'dispositivo, riavvia l\'app per caricarla.'),
-      ));
+            'dispositivo, riavvia l\'app per caricarla.',
+          ),
+        ),
+      );
     }
   }
 
@@ -163,10 +176,12 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
     if (email == null) return;
     final error = await sync.resetPassword(email);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      behavior: SnackBarBehavior.floating,
-      content: Text(error ?? 'Email inviata a $email.'),
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(error ?? 'Email inviata a $email.'),
+      ),
+    );
   }
 
   Future<void> _confirmDisable(BuildContext context) async {
@@ -176,7 +191,8 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
         backgroundColor: AppColors.surface,
         title: const Text('Uscire dall\'account?'),
         content: const Text(
-            'I tuoi dati restano salvati nel cloud. Da questo dispositivo verranno tolti playlist, profili e cronologia finché non accedi di nuovo.'),
+          'I tuoi dati restano salvati nel cloud. Da questo dispositivo verranno tolti playlist, profili e cronologia finché non accedi di nuovo.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -184,8 +200,7 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child:
-                const Text('Esci', style: TextStyle(color: AppColors.error)),
+            child: const Text('Esci', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),

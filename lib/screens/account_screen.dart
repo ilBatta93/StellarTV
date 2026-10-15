@@ -115,17 +115,7 @@ class _AccountScreenState extends State<AccountScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(0, -0.7),
-            radius: 1.1,
-            colors: [
-              AppColors.primary.withValues(alpha: 0.16),
-              AppColors.background,
-            ],
-          ),
-        ),
+      body: SizedBox(
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -142,7 +132,7 @@ class _AccountScreenState extends State<AccountScreen> {
                         _register ? 'Crea il tuo account' : 'Accedi',
                         style: const TextStyle(
                           color: AppColors.textPrimary,
-                          fontSize: 22,
+                          fontSize: 26,
                           fontWeight: FontWeight.w700,
                         ),
                       ),

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/channel.dart';
 import '../services/catalog_rating_service.dart';
 import 'tv_focusable.dart';
+import '../theme/app_theme.dart';
 import 'tv_text_field.dart';
 
 /// Date means the provider's addition date, not the theatrical release date.
@@ -276,6 +277,12 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
               onPressed: _toggle,
               child: IconButton(
                 tooltip: _expanded ? 'Chiudi ricerca' : 'Cerca',
+                style: IconButton.styleFrom(
+                  backgroundColor: AppColors.surface,
+                  foregroundColor: _expanded
+                      ? AppColors.primary
+                      : AppColors.textPrimary,
+                ),
                 onPressed: _toggle,
                 icon: Icon(
                   _expanded ? Icons.close_rounded : Icons.search_rounded,
@@ -287,6 +294,12 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
                 focusNode: _filterButton,
                 onPressed: _toggleFilters,
                 child: IconButton(
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.surface,
+                    foregroundColor: _filtersOpen
+                        ? AppColors.primary
+                        : AppColors.textPrimary,
+                  ),
                   tooltip: _filtersOpen
                       ? 'Chiudi filtri'
                       : (widget.genresOnly
@@ -307,6 +320,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
               onPressed: _choose,
               child: IconButton(
                 tooltip: 'Ordina: ${widget.sort?.label ?? "Predefinito"}',
+                style: IconButton.styleFrom(backgroundColor: AppColors.surface),
                 onPressed: _choose,
                 icon: const Icon(Icons.sort_rounded),
               ),

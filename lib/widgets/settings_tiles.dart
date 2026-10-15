@@ -39,12 +39,12 @@ class SettingsSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
             child: Text(
-              title.toUpperCase(),
+              title,
               style: TextStyle(
-                color: AppColors.primary,
-                fontSize: 12,
+                color: AppColors.textSecondary,
+                fontSize: DeviceTypeService.isTv ? 16 : 13,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 1.1,
+                letterSpacing: 0,
               ),
             ),
           ),
@@ -63,7 +63,7 @@ class SettingsSection extends StatelessWidget {
           // A Material (not a coloured Container) so the focus/tap highlight of
           // the tiles is painted on top of the card and visible with a remote.
           Material(
-            color: AppColors.surface,
+            color: AppColors.glass,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
               side: BorderSide(color: AppColors.border.withValues(alpha: 0.6)),
@@ -116,7 +116,15 @@ class EngineBadge extends StatelessWidget {
 
 Widget _title(String title, String? badge) => Row(
   children: [
-    Flexible(child: Text(title, style: const TextStyle(fontSize: 15))),
+    Flexible(
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: DeviceTypeService.isTv ? 17 : 15,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    ),
     if (badge != null) EngineBadge(badge),
   ],
 );
@@ -159,7 +167,7 @@ class SettingsSwitchTile extends StatelessWidget {
         title: _title(title, badge),
         subtitle: _subtitle(subtitle),
         value: value,
-        activeThumbColor: Colors.white,
+        activeThumbColor: AppColors.textPrimary,
         activeTrackColor: AppColors.primary,
         onChanged: onChanged,
       ),
@@ -361,7 +369,7 @@ class _TvSliderFocusState extends State<_TvSliderFocus> {
         foregroundDecoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: _focused ? AppColors.primary : Colors.transparent,
+            color: _focused ? AppColors.textPrimary : AppColors.clear,
             width: 3,
           ),
         ),

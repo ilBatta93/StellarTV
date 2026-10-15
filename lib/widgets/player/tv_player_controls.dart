@@ -113,10 +113,10 @@ class TvPlayerControls extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Color(0xD9000000),
-                  Color(0x00000000),
-                  Color(0x00000000),
-                  Color(0xF2000000),
+                  AppColors.overlay,
+                  AppColors.clear,
+                  AppColors.clear,
+                  AppColors.overlay,
                 ],
                 stops: [0, 0.28, 0.55, 1],
               ),
@@ -127,45 +127,37 @@ class TvPlayerControls extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(40, 24, 40, 24),
           child: Column(
             children: [
-              Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        if (subtitle.isNotEmpty)
-                          Text(
-                            subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                      ],
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.onOverlay,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (top != null)
-                    for (final (i, a) in top.actions.indexed)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 10),
-                        child: _TvPill(
-                          action: a,
-                          selected: _isSelected(TvPlayerRowKind.top, i),
-                        ),
+                  if (subtitle.isNotEmpty)
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.onOverlaySecondary,
+                        fontSize: 14,
                       ),
+                    ),
+                  if (top != null) ...[
+                    const SizedBox(height: 12),
+                    _TvActionStrip(
+                      row: top,
+                      selectedRow: selectedRow,
+                      selectedColumn: selectedColumn,
+                    ),
+                  ],
                 ],
               ),
               const Spacer(),
@@ -203,17 +195,10 @@ class TvPlayerControls extends StatelessWidget {
                   selected: selectedRow == TvPlayerRowKind.progress,
                 ),
               if (bottom != null)
-                Row(
-                  children: [
-                    for (final (i, a) in bottom.actions.indexed)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 10),
-                        child: _TvPill(
-                          action: a,
-                          selected: _isSelected(TvPlayerRowKind.bottom, i),
-                        ),
-                      ),
-                  ],
+                _TvActionStrip(
+                  row: bottom,
+                  selectedRow: selectedRow,
+                  selectedColumn: selectedColumn,
                 ),
             ],
           ),
@@ -221,6 +206,33 @@ class TvPlayerControls extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Fixed equal-width cells preserve the player's logical row/column mapping.
+class _TvActionStrip extends StatelessWidget {
+  final TvPlayerRow row;
+  final TvPlayerRowKind selectedRow;
+  final int selectedColumn;
+  const _TvActionStrip({
+    required this.row,
+    required this.selectedRow,
+    required this.selectedColumn,
+  });
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      for (final (index, action) in row.actions.indexed)
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: _TvPill(
+              action: action,
+              selected: row.kind == selectedRow && index == selectedColumn,
+            ),
+          ),
+        ),
+    ],
+  );
 }
 
 class _TvPill extends StatelessWidget {
@@ -232,34 +244,39 @@ class _TvPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = action.enabled;
     final fg = selected
-        ? Colors.white
+        ? AppColors.background
         : enabled
-        ? Colors.white.withValues(alpha: 0.9)
-        : Colors.white38;
+        ? AppColors.onOverlay.withValues(alpha: 0.9)
+        : AppColors.onOverlayDisabled;
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 110),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 110),
+      height: 76,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       decoration: BoxDecoration(
-        color: selected
-            ? AppColors.primary
-            : Colors.white.withValues(alpha: 0.12),
+        color: selected ? AppColors.textPrimary : AppColors.overlayControl,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: selected ? Colors.white : Colors.transparent,
+          color: selected ? AppColors.onOverlay : AppColors.clear,
           width: 2,
         ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(action.icon, size: 20, color: fg),
-          const SizedBox(width: 6),
+          Icon(action.icon, size: 22, color: fg),
+          const SizedBox(height: 4),
           Text(
             action.label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: fg,
-              fontSize: 14,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              fontSize: 12,
+              height: 1.2,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -281,38 +298,48 @@ class _TvRoundButton extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         AnimatedScale(
-          scale: selected ? 1.12 : 1,
-          duration: const Duration(milliseconds: 110),
+          scale: selected && !MediaQuery.disableAnimationsOf(context)
+              ? 1.12
+              : 1,
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 110),
           child: Container(
             width: size,
             height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: selected
-                  ? AppColors.primary
+                  ? AppColors.textPrimary
                   : action.primary
                   ? AppColors.primary.withValues(alpha: 0.55)
-                  : Colors.black.withValues(alpha: enabled ? 0.45 : 0.2),
+                  : AppColors.overlayControl,
               border: Border.all(
-                color: selected ? Colors.white : Colors.white24,
+                color: selected ? AppColors.onOverlay : AppColors.track,
                 width: selected ? 3 : 1,
               ),
             ),
             child: Icon(
               action.icon,
               size: size * 0.52,
-              color: enabled ? Colors.white : Colors.white30,
+              color: selected
+                  ? AppColors.background
+                  : enabled
+                  ? AppColors.onOverlay
+                  : AppColors.onOverlayDisabled,
             ),
           ),
         ),
         const SizedBox(height: 8),
         AnimatedOpacity(
           opacity: selected ? 1 : 0,
-          duration: const Duration(milliseconds: 110),
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 110),
           child: Text(
             action.label,
             style: const TextStyle(
-              color: Colors.white,
+              color: AppColors.onOverlay,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
@@ -345,7 +372,7 @@ class _TvProgress extends StatelessWidget {
         total <= 0 ? 0 : (d.inMilliseconds / total).clamp(0.0, 1.0);
     final shown = pendingSeek ?? position;
     const timeStyle = TextStyle(
-      color: Colors.white,
+      color: AppColors.onOverlay,
       fontSize: 14,
       fontFeatures: [FontFeature.tabularFigures()],
     );
@@ -370,14 +397,18 @@ class _TvProgress extends StatelessWidget {
                         alignment: Alignment.centerLeft,
                         clipBehavior: Clip.none,
                         children: [
-                          _bar(w, height, Colors.white24),
-                          _bar(w * frac(buffered), height, Colors.white54),
+                          _bar(w, height, AppColors.track),
+                          _bar(
+                            w * frac(buffered),
+                            height,
+                            AppColors.bufferedTrack,
+                          ),
                           _bar(w * frac(position), height, AppColors.primary),
                           if (pendingSeek != null)
                             _bar(
                               w * frac(pendingSeek!),
                               height,
-                              Colors.white.withValues(alpha: 0.85),
+                              AppColors.onOverlay.withValues(alpha: 0.85),
                             ),
                           if (selected)
                             Positioned(
@@ -389,7 +420,7 @@ class _TvProgress extends StatelessWidget {
                                 width: thumb,
                                 height: thumb,
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: AppColors.onOverlay,
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                     color: AppColors.primary,
@@ -410,12 +441,17 @@ class _TvProgress extends StatelessWidget {
           ),
           AnimatedOpacity(
             opacity: selected ? 1 : 0,
-            duration: const Duration(milliseconds: 110),
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 110),
             child: const Padding(
               padding: EdgeInsets.only(top: 6),
               child: Text(
-                '◀ ▶ per spostarti nel video · OK per pausa',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
+                'Riproduzione',
+                style: TextStyle(
+                  color: AppColors.onOverlaySecondary,
+                  fontSize: 12,
+                ),
               ),
             ),
           ),
@@ -478,7 +514,6 @@ class TvExitPrompt extends StatelessWidget {
   }
 }
 
-
 /// Shown instead of LIVE while the picture is behind the live point.
 class TimeshiftBadge extends StatelessWidget {
   final Duration delay;
@@ -491,19 +526,23 @@ class TimeshiftBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.55),
+        color: AppColors.overlayControl,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white38),
+        border: Border.all(color: AppColors.onOverlayDisabled),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.history_rounded, color: Colors.white, size: 18),
+          const Icon(
+            Icons.history_rounded,
+            color: AppColors.onOverlay,
+            size: 18,
+          ),
           const SizedBox(width: 8),
           Text(
             'In differita  -$m:$sec',
             style: const TextStyle(
-              color: Colors.white,
+              color: AppColors.onOverlay,
               fontSize: 15,
               fontWeight: FontWeight.w700,
             ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/apple_page_scaffold.dart';
 import 'package:provider/provider.dart';
 import '../widgets/catalog_section_status.dart';
 
@@ -90,17 +91,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: Icons.download_for_offline_outlined,
           title: 'Download',
           subtitle: 'Film ed episodi da guardare senza connessione',
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const DownloadsScreen()),
-          ),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const DownloadsScreen())),
         ),
         SettingsValueTile(
           icon: Icons.fiber_smart_record_outlined,
           title: 'Registrazioni',
           subtitle: 'Dirette registrate e programmi programmati dalla guida',
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const RecordingsScreen()),
-          ),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const RecordingsScreen())),
         ),
         SettingsValueTile(
           icon: Icons.view_week_outlined,
@@ -233,8 +234,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Impostazioni')),
+    return ApplePageScaffold(
+      title: 'Impostazioni',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [

@@ -41,7 +41,10 @@ class ChannelCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.border),
+          color: DeviceTypeService.isTv ? AppColors.surface : null,
+          border: Border.all(
+            color: DeviceTypeService.isTv ? AppColors.clear : AppColors.border,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,7 +111,7 @@ class ChannelCard extends StatelessWidget {
                   height: DeviceTypeService.isTv ? 1.2 : 1.1,
                   shadows: [
                     Shadow(
-                      color: Colors.black.withValues(alpha: 0.5),
+                      color: AppColors.overlay,
                       offset: const Offset(0, 1),
                       blurRadius: 2,
                     ),
@@ -136,7 +139,7 @@ class _FavoriteButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.55),
+          color: AppColors.overlayControl,
           shape: BoxShape.circle,
         ),
         child: AnimatedSwitcher(
@@ -146,7 +149,7 @@ class _FavoriteButton extends StatelessWidget {
           child: Icon(
             isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
             key: ValueKey(isFavorite),
-            color: isFavorite ? AppColors.primary : Colors.white,
+            color: isFavorite ? AppColors.primary : AppColors.textPrimary,
             size: 16,
           ),
         ),
@@ -169,7 +172,7 @@ class LiveBadge extends StatelessWidget {
       child: const Text(
         'LIVE',
         style: TextStyle(
-          color: Colors.white,
+          color: AppColors.textPrimary,
           fontSize: 10,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.5,

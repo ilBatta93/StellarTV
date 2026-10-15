@@ -169,7 +169,7 @@ class TmdbPosterCard extends StatelessWidget {
                   height: DeviceTypeService.isTv ? 1.2 : 1.1,
                   shadows: [
                     Shadow(
-                      color: Colors.black.withValues(alpha: 0.5),
+                      color: AppColors.overlay,
                       offset: const Offset(0, 1),
                       blurRadius: 2,
                     ),
@@ -266,7 +266,7 @@ class RatingBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.7),
+        color: AppColors.overlayControl,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -277,7 +277,7 @@ class RatingBadge extends StatelessWidget {
           Text(
             value.toStringAsFixed(1),
             style: const TextStyle(
-              color: Colors.white,
+              color: AppColors.textPrimary,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),

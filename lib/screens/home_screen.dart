@@ -590,7 +590,7 @@ class _TvNavPillState extends State<_TvNavPill> {
         : widget.selected
         ? AppColors.primary
         : AppColors.textPrimary;
-    const shadow = [Shadow(color: Color(0xCC000000), blurRadius: 6)];
+    const shadow = [Shadow(color: AppColors.overlay, blurRadius: 6)];
     return Focus(
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
@@ -601,7 +601,10 @@ class _TvNavPillState extends State<_TvNavPill> {
       }),
       child: GestureDetector(
         onTap: widget.onPressed,
-        child: Container(
+        child: AnimatedContainer(
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 120),
           margin: EdgeInsets.symmetric(horizontal: widget.compact ? 2 : 4),
           padding: EdgeInsets.symmetric(
             horizontal: widget.compact
@@ -610,11 +613,18 @@ class _TvNavPillState extends State<_TvNavPill> {
             vertical: widget.compact ? 8 : 10,
           ),
           decoration: BoxDecoration(
-            color: _focused ? AppColors.textPrimary : Colors.transparent,
+            color: _focused
+                ? AppColors.textPrimary
+                : widget.selected
+                ? AppColors.glass
+                : AppColors.clear,
             borderRadius: BorderRadius.circular(28),
-            border: widget.selected && !_focused
-                ? Border.all(color: AppColors.primary, width: 2)
-                : null,
+            border: Border.all(
+              color: widget.selected && !_focused
+                  ? AppColors.primary
+                  : AppColors.clear,
+              width: 2,
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -630,7 +640,7 @@ class _TvNavPillState extends State<_TvNavPill> {
                 SizedBox(width: widget.compact ? 6 : 8),
               if (widget.label != null)
                 Text(
-                  widget.label!.toUpperCase(),
+                  widget.label ?? '',
                   style: TextStyle(
                     color: fg,
                     fontSize: widget.compact ? 16 : 19,

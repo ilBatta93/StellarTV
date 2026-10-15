@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/apple_page_scaffold.dart';
 import 'package:provider/provider.dart';
 
 import '../navigation/app_routes.dart';
@@ -16,8 +17,8 @@ class DownloadsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
-    return Scaffold(
-      appBar: AppBar(title: const Text('Download')),
+    return ApplePageScaffold(
+      title: 'Download',
       body: ListenableBuilder(
         listenable: DownloadService.instance,
         builder: (context, _) {
@@ -69,20 +70,17 @@ class DownloadsScreen extends StatelessWidget {
 class _DownloadRow extends StatelessWidget {
   final DownloadItem item;
   final bool autofocus;
-  const _DownloadRow({
-    super.key,
-    required this.item,
-    required this.autofocus,
-  });
+  const _DownloadRow({super.key, required this.item, required this.autofocus});
 
   String get _status {
     final p = item.progress;
     return switch (item.status) {
       DownloadStatus.queued => 'In coda',
-      DownloadStatus.running => p == null
-          ? 'Download · ${formatBytes(item.received)}'
-          : 'Download ${(p * 100).round()}% · '
-              '${formatBytes(item.received)} di ${formatBytes(item.total)}',
+      DownloadStatus.running =>
+        p == null
+            ? 'Download · ${formatBytes(item.received)}'
+            : 'Download ${(p * 100).round()}% · '
+                  '${formatBytes(item.received)} di ${formatBytes(item.total)}',
       DownloadStatus.paused => 'In pausa · ${formatBytes(item.received)}',
       DownloadStatus.failed => item.error ?? 'Errore',
       DownloadStatus.completed =>
@@ -105,7 +103,8 @@ class _DownloadRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = DownloadService.instance;
     final done = item.status == DownloadStatus.completed;
-    final active = item.status == DownloadStatus.running ||
+    final active =
+        item.status == DownloadStatus.running ||
         item.status == DownloadStatus.queued;
     final c = item.channel;
     final title = c.season != null && c.episode != null
