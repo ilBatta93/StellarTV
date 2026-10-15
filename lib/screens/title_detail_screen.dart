@@ -417,7 +417,7 @@ class _Actions extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (playable != null)
+        if (playable != null) ...[
           TvFocusable(
             autofocus: DeviceTypeService.isTv,
             onPressed: () => _play(context),
@@ -426,14 +426,13 @@ class _Actions extends StatelessWidget {
               label: const Text('Guarda ora'),
               onPressed: () => _play(context),
             ),
-          )
-        if (playable != null &&
-            playable!.type == ContentType.movie &&
-            DownloadService.canDownload(playable!)) ...[
-          const SizedBox(height: 8),
-          DownloadButton(channel: playable!, expanded: true),
-        ],
-        else
+          ),
+          if (playable!.type == ContentType.movie &&
+              DownloadService.canDownload(playable!)) ...[
+            const SizedBox(height: 8),
+            DownloadButton(channel: playable!, expanded: true),
+          ],
+        ] else
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
