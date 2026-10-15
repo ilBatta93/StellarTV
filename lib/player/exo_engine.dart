@@ -83,7 +83,7 @@ class ExoEngine extends PlaybackEngine {
   }
 
   @override
-  Future<void> open() async {
+  Future<void> open({double initialVolume = 1}) async {
     _controller.addListener(_sync);
     try {
       await _controller.initialize();
@@ -96,6 +96,7 @@ class ExoEngine extends PlaybackEngine {
       );
     }
     try {
+      await _controller.setVolume(initialVolume.clamp(0.0, 1.0));
       await _controller.play();
     } catch (e) {
       throw PlaybackException(_describeInitError(e));

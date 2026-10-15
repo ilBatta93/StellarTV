@@ -98,26 +98,28 @@ class ChannelCard extends StatelessWidget {
               padding: DeviceTypeService.isTv
                   ? const EdgeInsets.fromLTRB(9, 8, 9, 9)
                   : const EdgeInsets.only(top: 8),
-              child: Text(
-                channel.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: DeviceTypeService.isTv ? 15 : 12,
-                  fontWeight: DeviceTypeService.isTv
-                      ? FontWeight.w700
-                      : FontWeight.w600,
-                  height: DeviceTypeService.isTv ? 1.2 : 1.1,
-                  shadows: [
-                    Shadow(
-                      color: AppColors.overlay,
-                      offset: const Offset(0, 1),
-                      blurRadius: 2,
+              child: DeviceTypeService.isTv
+                  ? TvPosterTitle(channel.name)
+                  : Text(
+                      channel.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: DeviceTypeService.isTv ? 15 : 12,
+                        fontWeight: DeviceTypeService.isTv
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                        height: DeviceTypeService.isTv ? 1.2 : 1.1,
+                        shadows: [
+                          Shadow(
+                            color: AppColors.overlay,
+                            offset: const Offset(0, 1),
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-              ),
             ),
           ],
         ),

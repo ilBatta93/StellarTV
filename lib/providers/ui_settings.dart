@@ -2,17 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme/app_theme.dart';
+import '../models/multiview_layout.dart';
 
 enum AppSection { home, live, movies, series }
 
 extension AppSectionInfo on AppSection {
   String get id => name;
   String get label => switch (this) {
-        AppSection.home => 'Home',
-        AppSection.live => 'Diretta',
-        AppSection.movies => 'Film',
-        AppSection.series => 'Serie TV',
-      };
+    AppSection.home => 'Home',
+    AppSection.live => 'Diretta',
+    AppSection.movies => 'Film',
+    AppSection.series => 'Serie TV',
+  };
 }
 
 class UiSettings extends ChangeNotifier {
@@ -23,6 +24,14 @@ class UiSettings extends ChangeNotifier {
   static const _compactKey = 'ui_compact';
   static const sectionOrderKey = 'ui_section_order';
   static const startSectionKey = 'ui_start_section';
+  static const multiViewLayoutKey = 'ui_multiview_layout';
+  MultiViewLayout _multiViewLayout = MultiViewLayout.automatic;
+  MultiViewLayout get multiViewLayout => _multiViewLayout;
+  Future<void> setMultiViewLayout(MultiViewLayout layout) async {
+    _multiViewLayout = layout;
+    await _save(multiViewLayoutKey, layout.name);
+    notifyListeners();
+  }
 
   static const accents = {
     'arancio': Color(0xFFFF5A1F),
@@ -66,7 +75,11 @@ class UiSettings extends ChangeNotifier {
     _animations = prefs.getBool(_animationsKey) ?? true;
     _compact = prefs.getBool(_compactKey) ?? false;
     _sectionOrder = _parseSectionOrder(prefs.getStringList(sectionOrderKey));
-    _startSection = _parseSection(prefs.getString(startSectionKey)) ?? AppSection.home;
+    _startSection =
+        _parseSection(prefs.getString(startSectionKey)) ?? AppSection.home;
+    _multiViewLayout = MultiViewLayout.parse(
+      prefs.getString(multiViewLayoutKey),
+    );
     _loaded = true;
     AppColors.primary = _accent;
     notifyListeners();
@@ -111,7 +124,8 @@ class UiSettings extends ChangeNotifier {
 
   Future<void> setSectionOrder(List<AppSection> value) async {
     if (value.length != AppSection.values.length ||
-        value.toSet().length != AppSection.values.length) return;
+        value.toSet().length != AppSection.values.length)
+      return;
     _sectionOrder = List.of(value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(sectionOrderKey, value.map((e) => e.id).toList());

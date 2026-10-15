@@ -24,6 +24,7 @@ import '../widgets/tv_catalog_toolbar.dart';
 import '../widgets/tv_filter_panel.dart';
 import '../widgets/tv_catalog_navigation.dart';
 import 'epg_settings_screen.dart';
+import 'multiview_screen.dart';
 
 /// "Diretta" tab: channel list with what is on now, a progress bar and what
 /// comes next, plus a full guide per channel.
@@ -69,7 +70,12 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(covariant LivePage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.active) _stopPreview();
+    if (!widget.active)
+      _stopPreview();
+    else if (!oldWidget.active) {
+      final channel = _selectedChannel;
+      if (channel != null) _select(channel, _selectedProgram);
+    }
   }
 
   void _routeChanged() {
@@ -89,7 +95,10 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     _previewDelay?.cancel();
     final old = _preview;
     _preview = null;
-    old?.dispose();
+    if (old != null) {
+      unawaited(old.setVolume(0));
+      old.dispose();
+    }
     if (old != null) _app.setPlaybackActive(false);
   }
 
@@ -120,7 +129,8 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
         url: channel.url,
         isLive: true,
         settings: settings,
-      )..muted = true;
+        previewMode: true,
+      );
       _app.setPlaybackActive(true);
       setState(() => _preview = session);
       await session.start();
@@ -140,258 +150,262 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
         .firstOrNull;
     final program =
         _selectedProgram ?? (selected == null ? null : epg.nowFor(selected));
-    return Column(
-      children: [
-        SizedBox(
-          height: 202,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        selected?.name ?? 'Diretta TV',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        program?.title ?? 'Guida programmi',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      if (program != null)
-                        Text(
-                          '${_hm(program.startTime)} – ${_hm(program.endTime)}',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: Text(
-                          program?.description ?? '',
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                      if (selected != null)
-                        Row(
-                          children: [
-                            TvFocusable(
-                              onPressed: () => _watch(selected),
-                              child: TextButton.icon(
-                                onPressed: () => _watch(selected),
-                                icon: const Icon(Icons.play_arrow_rounded),
-                                label: const Text('Guarda'),
-                              ),
-                            ),
-                            TvFocusable(
-                              onPressed: () => app.toggleFavorite(selected),
-                              child: IconButton(
-                                tooltip: 'Preferiti',
-                                onPressed: () => app.toggleFavorite(selected),
-                                icon: Icon(
-                                  app.favoriteIds.contains(selected.id)
-                                      ? Icons.favorite_rounded
-                                      : Icons.favorite_border_rounded,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final previewWidth = (box.maxWidth * 0.32).clamp(240.0, 380.0);
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 156, child: Text('Canali')),
+                          for (final title in ['Ora', 'A seguire', 'Poi'])
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
                                 ),
                               ),
                             ),
-                            TvFocusable(
-                              onPressed: () {
-                                _stopPreview();
-                                setState(() {});
-                                showChannelGuide(context, selected);
-                              },
-                              child: IconButton(
-                                tooltip: 'Guida e registrazioni',
-                                icon: const Icon(Icons.calendar_month_rounded),
-                                onPressed: () {
-                                  _stopPreview();
-                                  setState(() {});
-                                  showChannelGuide(context, selected);
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 28),
-                SizedBox(
-                  width: 310,
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: _preview == null
-                          ? ColoredBox(
-                              color: AppColors.surface,
-                              child: const Center(
-                                child: Icon(Icons.live_tv_rounded, size: 42),
-                              ),
-                            )
-                          : ListenableBuilder(
-                              listenable: _preview ?? app,
-                              builder: (_, _) {
-                                final session = _preview;
-                                if (session == null) return const SizedBox();
-                                if (session.status == SessionStatus.failed)
-                                  return ColoredBox(
-                                    color: AppColors.surface,
-                                    child: const Center(
-                                      child: Text('Anteprima non disponibile'),
-                                    ),
-                                  );
-                                return Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    VideoSurface(
-                                      session: session,
-                                      settings: session.settings,
-                                    ),
-                                    if (session.status ==
-                                        SessionStatus.connecting)
-                                      const Center(
-                                        child: CircularProgressIndicator(),
-                                      ),
-                                  ],
-                                );
-                              },
-                            ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
-          child: Row(
-            children: [
-              const SizedBox(width: 200, child: Text('Canali')),
-              for (var i = 0; i < 3; i++)
-                Expanded(
-                  child: Text(
-                    _hm(DateTime.now().add(Duration(minutes: 30 * i))),
-                    style: const TextStyle(color: AppColors.textMuted),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
-            itemCount: channels.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 6),
-            itemBuilder: (context, i) {
-              final c = channels[i];
-              final programs = epg
-                  .programmesFor(c)
-                  .where((p) => p.endTime.isAfter(DateTime.now()))
-                  .take(3)
-                  .toList();
-              return Row(
-                children: [
-                  SizedBox(
-                    width: 192,
-                    child: TvCategoryEdge(
-                      scaffoldKey: _scaffoldKey,
-                      onOpen: _openCategories,
-                      child: TvFocusable(
-                        focusedScale: 1,
-                        onFocusChange: (focus) {
-                          if (focus) _select(c);
-                        },
-                        onPressed: () => _watch(c),
-                        child: ListTile(
-                          dense: true,
-                          title: Text(
-                            c.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          onTap: () => _watch(c),
-                        ),
+                        ],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  if (programs.isEmpty)
                     Expanded(
-                      child: TvFocusable(
-                        focusedScale: 1,
-                        onFocusChange: (focus) {
-                          if (focus) _select(c);
-                        },
-                        onPressed: () => _watch(c),
-                        child: ListTile(
-                          title: const Text('Programmazione non disponibile'),
-                          onTap: () => _watch(c),
-                        ),
-                      ),
-                    )
-                  else
-                    for (final p in programs)
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: TvFocusable(
-                            focusedScale: 1,
-                            onFocusChange: (focus) {
-                              if (focus) _select(c, p);
-                            },
-                            onPressed: () {
-                              _stopPreview();
-                              setState(() {});
-                              showChannelGuide(context, c);
-                            },
-                            child: Container(
-                              height: 64,
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: p.startTime.isBefore(DateTime.now())
-                                    ? AppColors.card
-                                    : AppColors.surface,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    p.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text(
-                                    '${_hm(p.startTime)} – ${_hm(p.endTime)}',
-                                    style: const TextStyle(
-                                      color: AppColors.textMuted,
-                                      fontSize: 11,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 6, 8, 16),
+                        itemCount: channels.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 6),
+                        itemBuilder: (context, i) {
+                          final c = channels[i];
+                          final programs = epg
+                              .programmesFor(c)
+                              .where((p) => p.endTime.isAfter(DateTime.now()))
+                              .take(3)
+                              .toList();
+                          return Row(
+                            children: [
+                              SizedBox(
+                                width: 148,
+                                child: TvCategoryEdge(
+                                  scaffoldKey: _scaffoldKey,
+                                  onOpen: _openCategories,
+                                  child: TvFocusable(
+                                    focusedScale: 1,
+                                    onFocusChange: (focus) {
+                                      if (focus) _select(c);
+                                    },
+                                    onPressed: () => _watch(c),
+                                    child: ListTile(
+                                      dense: true,
+                                      title: TvPosterTitle(c.name),
+                                      onTap: () => _watch(c),
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              if (programs.isEmpty)
+                                Expanded(
+                                  child: TvFocusable(
+                                    focusedScale: 1,
+                                    onFocusChange: (focus) {
+                                      if (focus) _select(c);
+                                    },
+                                    onPressed: () => _watch(c),
+                                    child: ListTile(
+                                      title: const Text(
+                                        'Programmazione non disponibile',
+                                      ),
+                                      onTap: () => _watch(c),
+                                    ),
+                                  ),
+                                )
+                              else
+                                for (final p in programs)
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: TvFocusable(
+                                        focusedScale: 1,
+                                        onFocusChange: (focus) {
+                                          if (focus) _select(c, p);
+                                        },
+                                        onPressed: () {
+                                          _stopPreview();
+                                          setState(() {});
+                                          showChannelGuide(context, c);
+                                        },
+                                        child: Container(
+                                          height: 92,
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                p.startTime.isBefore(
+                                                  DateTime.now(),
+                                                )
+                                                ? AppColors.card
+                                                : AppColors.surface,
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                p.title,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  height: 1.2,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 5),
+                                              FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                alignment: Alignment.centerLeft,
+                                                child: Text(
+                                                  '${_hm(p.startTime)} – ${_hm(p.endTime)}',
+                                                  style: const TextStyle(
+                                                    color: AppColors.textMuted,
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: previewWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TvFocusable(
+                      focusedScale: 1,
+                      onPressed: () {
+                        if (selected != null) _watch(selected);
+                      },
+                      child: GestureDetector(
+                        onTap: () {
+                          if (selected != null) _watch(selected);
+                        },
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: _preview == null
+                                ? const ColoredBox(
+                                    color: AppColors.surface,
+                                    child: Center(
+                                      child: Icon(
+                                        Icons.live_tv_rounded,
+                                        size: 42,
+                                      ),
+                                    ),
+                                  )
+                                : ListenableBuilder(
+                                    listenable: _preview ?? app,
+                                    builder: (_, _) {
+                                      final session = _preview;
+                                      if (session == null)
+                                        return const SizedBox.expand();
+                                      if (session.status ==
+                                          SessionStatus.failed) {
+                                        return const ColoredBox(
+                                          color: AppColors.surface,
+                                          child: Center(
+                                            child: Text(
+                                              'Anteprima non disponibile',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      return Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          VideoSurface(
+                                            session: session,
+                                            settings: session.settings,
+                                          ),
+                                          if (session.status ==
+                                                  SessionStatus.connecting ||
+                                              session.status ==
+                                                  SessionStatus.switching)
+                                            const Center(
+                                              child:
+                                                  CircularProgressIndicator(),
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
                           ),
                         ),
                       ),
-                ],
-              );
-            },
-          ),
-        ),
-      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TvPosterTitle(selected?.name ?? 'Diretta TV'),
+                        ),
+                        if (selected != null)
+                          TvFocusable(
+                            focusedScale: 1,
+                            onPressed: () => app.toggleFavorite(selected),
+                            child: IconButton(
+                              tooltip: 'Preferiti',
+                              onPressed: () => app.toggleFavorite(selected),
+                              icon: Icon(
+                                app.favoriteIds.contains(selected.id)
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (program != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        program.title,
+                        maxLines: 3,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      Text(
+                        '${_hm(program.startTime)} – ${_hm(program.endTime)}',
+                        style: const TextStyle(color: AppColors.textMuted),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -475,6 +489,16 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       _selectedChannel = null;
       _selectedProgram = null;
     }
+    if (DeviceTypeService.isTv &&
+        widget.active &&
+        _selectedChannel == null &&
+        channels.isNotEmpty) {
+      final first = channels.first;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.active && _selectedChannel == null)
+          _select(first);
+      });
+    }
     final content = catalogColumn(
       children: [
         if (DeviceTypeService.isTv)
@@ -502,13 +526,26 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
             ),
             onSort: (value) => setState(() => _sort = value),
             scaffoldKey: _scaffoldKey,
-            trailing: TvFocusable(
-              onPressed: _openEpg,
-              child: IconButton(
-                tooltip: 'Guida TV (EPG)',
-                icon: const Icon(Icons.calendar_view_day_rounded),
-                onPressed: _openEpg,
-              ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TvFocusable(
+                  onPressed: _openMultiView,
+                  child: IconButton(
+                    tooltip: 'MultiView',
+                    icon: const Icon(Icons.grid_view_rounded),
+                    onPressed: _openMultiView,
+                  ),
+                ),
+                TvFocusable(
+                  onPressed: _openEpg,
+                  child: IconButton(
+                    tooltip: 'Guida TV (EPG)',
+                    icon: const Icon(Icons.calendar_view_day_rounded),
+                    onPressed: _openEpg,
+                  ),
+                ),
+              ],
             ),
           )
         else
@@ -525,6 +562,11 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                       prefixIcon: Icon(Icons.search_rounded, size: 20),
                     ),
                   ),
+                ),
+                IconButton(
+                  tooltip: 'MultiView',
+                  icon: const Icon(Icons.grid_view_rounded),
+                  onPressed: _openMultiView,
                 ),
                 IconButton(
                   tooltip: 'Guida TV (EPG)',
@@ -634,6 +676,22 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       ),
       body: content,
     );
+  }
+
+  Future<void> _openMultiView() async {
+    final channel = _selectedChannel;
+    _stopPreview();
+    setState(() {});
+    // Native decoder/connection must be released before the parallel player opens.
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (!mounted || !widget.active) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MultiViewScreen(initialChannel: channel),
+      ),
+    );
+    if (mounted && widget.active && channel != null) _select(channel);
   }
 
   void _openEpg() {

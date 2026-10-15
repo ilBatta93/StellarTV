@@ -182,7 +182,8 @@ class _StellarTvAppState extends State<StellarTvApp> {
     if (!_uiSettings.loaded) return;
     final sig =
         '${_uiSettings.sectionOrder.map((e) => e.id).join(',')}:'
-        '${_uiSettings.startSection.id}';
+        '${_uiSettings.startSection.id}:'
+        '${_uiSettings.multiViewLayout.name}';
     if (sig == _uiSignature) return;
     final first = _uiSignature.isEmpty;
     _uiSignature = sig;

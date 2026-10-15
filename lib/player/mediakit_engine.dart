@@ -15,12 +15,15 @@ class MediaKitEngine extends PlaybackEngine {
     required this.url,
     required PlayerSettings settings,
     this.isLive = false,
+    this.previewMode = false,
   }) : _settings = settings,
        _player = Player(
          configuration: PlayerConfiguration(
            // The old value (network caching ms * 1 KB, ~1.5 MB) held about a
            // second of HD video: any network hiccup stuttered. 32 MB minimum.
-           bufferSize: _bufferBytes(settings, isLive),
+           bufferSize: previewMode
+               ? 8 * 1024 * 1024
+               : _bufferBytes(settings, isLive),
            logLevel: MPVLogLevel.warn,
          ),
        ) {
@@ -67,7 +70,10 @@ class MediaKitEngine extends PlaybackEngine {
       'interpolation': 'no',
       'video-sync': 'audio',
       'cache': 'yes',
-      'demuxer-readahead-secs': isLive ? '1' : '20',
+      'demuxer-readahead-secs': isLive
+          ? (DeviceTypeService.isFireTv ? '3' : '1')
+          : '20',
+      'framedrop': _settings.dropLateFrames ? 'vo' : 'no',
       'cache-pause-initial': 'no',
       'vd-lavc-threads': '0',
     };
@@ -79,6 +85,7 @@ class MediaKitEngine extends PlaybackEngine {
   }
 
   final bool isLive;
+  final bool previewMode;
   final PlayerSettings _settings;
   final String url;
   late final Player _player;
@@ -106,7 +113,7 @@ class MediaKitEngine extends PlaybackEngine {
   bool get supportsDelays => true;
 
   @override
-  bool get supportsTimeshift => isLive;
+  bool get supportsTimeshift => isLive && !previewMode;
 
   /// Local timeshift window kept by mpv behind the playback point.
   static const timeshiftBackBytes = 256 * 1024 * 1024;
@@ -120,7 +127,9 @@ class MediaKitEngine extends PlaybackEngine {
       'cache': 'yes',
       'demuxer-seekable-cache': 'yes',
       'force-seekable': 'yes',
-      'demuxer-max-back-bytes': '$timeshiftBackBytes',
+      // Keep the rewind feature, but bound RAM on memory-constrained Fire TV.
+      'demuxer-max-back-bytes':
+          '${DeviceTypeService.isFireTv ? 64 * 1024 * 1024 : timeshiftBackBytes}',
       'demuxer-donate-buffer': 'no',
       'cache-pause': 'yes',
     };
@@ -183,9 +192,10 @@ class MediaKitEngine extends PlaybackEngine {
   }
 
   @override
-  Future<void> open() async {
+  Future<void> open({double initialVolume = 1}) async {
     if (DeviceTypeService.isTv) await _tuneForTv();
-    if (isLive) await _enableTimeshift();
+    if (isLive && !previewMode) await _enableTimeshift();
+    await _player.setVolume(initialVolume.clamp(0.0, 1.0) * 100);
     _playing = Completer<void>();
     try {
       final configured = _settings.userAgent.trim();

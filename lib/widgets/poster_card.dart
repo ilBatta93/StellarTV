@@ -97,6 +97,7 @@ class _PressableState extends State<Pressable> {
     return TvFocusable(
       onPressed: widget.onTap,
       onLongPress: widget.onLongPress,
+      revealOnFocus: widget.onFocus == null,
       onFocusChange: widget.onFocus == null
           ? null
           : (f) {
@@ -156,26 +157,28 @@ class TmdbPosterCard extends StatelessWidget {
               padding: DeviceTypeService.isTv
                   ? const EdgeInsets.fromLTRB(9, 8, 9, 9)
                   : const EdgeInsets.only(top: 8),
-              child: Text(
-                item.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: DeviceTypeService.isTv ? 14 : 12,
-                  fontWeight: DeviceTypeService.isTv
-                      ? FontWeight.w700
-                      : FontWeight.w600,
-                  height: DeviceTypeService.isTv ? 1.2 : 1.1,
-                  shadows: [
-                    Shadow(
-                      color: AppColors.overlay,
-                      offset: const Offset(0, 1),
-                      blurRadius: 2,
+              child: DeviceTypeService.isTv
+                  ? TvPosterTitle(item.title)
+                  : Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: DeviceTypeService.isTv ? 14 : 12,
+                        fontWeight: DeviceTypeService.isTv
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                        height: DeviceTypeService.isTv ? 1.2 : 1.1,
+                        shadows: [
+                          Shadow(
+                            color: AppColors.overlay,
+                            offset: const Offset(0, 1),
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-              ),
             ),
           ],
         ),
@@ -289,10 +292,60 @@ class RatingBadge extends StatelessWidget {
 }
 
 /// Height of a horizontal row of [TmdbPosterCard]s that never clips the
-/// two-line title, including the TV focus padding and system text scaling.
+/// three-line title, including the TV focus padding and system text scaling.
 double tmdbPosterRowHeight(BuildContext context, {double mobile = 210}) {
   if (!DeviceTypeService.isTv) return mobile;
   final line = MediaQuery.textScalerOf(context).scale(14) * 1.2;
-  // 112px poster (2:3) + title padding + two lines + list vertical padding.
-  return 112 * 3 / 2 + 17 + line * 2 + 16 + 6;
+  // 112px poster (2:3) + title padding + three lines + list vertical padding.
+  return 112 * 3 / 2 + 17 + line * 3 + 16 + 10;
+}
+
+/// A fixed title box keeps adjacent posters aligned; long names fit in full.
+class TvPosterTitle extends StatelessWidget {
+  const TvPosterTitle(this.title, {super.key});
+  final String title;
+  @override
+  Widget build(BuildContext context) {
+    final height = MediaQuery.textScalerOf(context).scale(14) * 1.2 * 3;
+    return SizedBox(
+      height: height,
+      width: double.infinity,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          var font = 14.0;
+          TextStyle style() => TextStyle(
+            fontSize: font,
+            height: 1.2,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          );
+          TextPainter painter() => TextPainter(
+            text: TextSpan(text: title, style: style()),
+            maxLines: 3,
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+          )..layout(maxWidth: box.maxWidth);
+          var measured = painter();
+          while (measured.didExceedMaxLines && font > 8) {
+            measured.dispose();
+            font -= 0.5;
+            measured = painter();
+          }
+          final stillLong = measured.didExceedMaxLines;
+          measured.dispose();
+          if (stillLong) {
+            return FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: box.maxWidth,
+                child: Text(title, style: style()),
+              ),
+            );
+          }
+          return Text(title, maxLines: 3, style: style());
+        },
+      ),
+    );
+  }
 }

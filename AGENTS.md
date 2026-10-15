@@ -30,7 +30,11 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 
 - Reactions use timestamped per-profile entries with neutral tombstones inside the existing authenticated settings snapshot, so cloud merges preserve reversals and profile privacy without a second sync path.
 - Episode presentation is a shared fixed-width horizontal card with separate playback/download/watched stops; the player episode picker owns modal focus and retires the old connection before episode replacement.
-- Live previews are muted, focus-debounced, active-tab gated and stopped synchronously on route pushes or app backgrounding, so hidden tabs cannot compete with the full-screen player.
+- Live previews are audible, focus-debounced, active-tab gated and silenced before retirement on route pushes or backgrounding, so hidden tabs cannot compete with playback.
+- Playback engines receive initial volume before playing, and session disposal silences then retires native resources after surfaces unmount to avoid overlapping audio and disposed handles.
+- MultiView owns an isolated session per tile, serial mute-before-unmute audio ownership, bounded preview buffers and shared persisted layout preferences; its picker rechecks catalog and Kids permissions before opening streams.
+- PlaybackSession supports an optional engine factory for deterministic remote/audio lifecycle tests without replacing production native engines.
+- TV Home seeds its banner from the latest eligible history item until user focus takes over, and rows coordinate vertical reveal instead of competing with poster auto-scroll.
 
 - Secondary pages share ApplePageScaffold with bounded readable widths and their original scroll/focus bodies; shared theme and controls own Apple styling so no playback or sync logic is duplicated.
 - TV focus respects the animation setting and system reduced motion, uses one high-contrast stop per action, and avoids blur filters on video or catalog surfaces to preserve low-powered TV performance.

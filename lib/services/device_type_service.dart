@@ -7,6 +7,8 @@ class DeviceTypeService {
 
   static const _channel = MethodChannel('stellartv/device');
   static bool _isTv = false;
+  static bool _isFireTv = false;
+  static bool get isFireTv => _isFireTv;
 
   static bool get isTv => _isTv;
 
@@ -14,8 +16,12 @@ class DeviceTypeService {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     try {
       _isTv = await _channel.invokeMethod<bool>('isTv') ?? false;
+      _isFireTv =
+          _isTv && (await _channel.invokeMethod<bool>('isFireTv') ?? false);
+    } on MissingPluginException {
+      _isFireTv = false;
     } on PlatformException {
-      _isTv = false;
+      _isFireTv = false;
     }
   }
 

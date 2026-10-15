@@ -60,3 +60,14 @@
 - [ ] Build con SDK e dipendenze originali: analisi locale bloccata dalle API video_player non disponibili nella versione di verifica
 - [ ] Verificare pannello player, preview EPG, cloud e tutte le nuove schermate con account/provider e telecomando su TV reale
 - [ ] Completare le restanti schermate del rifacimento Apple dopo verifica delle modifiche preparate
+
+## Diretta e MultiView
+- [x] Titoli TV adattati senza ellissi e intestazioni Home rivelate al focus
+- [x] Diretta compatta con guida, anteprima sonora, preferiti e accesso MultiView
+- [x] Banner Home iniziale dall’ultima visione idonea
+- [x] MultiView fino a quattro canali, disposizioni sincronizzate e audio esclusivo
+- [x] Contenimento memoria e buffer MPV Fire TV applicato (prestazioni hardware non verificate)
+- [x] 10 test mirati Home/Diretta/MultiView superati a 960×540 e 1280×720
+- [x] Regressione locale: 53 test superati; test splash preesistente bloccato da inizializzazione cloud assente nel test
+- [ ] Build Codemagic con SDK e dipendenze originali (ambiente locale non compatibile)
+- [ ] Prova reale di audio, provider multi-connessione, MPV Fire TV e telecomando (serve dispositivo/account dell’utente)

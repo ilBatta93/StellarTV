@@ -20,6 +20,7 @@ import 'xtream_account_screen.dart';
 import 'section_layout_screen.dart';
 import 'downloads_screen.dart';
 import 'recordings_screen.dart';
+import 'multiview_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -242,6 +243,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SettingsSection(
             title: 'Riproduzione',
             children: [
+              SettingsValueTile(
+                icon: Icons.dashboard_customize_outlined,
+                title: 'MultiView',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const MultiViewSettingsScreen(),
+                  ),
+                ),
+              ),
               SettingsValueTile(
                 icon: Icons.play_circle_outline_rounded,
                 title: 'Player video',

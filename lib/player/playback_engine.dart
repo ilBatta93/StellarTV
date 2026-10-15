@@ -71,7 +71,7 @@ abstract class PlaybackEngine extends ChangeNotifier {
 
   /// Completes once the stream is actually playing; throws when it can't.
   /// Engines backed by a platform view only progress while [buildView] is mounted.
-  Future<void> open();
+  Future<void> open({double initialVolume = 1});
 
   /// Renders the video stretched to fill its parent, whose ratio is [boxRatio].
   Widget buildView(double boxRatio);
@@ -169,7 +169,8 @@ String describeVideo({String? codec, int? bitrate, double? frameRate}) {
 String languageName(String? code) {
   if (code == null || code.isEmpty || code == 'und') return 'Sconosciuta';
   final lower = code.toLowerCase().split('-').first;
-  final key = _languageAliases.entries
+  final key =
+      _languageAliases.entries
           .where((e) => e.value.contains(lower))
           .firstOrNull
           ?.key ??

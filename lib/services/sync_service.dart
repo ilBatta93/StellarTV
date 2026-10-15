@@ -77,6 +77,7 @@ class SyncService {
     'ui_compact',
     UiSettings.sectionOrderKey,
     UiSettings.startSectionKey,
+    UiSettings.multiViewLayoutKey,
     'show_adult_content',
     'hidden_categories',
     'playlist_refresh_minutes',

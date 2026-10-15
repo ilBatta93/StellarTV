@@ -20,6 +20,7 @@ class TvFocusable extends StatefulWidget {
   final double focusedScale;
   final BorderRadius borderRadius;
   final ValueChanged<bool>? onFocusChange;
+  final bool revealOnFocus;
 
   const TvFocusable({
     super.key,
@@ -31,6 +32,7 @@ class TvFocusable extends StatefulWidget {
     this.focusedScale = 1.04,
     this.borderRadius = const BorderRadius.all(Radius.circular(10)),
     this.onFocusChange,
+    this.revealOnFocus = true,
   });
 
   @override
@@ -95,7 +97,7 @@ class _TvFocusableState extends State<TvFocusable> {
         if (value == _focused) return;
         setState(() => _focused = value);
         widget.onFocusChange?.call(value);
-        if (value) {
+        if (value && widget.revealOnFocus) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted || !_focused) return;
             Scrollable.ensureVisible(

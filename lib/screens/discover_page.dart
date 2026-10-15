@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -24,6 +25,27 @@ import '../widgets/tv_focusable.dart';
 
 /// A watch-history entry paired with the channel it belongs to.
 typedef ResumeItem = (HistoryEntry, Channel);
+
+ResumeItem? latestHistoryResume(List<HistoryEntry> entries, AppProvider app) {
+  final ordered = entries.where((e) => !e.isLive).toList()
+    ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
+  for (final e in ordered) {
+    final channel =
+        app.channelById(e.contentId) ??
+        Channel(
+          id: e.contentId,
+          name: e.title,
+          url: e.url,
+          logo: e.posterUrl,
+          group: e.group,
+          type: e.type,
+          seriesKey: e.seriesKey.isEmpty ? null : e.seriesKey,
+          seriesName: e.seriesName.isEmpty ? null : e.seriesName,
+        );
+    if (!app.kidsMode || app.isKidsContent(channel)) return (e, channel);
+  }
+  return null;
+}
 
 class DiscoverPage extends StatefulWidget {
   const DiscoverPage({super.key});
@@ -145,6 +167,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       return _TvDiscover(
         profileId: context.watch<ProfileProvider>().selected?.id,
         banner: banner,
+        initialHistory: latestHistoryResume(history.entries, app),
         startedMovies: startedMovies,
         startedSeries: startedSeries,
         forYou: discover.forYou
@@ -741,19 +764,21 @@ class _HistoryCard extends StatelessWidget {
               padding: DeviceTypeService.isTv
                   ? const EdgeInsets.fromLTRB(9, 0, 9, 9)
                   : EdgeInsets.zero,
-              child: Text(
-                title,
-                maxLines: DeviceTypeService.isTv ? 2 : 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: DeviceTypeService.isTv ? 14 : 13,
-                  fontWeight: DeviceTypeService.isTv
-                      ? FontWeight.w700
-                      : FontWeight.w600,
-                  height: 1.2,
-                ),
-              ),
+              child: DeviceTypeService.isTv
+                  ? TvPosterTitle(title)
+                  : Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: DeviceTypeService.isTv ? 14 : 13,
+                        fontWeight: DeviceTypeService.isTv
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                        height: 1.2,
+                      ),
+                    ),
             ),
           ],
         ),
@@ -840,6 +865,19 @@ class _DiscoverSkeleton extends StatelessWidget {
 // TV-only Home: large hero driven by the focused title, rows below.
 // ---------------------------------------------------------------------------
 
+void _revealTvHeading(BuildContext context) {
+  final scroll = Scrollable.maybeOf(context);
+  final target = context.findRenderObject();
+  if (scroll == null || target == null) return;
+  final viewport = RenderAbstractViewport.maybeOf(target);
+  if (viewport == null) return;
+  final position = scroll.position;
+  final offset = viewport.getOffsetToReveal(target, 0).offset;
+  position.jumpTo(
+    offset.clamp(position.minScrollExtent, position.maxScrollExtent),
+  );
+}
+
 typedef TvTopSpec = (
   String title,
   String? subtitle,
@@ -851,6 +889,7 @@ typedef TvTopSpec = (
 class _TvDiscover extends StatefulWidget {
   final String? profileId;
   final List<TmdbItem> banner;
+  final ResumeItem? initialHistory;
   final List<ResumeItem> startedMovies;
   final List<ResumeItem> startedSeries;
   final List<TmdbItem> forYou;
@@ -862,6 +901,7 @@ class _TvDiscover extends StatefulWidget {
   const _TvDiscover({
     required this.profileId,
     required this.banner,
+    required this.initialHistory,
     required this.startedMovies,
     required this.startedSeries,
     required this.forYou,
@@ -879,12 +919,15 @@ class _TvDiscoverState extends State<_TvDiscover> {
   late final ValueNotifier<TmdbItem?> _hero;
   Timer? _debounce;
   int _heroRequest = 0;
+  bool _userFocused = false;
+  String? _seededHistory;
   final Map<String, TmdbItem?> _historyInfo = {};
 
   @override
   void initState() {
     super.initState();
     _hero = ValueNotifier(_firstHero());
+    _seedInitialHistory();
   }
 
   TmdbItem? _firstHero() {
@@ -910,10 +953,15 @@ class _TvDiscoverState extends State<_TvDiscover> {
   @override
   void didUpdateWidget(covariant _TvDiscover oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.profileId == widget.profileId) return;
-    _debounce?.cancel();
-    _historyInfo.clear();
-    _hero.value = _firstHero();
+    if (oldWidget.profileId != widget.profileId) {
+      _heroRequest++;
+      _debounce?.cancel();
+      _historyInfo.clear();
+      _userFocused = false;
+      _seededHistory = null;
+      _hero.value = _firstHero();
+    }
+    _seedInitialHistory();
   }
 
   @override
@@ -926,6 +974,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
   // Debounced so scrolling quickly with the remote does not load every
   // backdrop on the way.
   void _focus(TmdbItem item) {
+    _userFocused = true;
     _heroRequest++;
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 220), () {
@@ -933,7 +982,16 @@ class _TvDiscoverState extends State<_TvDiscover> {
     });
   }
 
-  void _focusHistory(ResumeItem resume) {
+  void _seedInitialHistory() {
+    final resume = widget.initialHistory;
+    if (_userFocused || resume == null || _seededHistory == resume.$1.contentId)
+      return;
+    _seededHistory = resume.$1.contentId;
+    _focusHistory(resume, initial: true);
+  }
+
+  void _focusHistory(ResumeItem resume, {bool initial = false}) {
+    if (!initial) _userFocused = true;
     final (entry, channel) = resume;
     final movie = entry.type == ContentType.movie;
     final title = movie
@@ -945,40 +1003,55 @@ class _TvDiscoverState extends State<_TvDiscover> {
     final request = ++_heroRequest;
     final tmdb = context.read<DiscoverProvider>().tmdb;
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 220), () async {
-      final item = _historyInfo.containsKey(key)
-          ? _historyInfo[key]
-          : await tmdb
-                .findByTitle(title, isMovie: movie)
-                .catchError((_) => null);
-      _historyInfo[key] = item;
-      if (!mounted || request != _heroRequest) return;
-      _hero.value =
-          item ??
-          TmdbItem(
-            id: -channel.id.hashCode.abs(),
-            mediaType: movie ? 'movie' : 'tv',
-            title: title,
-            overview: channel.group,
-            posterPath: null,
-            backdropPath: null,
-            voteAverage: 0,
-            popularity: 0,
-            releaseDate: '',
-          );
-    });
+    _debounce = Timer(
+      initial ? Duration.zero : const Duration(milliseconds: 220),
+      () async {
+        final item = _historyInfo.containsKey(key)
+            ? _historyInfo[key]
+            : await tmdb
+                  .findByTitle(title, isMovie: movie)
+                  .catchError((_) => null);
+        if (!mounted || request != _heroRequest) return;
+        _historyInfo[key] = item;
+        _hero.value =
+            item ??
+            TmdbItem(
+              id: -channel.id.hashCode.abs(),
+              mediaType: movie ? 'movie' : 'tv',
+              title: title,
+              overview: channel.group,
+              posterPath: null,
+              backdropPath: null,
+              voteAverage: 0,
+              popularity: 0,
+              releaseDate: '',
+            );
+      },
+    );
   }
 
   void _revealHeading(BuildContext rowContext) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !rowContext.mounted) return;
-      Scrollable.ensureVisible(
-        rowContext,
-        alignment: 0,
-        duration: const Duration(milliseconds: 140),
-      );
+      _revealTvHeading(rowContext);
     });
   }
+
+  Widget _historySection(String title, List<ResumeItem> items) => Builder(
+    builder: (rowContext) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _TvRowTitle(title),
+        _HistoryRow(
+          items: items,
+          onFocus: (resume) {
+            _focusHistory(resume);
+            _revealHeading(rowContext);
+          },
+        ),
+      ],
+    ),
+  );
 
   Widget _row(String title, List<TmdbItem> items) {
     return Builder(
@@ -1017,7 +1090,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final heroHeight = (c.maxHeight * 0.48).clamp(250.0, 340.0);
+        final heroHeight = (c.maxHeight * 0.36).clamp(210.0, 260.0);
         return Stack(
           children: [
             Positioned.fill(
@@ -1044,62 +1117,16 @@ class _TvDiscoverState extends State<_TvDiscover> {
                     padding: const EdgeInsets.only(top: 12, bottom: 48),
                     children: [
                       const ExpiryBanner(),
-                      if (widget.startedSeries.isNotEmpty) ...[
-                        const _TvRowTitle('Serie viste di recente'),
-                        _HistoryRow(
-                          items: widget.startedSeries,
-                          onFocus: (resume) {
-                            _focusHistory(resume);
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (!mounted) return;
-                              final focusContext =
-                                  FocusManager.instance.primaryFocus?.context;
-                              if (focusContext == null) return;
-                              final scroll = Scrollable.of(
-                                focusContext,
-                                axis: Axis.vertical,
-                              );
-                              final position = scroll.position;
-                              position.animateTo(
-                                (position.pixels - 44).clamp(
-                                  position.minScrollExtent,
-                                  position.maxScrollExtent,
-                                ),
-                                duration: const Duration(milliseconds: 140),
-                                curve: Curves.easeOut,
-                              );
-                            });
-                          },
+                      if (widget.startedSeries.isNotEmpty)
+                        _historySection(
+                          'Serie viste di recente',
+                          widget.startedSeries,
                         ),
-                      ],
-                      if (widget.startedMovies.isNotEmpty) ...[
-                        const _TvRowTitle('Film visti di recente'),
-                        _HistoryRow(
-                          items: widget.startedMovies,
-                          onFocus: (resume) {
-                            _focusHistory(resume);
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (!mounted) return;
-                              final focusContext =
-                                  FocusManager.instance.primaryFocus?.context;
-                              if (focusContext == null) return;
-                              final scroll = Scrollable.of(
-                                focusContext,
-                                axis: Axis.vertical,
-                              );
-                              final position = scroll.position;
-                              position.animateTo(
-                                (position.pixels - 44).clamp(
-                                  position.minScrollExtent,
-                                  position.maxScrollExtent,
-                                ),
-                                duration: const Duration(milliseconds: 140),
-                                curve: Curves.easeOut,
-                              );
-                            });
-                          },
+                      if (widget.startedMovies.isNotEmpty)
+                        _historySection(
+                          'Film visti di recente',
+                          widget.startedMovies,
                         ),
-                      ],
                       if (widget.forYou.isNotEmpty)
                         _row(
                           widget.forYouSource == null
@@ -1145,6 +1172,7 @@ class _TvTopRow extends StatefulWidget {
 
 class _TvTopRowState extends State<_TvTopRow> {
   bool _showSeries = false;
+  final _headingKey = GlobalKey();
   final _movieFocus = FocusNode(debugLabel: 'top movies');
   final _seriesFocus = FocusNode(debugLabel: 'top series');
   @override
@@ -1166,6 +1194,7 @@ class _TvTopRowState extends State<_TvTopRow> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
+          key: _headingKey,
           padding: const EdgeInsets.fromLTRB(32, 16, 32, 8),
           child: Row(
             children: [
@@ -1240,12 +1269,8 @@ class _TvTopRowState extends State<_TvTopRow> {
               onFocus: () {
                 widget.onFocusItem(items[i]);
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted)
-                    Scrollable.ensureVisible(
-                      this.context,
-                      alignment: 0,
-                      duration: const Duration(milliseconds: 140),
-                    );
+                  final heading = _headingKey.currentContext;
+                  if (mounted && heading != null) _revealTvHeading(heading);
                 });
               },
             ),
@@ -1398,23 +1423,34 @@ class _TvHeroInfo extends StatelessWidget {
       ),
     );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 82, 24, 8),
+      padding: const EdgeInsets.fromLTRB(32, 70, 24, 8),
       child: FractionallySizedBox(
         alignment: Alignment.topLeft,
         widthFactor: 0.55,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              it.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'Sora',
-                color: AppColors.textPrimary,
-                fontSize: 30,
-                height: 1.05,
-                fontWeight: FontWeight.w800,
+            Flexible(
+              flex: 2,
+              child: SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: MediaQuery.sizeOf(context).width * 0.5,
+                    child: Text(
+                      it.title,
+                      style: const TextStyle(
+                        fontFamily: 'Sora',
+                        color: AppColors.textPrimary,
+                        fontSize: 26,
+                        height: 1.1,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 8),

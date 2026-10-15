@@ -146,6 +146,9 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "isTv" -> result.success(isTelevision())
+                    "isFireTv" -> result.success(isTelevision() &&
+                        (Build.MANUFACTURER.equals("Amazon", ignoreCase = true) ||
+                         packageManager.hasSystemFeature("amazon.hardware.fire_tv")))
                     "moveToBack" -> result.success(moveTaskToBack(true))
                     "showKeyboard" -> result.success(showSoftKeyboard())
                     "setTextEditing" -> {

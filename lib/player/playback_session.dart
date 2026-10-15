@@ -16,6 +16,8 @@ class PlaybackSession extends ChangeNotifier {
     required this.isLive,
     required this.settings,
     this.startAt,
+    this.previewMode = false,
+    this.engineFactory,
   }) : _candidates = liveCandidates(url, isLive),
        speed = isLive ? 1.0 : settings.defaultSpeed,
        fitMode = settings.fitMode,
@@ -24,6 +26,9 @@ class PlaybackSession extends ChangeNotifier {
 
   final String url;
   final bool isLive;
+  final bool previewMode;
+  /// Allows deterministic playback/lifecycle tests without a native decoder.
+  final PlaybackEngine Function(PlayerEngineType)? engineFactory;
 
   /// Alternative addresses for the same stream. Xtream live channels were
   /// saved without the `/live/` segment (HTTP 404); the standard
@@ -93,12 +98,13 @@ class PlaybackSession extends ChangeNotifier {
     return pos > Duration.zero ? pos : startAt;
   }
 
-  PlaybackEngine _create(PlayerEngineType type) => switch (type) {
+  PlaybackEngine _create(PlayerEngineType type) => engineFactory?.call(type) ?? switch (type) {
     PlayerEngineType.exo => ExoEngine(url: currentUrl, settings: settings),
     PlayerEngineType.mediakit => MediaKitEngine(
       url: currentUrl,
       settings: settings,
       isLive: isLive,
+      previewMode: previewMode,
     ),
   };
 
@@ -114,13 +120,15 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
 
     try {
-      await engine.open().timeout(
-        Duration(seconds: settings.startTimeoutSeconds),
-        onTimeout: () => throw PlaybackException(
-          'Nessuna risposta dopo ${settings.startTimeoutSeconds} secondi',
-        ),
-      );
-      if (gen != _generation) return;
+      await engine
+          .open(initialVolume: muted ? 0 : volume)
+          .timeout(
+            Duration(seconds: settings.startTimeoutSeconds),
+            onTimeout: () => throw PlaybackException(
+              'Nessuna risposta dopo ${settings.startTimeoutSeconds} secondi',
+            ),
+          );
+      if (gen != _generation || _disposed) return;
     } catch (e) {
       if (gen != _generation) return;
       await _handleFailure(type, e.toString(), resumeAt);
@@ -152,9 +160,11 @@ class PlaybackSession extends ChangeNotifier {
     Duration? resumeAt,
     int gen,
   ) async {
+    if (gen != _generation || _disposed) return;
     if (resumeAt != null && resumeAt > Duration.zero) {
       await _seekWhenReady(engine, resumeAt, gen);
     }
+    if (gen != _generation || _disposed) return;
     if (speed != 1.0) await engine.setSpeed(speed);
     await engine.setVolume(muted ? 0 : volume);
     await engine.applyFitMode(fitMode, _boxRatio);
@@ -511,8 +521,10 @@ class PlaybackSession extends ChangeNotifier {
     _generation++;
     final engine = _engine;
     _engine = null;
-    engine?.removeListener(_onEngineChanged);
-    engine?.dispose();
+    if (engine != null) {
+      unawaited(engine.setVolume(0).catchError((Object _) {}));
+      _retire(engine);
+    }
     super.dispose();
   }
 }
