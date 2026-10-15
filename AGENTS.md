@@ -27,3 +27,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 
 - Offline downloads live in DownloadService (one at a time, HTTP Range resume, device-only files) and playChannel swaps in the local file: history/resume ids stay unchanged.
 - Every new TV control must be a TvFocusable stop reachable with the D-Pad: the app is used with a remote only.
+
+- Reactions use timestamped per-profile entries with neutral tombstones inside the existing authenticated settings snapshot, so cloud merges preserve reversals and profile privacy without a second sync path.
+- Episode presentation is a shared fixed-width horizontal card with separate playback/download/watched stops; the player episode picker owns modal focus and retires the old connection before episode replacement.
+- Live previews are muted, focus-debounced, active-tab gated and stopped synchronously on route pushes or app backgrounding, so hidden tabs cannot compete with the full-screen player.

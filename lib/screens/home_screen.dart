@@ -38,24 +38,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   AppSection? get _currentSection =>
       _currentIndex >= 0 && _currentIndex < _order.length
-          ? _order[_currentIndex]
-          : null;
+      ? _order[_currentIndex]
+      : null;
 
   Widget _pageFor(AppSection section) => switch (section) {
-        AppSection.home => const DiscoverPage(),
-        AppSection.live => const CatalogSectionFrame(
-            type: ContentType.live,
-            child: LivePage(),
-          ),
-        AppSection.movies => const CatalogSectionFrame(
-            type: ContentType.movie,
-            child: CatalogPage(type: ContentType.movie),
-          ),
-        AppSection.series => const CatalogSectionFrame(
-            type: ContentType.series,
-            child: CatalogPage(type: ContentType.series),
-          ),
-      };
+    AppSection.home => const DiscoverPage(),
+    AppSection.live => CatalogSectionFrame(
+      type: ContentType.live,
+      child: LivePage(active: _currentSection == AppSection.live),
+    ),
+    AppSection.movies => const CatalogSectionFrame(
+      type: ContentType.movie,
+      child: CatalogPage(type: ContentType.movie),
+    ),
+    AppSection.series => const CatalogSectionFrame(
+      type: ContentType.series,
+      child: CatalogPage(type: ContentType.series),
+    ),
+  };
 
   void _syncLayout(UiSettings ui) {
     final next = ui.sectionOrder;
@@ -70,8 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _startSectionApplied = true;
       return;
     }
-    if (_order.map((e) => e.id).join(',') ==
-        next.map((e) => e.id).join(',')) {
+    if (_order.map((e) => e.id).join(',') == next.map((e) => e.id).join(',')) {
       return;
     }
     final selected = _currentSection;
@@ -121,7 +120,9 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _currentIndex,
         children: [
           for (final section in _order)
-            _visited.contains(section) ? _pageFor(section) : const SizedBox.shrink(),
+            _visited.contains(section)
+                ? _pageFor(section)
+                : const SizedBox.shrink(),
           const FavoritesPage(),
         ],
       ),
@@ -148,21 +149,46 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  NavigationDestination _mobileDestination(AppSection section) => switch (section) {
+  NavigationDestination _mobileDestination(AppSection section) =>
+      switch (section) {
         AppSection.home => const NavigationDestination(
-            icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home_rounded),
+          label: 'Home',
+        ),
         AppSection.live => const NavigationDestination(
-            icon: CatalogNavigationIcon(icon: Icons.live_tv_outlined, type: ContentType.live),
-            selectedIcon: CatalogNavigationIcon(icon: Icons.live_tv_rounded, type: ContentType.live),
-            label: 'Diretta'),
+          icon: CatalogNavigationIcon(
+            icon: Icons.live_tv_outlined,
+            type: ContentType.live,
+          ),
+          selectedIcon: CatalogNavigationIcon(
+            icon: Icons.live_tv_rounded,
+            type: ContentType.live,
+          ),
+          label: 'Diretta',
+        ),
         AppSection.movies => const NavigationDestination(
-            icon: CatalogNavigationIcon(icon: Icons.movie_outlined, type: ContentType.movie),
-            selectedIcon: CatalogNavigationIcon(icon: Icons.movie_rounded, type: ContentType.movie),
-            label: 'Film'),
+          icon: CatalogNavigationIcon(
+            icon: Icons.movie_outlined,
+            type: ContentType.movie,
+          ),
+          selectedIcon: CatalogNavigationIcon(
+            icon: Icons.movie_rounded,
+            type: ContentType.movie,
+          ),
+          label: 'Film',
+        ),
         AppSection.series => const NavigationDestination(
-            icon: CatalogNavigationIcon(icon: Icons.video_library_outlined, type: ContentType.series),
-            selectedIcon: CatalogNavigationIcon(icon: Icons.video_library_rounded, type: ContentType.series),
-            label: 'Serie TV'),
+          icon: CatalogNavigationIcon(
+            icon: Icons.video_library_outlined,
+            type: ContentType.series,
+          ),
+          selectedIcon: CatalogNavigationIcon(
+            icon: Icons.video_library_rounded,
+            type: ContentType.series,
+          ),
+          label: 'Serie TV',
+        ),
       };
 
   final FocusScopeNode _tvNavScope = FocusScopeNode(debugLabel: 'tvNav');
@@ -276,8 +302,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: i == _order.length
                 ? const FavoritesPage()
                 : (_visited.contains(_order[i])
-                    ? _pageFor(_order[i])
-                    : const SizedBox.shrink()),
+                      ? _pageFor(_order[i])
+                      : const SizedBox.shrink()),
           ),
       ],
     );

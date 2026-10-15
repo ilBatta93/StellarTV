@@ -24,6 +24,7 @@ class DiscoverProvider extends ChangeNotifier {
   List<TmdbItem> _forYouSeries = [];
   String? _forYouSeriesSource;
   String _forYouSeriesSignature = '';
+  String _profileScope = '';
 
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -146,7 +147,23 @@ class DiscoverProvider extends ChangeNotifier {
   /// the 3 most recent titles of its kind in the history (series episodes
   /// count once per series), asks TMDB for their recommendations (similar
   /// titles as fallback) and interleaves them, max 20, without the seeds.
-  Future<void> loadForYou(List<Channel> history) async {
+  Future<void> loadForYou(
+    List<Channel> history, {
+    List<TmdbItem> liked = const [],
+    Set<String> disliked = const {},
+    String reactionSignature = '',
+  }) async {
+    final scope = reactionSignature.split(':').first;
+    if (_profileScope != scope) {
+      _profileScope = scope;
+      _forYou = [];
+      _forYouSeries = [];
+      _forYouSource = null;
+      _forYouSeriesSource = null;
+      _forYouSignature = '';
+      _forYouSeriesSignature = '';
+      notifyListeners();
+    }
     final movies = <Channel>[];
     final series = <Channel>[];
     final seenSeries = <String>{};
@@ -159,14 +176,39 @@ class DiscoverProvider extends ChangeNotifier {
       }
       if (movies.length >= 3 && series.length >= 3) break;
     }
-    await Future.wait([_loadMovies(movies), _loadSeries(series)]);
+
+    await Future.wait([
+      _loadMovies(
+        movies,
+        liked.where((m) => m.isMovie).toList(),
+        disliked,
+        reactionSignature,
+      ),
+      _loadSeries(
+        series,
+        liked.where((m) => !m.isMovie).toList(),
+        disliked,
+        reactionSignature,
+      ),
+    ]);
   }
 
-  Future<void> _loadMovies(List<Channel> seeds) async {
-    final signature = seeds.map((c) => c.id).join('|');
+  Future<void> _loadMovies(
+    List<Channel> seeds,
+    List<TmdbItem> liked,
+    Set<String> disliked,
+    String reactions,
+  ) async {
+    final signature = '$reactions:${seeds.map((c) => c.id).join('|')}';
     if (signature == _forYouSignature) return;
     _forYouSignature = signature;
-    final result = await _recommend(seeds, isMovie: true);
+    final result = await _recommend(
+      seeds,
+      isMovie: true,
+      liked: liked,
+      disliked: disliked,
+    );
+    if (signature != _forYouSignature) return;
     if (result == null) {
       _forYouSignature = '';
       return;
@@ -176,13 +218,23 @@ class DiscoverProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _loadSeries(List<Channel> seeds) async {
-    final signature = seeds
-        .map((c) => c.seriesKey ?? c.displaySeriesName)
-        .join('|');
+  Future<void> _loadSeries(
+    List<Channel> seeds,
+    List<TmdbItem> liked,
+    Set<String> disliked,
+    String reactions,
+  ) async {
+    final signature =
+        '$reactions:${seeds.map((c) => c.seriesKey ?? c.displaySeriesName).join('|')}';
     if (signature == _forYouSeriesSignature) return;
     _forYouSeriesSignature = signature;
-    final result = await _recommend(seeds, isMovie: false);
+    final result = await _recommend(
+      seeds,
+      isMovie: false,
+      liked: liked,
+      disliked: disliked,
+    );
+    if (signature != _forYouSeriesSignature) return;
     if (result == null) {
       _forYouSeriesSignature = '';
       return;
@@ -196,8 +248,10 @@ class DiscoverProvider extends ChangeNotifier {
   Future<(List<TmdbItem>, String?)?> _recommend(
     List<Channel> seeds, {
     required bool isMovie,
+    required List<TmdbItem> liked,
+    required Set<String> disliked,
   }) async {
-    if (seeds.isEmpty) return (const <TmdbItem>[], null);
+    if (seeds.isEmpty && liked.isEmpty) return (const <TmdbItem>[], null);
     try {
       final matches = await Future.wait(
         seeds.map(
@@ -209,14 +263,22 @@ class DiscoverProvider extends ChangeNotifier {
               .catchError((_) => null),
         ),
       );
-      final found = matches.whereType<TmdbItem>().toList();
+      final unique = <String, TmdbItem>{};
+      for (final item in [
+        ...liked.reversed,
+        ...matches.whereType<TmdbItem>(),
+      ]) {
+        if (!disliked.contains(item.key))
+          unique.putIfAbsent(item.key, () => item);
+      }
+      final found = unique.values.take(5).toList();
       if (found.isEmpty) return (const <TmdbItem>[], null);
       final recs = await Future.wait(
         found.map(
           (m) => tmdb.recommendations(m).catchError((_) => <TmdbItem>[]),
         ),
       );
-      final seen = found.map((e) => e.key).toSet();
+      final seen = {...disliked, ...found.map((e) => e.key)};
       final merged = <TmdbItem>[];
       for (var i = 0; i < 20; i++) {
         for (final list in recs) {

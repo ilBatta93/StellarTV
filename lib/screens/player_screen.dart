@@ -28,6 +28,7 @@ import '../widgets/player/player_stats.dart';
 import '../widgets/player/subtitle_overlay.dart';
 import '../widgets/player/tv_player_controls.dart';
 import '../widgets/player/video_surface.dart';
+import '../widgets/tv_focusable.dart';
 
 class PlayerScreen extends StatefulWidget {
   final Channel channel;
@@ -584,6 +585,13 @@ class _PlayerScreenState extends State<PlayerScreen>
             label: 'Scheda titolo',
             onPressed: _openTitle,
           ),
+        if (_isEpisode)
+          TvPlayerAction(
+            id: 'episodes',
+            icon: Icons.video_library_rounded,
+            label: 'Stagioni ed episodi',
+            onPressed: _openEpisodes,
+          ),
         if (engine != null)
           TvPlayerAction(
             id: 'engine',
@@ -846,6 +854,47 @@ class _PlayerScreenState extends State<PlayerScreen>
     });
   }
 
+  Future<void> _openEpisodes() async {
+    if (!_isEpisode) return;
+    _hideTimer?.cancel();
+    // The dialog owns the D-Pad; the early player handler ignores non-current routes.
+    final selected = await showDialog<Channel>(
+      context: context,
+      barrierColor: AppColors.background.withValues(alpha: 0.2),
+      builder: (_) => _EpisodePicker(
+        current: widget.channel,
+        load: () async {
+          await _resolveQueue();
+          final app = _app;
+          return (_queue ?? const <Channel>[])
+              .where((c) => !app.kidsMode || app.isKidsContent(c))
+              .toList();
+        },
+      ),
+    );
+    if (!mounted) return;
+    _remoteFocus.requestFocus();
+    _scheduleHide();
+    if (selected == null || selected.id == widget.channel.id || _advancing)
+      return;
+    _advancing = true;
+    await _saveResume();
+    // Retire the old stream before opening another on single-connection providers.
+    final previous = _session;
+    previous?.removeListener(_onSessionChanged);
+    setState(() => _session = null);
+    previous?.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (!mounted) return;
+    playChannel(
+      context,
+      selected,
+      queue: _queue,
+      startAt: _history.entryFor(selected.id)?.resumePosition,
+      replace: true,
+    );
+  }
+
   /// IntroDB: resolve the IMDb id of the series, then fetch intro/outro.
   /// Any failure is ignored silently and playback continues normally.
   Future<void> _loadSegments() async {
@@ -941,11 +990,19 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void playNextEpisode() => _playNext();
 
-  void _playNext() {
+  Future<void> _playNext() async {
     final next = _next;
     if (next == null || _advancing) return;
     _advancing = true;
-    _saveResume();
+    _outroTimer?.cancel();
+    await _saveResume();
+    if (!mounted) return;
+    final previous = _session;
+    previous?.removeListener(_onSessionChanged);
+    setState(() => _session = null);
+    previous?.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (!mounted) return;
     final entry = _history.entryFor(next.id);
     playChannel(
       context,
@@ -1446,6 +1503,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 onNextChannel: () => _playLiveChannel(_adjacentLiveChannel(1)),
                 onBack: () => Navigator.pop(context),
                 onOpenTitle: _isLive ? null : _openTitle,
+                onEpisodes: _isEpisode ? _openEpisodes : null,
                 onPip: _enterPip,
                 onMenu: _openMenu,
                 onToggleLock: () {
@@ -1787,4 +1845,169 @@ class _FailureView extends StatelessWidget {
       ),
     );
   }
+}
+
+class _EpisodePicker extends StatefulWidget {
+  final Channel current;
+  final Future<List<Channel>> Function() load;
+  const _EpisodePicker({required this.current, required this.load});
+  @override
+  State<_EpisodePicker> createState() => _EpisodePickerState();
+}
+
+class _EpisodePickerState extends State<_EpisodePicker> {
+  late final Future<List<Channel>> _episodes;
+  late int _season;
+  final _first = FocusNode(debugLabel: 'episode panel first');
+  @override
+  void initState() {
+    super.initState();
+    _season = widget.current.season ?? 1;
+    _episodes = widget.load();
+  }
+
+  @override
+  void dispose() {
+    _first.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerRight,
+    child: SizedBox(
+      width: MediaQuery.sizeOf(context).width < 480
+          ? MediaQuery.sizeOf(context).width * .94
+          : 460,
+      height: MediaQuery.sizeOf(context).height,
+      child: Material(
+        color: AppColors.surface,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: FocusTraversalGroup(
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.current.displaySeriesName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      TvFocusable(
+                        onPressed: () => Navigator.pop(context),
+                        child: IconButton(
+                          tooltip: 'Chiudi episodi',
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: FutureBuilder<List<Channel>>(
+                      future: _episodes,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState != ConnectionState.done) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+                        final all = snapshot.data ?? const <Channel>[];
+                        if (all.isEmpty)
+                          return const Center(
+                            child: Text('Episodi non disponibili'),
+                          );
+                        final seasons =
+                            all.map((c) => c.season ?? 1).toSet().toList()
+                              ..sort();
+                        final selectedSeason = seasons.contains(_season)
+                            ? _season
+                            : seasons.first;
+                        final episodes = all
+                            .where((c) => (c.season ?? 1) == selectedSeason)
+                            .toList();
+                        return Column(
+                          children: [
+                            SizedBox(
+                              height: 56,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: seasons.length,
+                                separatorBuilder: (_, _) =>
+                                    const SizedBox(width: 8),
+                                itemBuilder: (context, i) => TvFocusable(
+                                  onPressed: () {
+                                    setState(() => _season = seasons[i]);
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                          if (mounted) _first.requestFocus();
+                                        });
+                                  },
+                                  child: ChoiceChip(
+                                    label: Text('Stagione ${seasons[i]}'),
+                                    selected: selectedSeason == seasons[i],
+                                    onSelected: (_) =>
+                                        setState(() => _season = seasons[i]),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Expanded(
+                              child: ListView.separated(
+                                key: ValueKey(selectedSeason),
+                                itemCount: episodes.length,
+                                separatorBuilder: (_, _) =>
+                                    const SizedBox(height: 8),
+                                itemBuilder: (context, i) {
+                                  final episode = episodes[i];
+                                  final current =
+                                      episode.id == widget.current.id;
+                                  return TvFocusable(
+                                    focusNode: i == 0 ? _first : null,
+                                    autofocus: i == 0,
+                                    focusedScale: 1,
+                                    onPressed: () =>
+                                        Navigator.pop(context, episode),
+                                    child: ListTile(
+                                      selected: current,
+                                      leading: Icon(
+                                        current
+                                            ? Icons.play_arrow_rounded
+                                            : Icons.movie_outlined,
+                                      ),
+                                      title: Text(
+                                        episode.name,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      subtitle: Text(
+                                        'S${episode.season ?? selectedSeason} · E${episode.episode ?? i + 1}',
+                                      ),
+                                      onTap: () =>
+                                          Navigator.pop(context, episode),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }

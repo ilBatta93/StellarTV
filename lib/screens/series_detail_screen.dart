@@ -1,5 +1,3 @@
-import '../services/image_cache_service.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -18,7 +16,8 @@ import '../widgets/section_row.dart';
 import '../services/device_type_service.dart';
 import '../widgets/tv_focusable.dart';
 import '../widgets/tv_detail_backdrop.dart';
-import '../widgets/download_button.dart';
+import '../widgets/reaction_buttons.dart';
+import '../widgets/episode_card.dart';
 
 class SeriesDetailScreen extends StatefulWidget {
   final Channel series;
@@ -196,6 +195,8 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                   _buildTvActions(context, isFav),
                   const SizedBox(height: 16),
                 ],
+                if (_item case final reactionItem?)
+                  ReactionButtons(item: reactionItem),
                 if (plot.trim().isNotEmpty) ...[
                   Text('Trama', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
@@ -287,38 +288,42 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
               ),
             ),
           ),
-          SliverList.builder(
-            itemCount: currentSeason.episodes.length,
-            itemBuilder: (context, i) {
-              final ep = currentSeason.episodes[i];
-              final history = context.watch<HistoryProvider>();
-              final entry = history.entryFor(ep.channel.id);
-              return _EpisodeTile(
-                episode: ep,
-                progress: entry?.isWatched == true ? null : entry?.progress,
-                watched: entry?.isWatched ?? false,
-                onToggleWatched: () {
-                  final h = context.read<HistoryProvider>();
-                  if (entry?.isWatched ?? false) {
-                    h.markUnwatched(ep.channel.id);
-                  } else {
-                    h.markWatched(ep.channel, duration: ep.duration);
-                  }
-                },
-                onTap: () => playChannel(
-                  context,
-                  ep.channel,
-                  queue: [
-                    for (final e in _details?.allEpisodes ?? const [])
-                      e.channel,
-                  ],
-                  startAt: context
-                      .read<HistoryProvider>()
-                      .entryFor(ep.channel.id)
-                      ?.resumePosition,
-                ),
-              );
-            },
+          SliverToBoxAdapter(
+            child: HorizontalRow(
+              key: ValueKey(currentSeason.number),
+              height: 300,
+              itemCount: currentSeason.episodes.length,
+              itemBuilder: (context, i) {
+                final ep = currentSeason.episodes[i];
+                final history = context.watch<HistoryProvider>();
+                final entry = history.entryFor(ep.channel.id);
+                return EpisodeCard(
+                  episode: ep,
+                  progress: entry?.isWatched == true ? null : entry?.progress,
+                  watched: entry?.isWatched ?? false,
+                  onToggleWatched: () {
+                    final h = context.read<HistoryProvider>();
+                    if (entry?.isWatched ?? false) {
+                      h.markUnwatched(ep.channel.id);
+                    } else {
+                      h.markWatched(ep.channel, duration: ep.duration);
+                    }
+                  },
+                  onPlay: () => playChannel(
+                    context,
+                    ep.channel,
+                    queue: [
+                      for (final e in _details?.allEpisodes ?? const [])
+                        e.channel,
+                    ],
+                    startAt: context
+                        .read<HistoryProvider>()
+                        .entryFor(ep.channel.id)
+                        ?.resumePosition,
+                  ),
+                );
+              },
+            ),
           ),
         ],
         if (_similar.isNotEmpty)
@@ -426,205 +431,6 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         ),
       ],
     );
-  }
-}
-
-class _EpisodeTile extends StatelessWidget {
-  final SeriesEpisode episode;
-  final VoidCallback onTap;
-  final double? progress;
-  final bool watched;
-  final VoidCallback onToggleWatched;
-
-  const _EpisodeTile({
-    required this.episode,
-    required this.onTap,
-    required this.onToggleWatched,
-    this.progress,
-    this.watched = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final ep = episode;
-    final card = Material(
-      color: AppColors.card,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onToggleWatched,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 120,
-                  height: 68,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ep.image != null && ep.image!.isNotEmpty
-                          ? CachedNetworkImage(
-                              cacheManager: AppImageCache.manager,
-                              imageUrl: ep.image!,
-                              fadeInDuration: const Duration(milliseconds: 150),
-                              fit: BoxFit.cover,
-                              memCacheWidth: 320,
-                              errorWidget: (_, _, _) => _placeholder(),
-                            )
-                          : _placeholder(),
-                      if (watched)
-                        Container(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            Icons.check_circle_rounded,
-                            color: Colors.white,
-                            size: 28,
-                          ),
-                        ),
-                      if (progress != null && progress! > 0)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 4,
-                            backgroundColor: Colors.white.withValues(
-                              alpha: 0.25,
-                            ),
-                            valueColor: AlwaysStoppedAnimation(
-                              AppColors.primary,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${ep.code} · ${ep.title}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (ep.overview != null &&
-                        ep.overview!.trim().isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        ep.overview!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                    if (ep.duration != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatDuration(ep.duration!),
-                        style: const TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (!DeviceTypeService.isTv)
-                DownloadButton(channel: ep.channel),
-              if (!DeviceTypeService.isTv)
-                IconButton(
-                  tooltip: watched
-                      ? 'Segna come non visto'
-                      : 'Segna come visto',
-                  onPressed: onToggleWatched,
-                  icon: Icon(
-                    watched
-                        ? Icons.check_circle_rounded
-                        : Icons.check_circle_outline_rounded,
-                    color: watched ? AppColors.primary : AppColors.textMuted,
-                    size: 26,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-    final tile = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: card,
-    );
-    if (!DeviceTypeService.isTv) return tile;
-    // TV: the focus ring hugs the card (no outer margin inside it, no
-    // enlargement), so it never runs off the screen or over the next row.
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: FocusTraversalGroup(
-        child: Row(
-          children: [
-            Expanded(
-              child: TvFocusable(
-                onPressed: onTap,
-                onLongPress: onToggleWatched,
-                focusedScale: 1.0,
-                borderRadius: BorderRadius.circular(12),
-                child: card,
-              ),
-            ),
-            const SizedBox(width: 12),
-            DownloadButton(channel: episode.channel),
-            TvFocusable(
-              onPressed: onToggleWatched,
-              focusedScale: 1.0,
-              borderRadius: BorderRadius.circular(24),
-              child: IconButton(
-                tooltip: watched ? 'Segna come non visto' : 'Segna come visto',
-                onPressed: onToggleWatched,
-                icon: Icon(
-                  watched ? Icons.check_circle : Icons.check_circle_outline,
-                  color: watched ? AppColors.primary : AppColors.textMuted,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _placeholder() => Container(
-    color: AppColors.surface,
-    child: const Icon(
-      Icons.movie_outlined,
-      color: AppColors.textMuted,
-      size: 28,
-    ),
-  );
-
-  String _formatDuration(Duration d) {
-    final h = d.inHours;
-    final m = d.inMinutes.remainder(60);
-    return h > 0 ? '$h ore $m min' : '$m min';
   }
 }
 

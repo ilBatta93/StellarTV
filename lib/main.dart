@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
 import 'providers/app_provider.dart';
 import 'providers/discover_provider.dart';
+import 'providers/reactions_provider.dart';
 import 'providers/epg_provider.dart';
 import 'providers/history_provider.dart';
 import 'providers/profile_provider.dart';
@@ -101,6 +102,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
   late final SyncProvider _syncProvider;
   late final HistoryProvider _historyProvider;
   late final ProfileProvider _profileProvider;
+  final ReactionsProvider _reactions = ReactionsProvider();
   final UiSettings _uiSettings = UiSettings()..load();
 
   @override
@@ -119,7 +121,10 @@ class _StellarTvAppState extends State<StellarTvApp> {
     // Load profiles at startup so the top-bar avatar and the splash routing
     // know which profile is active on this device.
     // Each profile has a private history; kids profiles see kids content only.
+    _reactions.onSaved = _syncProvider.schedulePush;
+    _reactions.reload();
     _profileProvider.onSelectionChanged = (profile) {
+      _reactions.switchProfile(profile?.id);
       _historyProvider.switchProfile(profile?.id);
       _appProvider.setKidsMode(profile?.isKids ?? false);
     };
@@ -139,6 +144,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
       await _appProvider.reloadSettings();
       await ExpiryReminderService.instance.reloadSettings();
       await _uiSettings.load();
+      await _reactions.reload();
     };
     // Profiles created/edited on other devices show up automatically.
     _historyProvider.onAfterAutoPull = () =>
@@ -154,6 +160,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
       await _appProvider.logout();
       await _appProvider.reloadFromStorage();
       _historyProvider.switchProfile(null);
+      await _reactions.switchProfile(null);
       await _profileProvider.load(silent: true);
     };
     _appProvider.addListener(_onAppChanged);
@@ -173,7 +180,8 @@ class _StellarTvAppState extends State<StellarTvApp> {
 
   void _onUiSettingsChanged() {
     if (!_uiSettings.loaded) return;
-    final sig = '${_uiSettings.sectionOrder.map((e) => e.id).join(',')}:'
+    final sig =
+        '${_uiSettings.sectionOrder.map((e) => e.id).join(',')}:'
         '${_uiSettings.startSection.id}';
     if (sig == _uiSignature) return;
     final first = _uiSignature.isEmpty;
@@ -187,7 +195,8 @@ class _StellarTvAppState extends State<StellarTvApp> {
   /// Any real change to favorites is pushed to the cloud instantly; other
   /// app notifications (loading progress etc.) do not trigger uploads.
   void _onAppChanged() {
-    final sig = '${_appProvider.favoriteIds.length}:'
+    final sig =
+        '${_appProvider.favoriteIds.length}:'
         '${Object.hashAllUnordered(_appProvider.favoriteIds)}:'
         '${Object.hashAll(_appProvider.tmdbFavorites.map((e) => e.key))}';
     if (sig == _favSignature) return;
@@ -201,6 +210,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
     _appProvider.removeListener(_onAppChanged);
     _uiSettings.removeListener(_onUiSettingsChanged);
     _uiSettings.dispose();
+    _reactions.dispose();
     _appProvider.dispose();
     _historyProvider.dispose();
     _syncProvider.dispose();
@@ -219,6 +229,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
         ChangeNotifierProvider(create: (_) => DiscoverProvider(TmdbService())),
         ChangeNotifierProvider(create: (_) => EpgProvider(_appProvider)),
         ChangeNotifierProvider.value(value: _uiSettings),
+        ChangeNotifierProvider.value(value: _reactions),
       ],
       child: Builder(
         builder: (context) {

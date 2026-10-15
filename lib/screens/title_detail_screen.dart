@@ -20,6 +20,7 @@ import '../services/device_type_service.dart';
 import '../widgets/tv_focusable.dart';
 import '../widgets/tv_detail_backdrop.dart';
 import '../widgets/download_button.dart';
+import '../widgets/reaction_buttons.dart';
 import '../services/download_service.dart';
 
 class TitleDetailScreen extends StatefulWidget {
@@ -202,6 +203,13 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
             ),
           ),
         ),
+        if (item != null)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ReactionButtons(item: item),
+            ),
+          ),
         SliverToBoxAdapter(child: _buildCast()),
         SliverToBoxAdapter(child: _buildSimilar()),
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
@@ -247,11 +255,12 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                             ? CachedNetworkImage(
                                 cacheManager: AppImageCache.manager,
                                 imageUrl: person.profileUrl,
-                                fadeInDuration: const Duration(milliseconds: 150),
+                                fadeInDuration: const Duration(
+                                  milliseconds: 150,
+                                ),
                                 fit: BoxFit.cover,
                                 memCacheWidth: 256,
-                                errorWidget: (_, _, _) =>
-                                    _castFallback(person),
+                                errorWidget: (_, _, _) => _castFallback(person),
                               )
                             : _castFallback(person),
                       ),

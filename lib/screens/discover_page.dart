@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../widgets/expiry_banner.dart';
@@ -13,6 +13,7 @@ import '../models/tmdb_item.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/discover_provider.dart';
+import '../providers/reactions_provider.dart';
 import '../providers/history_provider.dart';
 import '../providers/profile_provider.dart';
 import '../services/device_type_service.dart';
@@ -46,6 +47,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final app = context.watch<AppProvider>();
     final discover = context.watch<DiscoverProvider>();
     final history = context.watch<HistoryProvider>();
+    final reactions = context.watch<ReactionsProvider>();
     // Episodes may not be indexed after a restart: rebuild them from the
     // history entry so watched series still feed "Serie consigliate".
     final watched = history.entries
@@ -99,7 +101,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
           it,
     ];
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<DiscoverProvider>().loadForYou(watched);
+      if (mounted)
+        context.read<DiscoverProvider>().loadForYou(
+          watched,
+          liked: reactions.liked.where(app.isTmdbAllowed).toList(),
+          disliked: reactions.disliked,
+          reactionSignature: reactions.signature,
+        );
     });
 
     if (discover.error != null && !discover.hasData) {
@@ -119,7 +127,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
     // Only titles that can actually be watched with the playlist.
     List<TmdbItem> available(List<TmdbItem> items) => items
-        .where((item) => app.isAvailable(item) && app.isTmdbAllowed(item))
+        .where(
+          (item) =>
+              app.isAvailable(item) &&
+              app.isTmdbAllowed(item) &&
+              !reactions.disliked.contains(item.key),
+        )
         .take(10)
         .toList();
     final topMovies = available(discover.topMovies);
@@ -135,11 +148,21 @@ class _DiscoverPageState extends State<DiscoverPage> {
         startedMovies: startedMovies,
         startedSeries: startedSeries,
         forYou: discover.forYou
-            .where((item) => app.isAvailable(item) && app.isTmdbAllowed(item))
+            .where(
+              (item) =>
+                  app.isAvailable(item) &&
+                  app.isTmdbAllowed(item) &&
+                  !reactions.disliked.contains(item.key),
+            )
             .toList(),
         forYouSource: discover.forYouSource,
         forYouSeries: discover.forYouSeries
-            .where((item) => app.isAvailable(item) && app.isTmdbAllowed(item))
+            .where(
+              (item) =>
+                  app.isAvailable(item) &&
+                  app.isTmdbAllowed(item) &&
+                  !reactions.disliked.contains(item.key),
+            )
             .toList(),
         forYouSeriesSource: discover.forYouSeriesSource,
         tops: [
@@ -193,7 +216,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
             _HistoryRow(items: startedSeries),
           ],
           if (discover.forYou
-              .where((item) => app.isAvailable(item) && app.isTmdbAllowed(item))
+              .where(
+                (item) =>
+                    app.isAvailable(item) &&
+                    app.isTmdbAllowed(item) &&
+                    !reactions.disliked.contains(item.key),
+              )
               .isNotEmpty) ...[
             SectionHeader(
               title: 'Consigliati per te',
@@ -207,13 +235,21 @@ class _DiscoverPageState extends State<DiscoverPage> {
             _PosterRow(
               items: discover.forYou
                   .where(
-                    (item) => app.isAvailable(item) && app.isTmdbAllowed(item),
+                    (item) =>
+                        app.isAvailable(item) &&
+                        app.isTmdbAllowed(item) &&
+                        !reactions.disliked.contains(item.key),
                   )
                   .toList(),
             ),
           ],
           if (discover.forYouSeries
-              .where((item) => app.isAvailable(item) && app.isTmdbAllowed(item))
+              .where(
+                (item) =>
+                    app.isAvailable(item) &&
+                    app.isTmdbAllowed(item) &&
+                    !reactions.disliked.contains(item.key),
+              )
               .isNotEmpty) ...[
             SectionHeader(
               title: 'Serie consigliate per te',
@@ -227,7 +263,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
             _PosterRow(
               items: discover.forYouSeries
                   .where(
-                    (item) => app.isAvailable(item) && app.isTmdbAllowed(item),
+                    (item) =>
+                        app.isAvailable(item) &&
+                        app.isTmdbAllowed(item) &&
+                        !reactions.disliked.contains(item.key),
                   )
                   .toList(),
             ),
@@ -930,7 +969,28 @@ class _TvDiscoverState extends State<_TvDiscover> {
     });
   }
 
+  void _revealHeading(BuildContext rowContext) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !rowContext.mounted) return;
+      Scrollable.ensureVisible(
+        rowContext,
+        alignment: 0,
+        duration: const Duration(milliseconds: 140),
+      );
+    });
+  }
+
   Widget _row(String title, List<TmdbItem> items) {
+    return Builder(
+      builder: (rowContext) => _posterRow(title, items, rowContext),
+    );
+  }
+
+  Widget _posterRow(
+    String title,
+    List<TmdbItem> items,
+    BuildContext rowContext,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -943,7 +1003,10 @@ class _TvDiscoverState extends State<_TvDiscover> {
           itemBuilder: (context, i) => TmdbPosterCard(
             item: items[i],
             onTap: () => openTmdbItem(context, items[i]),
-            onFocus: () => _focus(items[i]),
+            onFocus: () {
+              _focus(items[i]);
+              _revealHeading(rowContext);
+            },
           ),
         ),
       ],
@@ -977,22 +1040,64 @@ class _TvDiscoverState extends State<_TvDiscover> {
                   child: ListView(
                     // Rows are pre-built so pressing Down always finds the
                     // next row instead of stopping on unbuilt content.
-                    scrollCacheExtent: const ScrollCacheExtent.pixels(2400),
-                    padding: const EdgeInsets.only(bottom: 48),
+                    cacheExtent: 2400,
+                    padding: const EdgeInsets.only(top: 12, bottom: 48),
                     children: [
                       const ExpiryBanner(),
                       if (widget.startedSeries.isNotEmpty) ...[
                         const _TvRowTitle('Serie viste di recente'),
                         _HistoryRow(
                           items: widget.startedSeries,
-                          onFocus: _focusHistory,
+                          onFocus: (resume) {
+                            _focusHistory(resume);
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (!mounted) return;
+                              final focusContext =
+                                  FocusManager.instance.primaryFocus?.context;
+                              if (focusContext == null) return;
+                              final scroll = Scrollable.of(
+                                focusContext,
+                                axis: Axis.vertical,
+                              );
+                              final position = scroll.position;
+                              position.animateTo(
+                                (position.pixels - 44).clamp(
+                                  position.minScrollExtent,
+                                  position.maxScrollExtent,
+                                ),
+                                duration: const Duration(milliseconds: 140),
+                                curve: Curves.easeOut,
+                              );
+                            });
+                          },
                         ),
                       ],
                       if (widget.startedMovies.isNotEmpty) ...[
                         const _TvRowTitle('Film visti di recente'),
                         _HistoryRow(
                           items: widget.startedMovies,
-                          onFocus: _focusHistory,
+                          onFocus: (resume) {
+                            _focusHistory(resume);
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (!mounted) return;
+                              final focusContext =
+                                  FocusManager.instance.primaryFocus?.context;
+                              if (focusContext == null) return;
+                              final scroll = Scrollable.of(
+                                focusContext,
+                                axis: Axis.vertical,
+                              );
+                              final position = scroll.position;
+                              position.animateTo(
+                                (position.pixels - 44).clamp(
+                                  position.minScrollExtent,
+                                  position.maxScrollExtent,
+                                ),
+                                duration: const Duration(milliseconds: 140),
+                                curve: Curves.easeOut,
+                              );
+                            });
+                          },
                         ),
                       ],
                       if (widget.forYou.isNotEmpty)
@@ -1040,6 +1145,14 @@ class _TvTopRow extends StatefulWidget {
 
 class _TvTopRowState extends State<_TvTopRow> {
   bool _showSeries = false;
+  final _movieFocus = FocusNode(debugLabel: 'top movies');
+  final _seriesFocus = FocusNode(debugLabel: 'top series');
+  @override
+  void dispose() {
+    _movieFocus.dispose();
+    _seriesFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1092,11 +1205,11 @@ class _TvTopRowState extends State<_TvTopRow> {
               ),
               if (hasMovies && hasSeries) ...[
                 const SizedBox(width: 24),
-                _chip('Film', !showSeries, () {
+                _chip('Film', _movieFocus, !showSeries, () {
                   setState(() => _showSeries = false);
                 }),
                 const SizedBox(width: 12),
-                _chip('Serie TV', showSeries, () {
+                _chip('Serie TV', _seriesFocus, showSeries, () {
                   setState(() => _showSeries = true);
                 }),
               ],
@@ -1105,27 +1218,52 @@ class _TvTopRowState extends State<_TvTopRow> {
         ),
         HorizontalRow(
           key: ValueKey('${title}_$showSeries'),
-          height: 190,
-          spacing: 8,
+          height: 204,
+          spacing: 16,
           itemCount: items.length,
-          itemBuilder: (context, i) => RankedPosterCard(
-            item: items[i],
-            rank: i + 1,
-            onTap: () => openTmdbItem(context, items[i]),
-            onFocus: () => widget.onFocusItem(items[i]),
+          itemBuilder: (context, i) => Focus(
+            canRequestFocus: false,
+            onKeyEvent: (_, event) {
+              if (hasMovies &&
+                  hasSeries &&
+                  event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                if (event is KeyDownEvent)
+                  (showSeries ? _seriesFocus : _movieFocus).requestFocus();
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: RankedPosterCard(
+              item: items[i],
+              rank: i + 1,
+              onTap: () => openTmdbItem(context, items[i]),
+              onFocus: () {
+                widget.onFocusItem(items[i]);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted)
+                    Scrollable.ensureVisible(
+                      this.context,
+                      alignment: 0,
+                      duration: const Duration(milliseconds: 140),
+                    );
+                });
+              },
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _chip(String label, bool selected, VoidCallback onTap) {
+  Widget _chip(
+    String label,
+    FocusNode focus,
+    bool selected,
+    VoidCallback onTap,
+  ) {
     return TvFocusable(
+      focusNode: focus,
       onPressed: onTap,
-      // Focusing a chip already switches, so Left/Right flips the list.
-      onFocusChange: (f) {
-        if (f && !selected) onTap();
-      },
       borderRadius: BorderRadius.circular(22),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),

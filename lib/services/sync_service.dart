@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../providers/ui_settings.dart';
+import '../providers/reactions_provider.dart';
 
 /// A snapshot of everything the user cares about, serializable to JSON.
 class SyncPayload {
@@ -26,25 +27,26 @@ class SyncPayload {
   });
 
   Map<String, dynamic> toJson() => {
-        'v': 3,
-        'profile_histories': profileHistories,
-        'history': history,
-        'favorite_ids': favoriteIds,
-        'tmdb_favorites': tmdbFavorites,
-        'settings': settings,
-      };
+    'v': 3,
+    'profile_histories': profileHistories,
+    'history': history,
+    'favorite_ids': favoriteIds,
+    'tmdb_favorites': tmdbFavorites,
+    'settings': settings,
+  };
 
   static SyncPayload fromJson(Map<String, dynamic> json) => SyncPayload(
-        history: (json['history'] as Map<String, dynamic>?) ?? const {},
-        favoriteIds:
-            ((json['favorite_ids'] as List?) ?? const []).cast<String>().toList(),
-        tmdbFavorites: ((json['tmdb_favorites'] as List?) ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .toList(),
-        settings: (json['settings'] as Map<String, dynamic>?) ?? const {},
-        profileHistories:
-            (json['profile_histories'] as Map<String, dynamic>?) ?? const {},
-      );
+    history: (json['history'] as Map<String, dynamic>?) ?? const {},
+    favoriteIds: ((json['favorite_ids'] as List?) ?? const [])
+        .cast<String>()
+        .toList(),
+    tmdbFavorites: ((json['tmdb_favorites'] as List?) ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList(),
+    settings: (json['settings'] as Map<String, dynamic>?) ?? const {},
+    profileHistories:
+        (json['profile_histories'] as Map<String, dynamic>?) ?? const {},
+  );
 }
 
 /// Handles everything for the optional cloud sync: local persistence, pairing
@@ -82,6 +84,7 @@ class SyncService {
     'epg_sources',
     'epg_refresh_minutes',
     'expiry_reminders_v1',
+    ReactionsProvider.storageKey,
   ];
   static const _syncedKeys = [
     ..._credentialsKeys,
@@ -100,7 +103,8 @@ class SyncService {
   /// Returns the account id; throws when nobody is signed in.
   Future<String> ensureCode() async {
     final id = currentUserId;
-    if (id == null) throw StateError('Accedi al tuo account per usare il cloud.');
+    if (id == null)
+      throw StateError('Accedi al tuo account per usare il cloud.');
     await _storeCode(id);
     return id;
   }
@@ -118,8 +122,10 @@ class SyncService {
 
   Future<String?> signIn(String email, String password) async {
     try {
-      await _client.auth
-          .signInWithPassword(email: email.trim(), password: password);
+      await _client.auth.signInWithPassword(
+        email: email.trim(),
+        password: password,
+      );
       await getStoredCode();
       return null;
     } on AuthException catch (e) {
@@ -131,8 +137,10 @@ class SyncService {
 
   Future<String?> signUp(String email, String password) async {
     try {
-      final res =
-          await _client.auth.signUp(email: email.trim(), password: password);
+      final res = await _client.auth.signUp(
+        email: email.trim(),
+        password: password,
+      );
       if (res.session == null) {
         return 'Account creato: controlla la tua email per confermarlo.';
       }
@@ -162,11 +170,14 @@ class SyncService {
     if (m.contains('already registered') || m.contains('already exists')) {
       return 'Esiste già un account con questa email: accedi.';
     }
-    if (m.contains('password') && (m.contains('weak') || m.contains('pwned') || m.contains('leaked'))) {
+    if (m.contains('password') &&
+        (m.contains('weak') || m.contains('pwned') || m.contains('leaked'))) {
       return 'Password troppo debole o già trapelata online: scegline un\'altra.';
     }
-    if (m.contains('at least')) return 'La password deve avere almeno 6 caratteri.';
-    if (m.contains('email') && m.contains('invalid')) return 'Email non valida.';
+    if (m.contains('at least'))
+      return 'La password deve avere almeno 6 caratteri.';
+    if (m.contains('email') && m.contains('invalid'))
+      return 'Email non valida.';
     return e.message;
   }
 
@@ -183,8 +194,8 @@ class SyncService {
 
   static String historyKeyFor(String? profileId) =>
       profileId == null || profileId.isEmpty
-          ? _localHistoryKey
-          : '${_localHistoryKey}__$profileId';
+      ? _localHistoryKey
+      : '${_localHistoryKey}__$profileId';
 
   Future<Map<String, dynamic>> loadLocalHistory({String? profileId}) async {
     final prefs = await SharedPreferences.getInstance();
@@ -194,8 +205,10 @@ class SyncService {
     return decoded is Map<String, dynamic> ? decoded : {};
   }
 
-  Future<void> saveLocalHistory(Map<String, dynamic> history,
-      {String? profileId}) async {
+  Future<void> saveLocalHistory(
+    Map<String, dynamic> history, {
+    String? profileId,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(historyKeyFor(profileId), jsonEncode(history));
   }
@@ -217,7 +230,9 @@ class SyncService {
 
   /// Merges a remote history map into local storage (newest `watched` wins).
   Future<Map<String, dynamic>> mergeHistoryInto(
-      Map<String, dynamic> remote, {String? profileId}) async {
+    Map<String, dynamic> remote, {
+    String? profileId,
+  }) async {
     final local = await loadLocalHistory(profileId: profileId);
     final merged = {...local};
     for (final e in remote.entries) {
@@ -225,7 +240,9 @@ class SyncService {
       if (r is! Map<String, dynamic>) continue;
       final l = merged[e.key];
       final rw = DateTime.tryParse(r['watched']?.toString() ?? '');
-      final lw = l is Map ? DateTime.tryParse(l['watched']?.toString() ?? '') : null;
+      final lw = l is Map
+          ? DateTime.tryParse(l['watched']?.toString() ?? '')
+          : null;
       if (lw == null || (rw != null && rw.isAfter(lw))) merged[e.key] = r;
     }
     await saveLocalHistory(merged, profileId: profileId);
@@ -262,15 +279,25 @@ class SyncService {
   /// copy is newer than this device's last upload) values replace local
   /// ones, so a change made on another device reaches every device;
   /// otherwise only keys missing locally are filled in.
-  Future<bool> applySnapshotSettings(Map<String, dynamic> settings,
-      {bool overwrite = false}) async {
+  Future<bool> applySnapshotSettings(
+    Map<String, dynamic> settings, {
+    bool overwrite = false,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     var changed = false;
     for (final entry in settings.entries) {
       final key = entry.key;
       if (!_syncedKeys.contains(key) || key == 'local_watch_history') continue;
-      final value = entry.value;
-      final write = overwrite || !prefs.containsKey(key);
+      final value = key == ReactionsProvider.storageKey && entry.value is String
+          ? ReactionsProvider.merge(
+              prefs.getString(key) ?? '{}',
+              entry.value as String,
+            )
+          : entry.value;
+      final write =
+          key == ReactionsProvider.storageKey ||
+          overwrite ||
+          !prefs.containsKey(key);
       if (!write || prefs.get(key).toString() == value.toString()) continue;
       changed = true;
       if (value is String) {
@@ -282,8 +309,7 @@ class SyncService {
       } else if (value is double) {
         await prefs.setDouble(key, value);
       } else if (value is List) {
-        await prefs.setStringList(
-            key, value.whereType<String>().toList());
+        await prefs.setStringList(key, value.whereType<String>().toList());
       }
     }
     return changed;

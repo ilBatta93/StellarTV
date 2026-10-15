@@ -6,6 +6,9 @@ import 'package:provider/provider.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/epg_program.dart';
+import '../player/playback_session.dart';
+import '../services/player_settings_service.dart';
+import '../widgets/player/video_surface.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/epg_provider.dart';
@@ -25,13 +28,14 @@ import 'epg_settings_screen.dart';
 /// "Diretta" tab: channel list with what is on now, a progress bar and what
 /// comes next, plus a full guide per channel.
 class LivePage extends StatefulWidget {
-  const LivePage({super.key});
+  final bool active;
+  const LivePage({super.key, this.active = true});
 
   @override
   State<LivePage> createState() => _LivePageState();
 }
 
-class _LivePageState extends State<LivePage> {
+class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   FocusNode? _drawerReturn;
@@ -54,10 +58,349 @@ class _LivePageState extends State<LivePage> {
   String? _category;
   bool _defaultApplied = false;
   Timer? _tick;
+  Timer? _previewDelay;
+
+  PlaybackSession? _preview;
+  Channel? _selectedChannel;
+  EpgProgram? _selectedProgram;
+  int _previewGeneration = 0;
+  late final AppProvider _app;
+
+  @override
+  void didUpdateWidget(covariant LivePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.active) _stopPreview();
+  }
+
+  void _routeChanged() {
+    if (_preview != null || _previewDelay?.isActive == true) {
+      _stopPreview();
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) _routeChanged();
+  }
+
+  void _stopPreview() {
+    _previewGeneration++;
+    _previewDelay?.cancel();
+    final old = _preview;
+    _preview = null;
+    old?.dispose();
+    if (old != null) _app.setPlaybackActive(false);
+  }
+
+  void _select(Channel channel, [EpgProgram? program]) {
+    final same = _selectedChannel?.id == channel.id;
+    setState(() {
+      _selectedChannel = channel;
+      _selectedProgram = program;
+    });
+    if (same && _preview != null) return;
+    _stopPreview();
+    final gen = _previewGeneration;
+    _previewDelay = Timer(const Duration(milliseconds: 800), () async {
+      if (!mounted ||
+          !widget.active ||
+          ModalRoute.of(context)?.isCurrent != true)
+        return;
+      final settings = await PlayerSettingsService().load(
+        scope: PlayerSettingsScope.liveTv,
+      );
+      if (!mounted ||
+          gen != _previewGeneration ||
+          !widget.active ||
+          ModalRoute.of(context)?.isCurrent != true)
+        return;
+      if (_app.kidsMode && !_app.isKidsContent(channel)) return;
+      final session = PlaybackSession(
+        url: channel.url,
+        isLive: true,
+        settings: settings,
+      )..muted = true;
+      _app.setPlaybackActive(true);
+      setState(() => _preview = session);
+      await session.start();
+    });
+  }
+
+  Future<void> _watch(Channel channel) async {
+    _stopPreview();
+    setState(() {});
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (mounted && widget.active) playChannel(context, channel);
+  }
+
+  Widget _tvGuide(List<Channel> channels, EpgProvider epg, AppProvider app) {
+    final selected = channels
+        .where((c) => c.id == _selectedChannel?.id)
+        .firstOrNull;
+    final program =
+        _selectedProgram ?? (selected == null ? null : epg.nowFor(selected));
+    return Column(
+      children: [
+        SizedBox(
+          height: 202,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        selected?.name ?? 'Diretta TV',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        program?.title ?? 'Guida programmi',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      if (program != null)
+                        Text(
+                          '${_hm(program.startTime)} – ${_hm(program.endTime)}',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: Text(
+                          program?.description ?? '',
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      if (selected != null)
+                        Row(
+                          children: [
+                            TvFocusable(
+                              onPressed: () => _watch(selected),
+                              child: TextButton.icon(
+                                onPressed: () => _watch(selected),
+                                icon: const Icon(Icons.play_arrow_rounded),
+                                label: const Text('Guarda'),
+                              ),
+                            ),
+                            TvFocusable(
+                              onPressed: () => app.toggleFavorite(selected),
+                              child: IconButton(
+                                tooltip: 'Preferiti',
+                                onPressed: () => app.toggleFavorite(selected),
+                                icon: Icon(
+                                  app.favoriteIds.contains(selected.id)
+                                      ? Icons.favorite_rounded
+                                      : Icons.favorite_border_rounded,
+                                ),
+                              ),
+                            ),
+                            TvFocusable(
+                              onPressed: () {
+                                _stopPreview();
+                                setState(() {});
+                                showChannelGuide(context, selected);
+                              },
+                              child: IconButton(
+                                tooltip: 'Guida e registrazioni',
+                                icon: const Icon(Icons.calendar_month_rounded),
+                                onPressed: () {
+                                  _stopPreview();
+                                  setState(() {});
+                                  showChannelGuide(context, selected);
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 28),
+                SizedBox(
+                  width: 310,
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _preview == null
+                          ? ColoredBox(
+                              color: AppColors.surface,
+                              child: const Center(
+                                child: Icon(Icons.live_tv_rounded, size: 42),
+                              ),
+                            )
+                          : ListenableBuilder(
+                              listenable: _preview ?? app,
+                              builder: (_, _) {
+                                final session = _preview;
+                                if (session == null) return const SizedBox();
+                                if (session.status == SessionStatus.failed)
+                                  return ColoredBox(
+                                    color: AppColors.surface,
+                                    child: const Center(
+                                      child: Text('Anteprima non disponibile'),
+                                    ),
+                                  );
+                                return Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    VideoSurface(
+                                      session: session,
+                                      settings: session.settings,
+                                    ),
+                                    if (session.status ==
+                                        SessionStatus.connecting)
+                                      const Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                  ],
+                                );
+                              },
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+          child: Row(
+            children: [
+              const SizedBox(width: 200, child: Text('Canali')),
+              for (var i = 0; i < 3; i++)
+                Expanded(
+                  child: Text(
+                    _hm(DateTime.now().add(Duration(minutes: 30 * i))),
+                    style: const TextStyle(color: AppColors.textMuted),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
+            itemCount: channels.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 6),
+            itemBuilder: (context, i) {
+              final c = channels[i];
+              final programs = epg
+                  .programmesFor(c)
+                  .where((p) => p.endTime.isAfter(DateTime.now()))
+                  .take(3)
+                  .toList();
+              return Row(
+                children: [
+                  SizedBox(
+                    width: 192,
+                    child: TvCategoryEdge(
+                      scaffoldKey: _scaffoldKey,
+                      onOpen: _openCategories,
+                      child: TvFocusable(
+                        focusedScale: 1,
+                        onFocusChange: (focus) {
+                          if (focus) _select(c);
+                        },
+                        onPressed: () => _watch(c),
+                        child: ListTile(
+                          dense: true,
+                          title: Text(
+                            c.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () => _watch(c),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (programs.isEmpty)
+                    Expanded(
+                      child: TvFocusable(
+                        focusedScale: 1,
+                        onFocusChange: (focus) {
+                          if (focus) _select(c);
+                        },
+                        onPressed: () => _watch(c),
+                        child: ListTile(
+                          title: const Text('Programmazione non disponibile'),
+                          onTap: () => _watch(c),
+                        ),
+                      ),
+                    )
+                  else
+                    for (final p in programs)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: TvFocusable(
+                            focusedScale: 1,
+                            onFocusChange: (focus) {
+                              if (focus) _select(c, p);
+                            },
+                            onPressed: () {
+                              _stopPreview();
+                              setState(() {});
+                              showChannelGuide(context, c);
+                            },
+                            child: Container(
+                              height: 64,
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: p.startTime.isBefore(DateTime.now())
+                                    ? AppColors.card
+                                    : AppColors.surface,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    '${_hm(p.startTime)} – ${_hm(p.endTime)}',
+                                    style: const TextStyle(
+                                      color: AppColors.textMuted,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   void initState() {
     super.initState();
+    _app = context.read<AppProvider>();
+    WidgetsBinding.instance.addObserver(this);
+    OpenRoutesObserver.instance.changes.addListener(_routeChanged);
     // Keep "now on" and progress bars current.
     _tick = Timer.periodic(const Duration(seconds: 60), (_) {
       if (mounted) setState(() {});
@@ -68,6 +411,9 @@ class _LivePageState extends State<LivePage> {
   void dispose() {
     _searchController.dispose();
     _tick?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    OpenRoutesObserver.instance.changes.removeListener(_routeChanged);
+    _stopPreview();
     super.dispose();
   }
 
@@ -123,6 +469,12 @@ class _LivePageState extends State<LivePage> {
       channels = sortCatalog(channels, _sort, (c) => c);
     }
 
+    if (_selectedChannel != null &&
+        !channels.any((c) => c.id == _selectedChannel?.id)) {
+      _stopPreview();
+      _selectedChannel = null;
+      _selectedProgram = null;
+    }
     final content = catalogColumn(
       children: [
         if (DeviceTypeService.isTv)
@@ -236,6 +588,8 @@ class _LivePageState extends State<LivePage> {
                   title: 'Nessun risultato',
                   message: 'Prova con un altro nome o categoria.',
                 )
+              : DeviceTypeService.isTv
+              ? _tvGuide(channels, epg, app)
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   itemCount: channels.length,
@@ -282,10 +636,14 @@ class _LivePageState extends State<LivePage> {
     );
   }
 
-  void _openEpg() => Navigator.push(
-    context,
-    MaterialPageRoute(builder: (_) => const EpgSettingsScreen()),
-  );
+  void _openEpg() {
+    _stopPreview();
+    setState(() {});
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const EpgSettingsScreen()),
+    );
+  }
 
   Widget _chip(String label, bool selected, VoidCallback onTap) {
     return Padding(
@@ -562,20 +920,26 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                               final rec = RecordingService.instance;
                               final messenger = ScaffoldMessenger.maybeOf(ctx);
                               if (!RecordingService.canRecord(channel)) {
-                                messenger?.showSnackBar(const SnackBar(
-                                  content: Text(
-                                    'Questo canale non può essere registrato',
+                                messenger?.showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Questo canale non può essere registrato',
+                                    ),
                                   ),
-                                ));
+                                );
                                 return;
                               }
-                              final existing =
-                                  rec.scheduledFor(channel, p.startTime);
+                              final existing = rec.scheduledFor(
+                                channel,
+                                p.startTime,
+                              );
                               if (existing != null) {
                                 await rec.stop(existing.id);
-                                messenger?.showSnackBar(const SnackBar(
-                                  content: Text('Registrazione annullata'),
-                                ));
+                                messenger?.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Registrazione annullata'),
+                                  ),
+                                );
                               } else {
                                 await rec.schedule(
                                   channel,
@@ -583,12 +947,14 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                                   start: p.startTime,
                                   end: p.endTime,
                                 );
-                                messenger?.showSnackBar(SnackBar(
-                                  content: Text(
-                                    'Registrazione programmata: ${p.title}. '
-                                    'Lascia l\'app aperta durante il programma.',
+                                messenger?.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Registrazione programmata: ${p.title}. '
+                                      'Lascia l\'app aperta durante il programma.',
+                                    ),
                                   ),
-                                ));
+                                );
                               }
                               (ctx as Element).markNeedsBuild();
                             },

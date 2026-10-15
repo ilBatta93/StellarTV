@@ -51,3 +51,12 @@
 - [x] Rilascio B: download offline di film ed episodi (file diretti non protetti)
 - [ ] Rilascio C: timeshift e pulsante LIVE
 - [ ] Rilascio D: registrazioni
+
+## Schermate e preferenze ottobre
+- [x] Modifiche preparate nella copia di verifica: episodi orizzontali, pannello episodi nel player, reazioni per profilo, 100 ultimi aggiunti, selettori Top e Diretta con EPG/anteprima
+- [x] 29 test selezionati superati nella copia con Flutter locale e dipendenze adattate solo per verifica
+- [x] Repository di destinazione confermata dall’utente: ilBatta93/StellarTV, main
+- [ ] Salvare le modifiche su GitHub nella repository confermata
+- [ ] Build con SDK e dipendenze originali: analisi locale bloccata dalle API video_player non disponibili nella versione di verifica
+- [ ] Verificare pannello player, preview EPG, cloud e tutte le nuove schermate con account/provider e telecomando su TV reale
+- [ ] Completare le restanti schermate del rifacimento Apple dopo verifica delle modifiche preparate

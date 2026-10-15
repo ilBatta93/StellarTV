@@ -26,6 +26,7 @@ class PlayerControls extends StatelessWidget {
 
   /// Opens the movie/series page; null for live TV (button hidden).
   final VoidCallback? onOpenTitle;
+  final VoidCallback? onEpisodes;
   final VoidCallback onPip;
   final VoidCallback onMenu;
   final VoidCallback onToggleLock;
@@ -56,6 +57,7 @@ class PlayerControls extends StatelessWidget {
     required this.onNextChannel,
     required this.onBack,
     this.onOpenTitle,
+    this.onEpisodes,
     required this.onPip,
     required this.onMenu,
     required this.onToggleLock,
@@ -135,69 +137,75 @@ class PlayerControls extends StatelessWidget {
     return FocusTraversalGroup(
       policy: ReadingOrderTraversalPolicy(),
       child: Row(
-      children: [
-        _TopButton(
-          icon: Icons.arrow_back_rounded,
-          tooltip: 'Indietro',
-          onPressed: onBack,
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  height: 1.2,
-                ),
-              ),
-              if (subtitle.isNotEmpty)
+        children: [
+          _TopButton(
+            icon: Icons.arrow_back_rounded,
+            tooltip: 'Indietro',
+            onPressed: onBack,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 Text(
-                  subtitle,
+                  title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                  ),
                 ),
-            ],
-          ),
-        ),
-        if (onOpenTitle != null)
-          Padding(
-            padding: const EdgeInsets.only(left: 8),
-            child: _TopChip(
-              icon: Icons.info_outline_rounded,
-              label: 'Scheda titolo',
-              onPressed: onOpenTitle!,
+                if (subtitle.isNotEmpty)
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+              ],
             ),
           ),
-        if (engine != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: _TopChip(
-              icon: Icons.memory_rounded,
-              label: engine.type.label,
-              onPressed: () => _act(() => showEngineSheet(context, session)),
+          if (onEpisodes case final openEpisodes?)
+            _TopButton(
+              icon: Icons.video_library_rounded,
+              tooltip: 'Stagioni ed episodi',
+              onPressed: openEpisodes,
             ),
-          ),
-        if (pipSupported)
+          if (onOpenTitle != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: _TopChip(
+                icon: Icons.info_outline_rounded,
+                label: 'Scheda titolo',
+                onPressed: onOpenTitle!,
+              ),
+            ),
+          if (engine != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: _TopChip(
+                icon: Icons.memory_rounded,
+                label: engine.type.label,
+                onPressed: () => _act(() => showEngineSheet(context, session)),
+              ),
+            ),
+          if (pipSupported)
+            _TopButton(
+              tooltip: 'Picture-in-Picture',
+              icon: Icons.picture_in_picture_alt_rounded,
+              onPressed: onPip,
+            ),
           _TopButton(
-            tooltip: 'Picture-in-Picture',
-            icon: Icons.picture_in_picture_alt_rounded,
-            onPressed: onPip,
+            tooltip: 'Opzioni',
+            icon: Icons.tune_rounded,
+            onPressed: onMenu,
           ),
-        _TopButton(
-          tooltip: 'Opzioni',
-          icon: Icons.tune_rounded,
-          onPressed: onMenu,
-        ),
-      ],
+        ],
       ),
     );
   }
@@ -327,74 +335,76 @@ class PlayerControls extends StatelessWidget {
         FocusTraversalGroup(
           policy: ReadingOrderTraversalPolicy(),
           child: Row(
-          children: [
-            _BarButton(
-              icon: session.muted
-                  ? Icons.volume_off_rounded
-                  : Icons.volume_up_rounded,
-              label: session.muted ? 'Muto' : 'Volume',
-              onPressed: () => _act(session.toggleMute),
-            ),
-            _BarButton(
-              icon: Icons.lock_open_rounded,
-              label: 'Blocca',
-              onPressed: () => _act(onToggleLock),
-            ),
-            if (onRecord != null)
+            children: [
               _BarButton(
-                icon: recording
-                    ? Icons.stop_circle_rounded
-                    : Icons.fiber_manual_record_rounded,
-                label: recording ? 'Ferma reg.' : 'Registra',
-                onPressed: () => _act(onRecord!),
+                icon: session.muted
+                    ? Icons.volume_off_rounded
+                    : Icons.volume_up_rounded,
+                label: session.muted ? 'Muto' : 'Volume',
+                onPressed: () => _act(session.toggleMute),
               ),
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                  children: [
-                    _BarButton(
-                      icon: Icons.audiotrack_rounded,
-                      label: 'Audio',
-                      onPressed: () =>
-                          _act(() => showAudioSheet(context, session)),
-                    ),
-                    _BarButton(
-                      icon: Icons.subtitles_rounded,
-                      label: onlineSubsActive ? 'ITA online' : 'Sottotitoli',
-                      onPressed: () => _act(
-                        () => showSubtitleSheet(
-                          context,
-                          session,
-                          onlineActive: onlineSubsActive,
-                          onlineLoading: onlineSubsLoading,
-                          onLoadOnline: onLoadOnlineSubs,
-                          onDisableOnline: onDisableOnlineSubs,
+              _BarButton(
+                icon: Icons.lock_open_rounded,
+                label: 'Blocca',
+                onPressed: () => _act(onToggleLock),
+              ),
+              if (onRecord != null)
+                _BarButton(
+                  icon: recording
+                      ? Icons.stop_circle_rounded
+                      : Icons.fiber_manual_record_rounded,
+                  label: recording ? 'Ferma reg.' : 'Registra',
+                  onPressed: () => _act(onRecord!),
+                ),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _BarButton(
+                          icon: Icons.audiotrack_rounded,
+                          label: 'Audio',
+                          onPressed: () =>
+                              _act(() => showAudioSheet(context, session)),
                         ),
-                      ),
+                        _BarButton(
+                          icon: Icons.subtitles_rounded,
+                          label: onlineSubsActive
+                              ? 'ITA online'
+                              : 'Sottotitoli',
+                          onPressed: () => _act(
+                            () => showSubtitleSheet(
+                              context,
+                              session,
+                              onlineActive: onlineSubsActive,
+                              onlineLoading: onlineSubsLoading,
+                              onLoadOnline: onLoadOnlineSubs,
+                              onDisableOnline: onDisableOnlineSubs,
+                            ),
+                          ),
+                        ),
+                        if (!session.isLive)
+                          _BarButton(
+                            icon: Icons.speed_rounded,
+                            label: formatSpeed(session.speed),
+                            onPressed: () =>
+                                _act(() => showSpeedSheet(context, session)),
+                          ),
+                        _BarButton(
+                          icon: Icons.aspect_ratio_rounded,
+                          label: session.fitMode.label,
+                          onPressed: () =>
+                              _act(() => showFitSheet(context, session)),
+                        ),
+                      ],
                     ),
-                    if (!session.isLive)
-                      _BarButton(
-                        icon: Icons.speed_rounded,
-                        label: formatSpeed(session.speed),
-                        onPressed: () =>
-                            _act(() => showSpeedSheet(context, session)),
-                      ),
-                    _BarButton(
-                      icon: Icons.aspect_ratio_rounded,
-                      label: session.fitMode.label,
-                      onPressed: () =>
-                          _act(() => showFitSheet(context, session)),
-                    ),
-                  ],
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ],
     );

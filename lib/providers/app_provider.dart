@@ -240,7 +240,10 @@ class AppProvider extends ChangeNotifier {
   Future<void> _prewarm() async {
     if (_playbackActive) {
       // Never compete with the video for the UI thread.
-      _prewarmTimer = Timer(const Duration(seconds: 10), () => unawaited(_prewarm()));
+      _prewarmTimer = Timer(
+        const Duration(seconds: 10),
+        () => unawaited(_prewarm()),
+      );
       return;
     }
     final snapshot = _allChannels;
@@ -405,10 +408,10 @@ class AppProvider extends ChangeNotifier {
 
   /// Recently added items of a type, in the playlist's own order (the
   /// provider lists newest entries last, so newest-first means reversed).
-  /// "Ultimi Aggiunti": the 50 newest items by the provider's added date
+  /// "Ultimi Aggiunti": the 100 newest items by the provider's added date
   /// (playlist order as tie-breaker, newest entries come last there).
-  List<CatalogEntry> recentEntries(ContentType type, {int limit = 50}) =>
-      _recentCache[type] ??= () {
+  List<CatalogEntry> recentEntries(ContentType type, {int limit = 100}) =>
+      (_recentCache[type] ??= () {
         final items = _visibleChannels(type);
         final indexed = [for (var i = 0; i < items.length; i++) (i, items[i])]
           ..sort((a, b) {
@@ -422,8 +425,8 @@ class AppProvider extends ChangeNotifier {
           for (final (_, c) in indexed)
             if (seen.add(_dedupeKey(c)))
               CatalogEntry(primary: c, variants: [c]),
-        ].take(limit).toList(growable: false);
-      }();
+        ].toList(growable: false);
+      }()).take(limit).toList(growable: false);
 
   /// Basic handling: every playlist item is played as it is, no merging of
   /// copies with different quality (that matching opened the wrong title).

@@ -109,13 +109,16 @@ class OpenRoutesObserver extends NavigatorObserver {
   static final OpenRoutesObserver instance = OpenRoutesObserver._();
 
   final List<Route<dynamic>> _routes = [];
+  final ValueNotifier<int> changes = ValueNotifier(0);
 
   bool containsNamed(String name) =>
       _routes.any((r) => r.settings.name == name && r.isActive);
 
   @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
-      _routes.add(route);
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _routes.add(route);
+    changes.value++;
+  }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
