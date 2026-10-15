@@ -26,7 +26,7 @@ class TvFocusable extends StatefulWidget {
     required this.onPressed,
     this.onLongPress,
     this.autofocus = false,
-    this.focusedScale = 1.02,
+    this.focusedScale = 1.04,
     this.borderRadius = const BorderRadius.all(Radius.circular(10)),
     this.onFocusChange,
   });
@@ -104,16 +104,37 @@ class _TvFocusableState extends State<TvFocusable> {
       },
       child: ExcludeFocus(
         child: RepaintBoundary(
+          // tvOS-style focus: the item lifts with a soft shadow and a glow
+          // in the StellarTV accent, instead of a flat thick frame.
           child: AnimatedScale(
             scale: _focused ? widget.focusedScale : 1,
-            duration: const Duration(milliseconds: 120),
-            curve: Curves.easeOut,
-            child: Container(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                borderRadius: widget.borderRadius,
+                boxShadow: _focused
+                    ? [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          blurRadius: 22,
+                          offset: const Offset(0, 12),
+                        ),
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.28),
+                          blurRadius: 18,
+                          spreadRadius: 1,
+                        ),
+                      ]
+                    : const [],
+              ),
               foregroundDecoration: BoxDecoration(
                 borderRadius: widget.borderRadius,
                 border: Border.all(
                   color: _focused ? AppColors.primary : Colors.transparent,
-                  width: 3,
+                  width: 2.5,
                 ),
               ),
               child: widget.child,

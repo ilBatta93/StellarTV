@@ -1,10 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const background = Color(0xFF0B0D10);
-  static const surface = Color(0xFF12151A);
-  static const card = Color(0xFF1B1E23);
-  static const border = Color(0xFF30343B);
+  static const background = Color(0xFF000000);
+  static const surface = Color(0xFF1C1C1E);
+  static const card = Color(0xFF2C2C2E);
+  static const border = Color(0xFF38383A);
 
   /// The accent currently chosen in settings. Updated by UiSettings; widgets
   /// that paint with `AppColors.primary` follow the user's color choice.
@@ -14,13 +15,13 @@ class AppColors {
   static const primaryLight = Color(0xFFFF9A62);
   static const secondary = Color(0xFFFFB627);
   static const accent = Color(0xFF2EC4B6);
-  static const success = Color(0xFF22C55E);
-  static const warning = Color(0xFFF59E0B);
-  static const error = Color(0xFFEF4444);
+  static const success = Color(0xFF30D158);
+  static const warning = Color(0xFFFFD60A);
+  static const error = Color(0xFFFF453A);
 
-  static const textPrimary = Color(0xFFF5F2EA);
-  static const textSecondary = Color(0xFFA8A7A2);
-  static const textMuted = Color(0xFF73757A);
+  static const textPrimary = Color(0xFFFFFFFF);
+  static const textSecondary = Color(0xFFAEAEB2);
+  static const textMuted = Color(0xFF8E8E93);
 
   static LinearGradient get brandGradient => LinearGradient(
     colors: [primary, secondary],
@@ -30,6 +31,13 @@ class AppColors {
 }
 
 class AppTheme {
+  static bool get _isApple =>
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS;
+
+  /// SF Pro (system) on Apple devices; the bundled heading font elsewhere.
+  static String? get _headingFamily => _isApple ? null : 'Sora';
+
   static ThemeData darkTheme({
     Color accent = AppColors.primaryDefault,
     bool isTv = false,
@@ -43,7 +51,8 @@ class AppTheme {
       visualDensity: isTv
           ? const VisualDensity(horizontal: -1, vertical: -1)
           : VisualDensity.standard,
-      fontFamily: 'Manrope',
+      // Apple-inspired: SF on iPhone/iPad (system font), Manrope elsewhere.
+      fontFamily: _isApple ? null : 'Manrope',
       // TV: pages change instantly. The animated zoom painted the old and the
       // new page together, which on TV boxes was slow, left both visible for
       // a moment (e.g. the Home behind the player) and wasted memory.
@@ -58,7 +67,13 @@ class AppTheme {
                 TargetPlatform.windows: _InstantPageTransitionsBuilder(),
               },
             )
-          : null,
+          : const PageTransitionsTheme(
+              builders: {
+                // iOS-style horizontal slide with edge swipe everywhere.
+                TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+                TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+              },
+            ),
       colorScheme: ColorScheme.dark(
         primary: accent,
         secondary: AppColors.secondary,
@@ -74,10 +89,12 @@ class AppTheme {
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
+          letterSpacing: -0.4,
           color: AppColors.textPrimary,
-          fontFamily: 'Sora',
+          fontFamily: _headingFamily,
           fontSize: 20,
           fontWeight: FontWeight.w700,
           height: 1.2,
@@ -88,12 +105,13 @@ class AppTheme {
         color: AppColors.card,
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: AppColors.surface,
+        // iOS tab bar: translucent, no pill, tinted icon when selected.
+        backgroundColor: const Color(0xF01C1C1E),
         surfaceTintColor: Colors.transparent,
-        indicatorColor: accent.withValues(alpha: 0.18),
+        indicatorColor: Colors.transparent,
         height: 68,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
@@ -138,9 +156,8 @@ class AppTheme {
                 vertical: isTv ? 10 : 14,
               ),
 
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              // Capsule buttons, as on iOS and tvOS.
+              shape: const StadiumBorder(),
             ).copyWith(
               side: isTv
                   ? WidgetStateProperty.resolveWith(
@@ -201,35 +218,39 @@ class AppTheme {
       chipTheme: isTv
           ? ChipThemeData(surfaceTintColor: Colors.transparent)
           : null,
-      snackBarTheme: const SnackBarThemeData(
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         backgroundColor: AppColors.card,
         contentTextStyle: TextStyle(color: AppColors.textPrimary),
       ),
       textTheme: TextTheme(
         headlineLarge: TextStyle(
           color: AppColors.textPrimary,
-          fontFamily: 'Sora',
-          fontSize: 32,
+          fontFamily: _headingFamily,
+          fontSize: 34,
           fontWeight: FontWeight.w700,
+          letterSpacing: -0.8,
           height: 1.2,
         ),
         headlineMedium: TextStyle(
           color: AppColors.textPrimary,
-          fontFamily: 'Sora',
-          fontSize: 24,
+          fontFamily: _headingFamily,
+          fontSize: 26,
           fontWeight: FontWeight.w700,
+          letterSpacing: -0.5,
           height: 1.2,
         ),
         titleLarge: TextStyle(
           color: AppColors.textPrimary,
-          fontFamily: 'Sora',
+          fontFamily: _headingFamily,
           fontSize: 20,
           fontWeight: FontWeight.w600,
           height: 1.2,
         ),
         titleMedium: TextStyle(
           color: AppColors.textPrimary,
-          fontFamily: 'Sora',
+          fontFamily: _headingFamily,
           fontSize: 16,
           fontWeight: FontWeight.w600,
           height: 1.2,
@@ -259,7 +280,33 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         selectedTileColor: accent.withValues(alpha: 0.16),
       ),
-      dividerTheme: const DividerThemeData(color: AppColors.card, thickness: 1),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.border,
+        thickness: 0.5,
+        space: 0.5,
+      ),
+      switchTheme: SwitchThemeData(
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? accent
+              : const Color(0xFF39393D),
+        ),
+        thumbColor: const WidgetStatePropertyAll(Colors.white),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      ),
     );
   }
 }

@@ -18,6 +18,7 @@ import 'expiry_reminder_screen.dart';
 import 'xtream_account_screen.dart';
 import 'section_layout_screen.dart';
 import 'downloads_screen.dart';
+import 'recordings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -91,6 +92,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           subtitle: 'Film ed episodi da guardare senza connessione',
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const DownloadsScreen()),
+          ),
+        ),
+        SettingsValueTile(
+          icon: Icons.fiber_smart_record_outlined,
+          title: 'Registrazioni',
+          subtitle: 'Dirette registrate e programmi programmati dalla guida',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const RecordingsScreen()),
           ),
         ),
         SettingsValueTile(

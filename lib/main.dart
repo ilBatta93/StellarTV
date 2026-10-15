@@ -18,6 +18,7 @@ import 'services/expiry_reminder_service.dart';
 import 'services/tv_remote_keys.dart';
 import 'services/sync_service.dart';
 import 'services/download_service.dart';
+import 'services/recording_service.dart';
 import 'services/tmdb_service.dart';
 import 'theme/app_theme.dart';
 
@@ -162,6 +163,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
       Future.delayed(const Duration(seconds: 8), () {
         ExpiryReminderService.instance.start(_appProvider.xtreamCredentials);
         DownloadService.instance.init();
+        RecordingService.instance.init();
       });
     });
     _syncProvider.load();
