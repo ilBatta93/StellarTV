@@ -1406,76 +1406,31 @@ class _TvHeroInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final it = item;
     if (it == null) return const SizedBox.shrink();
-    Widget chip(String text) => Container(
-      margin: const EdgeInsets.only(right: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.textSecondary, width: 1.5),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(32, 70, 24, 8),
       child: FractionallySizedBox(
         alignment: Alignment.topLeft,
         widthFactor: 0.55,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Flexible(
-              flex: 2,
-              child: SizedBox(
-                width: double.infinity,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: SizedBox(
-                    width: MediaQuery.sizeOf(context).width * 0.5,
-                    child: Text(
-                      it.title,
-                      style: const TextStyle(
-                        fontFamily: 'Sora',
-                        color: AppColors.textPrimary,
-                        fontSize: 26,
-                        height: 1.1,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Flexible(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: MediaQuery.sizeOf(context).width * 0.5,
               child: Text(
-                it.overview,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                it.title,
+                key: const ValueKey('tv-home-banner-title'),
                 style: const TextStyle(
+                  fontFamily: 'Sora',
                   color: AppColors.textPrimary,
-                  fontSize: 14,
-                  height: 1.35,
+                  fontSize: 26,
+                  height: 1.15,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                chip(it.isMovie ? 'Film' : 'Serie TV'),
-                if (it.year.isNotEmpty) chip(it.year),
-                if (it.voteAverage > 0)
-                  chip('★ ${it.voteAverage.toStringAsFixed(1)}'),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );

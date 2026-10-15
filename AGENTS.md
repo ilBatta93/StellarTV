@@ -38,3 +38,5 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 
 - Secondary pages share ApplePageScaffold with bounded readable widths and their original scroll/focus bodies; shared theme and controls own Apple styling so no playback or sync logic is duplicated.
 - TV focus respects the animation setting and system reduced motion, uses one high-contrast stop per action, and avoids blur filters on video or catalog surfaces to preserve low-powered TV performance.
+
+- TV live guide rows and the preview expose catalog boundary markers: Up reaches tools from the first row or preview, then the shared menu; channel logos reuse the bounded disk image cache without adding focus stops.

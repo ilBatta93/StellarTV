@@ -71,3 +71,10 @@
 - [x] Regressione locale: 53 test superati; test splash preesistente bloccato da inizializzazione cloud assente nel test
 - [ ] Build Codemagic con SDK e dipendenze originali (ambiente locale non compatibile)
 - [ ] Prova reale di audio, provider multi-connessione, MPV Fire TV e telecomando (serve dispositivo/account dell’utente)
+
+## Rifinitura Home e Diretta TV
+- [x] Banner Home TV con solo titolo, senza trama o metadati
+- [x] Loghi canali disponibili nella guida e anteprima, separatori e selezione coerenti
+- [x] Risalita da primo canale, EPG e anteprima a strumenti e menu principale
+- [x] Test con menu HomeScreen reale, ritorno alla guida e controlli a 960×540/1280×720
+- [ ] Verifica finale dell’APK con provider e telecomando su televisore reale

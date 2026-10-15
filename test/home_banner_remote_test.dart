@@ -41,7 +41,6 @@ TmdbItem item(int id, String title) => TmdbItem(
 class HomeApp extends fixtures.TestApp {
   @override
   bool isAvailable(TmdbItem item) => true;
-  @override
   bool isTmdbAllowed(TmdbItem item) => true;
   @override
   Channel? findForTmdb(TmdbItem item) => null;
@@ -99,6 +98,13 @@ class HomeProfile extends ProfileProvider {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   fixtures.mainSetupForRemote();
+  setUp(() async {
+    for (final family in ['Sora', 'Manrope', 'MaterialIcons']) {
+      final loader = FontLoader(family)..addFont(rootBundle.load(
+        family == 'MaterialIcons' ? 'fonts/MaterialIcons-Regular.otf' : 'assets/fonts/$family.ttf'));
+      await loader.load();
+    }
+  });
   for (final size in [const Size(960, 540), const Size(1280, 720)]) {
     testWidgets(
       'Home latest history banner and row header intact ${size.width}',
@@ -140,6 +146,11 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
         expect(tester.takeException(), isNull);
         expect(find.text('Titolo ultima visione'), findsOneWidget);
+        expect(find.text('Descrizione del film riprodotto di recente'), findsNothing);
+        final title = tester.getRect(find.byKey(const ValueKey('tv-home-banner-title')));
+        expect(title.top, greaterThanOrEqualTo(0));
+        expect(title.bottom, lessThan(size.height));
+        expect(find.text('★ 8.0'), findsNothing);
         expect(tmdb.calls, 1);
         discover.notifyListeners();
         await tester.pump(const Duration(milliseconds: 500));

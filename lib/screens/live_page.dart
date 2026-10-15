@@ -165,7 +165,16 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                       padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
                       child: Row(
                         children: [
-                          const SizedBox(width: 156, child: Text('Canali')),
+                          const SizedBox(
+                            width: 156,
+                            child: Text(
+                              'Canali',
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
                           for (final title in ['Ora', 'A seguire', 'Poi'])
                             Expanded(
                               child: Text(
@@ -178,11 +187,15 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                         ],
                       ),
                     ),
+                    const Divider(height: 1, color: AppColors.border),
                     Expanded(
                       child: ListView.separated(
                         padding: const EdgeInsets.fromLTRB(16, 6, 8, 16),
                         itemCount: channels.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 6),
+                        separatorBuilder: (_, _) => const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 5),
+                          child: Divider(height: 1, color: AppColors.border),
+                        ),
                         itemBuilder: (context, i) {
                           final c = channels[i];
                           final programs = epg
@@ -190,97 +203,57 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                               .where((p) => p.endTime.isAfter(DateTime.now()))
                               .take(3)
                               .toList();
-                          return Row(
-                            children: [
-                              SizedBox(
-                                width: 148,
-                                child: TvCategoryEdge(
-                                  scaffoldKey: _scaffoldKey,
-                                  onOpen: _openCategories,
-                                  child: TvFocusable(
-                                    focusedScale: 1,
-                                    onFocusChange: (focus) {
-                                      if (focus) _select(c);
-                                    },
-                                    onPressed: () => _watch(c),
-                                    child: ListTile(
-                                      dense: true,
-                                      title: TvPosterTitle(c.name),
-                                      onTap: () => _watch(c),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              if (programs.isEmpty)
-                                Expanded(
-                                  child: TvFocusable(
-                                    focusedScale: 1,
-                                    onFocusChange: (focus) {
-                                      if (focus) _select(c);
-                                    },
-                                    onPressed: () => _watch(c),
-                                    child: ListTile(
-                                      title: const Text(
-                                        'Programmazione non disponibile',
-                                      ),
-                                      onTap: () => _watch(c),
-                                    ),
-                                  ),
-                                )
-                              else
-                                for (final p in programs)
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(right: 6),
-                                      child: TvFocusable(
-                                        focusedScale: 1,
-                                        onFocusChange: (focus) {
-                                          if (focus) _select(c, p);
-                                        },
-                                        onPressed: () {
-                                          _stopPreview();
-                                          setState(() {});
-                                          showChannelGuide(context, c);
-                                        },
+                          return TvCatalogItem(
+                            index: i,
+                            columns: 1,
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 148,
+                                  child: TvCategoryEdge(
+                                    scaffoldKey: _scaffoldKey,
+                                    onOpen: _openCategories,
+                                    child: TvFocusable(
+                                      focusedScale: 1,
+                                      onFocusChange: (focus) {
+                                        if (focus) _select(c);
+                                      },
+                                      onPressed: () => _watch(c),
+                                      child: GestureDetector(
+                                        onTap: () => _watch(c),
                                         child: Container(
-                                          height: 92,
-                                          padding: const EdgeInsets.all(10),
+                                          constraints: const BoxConstraints(
+                                            minHeight: 92,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 10,
+                                          ),
                                           decoration: BoxDecoration(
-                                            color:
-                                                p.startTime.isBefore(
-                                                  DateTime.now(),
-                                                )
-                                                ? AppColors.card
+                                            color: c.id == selected?.id
+                                                ? AppColors.primary.withValues(
+                                                    alpha: 0.12,
+                                                  )
                                                 : AppColors.surface,
                                             borderRadius: BorderRadius.circular(
                                               8,
                                             ),
+                                            border: Border.all(
+                                              color: c.id == selected?.id
+                                                  ? AppColors.primary
+                                                        .withValues(alpha: 0.55)
+                                                  : AppColors.border,
+                                            ),
                                           ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
+                                          child: Row(
                                             children: [
-                                              Text(
-                                                p.title,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                  fontSize: 13,
-                                                  height: 1.2,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 5),
-                                              FittedBox(
-                                                fit: BoxFit.scaleDown,
-                                                alignment: Alignment.centerLeft,
-                                                child: Text(
-                                                  '${_hm(p.startTime)} – ${_hm(p.endTime)}',
-                                                  style: const TextStyle(
-                                                    color: AppColors.textMuted,
-                                                    fontSize: 11,
-                                                  ),
-                                                ),
+                                              if (c.logo.isNotEmpty) ...[
+                                                _channelLogo(c, size: 30),
+                                                const SizedBox(width: 8),
+                                              ],
+                                              Expanded(
+                                                child: TvPosterTitle(c.name),
                                               ),
                                             ],
                                           ),
@@ -288,7 +261,106 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                       ),
                                     ),
                                   ),
-                            ],
+                                ),
+                                const SizedBox(width: 8),
+                                if (programs.isEmpty)
+                                  Expanded(
+                                    child: TvFocusable(
+                                      focusedScale: 1,
+                                      onFocusChange: (focus) {
+                                        if (focus) _select(c);
+                                      },
+                                      onPressed: () => _watch(c),
+                                      child: ListTile(
+                                        title: const Text(
+                                          'Programmazione non disponibile',
+                                        ),
+                                        onTap: () => _watch(c),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  for (final p in programs)
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          right: 6,
+                                        ),
+                                        child: TvFocusable(
+                                          focusedScale: 1,
+                                          onFocusChange: (focus) {
+                                            if (focus) _select(c, p);
+                                          },
+                                          onPressed: () {
+                                            _stopPreview();
+                                            setState(() {});
+                                            showChannelGuide(context, c);
+                                          },
+                                          child: Container(
+                                            height: 92,
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  p.startTime.isBefore(
+                                                    DateTime.now(),
+                                                  )
+                                                  ? AppColors.card
+                                                  : AppColors.surface,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: AppColors.border,
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  p.title,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 13,
+                                                    height: 1.2,
+                                                  ),
+                                                ),
+                                                const Spacer(),
+                                                FittedBox(
+                                                  fit: BoxFit.scaleDown,
+                                                  alignment:
+                                                      Alignment.centerLeft,
+                                                  child: Text(
+                                                    '${_hm(p.startTime)} – ${_hm(p.endTime)}',
+                                                    style: const TextStyle(
+                                                      color:
+                                                          AppColors.textMuted,
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 7),
+                                                LinearProgressIndicator(
+                                                  value:
+                                                      p.startTime.isBefore(
+                                                        DateTime.now(),
+                                                      )
+                                                      ? _progressOf(p)
+                                                      : 0,
+                                                  minHeight: 2,
+                                                  color: AppColors.primary,
+                                                  backgroundColor:
+                                                      AppColors.border,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                              ],
+                            ),
                           );
                         },
                       ),
@@ -296,78 +368,92 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: VerticalDivider(width: 1, color: AppColors.border),
+              ),
               SizedBox(
                 width: previewWidth,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TvFocusable(
-                      focusedScale: 1,
-                      onPressed: () {
-                        if (selected != null) _watch(selected);
-                      },
-                      child: GestureDetector(
-                        onTap: () {
+                    TvCatalogItem(
+                      index: 0,
+                      columns: 1,
+                      child: TvFocusable(
+                        key: const ValueKey('live-preview-focus'),
+                        focusedScale: 1,
+                        onPressed: () {
                           if (selected != null) _watch(selected);
                         },
-                        child: AspectRatio(
-                          aspectRatio: 16 / 9,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: _preview == null
-                                ? const ColoredBox(
-                                    color: AppColors.surface,
-                                    child: Center(
-                                      child: Icon(
-                                        Icons.live_tv_rounded,
-                                        size: 42,
+                        child: GestureDetector(
+                          onTap: () {
+                            if (selected != null) _watch(selected);
+                          },
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: _preview == null
+                                  ? const ColoredBox(
+                                      color: AppColors.surface,
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.live_tv_rounded,
+                                          size: 42,
+                                        ),
                                       ),
-                                    ),
-                                  )
-                                : ListenableBuilder(
-                                    listenable: _preview ?? app,
-                                    builder: (_, _) {
-                                      final session = _preview;
-                                      if (session == null)
-                                        return const SizedBox.expand();
-                                      if (session.status ==
-                                          SessionStatus.failed) {
-                                        return const ColoredBox(
-                                          color: AppColors.surface,
-                                          child: Center(
-                                            child: Text(
-                                              'Anteprima non disponibile',
+                                    )
+                                  : ListenableBuilder(
+                                      listenable: _preview ?? app,
+                                      builder: (_, _) {
+                                        final session = _preview;
+                                        if (session == null)
+                                          return const SizedBox.expand();
+                                        if (session.status ==
+                                            SessionStatus.failed) {
+                                          return const ColoredBox(
+                                            color: AppColors.surface,
+                                            child: Center(
+                                              child: Text(
+                                                'Anteprima non disponibile',
+                                              ),
                                             ),
-                                          ),
+                                          );
+                                        }
+                                        return Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            VideoSurface(
+                                              session: session,
+                                              settings: session.settings,
+                                            ),
+                                            if (session.status ==
+                                                    SessionStatus.connecting ||
+                                                session.status ==
+                                                    SessionStatus.switching)
+                                              const Center(
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              ),
+                                          ],
                                         );
-                                      }
-                                      return Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          VideoSurface(
-                                            session: session,
-                                            settings: session.settings,
-                                          ),
-                                          if (session.status ==
-                                                  SessionStatus.connecting ||
-                                              session.status ==
-                                                  SessionStatus.switching)
-                                            const Center(
-                                              child:
-                                                  CircularProgressIndicator(),
-                                            ),
-                                        ],
-                                      );
-                                    },
-                                  ),
+                                      },
+                                    ),
+                            ),
                           ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 12),
+                    const Divider(height: 1, color: AppColors.border),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
+                        if (selected != null && selected.logo.isNotEmpty) ...[
+                          _channelLogo(selected, size: 36),
+                          const SizedBox(width: 10),
+                        ],
                         Expanded(
                           child: TvPosterTitle(selected?.name ?? 'Diretta TV'),
                         ),
@@ -408,6 +494,20 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       ),
     );
   }
+
+  Widget _channelLogo(Channel channel, {required double size}) => SizedBox(
+    key: ValueKey('live-logo-${channel.id}-$size'),
+    width: size,
+    height: size,
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: PosterImage(
+        url: channel.logo,
+        fit: BoxFit.contain,
+        fallbackIcon: Icons.live_tv_rounded,
+      ),
+    ),
+  );
 
   @override
   void initState() {
