@@ -128,6 +128,10 @@ class PlaybackSession extends ChangeNotifier {
     }
     engine.addListener(_onEngineChanged);
     _status = SessionStatus.playing;
+    // Fresh stream (new channel or reconnect): timeshift starts from here.
+    _shift = Duration.zero;
+    _pausedAt = null;
+    _liveStartedAt = isLive ? DateTime.now() : null;
     _notify();
     try {
       await _applyInitialState(engine, resumeAt, gen);
@@ -314,9 +318,121 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
+  // ---- Live timeshift --------------------------------------------------
+  // The delay is tracked on the wall clock (pauses add to it, rewinds add,
+  // fast-forwards remove), so it stays right even when the stream clock of
+  // the provider jumps. LIVE always brings it back to zero.
+  static const timeshiftWindow = Duration(minutes: 30);
+  Duration _shift = Duration.zero;
+  DateTime? _pausedAt;
+  DateTime? _liveStartedAt;
+  Timer? _delayTick;
+
+  /// Refreshes the delay label every second while behind the live point.
+  void _syncDelayTick() {
+    if (isBehindLive || _pausedAt != null) {
+      _delayTick ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!isBehindLive && _pausedAt == null) {
+          _delayTick?.cancel();
+          _delayTick = null;
+        }
+        _notify();
+      });
+    } else {
+      _delayTick?.cancel();
+      _delayTick = null;
+    }
+  }
+
+  bool get canTimeshift => isLive && (_engine?.supportsTimeshift ?? false);
+
+  /// How far behind the live point the picture is.
+  Duration get liveDelay {
+    var d = _shift;
+    if (_pausedAt != null) d += DateTime.now().difference(_pausedAt!);
+    final cap = _maxRewind;
+    if (d > cap) d = cap;
+    return d.isNegative ? Duration.zero : d;
+  }
+
+  bool get isBehindLive => canTimeshift && liveDelay.inSeconds >= 3;
+
+  Duration get _maxRewind {
+    final start = _liveStartedAt;
+    if (start == null) return Duration.zero;
+    final elapsed = DateTime.now().difference(start);
+    return elapsed < timeshiftWindow ? elapsed : timeshiftWindow;
+  }
+
+  void _foldPause() {
+    if (_pausedAt == null) return;
+    _shift += DateTime.now().difference(_pausedAt!);
+    _pausedAt = null;
+  }
+
+  /// Rewinds (negative) or fast-forwards (positive) inside the buffer.
+  Future<void> timeshiftBy(Duration offset) async {
+    final engine = _engine;
+    if (engine == null || !canTimeshift) return;
+    _liveStartedAt ??= DateTime.now();
+    _foldPause();
+    var target = _shift - offset;
+    if (target.isNegative) target = Duration.zero;
+    if (target > _maxRewind) target = _maxRewind;
+    final move = _shift - target; // >0 forward, <0 backward
+    _shift = target;
+    if (!engine.value.isPlaying) _pausedAt = DateTime.now();
+    var pos = engine.value.position + move;
+    if (pos.isNegative) pos = Duration.zero;
+    await engine.seekTo(pos);
+    _notify();
+  }
+
+  /// Jumps back to the most recent live picture.
+  Future<void> goLive() async {
+    final engine = _engine;
+    if (engine == null) return;
+    _foldPause();
+    final move = _shift;
+    _shift = Duration.zero;
+    final buffered = engine.value.bufferedUntil;
+    var pos = engine.value.position + move;
+    if (buffered > engine.value.position &&
+        buffered - const Duration(milliseconds: 500) > pos) {
+      pos = buffered - const Duration(milliseconds: 500);
+    }
+    await engine.seekTo(pos);
+    if (!engine.value.isPlaying) await engine.play();
+    _notify();
+  }
+
+  bool _inTick = false;
+  void _syncDelayTickSafe() {
+    if (_inTick) return;
+    _inTick = true;
+    try {
+      _syncDelayTick();
+    } finally {
+      _inTick = false;
+    }
+  }
+
   Future<void> togglePlay() async {
     final engine = _engine;
     if (engine == null) return;
+    if (isLive && canTimeshift) {
+      _liveStartedAt ??= DateTime.now();
+      if (engine.value.isPlaying) {
+        await engine.pause();
+        _pausedAt = DateTime.now();
+      } else {
+        _foldPause();
+        if (_shift > _maxRewind) _shift = _maxRewind;
+        await engine.play();
+      }
+      _notify();
+      return;
+    }
     if (engine.value.isEnded) {
       await engine.seekTo(Duration.zero);
       await engine.play();
@@ -383,12 +499,15 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   void _notify() {
-    if (!_disposed) notifyListeners();
+    if (_disposed) return;
+    if (isLive) _syncDelayTickSafe();
+    notifyListeners();
   }
 
   @override
   void dispose() {
     _disposed = true;
+    _delayTick?.cancel();
     _generation++;
     final engine = _engine;
     _engine = null;

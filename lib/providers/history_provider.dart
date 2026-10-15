@@ -80,11 +80,65 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool get isSyncEnabled => true;
 
   /// Movies and episodes started but not finished (newest first).
-  List<HistoryEntry> get continueWatching => _entries.where((e) {
+  ///
+  /// One item per series: only the most recently watched episode counts.
+  /// Older half-watched episodes of the same series are hidden, and when the
+  /// latest episode was completed none of the older ones resurfaces.
+  List<HistoryEntry> get continueWatching => onePerSeries(_entries).where((e) {
     if (e.isLive || e.position < const Duration(seconds: 5)) return false;
     if (e.duration <= Duration.zero) return true;
     return !e.isWatched;
   }).toList();
+
+  /// History with episodes collapsed to the latest one of each series.
+  List<HistoryEntry> get entriesOnePerSeries => onePerSeries(_entries);
+
+  static final _episodeTag = RegExp(
+    r'\bS\d{1,2}\s*E\d{1,4}\b.*$|\b\d{1,2}x\d{1,4}\b.*$',
+    caseSensitive: false,
+  );
+
+  static String _norm(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ')
+      .replaceAll(RegExp(r'^\s*[a-z]{2,3}\s*[:|\-]\s*'), '')
+      .replaceAll(RegExp(r'[^a-z0-9à-ÿ]+'), ' ')
+      .trim();
+
+  /// Keys identifying the series of an episode entry (empty for others).
+  static List<String> seriesKeysOf(HistoryEntry e) {
+    if (e.type != ContentType.series && e.type != ContentType.anime) {
+      return const [];
+    }
+    final keys = <String>[];
+    if (e.seriesKey.isNotEmpty) keys.add('k:${e.seriesKey}');
+    final name = e.seriesName.isNotEmpty
+        ? e.seriesName
+        : e.title.replaceAll(_episodeTag, '');
+    final n = _norm(name);
+    if (n.isNotEmpty) keys.add('n:$n');
+    return keys;
+  }
+
+  /// Keeps entry order (newest first) and drops older episodes of a series
+  /// already represented, matching by series key or by series name.
+  static List<HistoryEntry> onePerSeries(List<HistoryEntry> entries) {
+    final sorted = [...entries]
+      ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
+    final seen = <String>{};
+    final out = <HistoryEntry>[];
+    for (final e in sorted) {
+      final keys = seriesKeysOf(e);
+      if (keys.isEmpty) {
+        out.add(e);
+        continue;
+      }
+      if (keys.any(seen.contains)) continue;
+      seen.addAll(keys);
+      out.add(e);
+    }
+    return out;
+  }
 
   bool isWatched(String contentId) => entryFor(contentId)?.isWatched ?? false;
 

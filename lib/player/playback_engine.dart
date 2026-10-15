@@ -66,6 +66,9 @@ abstract class PlaybackEngine extends ChangeNotifier {
   bool get supportsQualitySelection;
   bool get supportsDelays;
 
+  /// Live pause/rewind from a local buffer (false = plain live only).
+  bool get supportsTimeshift => false;
+
   /// Completes once the stream is actually playing; throws when it can't.
   /// Engines backed by a platform view only progress while [buildView] is mounted.
   Future<void> open();

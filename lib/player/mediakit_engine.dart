@@ -105,6 +105,32 @@ class MediaKitEngine extends PlaybackEngine {
   @override
   bool get supportsDelays => true;
 
+  @override
+  bool get supportsTimeshift => isLive;
+
+  /// Local timeshift window kept by mpv behind the playback point.
+  static const timeshiftBackBytes = 256 * 1024 * 1024;
+
+  /// Lets mpv keep already-played live data so the viewer can pause and
+  /// rewind, and keep downloading while paused (true timeshift buffer).
+  Future<void> _enableTimeshift() async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return;
+    final options = {
+      'cache': 'yes',
+      'demuxer-seekable-cache': 'yes',
+      'force-seekable': 'yes',
+      'demuxer-max-back-bytes': '$timeshiftBackBytes',
+      'demuxer-donate-buffer': 'no',
+      'cache-pause': 'yes',
+    };
+    for (final entry in options.entries) {
+      try {
+        await platform.setProperty(entry.key, entry.value);
+      } catch (_) {}
+    }
+  }
+
   void _onError(String message) {
     if (_disposed || message.isEmpty) return;
     _value = PlaybackSnapshot(
@@ -159,6 +185,7 @@ class MediaKitEngine extends PlaybackEngine {
   @override
   Future<void> open() async {
     if (DeviceTypeService.isTv) await _tuneForTv();
+    if (isLive) await _enableTimeshift();
     _playing = Completer<void>();
     try {
       final configured = _settings.userAgent.trim();

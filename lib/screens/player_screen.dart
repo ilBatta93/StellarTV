@@ -113,11 +113,13 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// channel / next episode) the old one is disposed AFTER the new one is
   /// created: it must not force portrait while a player is still visible.
   static int _activePlayers = 0;
+  late final AppProvider _app;
 
   @override
   void initState() {
     super.initState();
     _activePlayers++;
+    _app = context.read<AppProvider>()..setPlaybackActive(true);
     WidgetsBinding.instance.addObserver(this);
     _history = context.read<HistoryProvider>();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -304,6 +306,14 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
       if (_isLive && (up || down)) {
         _playLiveChannel(_adjacentLiveChannel(up ? -1 : 1));
+        return;
+      }
+      if ((left || right) && _isLive && session.canTimeshift) {
+        // Live timeshift straight from the arrows, like a DVR.
+        _showTvControls(TvPlayerRowKind.center);
+        if (left || session.isBehindLive) {
+          session.timeshiftBy(left ? -step : step);
+        }
         return;
       }
       if ((left || right) && _canSeek(session)) {
@@ -576,6 +586,13 @@ class _PlayerScreenState extends State<PlayerScreen>
             label: '-${step.inSeconds} s',
             onPressed: () => _tvSeekBy(-step, false),
           ),
+        if (_isLive && session.canTimeshift)
+          TvPlayerAction(
+            id: 'liveRewind',
+            icon: Icons.replay_10_rounded,
+            label: 'Indietro ${step.inSeconds} s',
+            onPressed: () => session.timeshiftBy(-step),
+          ),
         TvPlayerAction(
           id: 'play',
           icon: v.isEnded
@@ -587,6 +604,22 @@ class _PlayerScreenState extends State<PlayerScreen>
           primary: true,
           onPressed: session.togglePlay,
         ),
+        if (_isLive && session.canTimeshift)
+          TvPlayerAction(
+            id: 'liveForward',
+            icon: Icons.forward_10_rounded,
+            label: 'Avanti ${step.inSeconds} s',
+            onPressed: session.isBehindLive
+                ? () => session.timeshiftBy(step)
+                : null,
+          ),
+        if (_isLive && session.isBehindLive)
+          TvPlayerAction(
+            id: 'goLive',
+            icon: Icons.sensors_rounded,
+            label: 'Torna in LIVE',
+            onPressed: session.goLive,
+          ),
         if (_isLive)
           TvPlayerAction(
             id: 'nextChannel',
@@ -1212,6 +1245,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _remoteFocus.dispose();
     _playFocus.dispose();
     _activePlayers--;
+    if (_activePlayers <= 0) _app.setPlaybackActive(false);
     if (_activePlayers <= 0) {
       _activePlayers = 0;
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -1325,6 +1359,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                   duration: session.value.duration,
                   buffered: session.value.bufferedUntil,
                   pendingSeek: _tvSeekTarget,
+                  liveDelay: _isLive && session.isBehindLive
+                      ? session.liveDelay
+                      : null,
                 ),
               ),
             ),

@@ -56,6 +56,9 @@ class TvPlayerControls extends StatelessWidget {
   /// Target of a seek still being composed with left/right.
   final Duration? pendingSeek;
 
+  /// Live timeshift: how far behind the live point (null = at LIVE).
+  final Duration? liveDelay;
+
   const TvPlayerControls({
     super.key,
     required this.rows,
@@ -69,6 +72,7 @@ class TvPlayerControls extends StatelessWidget {
     required this.duration,
     required this.buffered,
     this.pendingSeek,
+    this.liveDelay,
   });
 
   TvPlayerRow? _row(TvPlayerRowKind kind) {
@@ -181,11 +185,13 @@ class TvPlayerControls extends StatelessWidget {
                 ),
               const Spacer(),
               if (isLive)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 12),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: LiveBadge(),
+                    child: liveDelay == null
+                        ? const LiveBadge()
+                        : TimeshiftBadge(delay: liveDelay!),
                   ),
                 )
               else if (progress != null)
@@ -465,6 +471,42 @@ class TvExitPrompt extends StatelessWidget {
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// Shown instead of LIVE while the picture is behind the live point.
+class TimeshiftBadge extends StatelessWidget {
+  final Duration delay;
+  const TimeshiftBadge({super.key, required this.delay});
+
+  @override
+  Widget build(BuildContext context) {
+    final m = delay.inMinutes;
+    final sec = (delay.inSeconds % 60).toString().padLeft(2, '0');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white38),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.history_rounded, color: Colors.white, size: 18),
+          const SizedBox(width: 8),
+          Text(
+            'In differita  -$m:$sec',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),

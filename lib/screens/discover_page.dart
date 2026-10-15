@@ -612,7 +612,7 @@ class _HistoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tv = DeviceTypeService.isTv;
     return HorizontalRow(
-      height: tv ? 212 : 200,
+      height: tv ? tmdbPosterRowHeight(context) + 4 : 200,
       spacing: tv ? 20 : 12,
       itemCount: items.length,
       itemBuilder: (context, i) => _HistoryCard(
@@ -697,15 +697,23 @@ class _HistoryCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: DeviceTypeService.isTv ? 13 : 13,
-                fontWeight: FontWeight.w600,
-                height: 1.2,
+            Padding(
+              // TV: keep the title inside the orange focus frame.
+              padding: DeviceTypeService.isTv
+                  ? const EdgeInsets.fromLTRB(9, 0, 9, 9)
+                  : EdgeInsets.zero,
+              child: Text(
+                title,
+                maxLines: DeviceTypeService.isTv ? 2 : 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: DeviceTypeService.isTv ? 14 : 13,
+                  fontWeight: DeviceTypeService.isTv
+                      ? FontWeight.w700
+                      : FontWeight.w600,
+                  height: 1.2,
+                ),
               ),
             ),
           ],
@@ -723,7 +731,7 @@ class _PosterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return HorizontalRow(
-      height: 210,
+      height: tmdbPosterRowHeight(context),
       itemCount: items.length,
       itemBuilder: (context, i) => TmdbPosterCard(
         item: items[i],
@@ -928,7 +936,8 @@ class _TvDiscoverState extends State<_TvDiscover> {
       children: [
         _TvRowTitle(title),
         HorizontalRow(
-          height: 212,
+          // Poster + two full title lines + focus frame, never clipped.
+          height: tmdbPosterRowHeight(context, mobile: 212),
           spacing: 20,
           itemCount: items.length,
           itemBuilder: (context, i) => TmdbPosterCard(

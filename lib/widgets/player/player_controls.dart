@@ -7,6 +7,7 @@ import '../channel_card.dart';
 import '../tv_focusable.dart';
 import '../../services/device_type_service.dart';
 import 'player_format.dart';
+import 'tv_player_controls.dart' show TimeshiftBadge;
 import 'player_sheets.dart';
 
 class PlayerControls extends StatelessWidget {
@@ -224,6 +225,14 @@ class PlayerControls extends StatelessWidget {
             tooltip: 'Indietro di ${step.inSeconds} secondi',
             onPressed: () => _act(() => session.seekBy(-step)),
           ),
+        if (session.isLive && session.canTimeshift) ...[
+          const SizedBox(width: 20),
+          _RoundButton(
+            icon: Icons.replay_10_rounded,
+            tooltip: 'Indietro di ${step.inSeconds} secondi',
+            onPressed: () => _act(() => session.timeshiftBy(-step)),
+          ),
+        ],
         const SizedBox(width: 32),
         v.isBuffering && !v.isPlaying
             ? SizedBox(
@@ -246,6 +255,16 @@ class PlayerControls extends StatelessWidget {
                 onPressed: () => _act(session.togglePlay),
               ),
         const SizedBox(width: 32),
+        if (session.isLive && session.canTimeshift) ...[
+          _RoundButton(
+            icon: Icons.forward_10_rounded,
+            tooltip: 'Avanti di ${step.inSeconds} secondi',
+            onPressed: session.isBehindLive
+                ? () => _act(() => session.timeshiftBy(step))
+                : null,
+          ),
+          const SizedBox(width: 20),
+        ],
         if (session.isLive)
           _RoundButton(
             icon: Icons.skip_next_rounded,
@@ -271,9 +290,25 @@ class PlayerControls extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (session.isLive)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Align(alignment: Alignment.centerLeft, child: LiveBadge()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: session.isBehindLive
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TimeshiftBadge(delay: session.liveDelay),
+                        const SizedBox(width: 10),
+                        TextButton.icon(
+                          onPressed: () => _act(session.goLive),
+                          icon: const Icon(Icons.sensors_rounded),
+                          label: const Text('Torna in LIVE'),
+                        ),
+                      ],
+                    )
+                  : const LiveBadge(),
+            ),
           )
         else
           _ScrubBar(

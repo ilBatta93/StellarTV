@@ -168,15 +168,56 @@ class AppProvider extends ChangeNotifier {
 
   Timer? _warmUpTimer;
 
+  // ---- Playback guard ----------------------------------------------------
+  bool _playbackActive = false;
+  bool get playbackActive => _playbackActive;
+  final Map<ContentType, List<Channel>> _pendingSections = {};
+  Timer? _pendingTimer;
+
+  /// Called by the player: while a video plays, background playlist updates
+  /// keep downloading but heavy catalog rebuilds wait until it closes.
+  void setPlaybackActive(bool value) {
+    if (value == _playbackActive) return;
+    _playbackActive = value;
+    _pendingTimer?.cancel();
+    if (!value && _pendingSections.isNotEmpty) {
+      // Let the exit animation finish first.
+      _pendingTimer = Timer(
+        const Duration(milliseconds: 900),
+        _applyPendingSections,
+      );
+    }
+  }
+
+  void _applyPendingSections() {
+    if (_playbackActive || _pendingSections.isEmpty) return;
+    var list = _rawChannels;
+    for (final entry in _pendingSections.entries) {
+      list = [
+        ...list.where((c) => !_belongsToSection(c, entry.key)),
+        ...entry.value,
+      ];
+    }
+    _pendingSections.clear();
+    _setChannels(list);
+    notifyListeners();
+  }
+
   void _setChannels(List<Channel> channels) {
     _rawChannels = channels;
     // The background age check is heavy on big playlists: start it once the
     // sections settle and the first navigation is done, not at every publish.
     _warmUpTimer?.cancel();
     if (channels.isNotEmpty) {
-      _warmUpTimer = Timer(const Duration(seconds: 20), () {
+      void warm() {
+        if (_playbackActive) {
+          _warmUpTimer = Timer(const Duration(seconds: 30), warm);
+          return;
+        }
         unawaited(_kids.warmUp(_rawChannels));
-      });
+      }
+
+      _warmUpTimer = Timer(const Duration(seconds: 20), warm);
     }
     _applyAdultFilter();
     _schedulePrewarm();
@@ -197,6 +238,11 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _prewarm() async {
+    if (_playbackActive) {
+      // Never compete with the video for the UI thread.
+      _prewarmTimer = Timer(const Duration(seconds: 10), () => unawaited(_prewarm()));
+      return;
+    }
     final snapshot = _allChannels;
     if (snapshot.isEmpty) return;
     final steps = <void Function()>[
@@ -1017,11 +1063,20 @@ class AppProvider extends ChangeNotifier {
         ),
       };
       if (key != _currentKey) return;
-      // Publish each completed section immediately, not after all three.
-      _setChannels([
-        ..._rawChannels.where((c) => !_belongsToSection(c, type)),
-        ...channels,
-      ]);
+      if (_playbackActive && _hasSection(type)) {
+        // A video is playing: swapping the catalog now re-filters and
+        // rebuilds every page under the player, freezing the picture and
+        // the remote. Keep the fresh section aside and apply it once the
+        // player closes.
+        _pendingSections[type] = channels;
+      } else {
+        // Publish each completed section immediately, not after all three.
+        _pendingSections.remove(type);
+        _setChannels([
+          ..._rawChannels.where((c) => !_belongsToSection(c, type)),
+          ...channels,
+        ]);
+      }
       _catalogStates[type] = CatalogLoadState(
         phase: CatalogLoadPhase.ready,
         hasContent: channels.isNotEmpty,

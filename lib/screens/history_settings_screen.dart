@@ -19,7 +19,7 @@ class HistorySettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final history = context.watch<HistoryProvider>();
     final app = context.watch<AppProvider>();
-    final entries = history.entries
+    final entries = history.entriesOnePerSeries
         .where(
           (e) =>
               !app.kidsMode ||
