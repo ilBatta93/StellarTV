@@ -2,7 +2,6 @@ import 'package:flutter/widgets.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/player_settings.dart';
-import '../services/device_type_service.dart';
 import 'playback_engine.dart';
 
 class ExoEngine extends PlaybackEngine {
@@ -20,12 +19,10 @@ class ExoEngine extends PlaybackEngine {
           preventsDisplaySleepDuringVideoPlayback: settings.keepScreenOn,
           backBufferDurationMs: settings.backBufferSeconds * 1000,
         ),
-        // TV: the video goes straight to a native surface composed by the
-        // hardware (no copy through a texture): smooth frame pacing and the
-        // TV scaler's full quality instead of a blurry, stuttering texture.
-        viewType: DeviceTypeService.isTv
-            ? VideoViewType.platformView
-            : VideoViewType.textureView,
+        // Texture on every device. The native-surface (platform view) mode
+        // showed a black picture and crashed when released/clipped on Fire
+        // TV, Google TV and Chromecast, especially with live channels.
+        viewType: VideoViewType.textureView,
       );
 
   final VideoPlayerController _controller;
@@ -209,10 +206,16 @@ class ExoEngine extends PlaybackEngine {
   Future<void> setAudioDelay(Duration delay) async {}
 
   @override
-  void dispose() {
+  Future<void> dispose() async {
+    if (_disposed) return;
     _disposed = true;
     _controller.removeListener(_sync);
-    _controller.dispose();
+    try {
+      await _controller.pause();
+    } catch (_) {}
+    try {
+      await _controller.dispose();
+    } catch (_) {}
     super.dispose();
   }
 }

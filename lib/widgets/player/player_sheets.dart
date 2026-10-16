@@ -150,6 +150,10 @@ class _Unsupported extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = session.engine?.type;
+    // mpv supports every optional feature (tracks, subtitles, delays).
+    final target = current == PlayerEngineType.mediakit
+        ? current?.other
+        : PlayerEngineType.mediakit;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
       child: Column(
@@ -157,14 +161,14 @@ class _Unsupported extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(message, style: Theme.of(context).textTheme.bodyMedium),
-          if (current != null) ...[
+          if (current != null && target != null) ...[
             const SizedBox(height: 16),
             OutlinedButton.icon(
               icon: const Icon(Icons.swap_horiz_rounded),
-              label: Text('Passa a ${current.other.label}'),
+              label: Text('Passa a ${target.label}'),
               onPressed: () {
                 Navigator.pop(context);
-                session.switchEngine(current.other);
+                session.switchEngine(target);
               },
             ),
           ],
@@ -316,7 +320,7 @@ Future<void> showSubtitleSheet(
         children: [
           onlineOption,
           _Unsupported(
-            message: 'ExoPlayer non mostra i sottotitoli incorporati nei flussi IPTV. Passa a mpv per vederli, oppure usa quelli online qui sopra.',
+            message: 'ExoPlayer non mostra i sottotitoli incorporati nei flussi IPTV. Passa a mpv o MDK per vederli, oppure usa quelli online qui sopra.',
             session: session,
           ),
         ],

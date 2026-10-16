@@ -11,6 +11,24 @@ import 'playback_engine.dart';
 
 enum SessionStatus { connecting, playing, switching, failed }
 
+/// One planned way to open the stream: an engine on one of the addresses.
+class _Attempt {
+  const _Attempt(this.engine, this.url);
+  final PlayerEngineType engine;
+  final String url;
+}
+
+/// Owns at most ONE native player at a time.
+///
+/// Field reports (Fire TV, Google TV, Chromecast): live channels showed a
+/// black picture and then the app closed with every engine. The old session
+/// created the next player while the previous one was still alive (released
+/// 300 ms later), and failures switched engine before trying the other
+/// addresses of the channel: one bad address produced a storm of native
+/// players and provider connections, ending in a native crash or in the
+/// provider refusing the stream. Now every swap fully releases the previous
+/// player first, alternative addresses are tried with the same engine, the
+/// number of attempts is bounded and errors of stale players are ignored.
 class PlaybackSession extends ChangeNotifier {
   PlaybackSession({
     required this.url,
@@ -27,6 +45,8 @@ class PlaybackSession extends ChangeNotifier {
 
   final String url;
   final bool isLive;
+
+  /// Small/parallel players (Diretta preview, MultiView tiles).
   final bool previewMode;
 
   /// Allows deterministic playback/lifecycle tests without a native decoder.
@@ -36,8 +56,9 @@ class PlaybackSession extends ChangeNotifier {
   /// saved without the `/live/` segment (HTTP 404); the standard
   /// `/live/user/pass/id.m3u8` form is tried first, then MPEG-TS.
   final List<String> _candidates;
-  int _urlIndex = 0;
-  String get currentUrl => _candidates[_urlIndex];
+  String _currentUrl = '';
+  String get currentUrl =>
+      _currentUrl.isEmpty ? _candidates.first : _currentUrl;
 
   static final _xtreamLive = RegExp(
     r'^(https?://[^/]+)/(?:live/)?([^/]+)/([^/]+)/(\d+)(?:\.(m3u8|ts))?$',
@@ -53,6 +74,14 @@ class PlaybackSession extends ChangeNotifier {
     return {'$base.m3u8', '$base.ts', url}.toList();
   }
 
+  /// Engine used by preview/MultiView tiles: ExoPlayer on Android (Java,
+  /// hardware decoder, cheap to create/release, safe to run several at
+  /// once); the configured engine elsewhere.
+  static PlayerEngineType previewEngine(PlayerSettings settings) =>
+      defaultTargetPlatform == TargetPlatform.android
+      ? PlayerEngineType.exo
+      : settings.primaryEngine;
+
   final PlayerSettings settings;
   final Duration? startAt;
 
@@ -61,9 +90,13 @@ class PlaybackSession extends ChangeNotifier {
   String? _notice;
   String? _error;
   int _generation = 0;
+  int _failedGeneration = -1;
   bool _disposed = false;
-  final Map<PlayerEngineType, int> _openCount = {};
   int _serverRefusalRetries = 0;
+  int _reconnects = 0;
+  List<_Attempt> _plan = const [];
+  int _attempt = 0;
+  Future<void> _releasing = Future<void>.value();
 
   double speed;
   double volume = 1.0;
@@ -75,23 +108,55 @@ class PlaybackSession extends ChangeNotifier {
   Size _lastVideoSize = Size.zero;
 
   PlaybackEngine? get engine => _engine;
+
+  /// Completes when every player of this session has been fully released
+  /// (useful after [dispose] before opening another stream).
+  Future<void> get released => _releasing;
   SessionStatus get status => _status;
   String? get notice => _notice;
   String? get error => _error;
   PlaybackSnapshot get value => _engine?.value ?? const PlaybackSnapshot();
 
-  Future<void> start() => _open(settings.primaryEngine, resumeAt: startAt);
+  PlayerEngineType get _firstEngine =>
+      previewMode ? previewEngine(settings) : settings.primaryEngine;
+
+  /// Every address with [primary] first; then, when allowed, every address
+  /// with the fallback engine. Previews never change engine.
+  List<_Attempt> _buildPlan(PlayerEngineType primary, {bool fallback = true}) {
+    final plan = [for (final u in _candidates) _Attempt(primary, u)];
+    final other = primary.other;
+    if (fallback && !previewMode && settings.autoFallback && other != primary) {
+      plan.addAll([for (final u in _candidates) _Attempt(other, u)]);
+    }
+    return plan;
+  }
+
+  Future<void> start() {
+    _plan = _buildPlan(_firstEngine);
+    _attempt = 0;
+    return _openAttempt(resumeAt: startAt);
+  }
 
   Future<void> retry() {
-    _openCount.clear();
     _serverRefusalRetries = 0;
-    _urlIndex = 0;
-    return _open(settings.primaryEngine, resumeAt: _resumePoint());
+    _reconnects = 0;
+    _plan = _buildPlan(_firstEngine);
+    _attempt = 0;
+    return _openAttempt(resumeAt: _resumePoint());
   }
 
   Future<void> switchEngine(PlayerEngineType type) {
-    _openCount.clear();
-    return _open(type, resumeAt: _resumePoint());
+    _serverRefusalRetries = 0;
+    _reconnects = 0;
+    // Keep the address that works, if one was already found.
+    final working = _currentUrl.isEmpty ? null : _currentUrl;
+    _plan = [
+      if (working != null) _Attempt(type, working),
+      for (final u in _candidates)
+        if (u != working) _Attempt(type, u),
+    ];
+    _attempt = 0;
+    return _openAttempt(resumeAt: _resumePoint());
   }
 
   Duration? _resumePoint() {
@@ -100,29 +165,60 @@ class PlaybackSession extends ChangeNotifier {
     return pos > Duration.zero ? pos : startAt;
   }
 
-  PlaybackEngine _create(PlayerEngineType type) =>
+  PlaybackEngine _create(PlayerEngineType type, String address) =>
       engineFactory?.call(type) ??
       switch (type) {
-        PlayerEngineType.exo => ExoEngine(url: currentUrl, settings: settings),
+        PlayerEngineType.exo => ExoEngine(url: address, settings: settings),
         PlayerEngineType.mediakit => MediaKitEngine(
-          url: currentUrl,
+          url: address,
           settings: settings,
           isLive: isLive,
           previewMode: previewMode,
         ),
         PlayerEngineType.fvp => FvpEngine(
-          url: currentUrl,
+          url: address,
           settings: settings,
           isLive: isLive,
           previewMode: previewMode,
         ),
       };
 
-  Future<void> _open(PlayerEngineType type, {Duration? resumeAt}) async {
+  /// Detaches the current player, unmounts its view and releases it
+  /// completely (decoder, surface and provider connection) before the
+  /// returned future completes. Releases are serialized.
+  Future<void> _releaseCurrent() {
+    final old = _engine;
+    if (old == null) return _releasing;
+    _engine = null;
+    old.removeListener(_onEngineChanged);
+    _notify(); // the view unmounts on the next frame
+    _releasing = _releasing.then((_) async {
+      try {
+        await old.setVolume(0).timeout(const Duration(milliseconds: 500));
+      } catch (_) {}
+      // Let the surface/texture leave the screen before freeing it.
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      try {
+        final Object? result = (old as dynamic).dispose();
+        if (result is Future) {
+          await result.timeout(const Duration(seconds: 4));
+        }
+      } catch (e) {
+        debugPrint('Player release failed: $e');
+      }
+      // Providers with a single connection need a moment to free it.
+      await Future<void>.delayed(Duration(milliseconds: isLive ? 450 : 150));
+    });
+    return _releasing;
+  }
+
+  Future<void> _openAttempt({Duration? resumeAt}) async {
     final gen = ++_generation;
-    _openCount[type] = (_openCount[type] ?? 0) + 1;
-    _retire(_engine);
-    final engine = _create(type);
+    await _releaseCurrent();
+    if (gen != _generation || _disposed || _plan.isEmpty) return;
+    final attempt = _plan[_attempt.clamp(0, _plan.length - 1)];
+    _currentUrl = attempt.url;
+    final engine = _create(attempt.engine, attempt.url);
     _engine = engine;
     _lastVideoSize = Size.zero;
     _error = null;
@@ -138,14 +234,15 @@ class PlaybackSession extends ChangeNotifier {
               'Nessuna risposta dopo ${settings.startTimeoutSeconds} secondi',
             ),
           );
-      if (gen != _generation || _disposed) return;
     } catch (e) {
-      if (gen != _generation) return;
-      await _handleFailure(type, e.toString(), resumeAt);
+      if (gen != _generation || _disposed || _engine != engine) return;
+      await _handleFailure(gen, e.toString(), resumeAt, midPlay: false);
       return;
     }
+    if (gen != _generation || _disposed || _engine != engine) return;
     engine.addListener(_onEngineChanged);
     _status = SessionStatus.playing;
+    _notice = null;
     // Fresh stream (new channel or reconnect): timeshift starts from here.
     _shift = Duration.zero;
     _pausedAt = null;
@@ -156,13 +253,6 @@ class PlaybackSession extends ChangeNotifier {
     } catch (e) {
       debugPrint('Initial playback state not applied: $e');
     }
-  }
-
-  void _retire(PlaybackEngine? engine) {
-    if (engine == null) return;
-    engine.removeListener(_onEngineChanged);
-    // Let the surface unmount before releasing the native player.
-    Future<void>.delayed(const Duration(milliseconds: 300), engine.dispose);
   }
 
   Future<void> _applyInitialState(
@@ -248,7 +338,7 @@ class PlaybackSession extends ChangeNotifier {
     if (engine == null) return;
     if (engine.value.hasError && _status == SessionStatus.playing) {
       final resumeAt = isLive ? null : engine.value.position;
-      _handleFailure(engine.type, engine.value.error!, resumeAt);
+      _handleFailure(_generation, engine.value.error!, resumeAt, midPlay: true);
       return;
     }
     if (engine.value.size != _lastVideoSize) {
@@ -258,33 +348,47 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> _handleFailure(
-    PlayerEngineType failed,
-    String reason,
-    Duration? resumeAt,
-  ) async {
+  static bool _isServerRefusal(String reason) {
     final lower = reason.toLowerCase();
-    final serverRefused =
-        lower.contains('458') ||
+    return lower.contains('458') ||
         lower.contains('-16845') ||
         lower.contains('http 403') ||
-        lower.contains('forbidden');
-    if (serverRefused) {
-      final engine = _engine;
-      _engine = null;
-      _retire(engine);
+        lower.contains('forbidden') ||
+        lower.contains('429') ||
+        lower.contains('max connections');
+  }
+
+  /// One failure is handled per attempt: errors repeated by the same player
+  /// or reported by a player already replaced are ignored.
+  Future<void> _handleFailure(
+    int gen,
+    String reason,
+    Duration? resumeAt, {
+    required bool midPlay,
+  }) async {
+    if (_disposed || gen != _generation || _failedGeneration == gen) return;
+    _failedGeneration = gen;
+    final failed = _plan.isEmpty
+        ? settings.primaryEngine
+        : _plan[_attempt.clamp(0, _plan.length - 1)].engine;
+
+    // The provider refuses a second connection: wait until it frees the
+    // previous one, then retry the same attempt (never a storm of players).
+    if (_isServerRefusal(reason)) {
       if (_serverRefusalRetries < 2) {
         _serverRefusalRetries++;
         _status = SessionStatus.switching;
         _notice = 'Il server sta liberando la connessione. Riprovo tra poco...';
-        _notify();
+        await _releaseCurrent();
         await Future<void>.delayed(
           Duration(seconds: _serverRefusalRetries == 1 ? 2 : 5),
         );
-        if (_disposed) return;
-        await _open(failed, resumeAt: resumeAt);
+        if (_disposed || gen != _generation) return;
+        await _openAttempt(resumeAt: resumeAt);
         return;
       }
+      await _releaseCurrent();
+      if (gen != _generation) return;
       _status = SessionStatus.failed;
       _error =
           'Il server TV ha rifiutato la connessione. Verifica che non ci '
@@ -292,46 +396,33 @@ class PlaybackSession extends ChangeNotifier {
       _notify();
       return;
     }
-    // Try every engine not yet attempted for this stream, in fallback order.
-    var next = failed.other;
-    for (var i = 0; i < PlayerEngineType.values.length - 1; i++) {
-      if ((_openCount[next] ?? 0) == 0) break;
-      next = next.other;
-    }
-    final otherReady = _openCount[next] ?? 0;
-    final canRetrySelf = _openCount[failed] != null && _openCount[failed]! < 2;
-    if (settings.autoFallback && otherReady == 0) {
+
+    // A stream that was already playing and dropped: reconnect the same
+    // way (at most twice) before trying anything else.
+    if (midPlay && _reconnects < 2 && !reason.contains('schermo nero')) {
+      _reconnects++;
       _status = SessionStatus.switching;
-      _notice =
-          '${failed.label} non riesce a riprodurre questo flusso. Passo a ${next.label}...';
+      _notice = 'Segnale interrotto, riconnessione...';
       _notify();
-      await Future<void>.delayed(const Duration(milliseconds: 700));
-      if (_disposed) return;
-      await _open(next, resumeAt: resumeAt);
+      await _openAttempt(resumeAt: resumeAt);
       return;
     }
-    if (settings.autoFallback && canRetrySelf) {
+
+    if (_attempt < _plan.length - 1) {
+      _attempt++;
+      final next = _plan[_attempt];
       _status = SessionStatus.switching;
-      _notice = 'Nuovo tentativo con ${failed.label}...';
+      _notice = next.engine == failed
+          ? 'Provo un formato alternativo del canale...'
+          : '${failed.label} non riesce a riprodurre questo flusso. '
+                'Passo a ${next.engine.label}...';
       _notify();
-      await Future<void>.delayed(const Duration(seconds: 1));
-      if (_disposed) return;
-      await _open(failed, resumeAt: resumeAt);
+      await _openAttempt(resumeAt: resumeAt);
       return;
     }
-    if (_urlIndex < _candidates.length - 1) {
-      _urlIndex++;
-      _openCount.clear();
-      _status = SessionStatus.switching;
-      _notice = 'Provo un formato alternativo del canale...';
-      _notify();
-      await Future<void>.delayed(const Duration(seconds: 1));
-      if (_disposed) return;
-      await _open(settings.primaryEngine, resumeAt: resumeAt);
-      return;
-    }
-    _retire(_engine);
-    _engine = null;
+
+    await _releaseCurrent();
+    if (gen != _generation || _disposed) return;
     _status = SessionStatus.failed;
     _error = reason;
     _notify();
@@ -534,12 +625,7 @@ class PlaybackSession extends ChangeNotifier {
     _disposed = true;
     _delayTick?.cancel();
     _generation++;
-    final engine = _engine;
-    _engine = null;
-    if (engine != null) {
-      unawaited(engine.setVolume(0).catchError((Object _) {}));
-      _retire(engine);
-    }
+    unawaited(_releaseCurrent());
     super.dispose();
   }
 }

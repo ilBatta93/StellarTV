@@ -65,7 +65,6 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   Channel? _selectedChannel;
   EpgProgram? _selectedProgram;
   int _previewGeneration = 0;
-  Future<void>? _previewStart;
   Future<void> _releaseQueue = Future<void>.value();
   late final AppProvider _app;
 
@@ -96,26 +95,17 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     _previewGeneration++;
     _previewDelay?.cancel();
     final old = _preview;
-    final starting = _previewStart;
     _preview = null;
-    _previewStart = null;
     if (old != null) {
       unawaited(old.setVolume(0));
-      // Releasing mpv while it is still opening, or while its video surface
-      // is still mounted, crashed the app natively when moving between
-      // channels. Unmount first, let the open settle, then release; the next
-      // preview waits for this queue so two decoders never overlap.
+      // The session unmounts and releases its player safely even while it
+      // is still opening; wait until the decoder and the provider connection
+      // are really free before the next preview or the full player starts.
       _releaseQueue = _releaseQueue.then((_) async {
-        if (starting != null) {
-          await starting
-              .timeout(const Duration(seconds: 4), onTimeout: () {})
-              .catchError((_) {});
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 350));
         try {
           old.dispose();
+          await old.released.timeout(const Duration(seconds: 6));
         } catch (_) {}
-        await Future<void>.delayed(const Duration(milliseconds: 250));
       });
       _app.setPlaybackActive(false);
     }
@@ -160,7 +150,6 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       _app.setPlaybackActive(true);
       setState(() => _preview = session);
       final start = session.start();
-      _previewStart = start;
       try {
         await start;
       } catch (_) {}

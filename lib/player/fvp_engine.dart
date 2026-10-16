@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:fvp/mdk.dart' as mdk;
 
@@ -29,6 +30,7 @@ class FvpEngine extends PlaybackEngine {
   Timer? _poll;
   bool _disposed = false;
   bool _buffering = true;
+  Completer<void>? _ready;
 
   @override
   PlayerEngineType get type => PlayerEngineType.fvp;
@@ -59,10 +61,12 @@ class FvpEngine extends PlaybackEngine {
     p.setProperty('avformat.allowed_segment_extensions', 'ALL');
     p.setProperty('avformat.rtsp_transport', 'tcp');
     p.setProperty('avformat.fflags', '+discardcorrupt+genpts');
-    p.setProperty('avio.reconnect', '1');
-    p.setProperty('avio.reconnect_streamed', '1');
-    p.setProperty('avio.reconnect_on_network_error', '1');
-    p.setProperty('avio.reconnect_delay_max', '7');
+    if (_settings.httpReconnect) {
+      p.setProperty('avio.reconnect', '1');
+      p.setProperty('avio.reconnect_streamed', '1');
+      p.setProperty('avio.reconnect_on_network_error', '1');
+      p.setProperty('avio.reconnect_delay_max', '7');
+    }
     p.setProperty('avio.user_agent', ua);
     p.setProperty('avio.headers', 'User-Agent: $ua\r\n');
     p.setProperty('continue_at_end', isLive ? '1' : '0');
@@ -72,12 +76,19 @@ class FvpEngine extends PlaybackEngine {
       p.setProperty('avformat.probesize', '2000000');
     }
     final hw = _settings.hardwareDecoding != HardwareDecoding.disabled;
+    // fvp's own Android defaults. The Java "MediaCodec" decoder needs a
+    // JavaVM handed to mdk and was a crash risk when used directly.
     p.videoDecoders = hw
-        ? ['MediaCodec:copy=0', 'AMediaCodec', 'VT', 'FFmpeg']
-        : ['FFmpeg'];
-    final liveMs = DeviceTypeService.isFireTv ? 2500 : 1500;
+        ? (defaultTargetPlatform == TargetPlatform.android
+              ? ['AMediaCodec', 'FFmpeg', 'dav1d']
+              : ['VT', 'FFmpeg', 'dav1d'])
+        : ['FFmpeg', 'dav1d'];
+    // Buffers follow the "Rete e buffer" settings, like the other engines.
+    var liveMs = _settings.liveCachingMs.clamp(800, 8000);
+    if (DeviceTypeService.isFireTv && liveMs < 2500) liveMs = 2500;
+    final vodMs = _settings.networkCachingMs.clamp(500, 10000);
     p.setBufferRange(
-      min: previewMode ? 300 : (isLive ? liveMs ~/ 3 : 1000),
+      min: previewMode ? 300 : (isLive ? liveMs ~/ 3 : vodMs),
       max: isLive ? liveMs * 4 : 20000,
       drop: false,
     );
@@ -118,6 +129,7 @@ class FvpEngine extends PlaybackEngine {
     _configure();
     _player.volume = initialVolume.clamp(0.0, 1.0);
     final ready = Completer<void>();
+    _ready = ready;
     _subs.add(
       _player.onMediaStatus.listen((s) {
         final n = s.newValue;
@@ -150,6 +162,8 @@ class FvpEngine extends PlaybackEngine {
     );
     _player.media = url;
     final ret = await _player.prepare();
+    // Released while opening: never touch the freed native player.
+    if (_disposed) throw const PlaybackException('Chiuso');
     if (ret < 0) throw const PlaybackException('Impossibile aprire il flusso');
     // Texture is created once the first video frame size is known.
     unawaited(_player.updateTexture());
@@ -158,6 +172,7 @@ class FvpEngine extends PlaybackEngine {
       _player.playbackRate = _settings.defaultSpeed;
     }
     _poll = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (_disposed) return;
       _sync();
       if (!ready.isCompleted &&
           (_player.position > 0 ||
@@ -289,11 +304,21 @@ class FvpEngine extends PlaybackEngine {
     if (_disposed) return;
     _disposed = true;
     _poll?.cancel();
-    for (final s in _subs) {
-      await s.cancel();
+    final ready = _ready;
+    if (ready != null && !ready.isCompleted) {
+      ready.completeError(const PlaybackException('Chiuso'));
     }
-    _player.state = mdk.PlaybackState.stopped;
-    _player.dispose();
+    for (final s in _subs) {
+      try {
+        await s.cancel();
+      } catch (_) {}
+    }
+    try {
+      _player.state = mdk.PlaybackState.stopped;
+      // Let the decoder stop before the texture and player are freed.
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      _player.dispose();
+    } catch (_) {}
     super.dispose();
   }
 }

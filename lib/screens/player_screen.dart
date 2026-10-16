@@ -874,7 +874,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     previous?.removeListener(_onSessionChanged);
     setState(() => _session = null);
     previous?.dispose();
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+    // Wait until decoder, surface and provider connection are really free.
+    await (previous?.released ?? Future<void>.value())
+        .timeout(const Duration(seconds: 6), onTimeout: () {});
     if (!mounted) return;
     unawaited(
       Navigator.of(context).pushReplacement(
@@ -916,7 +918,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     previous?.removeListener(_onSessionChanged);
     setState(() => _session = null);
     previous?.dispose();
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+    // Wait until decoder, surface and provider connection are really free.
+    await (previous?.released ?? Future<void>.value())
+        .timeout(const Duration(seconds: 6), onTimeout: () {});
     if (!mounted) return;
     playChannel(
       context,
@@ -1033,7 +1037,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     previous?.removeListener(_onSessionChanged);
     setState(() => _session = null);
     previous?.dispose();
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+    // Wait until decoder, surface and provider connection are really free.
+    await (previous?.released ?? Future<void>.value())
+        .timeout(const Duration(seconds: 6), onTimeout: () {});
     if (!mounted) return;
     final entry = _history.entryFor(next.id);
     playChannel(
@@ -1071,9 +1077,12 @@ class _PlayerScreenState extends State<PlayerScreen>
     // Many Xtream plans allow only one active stream and otherwise return 458.
     final previous = _session;
     previous?.removeListener(_onSessionChanged);
-    _session = null;
+    // Unmount the picture before its player is released.
+    setState(() => _session = null);
     previous?.dispose();
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+    // Wait until decoder, surface and provider connection are really free.
+    await (previous?.released ?? Future<void>.value())
+        .timeout(const Duration(seconds: 6), onTimeout: () {});
     if (!mounted) return;
     playChannel(context, channel, replace: true);
   }

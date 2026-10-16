@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../widgets/apple_page_scaffold.dart';
 
 import '../models/player_settings.dart';
@@ -36,6 +37,9 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
       !_tvProfile || s.primaryEngine == PlayerEngineType.mediakit;
   bool _exo(PlayerSettings s) =>
       !_tvProfile || s.primaryEngine == PlayerEngineType.exo;
+  bool _fvp(PlayerSettings s) =>
+      !_tvProfile || s.primaryEngine == PlayerEngineType.fvp;
+  bool _mpvOrMdk(PlayerSettings s) => _mpv(s) || _fvp(s);
 
   bool get _live => _scope == PlayerSettingsScope.liveTv;
   bool get _tvProfile => DeviceTypeService.isTv && widget.scope != null;
@@ -131,7 +135,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
                 ..._playbackSection(s),
                 ..._audioSection(s),
                 ..._subtitleSection(s),
-                if (_mpv(s)) ..._videoSection(s),
+                if (_mpvOrMdk(s)) ..._videoSection(s),
                 ..._networkSection(s),
                 ..._systemSection(s),
                 _capabilitiesSection(),
@@ -145,7 +149,10 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     SettingsSection(
       title: 'Motore di riproduzione',
       description:
-          'Se il motore principale non riesce ad aprire un canale, l\'app può passare da sola all\'altro.',
+          'Se il motore principale non riesce ad aprire un canale, l\'app prova '
+          'prima gli altri formati del canale e poi il motore di riserva. '
+          'Anteprima della Diretta e MultiView usano sempre ExoPlayer su Android, '
+          'il più leggero. Le opzioni qui sotto cambiano in base al motore scelto.',
       children: [
         SettingsValueTile(
           icon: Icons.memory_rounded,
@@ -160,6 +167,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             detail: (e) => e.description,
           ),
         ),
+        _EngineFeatures(engine: s.primaryEngine),
         SettingsSwitchTile(
           icon: Icons.swap_horiz_rounded,
           title: 'Cambio automatico del motore',
@@ -171,8 +179,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
         SettingsSliderTile(
           icon: Icons.timer_outlined,
           title: 'Attesa massima all\'avvio',
-          subtitle:
-              'Dopo questo tempo senza immagine si considera il tentativo fallito',
+          subtitle: 'Dopo questo tempo senza immagine si considera il tentativo fallito',
           value: s.startTimeoutSeconds.toDouble(),
           min: 5,
           max: 30,
@@ -265,8 +272,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           SettingsSwitchTile(
             icon: Icons.swipe_rounded,
             title: 'Gesti a schermo',
-            subtitle:
-                'Scorri a sinistra per la luminosità, a destra per il volume, in orizzontale per avanzare',
+            subtitle: 'Scorri a sinistra per la luminosità, a destra per il volume, in orizzontale per avanzare',
             value: s.gesturesEnabled,
             onChanged: (v) => _update((s) => s.gesturesEnabled = v),
           ),
@@ -303,8 +309,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           SettingsSwitchTile(
             icon: Icons.surround_sound_outlined,
             title: 'Passthrough Dolby / DTS',
-            subtitle:
-                'Invia l\'audio originale a soundbar o ricevitore compatibili tramite HDMI',
+            subtitle: 'Invia l\'audio originale a soundbar o ricevitore compatibili tramite HDMI',
             badge: 'mpv',
             value: s.audioPassthrough,
             onChanged: (v) => _update((s) => s.audioPassthrough = v),
@@ -337,16 +342,15 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
   List<Widget> _subtitleSection(PlayerSettings s) => [
     SettingsSection(
       title: 'Sottotitoli',
-      description:
-          'I sottotitoli incorporati nei flussi IPTV vengono mostrati con il motore mpv.',
+      description: 'I sottotitoli incorporati nei flussi IPTV vengono mostrati con mpv e MDK.',
       children: [
         _SubtitlePreview(settings: s),
-        if (_mpv(s))
+        if (_mpvOrMdk(s))
           SettingsSwitchTile(
             icon: Icons.subtitles_outlined,
+            badge: 'mpv · MDK',
             title: 'Attiva automaticamente',
-            subtitle:
-                'Seleziona i sottotitoli nella lingua preferita quando disponibili',
+            subtitle: 'Seleziona i sottotitoli nella lingua preferita quando disponibili',
             value: s.subtitlesEnabled,
             onChanged: (v) => _update((s) => s.subtitlesEnabled = v),
           ),
@@ -398,17 +402,18 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           value: s.subtitleBold,
           onChanged: (v) => _update((s) => s.subtitleBold = v),
         ),
-        SettingsSliderTile(
-          icon: Icons.av_timer_rounded,
-          title: 'Ritardo sottotitoli predefinito',
-          badge: 'mpv',
-          value: s.subtitleDelayMs.toDouble(),
-          min: -5000,
-          max: 5000,
-          divisions: 100,
-          format: (v) => formatDelay(Duration(milliseconds: v.round())),
-          onChanged: (v) => _update((s) => s.subtitleDelayMs = v.round()),
-        ),
+        if (_mpv(s))
+          SettingsSliderTile(
+            icon: Icons.av_timer_rounded,
+            title: 'Ritardo sottotitoli predefinito',
+            badge: 'mpv',
+            value: s.subtitleDelayMs.toDouble(),
+            min: -5000,
+            max: 5000,
+            divisions: 100,
+            format: (v) => formatDelay(Duration(milliseconds: v.round())),
+            onChanged: (v) => _update((s) => s.subtitleDelayMs = v.round()),
+          ),
       ],
     ),
   ];
@@ -416,14 +421,13 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
   List<Widget> _videoSection(PlayerSettings s) => [
     SettingsSection(
       title: 'Video e decodifica',
-      description:
-          'HDR10, HLG e Dolby Vision vengono riprodotti tramite la decodifica hardware del dispositivo, se lo schermo li supporta.',
+      description: 'HDR10, HLG e Dolby Vision vengono riprodotti tramite la decodifica hardware del dispositivo, se lo schermo li supporta.',
       children: [
-        if (_mpv(s))
+        if (_mpvOrMdk(s))
           SettingsValueTile(
             icon: Icons.developer_board_rounded,
             title: 'Decodifica hardware',
-            badge: 'mpv',
+            badge: 'mpv · MDK',
             value: s.hardwareDecoding.label,
             onTap: () => _pick(
               'Decodifica hardware',
@@ -467,15 +471,14 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
   List<Widget> _networkSection(PlayerSettings s) => [
     SettingsSection(
       title: 'Rete e buffer',
-      description:
-          'Valori più alti riducono le interruzioni su connessioni instabili ma aumentano il tempo di avvio.',
+      description: 'Valori più alti riducono le interruzioni su connessioni instabili ma aumentano il tempo di avvio.',
       children: [
         if (!_tvProfile || !_live)
-          if (_mpv(s))
+          if (_mpvOrMdk(s))
             SettingsSliderTile(
               icon: Icons.cloud_download_outlined,
               title: 'Buffer film e serie',
-              badge: 'mpv',
+              badge: 'mpv · MDK',
               value: s.networkCachingMs.toDouble(),
               min: 300,
               max: 10000,
@@ -485,11 +488,11 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
                   _update((s) => s.networkCachingMs = (v / 100).round() * 100),
             ),
         if (!_tvProfile || _live)
-          if (_mpv(s))
+          if (_mpvOrMdk(s))
             SettingsSliderTile(
               icon: Icons.live_tv_rounded,
               title: 'Buffer dirette',
-              badge: 'mpv',
+              badge: 'mpv · MDK',
               value: s.liveCachingMs.toDouble(),
               min: 300,
               max: 10000,
@@ -502,8 +505,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           SettingsSliderTile(
             icon: Icons.replay_circle_filled_outlined,
             title: 'Buffer all\'indietro',
-            subtitle:
-                'Secondi già visti tenuti in memoria per tornare indietro subito',
+            subtitle: 'Secondi già visti tenuti in memoria per tornare indietro subito',
             badge: 'ExoPlayer',
             value: s.backBufferSeconds.toDouble(),
             min: 0,
@@ -512,12 +514,12 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             format: (v) => '${v.round()} s',
             onChanged: (v) => _update((s) => s.backBufferSeconds = v.round()),
           ),
-        if (_mpv(s))
+        if (_mpvOrMdk(s))
           SettingsSwitchTile(
             icon: Icons.wifi_protected_setup_rounded,
             title: 'Riconnessione automatica',
             subtitle: 'Riprova da solo se il flusso si interrompe',
-            badge: 'mpv',
+            badge: 'mpv · MDK',
             value: s.httpReconnect,
             onChanged: (v) => _update((s) => s.httpReconnect = v),
           ),
@@ -540,8 +542,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
         SettingsSwitchTile(
           icon: Icons.picture_in_picture_alt_rounded,
           title: 'Picture-in-Picture automatico',
-          subtitle:
-              'Continua a guardare in una finestra quando esci dall\'app (Android)',
+          subtitle: 'Continua a guardare in una finestra quando esci dall\'app (Android)',
           value: s.autoPip,
           onChanged: (v) => _update((s) => s.autoPip = v),
         ),
@@ -554,8 +555,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
         SettingsSwitchTile(
           icon: Icons.headphones_rounded,
           title: 'Audio in background',
-          subtitle:
-              'Non mette in pausa quando esci dall\'app. Android potrebbe comunque interrompere l\'audio dopo un po\'',
+          subtitle: 'Non mette in pausa quando esci dall\'app. Android potrebbe comunque interrompere l\'audio dopo un po\'',
           value: s.backgroundAudio,
           onChanged: (v) => _update((s) => s.backgroundAudio = v),
         ),
@@ -749,6 +749,65 @@ class _UserAgentDialogState extends State<_UserAgentDialog> {
           child: const Text('Salva'),
         ),
       ],
+    );
+  }
+}
+
+/// What the selected engine can do, so the settings below make sense.
+class _EngineFeatures extends StatelessWidget {
+  const _EngineFeatures({required this.engine});
+  final PlayerEngineType engine;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <(String, bool)>[
+      ('Tracce audio', true),
+      ('Sottotitoli incorporati', engine.supportsSubtitles),
+      ('Scelta qualità', engine.supportsQuality),
+      ('Ritardo audio e sottotitoli', engine.supportsDelays),
+      ('Pausa e riavvolgimento diretta', engine.supportsTimeshift),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final (label, ok) in items)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: ok
+                    ? AppColors.primary.withValues(alpha: 0.14)
+                    : AppColors.surface,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: ok
+                      ? AppColors.primary.withValues(alpha: 0.5)
+                      : AppColors.border,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    ok ? Icons.check_rounded : Icons.remove_rounded,
+                    size: 14,
+                    color: ok ? AppColors.primary : AppColors.textMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: ok ? AppColors.textPrimary : AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

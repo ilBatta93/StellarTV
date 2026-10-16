@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/player_settings.dart';
+import 'device_type_service.dart';
 
 enum PlayerSettingsScope { shared, liveTv, filmSeriesTv }
 
@@ -24,6 +25,7 @@ class PlayerSettingsService {
     final raw = prefs.getString(_key(scope));
     if (raw == null && scope != PlayerSettingsScope.shared) {
       final previous = await load();
+      if (scope == PlayerSettingsScope.liveTv) _liveDefaults(previous);
       await save(previous, scope: scope);
       return previous;
     }
@@ -31,12 +33,30 @@ class PlayerSettingsService {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is Map<String, dynamic>) {
-        return PlayerSettings.fromJson(decoded);
+        final settings = PlayerSettings.fromJson(decoded);
+        // One-time switch of TV live channels to ExoPlayer (see
+        // _liveDefaults); later choices of the user are kept.
+        if (scope == PlayerSettingsScope.liveTv &&
+            decoded['liveEngineV'] != 3) {
+          _liveDefaults(settings);
+          await save(settings, scope: scope);
+        }
+        return settings;
       }
     } on FormatException {
       // Corrupt payload: fall through to defaults.
     }
     return PlayerSettings();
+  }
+
+  /// TV live channels start with ExoPlayer: on Fire TV, Google TV and
+  /// Chromecast it is the engine that opens IPTV/Xtream live streams most
+  /// reliably and with the least memory; mpv remains the automatic
+  /// fallback (and can be chosen again, e.g. for live pause/rewind).
+  static void _liveDefaults(PlayerSettings s) {
+    if (!DeviceTypeService.isTv) return;
+    s.primaryEngine = PlayerEngineType.exo;
+    s.autoFallback = true;
   }
 
   Future<void> save(
@@ -50,7 +70,9 @@ class PlayerSettingsService {
   Future<void> reset({
     PlayerSettingsScope scope = PlayerSettingsScope.shared,
   }) async {
-    await save(PlayerSettings(), scope: scope);
+    final defaults = PlayerSettings();
+    if (scope == PlayerSettingsScope.liveTv) _liveDefaults(defaults);
+    await save(defaults, scope: scope);
   }
 
   Future<Map<String, int>> _resumeMap(SharedPreferences prefs) async {

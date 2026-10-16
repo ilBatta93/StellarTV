@@ -32,6 +32,9 @@ class MediaKitEngine extends PlaybackEngine {
       configuration: VideoControllerConfiguration(
         enableHardwareAcceleration:
             settings.hardwareDecoding != HardwareDecoding.disabled,
+        // hwdec must be given here: the controller applies its own value
+        // asynchronously and silently overrode the one set at open.
+        hwdec: _hwdec(settings.hardwareDecoding),
         vo: null,
       ),
     );
@@ -132,10 +135,13 @@ class MediaKitEngine extends PlaybackEngine {
     final options = {
       'cache': 'yes',
       'demuxer-seekable-cache': 'yes',
-      'force-seekable': 'yes',
-      // Keep the rewind feature, but bound RAM on memory-constrained Fire TV.
+      // No 'force-seekable': media_kit seeks to 0 every time the Android
+      // surface is (re)attached; on a forced-seekable live stream that seek
+      // jumped outside the stream (black picture, stalled player). The
+      // seekable cache alone already allows pause/rewind (partially-seekable).
+      // RAM is bounded on every TV (Fire TV/Chromecast have 1-2 GB).
       'demuxer-max-back-bytes':
-          '${DeviceTypeService.isFireTv ? 64 * 1024 * 1024 : timeshiftBackBytes}',
+          '${DeviceTypeService.isTv ? 64 * 1024 * 1024 : timeshiftBackBytes}',
       'demuxer-donate-buffer': 'no',
       'cache-pause': 'yes',
     };
@@ -216,11 +222,9 @@ class MediaKitEngine extends PlaybackEngine {
       'demuxer-lavf-analyzeduration': isLive ? '3' : '5',
       'demuxer-lavf-probe-info': 'auto',
       'hls-bitrate': 'max',
-      'vd-lavc-dr': 'yes',
-      'hwdec': _hwdec(_settings.hardwareDecoding),
-      'hwdec-codecs': 'all',
       if (isLive)
-        'demuxer-max-bytes': '${DeviceTypeService.isFireTv ? 48 : 96}MiB',
+        'demuxer-max-bytes':
+            '${previewMode ? 8 : (DeviceTypeService.isTv ? 32 : 64)}MiB',
     };
     for (final entry in options.entries) {
       try {
@@ -234,46 +238,35 @@ class MediaKitEngine extends PlaybackEngine {
   /// always reaches the screen.
   static String _hwdec(HardwareDecoding mode) => switch (mode) {
     HardwareDecoding.disabled => 'no',
-    HardwareDecoding.full => 'mediacodec,mediacodec-copy,auto-safe',
-    _ => 'mediacodec-copy,auto-safe',
+    _ => 'mediacodec-copy',
   };
 
   Timer? _blackWatch;
-  int _blackStage = 0;
 
-  /// Audio playing but no video frame size after a few seconds = black
-  /// screen: switch decoder (copy hardware → software) instead of leaving
-  /// the viewer in front of a black picture.
+  /// Audio playing but no video frame after a few seconds = black screen.
+  /// Changing the decoder of a running mpv on Android was unreliable, so the
+  /// session is told the stream failed and moves on to the next attempt
+  /// (other address or ExoPlayer) after releasing this player.
   void _watchBlackScreen() {
     _blackWatch?.cancel();
-    _blackWatch = Timer.periodic(const Duration(seconds: 4), (_) async {
+    var strikes = 0;
+    _blackWatch = Timer.periodic(const Duration(seconds: 3), (_) {
       if (_disposed) return _blackWatch?.cancel();
       final st = _player.state;
+      final hasFrame = (st.width ?? 0) > 0 && (st.height ?? 0) > 0;
       final hasVideoTrack = st.tracks.video.any(
         (t) => t.id != 'auto' && t.id != 'no',
       );
-      final hasFrame = (st.width ?? 0) > 0 && (st.height ?? 0) > 0;
-      if (hasFrame || !hasVideoTrack) {
-        if (hasFrame) _blackWatch?.cancel();
-        return;
-      }
-      if (!st.playing || st.position <= const Duration(seconds: 2)) return;
-      final platform = _player.platform;
-      if (platform is! NativePlayer || _blackStage >= 2) {
+      if (hasFrame || (!hasVideoTrack && strikes > 3)) {
         _blackWatch?.cancel();
         return;
       }
-      _blackStage++;
-      try {
-        await platform.setProperty(
-          'hwdec',
-          _blackStage == 1 ? 'mediacodec-copy' : 'no',
-        );
-        if (_blackStage == 2) {
-          await platform.setProperty('vd-lavc-fast', 'yes');
-          await platform.setProperty('vd-lavc-skiploopfilter', 'nonkey');
-        }
-      } catch (_) {}
+      if (!st.playing) return;
+      strikes++;
+      if (strikes >= 3) {
+        _blackWatch?.cancel();
+        _onError('Nessuna immagine dal flusso (schermo nero)');
+      }
     });
   }
 
@@ -283,6 +276,7 @@ class MediaKitEngine extends PlaybackEngine {
     await _tuneNetwork(configuredUa.isEmpty ? 'StellarTV/1.0' : configuredUa);
     if (DeviceTypeService.isTv) await _tuneForTv();
     if (isLive && !previewMode) await _enableTimeshift();
+    if (_disposed) throw const PlaybackException('Chiuso');
     await _player.setVolume(initialVolume.clamp(0.0, 1.0) * 100);
     _playing = Completer<void>();
     try {
@@ -295,6 +289,7 @@ class MediaKitEngine extends PlaybackEngine {
     } catch (e) {
       throw PlaybackException('$e');
     }
+    if (_disposed) throw const PlaybackException('Chiuso');
     await _player.setRate(isLive ? 1.0 : _settings.defaultSpeed);
     _watchBlackScreen();
     await _playing!.future.timeout(
@@ -426,7 +421,16 @@ class MediaKitEngine extends PlaybackEngine {
     if (_disposed) return;
     _disposed = true;
     _blackWatch?.cancel();
-    await _player.dispose();
+    if (_playing != null && !_playing!.isCompleted) {
+      _playing!.completeError(const PlaybackException('Chiuso'));
+      _playing!.future.catchError((_) {});
+    }
+    try {
+      await _player.stop();
+    } catch (_) {}
+    try {
+      await _player.dispose();
+    } catch (_) {}
     super.dispose();
   }
 }

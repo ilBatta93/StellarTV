@@ -1,3 +1,5 @@
+- [x] Ottobre 16 (2): dirette stabili — un solo player alla volta, formati del canale provati prima di cambiare motore, ExoPlayer predefinito per Dirette TV e anteprima/MultiView, MPV senza ricerca forzata, MDK sicuro e impostazioni per motore
+- [ ] Ottobre 16 (2): prova su Fire TV, Google TV e Chromecast (serve build Codemagic)
 - [x] Ottobre 16: MPV dirette (codec FFmpeg completi, decodifica sicura anti schermo nero, buffer Fire TV), terzo motore MDK, Diretta senza chiusure, icone→canali, MultiView nel player, lista episodi Apple con progresso e Back a due livelli
 - [ ] Ottobre 16: prova su TV reale di MPV/MDK (serve build Codemagic)
 

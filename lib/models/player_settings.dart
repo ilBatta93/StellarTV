@@ -1,26 +1,39 @@
 import 'package:flutter/material.dart';
 
 enum PlayerEngineType {
-  exo('ExoPlayer', 'Motore nativo Android, ottimo per HLS e HDR'),
+  exo(
+    'ExoPlayer',
+    'Nativo Android, il più stabile e leggero: consigliato per le dirette. '
+        'Tracce audio e qualità; niente pausa della diretta',
+  ),
   mediakit(
     'mpv (media-kit)',
-    'Massima compatibilità, sottotitoli e tracce audio completi',
+    'Massima compatibilità: sottotitoli, tracce audio, ritardi audio/sottotitoli '
+        'e pausa/riavvolgimento della diretta',
   ),
   fvp(
     'MDK (FFmpeg)',
-    'Terzo motore: tutti i codec FFmpeg, ideale per IPTV e Xtream',
+    'Tutti i codec FFmpeg con decodifica hardware: tracce audio e sottotitoli; '
+        'niente ritardi né pausa della diretta',
   );
 
   final String label;
   final String description;
   const PlayerEngineType(this.label, this.description);
 
-  /// Automatic fallback order: mpv → MDK → ExoPlayer → mpv.
+  /// Automatic fallback: ExoPlayer ⇄ mpv; MDK falls back to ExoPlayer.
+  /// MDK is never chosen automatically (only when selected by the user),
+  /// so a failing stream never chains three native players.
   PlayerEngineType get other => switch (this) {
-    PlayerEngineType.mediakit => PlayerEngineType.fvp,
+    PlayerEngineType.mediakit => PlayerEngineType.exo,
     PlayerEngineType.fvp => PlayerEngineType.exo,
     PlayerEngineType.exo => PlayerEngineType.mediakit,
   };
+
+  bool get supportsSubtitles => this != PlayerEngineType.exo;
+  bool get supportsDelays => this == PlayerEngineType.mediakit;
+  bool get supportsTimeshift => this == PlayerEngineType.mediakit;
+  bool get supportsQuality => this == PlayerEngineType.exo;
 }
 
 enum VideoFitMode {
@@ -240,6 +253,7 @@ class PlayerSettings {
   Map<String, dynamic> toJson() => {
     'primaryEngine': primaryEngine.name,
     'engineV': 2,
+    'liveEngineV': 3,
     'autoFallback': autoFallback,
     'startTimeoutSeconds': startTimeoutSeconds,
     'hardwareDecoding': hardwareDecoding.name,

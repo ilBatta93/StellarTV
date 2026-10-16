@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,7 @@ import 'package:stellar_tv/providers/app_provider.dart';
 import 'package:stellar_tv/providers/ui_settings.dart';
 import 'package:stellar_tv/screens/multiview_screen.dart';
 import 'package:stellar_tv/theme/app_theme.dart';
+
 import 'october_live_multiview_test.dart' as fixtures;
 
 class FakeEngine extends PlaybackEngine {
@@ -175,9 +177,8 @@ void main() {
               format: ui.ImageByteFormat.png,
             );
             if (bytes != null)
-              await File(
-                '/tmp/stv/multiview-${size.width.toInt()}.png',
-              ).writeAsBytes(bytes.buffer.asUint8List());
+              await File('/tmp/stv/multiview-${size.width.toInt()}.png')
+                  .writeAsBytes(bytes.buffer.asUint8List());
             image.dispose();
           });
         }
@@ -216,7 +217,8 @@ void main() {
         await tester.binding.handlePopRoute();
         await tester.pumpAndSettle();
         expect(find.byType(MultiViewScreen), findsNothing);
-        await tester.pump(const Duration(milliseconds: 400));
+        // Release: unmount, free the player, then the provider pause.
+        await tester.pump(const Duration(milliseconds: 1200));
         expect(engines.every((e) => e.volume == 0 && e.disposed), true);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
