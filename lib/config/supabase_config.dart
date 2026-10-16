@@ -4,9 +4,9 @@ class SupabaseConfig {
 
   /// Proxy TMDB (Top 10 / Scopri) ospitato sul nuovo cloud.
   static const tmdbProxyUrl =
-      'https://playbox-discover.lovable.app/api/public/tmdb';
+      'https://stellartv.lovable.app/api/public/tmdb';
 
   /// Base dei servizi dell'app (filtro bambini, risoluzione IMDb).
   static const apiBase =
-      'https://playbox-discover.lovable.app/api/public';
+      'https://stellartv.lovable.app/api/public';
 }
