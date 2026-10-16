@@ -67,8 +67,13 @@ class _SplashScreenState extends State<SplashScreen>
     // device. Run once per launch, then continue navigating.
     // Every device needs a StellarTV account: it is what syncs the data.
     if (!sync.isSignedIn) {
-      _navigate(const AccountScreen());
-      return;
+      // Guest mode: the user chose to use this device without an account.
+      final guest = await AccountScreen.isGuest();
+      if (!mounted) return;
+      if (!guest) {
+        _navigate(const AccountScreen());
+        return;
+      }
     }
 
     if (!_cloudChecked) {
