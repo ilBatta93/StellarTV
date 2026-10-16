@@ -16,6 +16,7 @@ class MediaKitEngine extends PlaybackEngine {
     required PlayerSettings settings,
     this.isLive = false,
     this.previewMode = false,
+    this.softwareDecode = false,
   }) : _settings = settings,
        _player = Player(
          configuration: PlayerConfiguration(
@@ -31,10 +32,11 @@ class MediaKitEngine extends PlaybackEngine {
       _player,
       configuration: VideoControllerConfiguration(
         enableHardwareAcceleration:
+            !softwareDecode &&
             settings.hardwareDecoding != HardwareDecoding.disabled,
         // hwdec must be given here: the controller applies its own value
         // asynchronously and silently overrode the one set at open.
-        hwdec: _hwdec(settings.hardwareDecoding),
+        hwdec: softwareDecode ? 'no' : _hwdec(settings.hardwareDecoding),
         vo: null,
       ),
     );
@@ -80,7 +82,13 @@ class MediaKitEngine extends PlaybackEngine {
           : isLive
           ? (DeviceTypeService.isFireTv ? '6' : '3')
           : '20',
-      'vd-lavc-fast': DeviceTypeService.isFireTv ? 'yes' : 'no',
+      'vd-lavc-fast': (DeviceTypeService.isFireTv || softwareDecode)
+          ? 'yes'
+          : 'no',
+      // Software decoding of broadcast 1080i: cheap deinterlacing, skip the
+      // loop filter so weak TV CPUs keep up.
+      if (softwareDecode) 'deinterlace': 'yes',
+      if (softwareDecode) 'vd-lavc-skiploopfilter': 'nonref',
       'audio-buffer': isLive ? '0.5' : '0.2',
       'framedrop': _settings.dropLateFrames ? 'vo' : 'no',
       'cache-pause-initial': 'no',
@@ -95,6 +103,10 @@ class MediaKitEngine extends PlaybackEngine {
 
   final bool isLive;
   final bool previewMode;
+
+  /// FFmpeg decoding on the CPU: used when the TV's hardware decoder gave
+  /// audio with a black picture (MPEG-2 / interlaced broadcast channels).
+  final bool softwareDecode;
   final PlayerSettings _settings;
   final String url;
   late final Player _player;
@@ -218,8 +230,10 @@ class MediaKitEngine extends PlaybackEngine {
           'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,'
           'reconnect_delay_max=5',
       'demuxer-lavf-o': 'fflags=+discardcorrupt+genpts',
-      'demuxer-lavf-probesize': isLive ? '5000000' : '10000000',
-      'demuxer-lavf-analyzeduration': isLive ? '3' : '5',
+      // Enough to find the video stream of an MPEG-TS channel without
+      // making the first picture wait several seconds.
+      'demuxer-lavf-probesize': isLive ? '2000000' : '10000000',
+      'demuxer-lavf-analyzeduration': isLive ? '2' : '5',
       'demuxer-lavf-probe-info': 'auto',
       'hls-bitrate': 'max',
       if (isLive)

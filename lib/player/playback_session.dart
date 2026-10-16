@@ -71,7 +71,17 @@ class PlaybackSession extends ChangeNotifier {
       return [url];
     }
     final base = '${m[1]}/live/${m[2]}/${m[3]}/${m[4]}';
-    return {'$base.m3u8', '$base.ts', url}.toList();
+    // The provider's own address first (most Xtream servers deliver live
+    // channels as native MPEG-TS; forcing HLS caused transcoding, audio with
+    // a black picture and a second connection refused by the server). Only
+    // addresses missing the `/live/` segment (HTTP 404) are rewritten.
+    final original = url.trim();
+    return {
+      if (original.contains('/live/')) original,
+      '$base.ts',
+      '$base.m3u8',
+      original,
+    }.toList();
   }
 
   /// Engine used by preview/MultiView tiles: ExoPlayer on Android (Java,
@@ -94,6 +104,7 @@ class PlaybackSession extends ChangeNotifier {
   bool _disposed = false;
   int _serverRefusalRetries = 0;
   int _reconnects = 0;
+  bool _softwareDecode = false;
   List<_Attempt> _plan = const [];
   int _attempt = 0;
   Future<void> _releasing = Future<void>.value();
@@ -174,6 +185,7 @@ class PlaybackSession extends ChangeNotifier {
           settings: settings,
           isLive: isLive,
           previewMode: previewMode,
+          softwareDecode: _softwareDecode,
         ),
         PlayerEngineType.fvp => FvpEngine(
           url: address,
@@ -394,6 +406,28 @@ class PlaybackSession extends ChangeNotifier {
           'Il server TV ha rifiutato la connessione. Verifica che non ci '
           'siano altri dispositivi collegati con lo stesso abbonamento e riprova.';
       _notify();
+      return;
+    }
+
+    // Audio but no picture: the TV's hardware decoder cannot draw this
+    // video (MPEG-2, interlaced 1080i...). Another address would give the
+    // same codec, so go straight to mpv with FFmpeg software decoding, which
+    // decodes every broadcast codec. Done once per session.
+    if (reason.contains('schermo nero') && !_softwareDecode) {
+      _softwareDecode = true;
+      final address = _currentUrl.isEmpty ? _candidates.first : _currentUrl;
+      _plan = [
+        _Attempt(PlayerEngineType.mediakit, address),
+        for (final u in _candidates)
+          if (u != address) _Attempt(PlayerEngineType.mediakit, u),
+      ];
+      _attempt = 0;
+      _reconnects = 0;
+      _status = SessionStatus.switching;
+      _notice = 'Video non supportato dal decoder della TV. '
+          'Passo alla decodifica software...';
+      _notify();
+      await _openAttempt(resumeAt: resumeAt);
       return;
     }
 
