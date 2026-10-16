@@ -24,7 +24,7 @@ class AppRelease {
 /// Checks GitHub Releases for a newer APK, downloads it and opens the
 /// Android installer. Android only; every step is remote-friendly.
 class AppUpdateService {
-  static const String _repo = 'ilBatta93/StellarTV';
+  static const String _repo = 'ilBatta93/StellarTV-releases';
   static const String _defined = String.fromEnvironment('APP_VERSION');
   static const MethodChannel _device = MethodChannel('stellartv/device');
 
