@@ -154,6 +154,39 @@ void main() {
     expect(_FakeEngine.alive, 0);
   });
 
+  test('MultiView tile moves to mpv on the same address right after '
+      'ExoPlayer fails', () async {
+    final opened = <String>[];
+    late PlaybackSession session;
+    session = PlaybackSession(
+      url: _xtream,
+      isLive: true,
+      previewMode: true,
+      previewFallback: true,
+      settings: PlayerSettings(primaryEngine: PlayerEngineType.exo),
+      engineFactory: (type) {
+        opened.add('${type.name} ${session.currentUrl}');
+        return _FakeEngine(
+          type,
+          session.currentUrl,
+          succeed: type == PlayerEngineType.mediakit,
+        );
+      },
+    );
+    await (() async {
+      session.start();
+      await Future<void>.delayed(const Duration(seconds: 4));
+    })();
+    expect(opened.take(2).toList(), [
+      'exo http://tv.example.com/live/user/pass/42.m3u8',
+      'mediakit http://tv.example.com/live/user/pass/42.m3u8',
+    ]);
+    expect(session.status, SessionStatus.playing);
+    expect(_FakeEngine.maxAlive, 1);
+    session.dispose();
+    await session.released;
+  });
+
   test(
     'repeated errors of the same player trigger one recovery only',
     () async {

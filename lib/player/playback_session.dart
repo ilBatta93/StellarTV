@@ -155,6 +155,17 @@ class PlaybackSession extends ChangeNotifier {
   /// Every address with [primary] first; then, when allowed, every address
   /// with the fallback engine. Previews never change engine.
   List<_Attempt> _buildPlan(PlayerEngineType primary, {bool fallback = true}) {
+    // MultiView: when the TV runs out of hardware decoders a second address
+    // would fail the same way, so each address is tried with ExoPlayer and
+    // then at once with mpv before moving on.
+    if (fallback && previewMode && previewFallback && primary.other != primary) {
+      return [
+        for (final u in _candidates) ...[
+          _Attempt(primary, u),
+          _Attempt(primary.other, u),
+        ],
+      ];
+    }
     final plan = [for (final u in _candidates) _Attempt(primary, u)];
     final other = primary.other;
     if (fallback &&
@@ -203,7 +214,11 @@ class PlaybackSession extends ChangeNotifier {
   PlaybackEngine _create(PlayerEngineType type, String address) =>
       engineFactory?.call(type) ??
       switch (type) {
-        PlayerEngineType.exo => ExoEngine(url: address, settings: settings),
+        PlayerEngineType.exo => ExoEngine(
+          url: address,
+          settings: settings,
+          shared: previewMode,
+        ),
         PlayerEngineType.mediakit => MediaKitEngine(
           url: address,
           settings: settings,

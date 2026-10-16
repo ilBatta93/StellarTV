@@ -7,8 +7,16 @@ import '../models/player_settings.dart';
 import 'playback_engine.dart';
 
 class ExoEngine extends PlaybackEngine {
-  ExoEngine({required String url, required PlayerSettings settings})
-    : _controller = VideoPlayerController.networkUrl(
+  /// [shared] is for MultiView and the Live preview: several players run at
+  /// once, so this one must not take Android's audio focus (which pauses
+  /// every other ExoPlayer) and reports a black picture sooner so the tile
+  /// can move to mpv software decoding.
+  ExoEngine({
+    required String url,
+    required PlayerSettings settings,
+    bool shared = false,
+  }) : _blackStrikes = shared ? 2 : 3,
+       _controller = VideoPlayerController.networkUrl(
         Uri.parse(url),
         formatHint: _formatHint(url),
         httpHeaders: {
@@ -17,6 +25,9 @@ class ExoEngine extends PlaybackEngine {
               : settings.userAgent.trim(),
         },
         videoPlayerOptions: VideoPlayerOptions(
+          // Without this every new player steals the audio focus and
+          // Android pauses the others: the MultiView tiles froze.
+          mixWithOthers: shared,
           allowBackgroundPlayback: settings.backgroundAudio,
           preventsDisplaySleepDuringVideoPlayback: settings.keepScreenOn,
           backBufferDurationMs: settings.backBufferSeconds * 1000,
@@ -28,6 +39,7 @@ class ExoEngine extends PlaybackEngine {
       );
 
   final VideoPlayerController _controller;
+  final int _blackStrikes;
   final Map<String, VideoTrack> _videoTracks = {};
   PlaybackSnapshot _value = const PlaybackSnapshot();
   bool _disposed = false;
@@ -127,7 +139,7 @@ class ExoEngine extends PlaybackEngine {
       }
       if (!v.isPlaying || v.isBuffering) return;
       strikes++;
-      if (strikes >= 3) {
+      if (strikes >= _blackStrikes) {
         _blackWatch?.cancel();
         _blackError = 'Nessuna immagine dal flusso (schermo nero)';
         _sync();

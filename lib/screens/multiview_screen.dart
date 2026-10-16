@@ -23,6 +23,18 @@ class _Slot {
   final Channel channel;
   final PlaybackSession session;
   final focus = FocusNode();
+
+  /// Keeps the tile's player alive when the layout changes (rows/columns
+  /// rebuild): without it the video view was recreated and went black.
+  final viewKey = GlobalKey();
+
+  // Per-tile health, used by the MultiView watchdog.
+  Duration? lastPosition;
+  DateTime? stallSince;
+  DateTime? playingSince;
+  DateTime? retryAt;
+  int autoRetries = 0;
+
   void dispose() {
     session.dispose();
     focus.dispose();
@@ -50,6 +62,69 @@ class _MultiViewScreenState extends State<MultiViewScreen>
   bool _modal = false;
   bool _adding = false;
   bool _closed = false;
+  Timer? _watchdog;
+
+  /// Every second: resumes tiles paused by the system, restarts a tile whose
+  /// picture is frozen and retries a failed tile on its own, without
+  /// touching the others.
+  void _tick() {
+    if (!mounted || _background || _closed) return;
+    final now = DateTime.now();
+    for (final slot in List.of(_slots)) {
+      final session = slot.session;
+      if (session.status == SessionStatus.failed) {
+        _autoRetry(slot, now);
+        continue;
+      }
+      if (session.status != SessionStatus.playing) {
+        slot.stallSince = null;
+        slot.lastPosition = null;
+        continue;
+      }
+      slot.retryAt = null;
+      slot.playingSince ??= now;
+      if (now.difference(slot.playingSince!) > const Duration(seconds: 30)) {
+        slot.autoRetries = 0;
+      }
+      final v = session.value;
+      if (!v.isPlaying && !v.isEnded) unawaited(session.ensurePlaying());
+      if (v.position != slot.lastPosition) {
+        slot.lastPosition = v.position;
+        slot.stallSince = now;
+        continue;
+      }
+      slot.stallSince ??= now;
+      if (now.difference(slot.stallSince!) > const Duration(seconds: 12)) {
+        _restart(slot);
+      }
+    }
+  }
+
+  void _restart(_Slot slot) {
+    slot
+      ..stallSince = null
+      ..lastPosition = null
+      ..playingSince = null;
+    unawaited(slot.session.retry().then((_) => _syncAudio()));
+  }
+
+  void _autoRetry(_Slot slot, DateTime now) {
+    final limit = _connectionLimit(slot) ? 1 : 3;
+    if (slot.autoRetries >= limit) return;
+    final at = slot.retryAt;
+    if (at == null) {
+      slot.retryAt = now.add(Duration(seconds: 4 + 4 * slot.autoRetries));
+      return;
+    }
+    if (now.isBefore(at)) return;
+    slot
+      ..retryAt = null
+      ..autoRetries += 1;
+    _restart(slot);
+  }
+
+  bool _connectionLimit(_Slot slot) =>
+      (slot.session.error ?? '').contains('connessioni simultanee');
 
   @override
   void initState() {
@@ -63,6 +138,7 @@ class _MultiViewScreenState extends State<MultiViewScreen>
     });
     _app.setPlaybackActive(true);
     _app.addListener(_checkAllowed);
+    _watchdog = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -111,9 +187,11 @@ class _MultiViewScreenState extends State<MultiViewScreen>
       return;
     }
     // Isolated settings, no timeshift allocation for parallel tiles.
+    // Small buffers: several streams share the TV's memory and network.
     final settings = PlayerSettings.fromJson(saved.toJson())
       ..audioPassthrough = false
-      ..backgroundAudio = false;
+      ..backgroundAudio = false
+      ..backBufferSeconds = 0;
     final session = PlaybackSession(
       url: channel.url,
       isLive: true,
@@ -247,21 +325,30 @@ class _MultiViewScreenState extends State<MultiViewScreen>
     );
   }
 
-  Widget _tile(_Slot slot) => TvFocusable(
+  void _activate(_Slot slot) {
+    _select(slot);
+    if (slot.session.status == SessionStatus.failed) {
+      slot.autoRetries = 0;
+      _restart(slot);
+      return;
+    }
+    setState(() => _expanded = _expanded == slot ? null : slot);
+  }
+
+  Widget _tile(_Slot slot) => KeyedSubtree(
+    key: slot.viewKey,
+    child: _tileBody(slot),
+  );
+
+  Widget _tileBody(_Slot slot) => TvFocusable(
     focusNode: slot.focus,
     focusedScale: 1,
     onFocusChange: (focused) {
       if (focused) _select(slot);
     },
-    onPressed: () {
-      _select(slot);
-      setState(() => _expanded = _expanded == slot ? null : slot);
-    },
+    onPressed: () => _activate(slot),
     child: GestureDetector(
-      onTap: () {
-        _select(slot);
-        setState(() => _expanded = _expanded == slot ? null : slot);
-      },
+      onTap: () => _activate(slot),
       child: DecoratedBox(
         decoration: BoxDecoration(
           border: Border.all(
@@ -283,7 +370,11 @@ class _MultiViewScreenState extends State<MultiViewScreen>
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Text(
-                            'Canale non disponibile\nIl provider o il dispositivo potrebbe limitare le riproduzioni simultanee.',
+                            _connectionLimit(slot)
+                                ? 'Il provider IPTV non consente più connessioni simultanee.\nPremi OK per riprovare.'
+                                : slot.autoRetries < 3
+                                ? 'Canale interrotto, nuovo tentativo tra poco...'
+                                : 'Canale non disponibile.\nPremi OK per riprovare.',
                             textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
@@ -476,6 +567,7 @@ class _MultiViewScreenState extends State<MultiViewScreen>
   @override
   void dispose() {
     _closed = true;
+    _watchdog?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _app.removeListener(_checkAllowed);
     _audio.dispose();
