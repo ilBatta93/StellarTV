@@ -11,10 +11,21 @@ permissions:
 jobs:
   build-and-release:
     name: Build & Release Android APK
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     steps:
+      - name: Libera spazio sul disco
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/node_modules /opt/ghc /usr/local/.ghcup \
+            /usr/share/swift /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/powershell /usr/local/share/chromium /opt/microsoft /opt/google \
+            /usr/lib/jvm/temurin-8* /usr/lib/jvm/temurin-11* || true
+          sudo docker image prune --all --force || true
+          sudo apt-get clean || true
+          df -h /
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -23,7 +34,6 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
       - name: Setup Flutter (stable)
         uses: subosito/flutter-action@v2
@@ -39,10 +49,13 @@ jobs:
           flutter pub get
 
       - name: Build APK (Release)
+        env:
+          GRADLE_OPTS: -Dorg.gradle.daemon=false
         run: |
           flutter build apk --release \
             --build-name="3.0.${{ github.run_number }}" \
             --build-number=${{ github.run_number }}
+          df -h /
 
       - name: Prepara APK per Release
         run: |
