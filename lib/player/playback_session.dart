@@ -121,6 +121,10 @@ class PlaybackSession extends ChangeNotifier {
   bool _disposed = false;
   int _serverRefusalRetries = 0;
   int _reconnects = 0;
+
+  /// When the current player started playing: a drop after a long stable
+  /// stretch is a new incident, so the reconnect budget is refilled.
+  DateTime? _playingSince;
   bool _softwareDecode = false;
   List<_Attempt> _plan = const [];
   int _attempt = 0;
@@ -279,6 +283,7 @@ class PlaybackSession extends ChangeNotifier {
     _shift = Duration.zero;
     _pausedAt = null;
     _liveStartedAt = isLive ? DateTime.now() : null;
+    _playingSince = DateTime.now();
     _notify();
     try {
       await _applyInitialState(engine, resumeAt, gen);
@@ -400,6 +405,13 @@ class PlaybackSession extends ChangeNotifier {
   }) async {
     if (_disposed || gen != _generation || _failedGeneration == gen) return;
     _failedGeneration = gen;
+    final since = _playingSince;
+    if (midPlay &&
+        since != null &&
+        DateTime.now().difference(since) > const Duration(seconds: 15)) {
+      _reconnects = 0;
+      _serverRefusalRetries = 0;
+    }
     final failed = _plan.isEmpty
         ? settings.primaryEngine
         : _plan[_attempt.clamp(0, _plan.length - 1)].engine;
