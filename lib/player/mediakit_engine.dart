@@ -70,9 +70,15 @@ class MediaKitEngine extends PlaybackEngine {
       'interpolation': 'no',
       'video-sync': 'audio',
       'cache': 'yes',
-      'demuxer-readahead-secs': isLive
-          ? (DeviceTypeService.isFireTv ? '3' : '1')
+      // Fire TV stuttered with a 3 s read-ahead on live: a deeper window
+      // absorbs provider jitter; previews stay short to start quickly.
+      'demuxer-readahead-secs': previewMode
+          ? '1'
+          : isLive
+          ? (DeviceTypeService.isFireTv ? '6' : '3')
           : '20',
+      'vd-lavc-fast': DeviceTypeService.isFireTv ? 'yes' : 'no',
+      'audio-buffer': isLive ? '0.5' : '0.2',
       'framedrop': _settings.dropLateFrames ? 'vo' : 'no',
       'cache-pause-initial': 'no',
       'vd-lavc-threads': '0',
@@ -191,8 +197,90 @@ class MediaKitEngine extends PlaybackEngine {
     }
   }
 
+  /// IPTV/Xtream network and demuxer options for every device: reconnects
+  /// on drops, tolerates corrupt MPEG-TS packets and probes long enough to
+  /// find the video stream (a short probe was a cause of audio with a
+  /// black picture on live channels).
+  Future<void> _tuneNetwork(String ua) async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return;
+    final options = {
+      'user-agent': ua,
+      'network-timeout': '20',
+      'tls-verify': 'no',
+      'stream-lavf-o':
+          'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,'
+          'reconnect_delay_max=5',
+      'demuxer-lavf-o': 'fflags=+discardcorrupt+genpts',
+      'demuxer-lavf-probesize': isLive ? '5000000' : '10000000',
+      'demuxer-lavf-analyzeduration': isLive ? '3' : '5',
+      'demuxer-lavf-probe-info': 'auto',
+      'hls-bitrate': 'max',
+      'vd-lavc-dr': 'yes',
+      'hwdec': _hwdec(_settings.hardwareDecoding),
+      'hwdec-codecs': 'all',
+      if (isLive)
+        'demuxer-max-bytes': '${DeviceTypeService.isFireTv ? 48 : 96}MiB',
+    };
+    for (final entry in options.entries) {
+      try {
+        await platform.setProperty(entry.key, entry.value);
+      } catch (_) {}
+    }
+  }
+
+  /// "mediacodec" (zero-copy) renders black on several Fire TV/Android TV
+  /// GPUs with live MPEG-TS; the copy variant keeps hardware decoding but
+  /// always reaches the screen.
+  static String _hwdec(HardwareDecoding mode) => switch (mode) {
+    HardwareDecoding.disabled => 'no',
+    HardwareDecoding.full => 'mediacodec,mediacodec-copy,auto-safe',
+    _ => 'mediacodec-copy,auto-safe',
+  };
+
+  Timer? _blackWatch;
+  int _blackStage = 0;
+
+  /// Audio playing but no video frame size after a few seconds = black
+  /// screen: switch decoder (copy hardware → software) instead of leaving
+  /// the viewer in front of a black picture.
+  void _watchBlackScreen() {
+    _blackWatch?.cancel();
+    _blackWatch = Timer.periodic(const Duration(seconds: 4), (_) async {
+      if (_disposed) return _blackWatch?.cancel();
+      final st = _player.state;
+      final hasVideoTrack = st.tracks.video.any(
+        (t) => t.id != 'auto' && t.id != 'no',
+      );
+      final hasFrame = (st.width ?? 0) > 0 && (st.height ?? 0) > 0;
+      if (hasFrame || !hasVideoTrack) {
+        if (hasFrame) _blackWatch?.cancel();
+        return;
+      }
+      if (!st.playing || st.position <= const Duration(seconds: 2)) return;
+      final platform = _player.platform;
+      if (platform is! NativePlayer || _blackStage >= 2) {
+        _blackWatch?.cancel();
+        return;
+      }
+      _blackStage++;
+      try {
+        await platform.setProperty(
+          'hwdec',
+          _blackStage == 1 ? 'mediacodec-copy' : 'no',
+        );
+        if (_blackStage == 2) {
+          await platform.setProperty('vd-lavc-fast', 'yes');
+          await platform.setProperty('vd-lavc-skiploopfilter', 'nonkey');
+        }
+      } catch (_) {}
+    });
+  }
+
   @override
   Future<void> open({double initialVolume = 1}) async {
+    final configuredUa = _settings.userAgent.trim();
+    await _tuneNetwork(configuredUa.isEmpty ? 'StellarTV/1.0' : configuredUa);
     if (DeviceTypeService.isTv) await _tuneForTv();
     if (isLive && !previewMode) await _enableTimeshift();
     await _player.setVolume(initialVolume.clamp(0.0, 1.0) * 100);
@@ -208,6 +296,7 @@ class MediaKitEngine extends PlaybackEngine {
       throw PlaybackException('$e');
     }
     await _player.setRate(isLive ? 1.0 : _settings.defaultSpeed);
+    _watchBlackScreen();
     await _playing!.future.timeout(
       Duration(seconds: _settings.startTimeoutSeconds + 5),
       onTimeout: () =>
@@ -336,6 +425,7 @@ class MediaKitEngine extends PlaybackEngine {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    _blackWatch?.cancel();
     await _player.dispose();
     super.dispose();
   }

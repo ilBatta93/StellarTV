@@ -29,7 +29,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Every new TV control must be a TvFocusable stop reachable with the D-Pad: the app is used with a remote only.
 
 - Reactions use timestamped per-profile entries with neutral tombstones inside the existing authenticated settings snapshot, so cloud merges preserve reversals and profile privacy without a second sync path.
-- Episode presentation is a shared fixed-width horizontal card with separate playback/download/watched stops; the player episode picker owns modal focus and retires the old connection before episode replacement.
+- Episode presentation is a shared fixed-width horizontal card with separate playback/download/watched stops; the player episode picker owns modal focus, shows history progress/watched state, steps Back from episodes to seasons before closing, and retires the old connection before episode replacement.
 - Live previews are audible, focus-debounced, active-tab gated and silenced before retirement on route pushes or backgrounding, so hidden tabs cannot compete with playback.
 - Playback engines receive initial volume before playing, and session disposal silences then retires native resources after surfaces unmount to avoid overlapping audio and disposed handles.
 - MultiView owns an isolated session per tile, serial mute-before-unmute audio ownership, bounded preview buffers and shared persisted layout preferences; its picker rechecks catalog and Kids permissions before opening streams.
@@ -39,4 +39,6 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Secondary pages share ApplePageScaffold with bounded readable widths and their original scroll/focus bodies; shared theme and controls own Apple styling so no playback or sync logic is duplicated.
 - TV focus respects the animation setting and system reduced motion, uses one high-contrast stop per action, and avoids blur filters on video or catalog surfaces to preserve low-powered TV performance.
 
-- TV live guide rows and the preview expose catalog boundary markers: Up reaches tools from the first row or preview, then the shared menu; channel logos reuse the bounded disk image cache without adding focus stops.
+- TV live guide rows and the preview expose catalog boundary markers: Up reaches tools from the first row or preview, then the shared menu; Down from tools skips items marked non-entry (the preview) to land on channels; channel logos reuse the bounded disk image cache without adding focus stops.
+- Live previews release through a serialized queue that waits for the pending open before disposing, so two native decoders never overlap while browsing channels.
+- Three engines (mpv, MDK via fvp used directly without registering as video_player, ExoPlayer) share PlaybackEngine; automatic fallback walks PlayerEngineType.other over untried engines; mpv watches for audio-without-frames and downgrades hwdec.

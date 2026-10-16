@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../services/device_type_service.dart';
 
 /// The menu owns its nodes; catalog sections only request a return to it.
@@ -18,9 +19,14 @@ class TvCatalogItem extends StatelessWidget {
     required this.index,
     required this.columns,
     required this.child,
+    this.entry = true,
   });
   final int index;
   final int columns;
+
+  /// False for side widgets (e.g. the Live preview) that must not receive
+  /// focus when Down enters the list from the toolbar.
+  final bool entry;
   final Widget child;
   @override
   Widget build(BuildContext context) => child;
@@ -53,10 +59,19 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
   }
 
   void _first(FocusScopeNode scope) {
-    final nodes = scope.traversalDescendants.where(
-      (n) => n.canRequestFocus && !n.skipTraversal,
-    );
-    final ordered = nodes.toList()
+    final all = scope.traversalDescendants
+        .where((n) => n.canRequestFocus && !n.skipTraversal)
+        .toList();
+    final entries = all
+        .where(
+          (n) =>
+              n.context
+                  ?.findAncestorWidgetOfExactType<TvCatalogItem>()
+                  ?.entry !=
+              false,
+        )
+        .toList();
+    final ordered = (entries.isEmpty ? all : entries)
       ..sort((a, b) {
         final ar = a.context?.findRenderObject(),
             br = b.context?.findRenderObject();

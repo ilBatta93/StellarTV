@@ -1,3 +1,6 @@
+- [x] Ottobre 16: MPV dirette (codec FFmpeg completi, decodifica sicura anti schermo nero, buffer Fire TV), terzo motore MDK, Diretta senza chiusure, icone→canali, MultiView nel player, lista episodi Apple con progresso e Back a due livelli
+- [ ] Ottobre 16: prova su TV reale di MPV/MDK (serve build Codemagic)
+
 # Roadmap
 
 - [x] Promemoria scadenza Xtream, sync cloud istantanea, cache voti condivisa, cache immagini unica, filtri memorizzati

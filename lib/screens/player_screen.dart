@@ -6,9 +6,11 @@ import 'package:provider/provider.dart';
 
 import '../models/channel.dart';
 import '../models/content_type.dart';
+import '../models/history_entry.dart';
 import '../models/player_settings.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
+import 'multiview_screen.dart';
 import '../providers/epg_provider.dart';
 import '../player/playback_session.dart';
 import '../providers/history_provider.dart';
@@ -28,6 +30,7 @@ import '../widgets/player/player_stats.dart';
 import '../widgets/player/subtitle_overlay.dart';
 import '../widgets/player/tv_player_controls.dart';
 import '../widgets/player/video_surface.dart';
+import '../widgets/poster_card.dart';
 import '../widgets/tv_focusable.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -592,6 +595,13 @@ class _PlayerScreenState extends State<PlayerScreen>
             label: 'Stagioni ed episodi',
             onPressed: _openEpisodes,
           ),
+        if (_isLive)
+          TvPlayerAction(
+            id: 'multiview',
+            icon: Icons.grid_view_rounded,
+            label: 'MultiView',
+            onPressed: _openMultiView,
+          ),
         if (engine != null)
           TvPlayerAction(
             id: 'engine',
@@ -854,6 +864,27 @@ class _PlayerScreenState extends State<PlayerScreen>
     });
   }
 
+  /// Live only: releases this stream (single-connection providers) and
+  /// replaces the player with MultiView, starting from the current channel.
+  Future<void> _openMultiView() async {
+    if (!_isLive || _advancing) return;
+    _advancing = true;
+    _hideTimer?.cancel();
+    final previous = _session;
+    previous?.removeListener(_onSessionChanged);
+    setState(() => _session = null);
+    previous?.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    if (!mounted) return;
+    unawaited(
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => MultiViewScreen(initialChannel: widget.channel),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openEpisodes() async {
     if (!_isEpisode) return;
     _hideTimer?.cancel();
@@ -863,6 +894,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       barrierColor: AppColors.background.withValues(alpha: 0.2),
       builder: (_) => _EpisodePicker(
         current: widget.channel,
+        entryFor: _history.entryFor,
         load: () async {
           await _resolveQueue();
           final app = _app;
@@ -1363,12 +1395,11 @@ class _PlayerScreenState extends State<PlayerScreen>
           if (_activePlayers == 0) _bridge.setOrientation('landscape');
         });
       } else {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-        ]).then((_) {
-          // Re-check: a new player may have opened meanwhile.
-          if (_activePlayers == 0) _bridge.setOrientation('portrait');
-        });
+        SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp])
+            .then((_) {
+              // Re-check: a new player may have opened meanwhile.
+              if (_activePlayers == 0) _bridge.setOrientation('portrait');
+            });
       }
     }
     super.dispose();
@@ -1504,6 +1535,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 onBack: () => Navigator.pop(context),
                 onOpenTitle: _isLive ? null : _openTitle,
                 onEpisodes: _isEpisode ? _openEpisodes : null,
+                onMultiView: _isLive ? _openMultiView : null,
                 onPip: _enterPip,
                 onMenu: _openMenu,
                 onToggleLock: () {
@@ -1850,7 +1882,12 @@ class _FailureView extends StatelessWidget {
 class _EpisodePicker extends StatefulWidget {
   final Channel current;
   final Future<List<Channel>> Function() load;
-  const _EpisodePicker({required this.current, required this.load});
+  final HistoryEntry? Function(String id) entryFor;
+  const _EpisodePicker({
+    required this.current,
+    required this.load,
+    required this.entryFor,
+  });
   @override
   State<_EpisodePicker> createState() => _EpisodePickerState();
 }
@@ -1859,6 +1896,10 @@ class _EpisodePickerState extends State<_EpisodePicker> {
   late final Future<List<Channel>> _episodes;
   late int _season;
   final _first = FocusNode(debugLabel: 'episode panel first');
+  final _seasonNodes = <int, FocusNode>{};
+  int _seasonCount = 0;
+  bool _inEpisodes = true;
+
   @override
   void initState() {
     super.initState();
@@ -1869,140 +1910,346 @@ class _EpisodePickerState extends State<_EpisodePicker> {
   @override
   void dispose() {
     _first.dispose();
+    for (final n in _seasonNodes.values) {
+      n.dispose();
+    }
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerRight,
-    child: SizedBox(
-      width: MediaQuery.sizeOf(context).width < 480
-          ? MediaQuery.sizeOf(context).width * .94
-          : 460,
-      height: MediaQuery.sizeOf(context).height,
-      child: Material(
-        color: AppColors.surface,
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: FocusTraversalGroup(
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          widget.current.displaySeriesName,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleLarge,
+  FocusNode _seasonNode(int season) => _seasonNodes.putIfAbsent(
+    season,
+    () => FocusNode(debugLabel: 'episode panel season $season'),
+  );
+
+  /// Back: from the episode list to the seasons (when there is more than
+  /// one), then a second Back closes the panel and resumes playback.
+  void _back() {
+    if (_inEpisodes && _seasonCount > 1) {
+      _seasonNodes[_season]?.requestFocus();
+      setState(() => _inEpisodes = false);
+      return;
+    }
+    Navigator.pop(context);
+  }
+
+  Widget _episodeRow(Channel episode, int i, int season) {
+    final current = episode.id == widget.current.id;
+    final entry = widget.entryFor(episode.id);
+    final watched = entry?.isWatched ?? false;
+    final progress = watched ? null : entry?.progress;
+    final number = episode.episode ?? i + 1;
+    final image = episode.logo.isNotEmpty ? episode.logo : widget.current.logo;
+    return TvFocusable(
+      focusNode: i == 0 ? _first : null,
+      autofocus: current || (i == 0 && season != (widget.current.season ?? 1)),
+      focusedScale: 1.02,
+      onFocusChange: (f) {
+        if (f && !_inEpisodes) setState(() => _inEpisodes = true);
+      },
+      onPressed: () => Navigator.pop(context, episode),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => Navigator.pop(context, episode),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: current
+                ? AppColors.primary.withValues(alpha: 0.14)
+                : AppColors.card.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: current
+                  ? AppColors.primary.withValues(alpha: 0.6)
+                  : AppColors.border.withValues(alpha: 0.6),
+            ),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 150,
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        PosterImage(
+                          url: image,
+                          fallbackIcon: Icons.movie_outlined,
                         ),
-                      ),
-                      TvFocusable(
-                        onPressed: () => Navigator.pop(context),
-                        child: IconButton(
-                          tooltip: 'Chiudi episodi',
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                      ),
-                    ],
+                        if (current)
+                          const ColoredBox(
+                            color: AppColors.overlay,
+                            child: Center(
+                              child: Icon(
+                                Icons.graphic_eq_rounded,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        if (watched)
+                          Positioned(
+                            top: 6,
+                            right: 6,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(
+                                color: AppColors.success,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.check_rounded,
+                                size: 14,
+                                color: AppColors.background,
+                              ),
+                            ),
+                          ),
+                        if (progress != null)
+                          Positioned(
+                            left: 8,
+                            right: 8,
+                            bottom: 6,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(
+                                value: progress,
+                                minHeight: 3,
+                                color: AppColors.primary,
+                                backgroundColor: AppColors.track,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: FutureBuilder<List<Channel>>(
-                      future: _episodes,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState != ConnectionState.done) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        }
-                        final all = snapshot.data ?? const <Channel>[];
-                        if (all.isEmpty)
-                          return const Center(
-                            child: Text('Episodi non disponibili'),
-                          );
-                        final seasons =
-                            all.map((c) => c.season ?? 1).toSet().toList()
-                              ..sort();
-                        final selectedSeason = seasons.contains(_season)
-                            ? _season
-                            : seasons.first;
-                        final episodes = all
-                            .where((c) => (c.season ?? 1) == selectedSeason)
-                            .toList();
-                        return Column(
-                          children: [
-                            SizedBox(
-                              height: 56,
-                              child: ListView.separated(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: seasons.length,
-                                separatorBuilder: (_, _) =>
-                                    const SizedBox(width: 8),
-                                itemBuilder: (context, i) => TvFocusable(
-                                  onPressed: () {
-                                    setState(() => _season = seasons[i]);
-                                    WidgetsBinding.instance
-                                        .addPostFrameCallback((_) {
-                                          if (mounted) _first.requestFocus();
-                                        });
-                                  },
-                                  child: ChoiceChip(
-                                    label: Text('Stagione ${seasons[i]}'),
-                                    selected: selectedSeason == seasons[i],
-                                    onSelected: (_) =>
-                                        setState(() => _season = seasons[i]),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'EPISODIO $number',
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                        letterSpacing: 0.8,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      episode.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                        height: 1.2,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      current
+                          ? 'In riproduzione'
+                          : watched
+                          ? 'Visto'
+                          : progress != null
+                          ? 'Visto al ${(progress * 100).round()}%'
+                          : 'S$season · E$number',
+                      style: TextStyle(
+                        color: current
+                            ? AppColors.primary
+                            : watched
+                            ? AppColors.success
+                            : AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: false,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) _back();
+    },
+    child: Align(
+      alignment: Alignment.centerRight,
+      child: SizedBox(
+        width: MediaQuery.sizeOf(context).width < 480
+            ? MediaQuery.sizeOf(context).width * .94
+            : 480,
+        height: MediaQuery.sizeOf(context).height,
+        child: Material(
+          color: AppColors.glass,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 22, 22, 12),
+              child: FocusTraversalGroup(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'EPISODI',
+                                style: TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 11,
+                                  letterSpacing: 1.2,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.current.displaySeriesName,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TvFocusable(
+                          onPressed: () => Navigator.pop(context),
+                          child: IconButton(
+                            tooltip: 'Chiudi episodi',
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Expanded(
+                      child: FutureBuilder<List<Channel>>(
+                        future: _episodes,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState !=
+                              ConnectionState.done) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+                          final all = snapshot.data ?? const <Channel>[];
+                          if (all.isEmpty) {
+                            return const Center(
+                              child: Text('Episodi non disponibili'),
+                            );
+                          }
+                          final seasons =
+                              all.map((c) => c.season ?? 1).toSet().toList()
+                                ..sort();
+                          _seasonCount = seasons.length;
+                          final selectedSeason = seasons.contains(_season)
+                              ? _season
+                              : seasons.first;
+                          final episodes = all
+                              .where((c) => (c.season ?? 1) == selectedSeason)
+                              .toList();
+                          return Column(
+                            children: [
+                              if (seasons.length > 1)
+                                SizedBox(
+                                  height: 48,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: seasons.length,
+                                    separatorBuilder: (_, _) =>
+                                        const SizedBox(width: 8),
+                                    itemBuilder: (context, i) {
+                                      final s = seasons[i];
+                                      final active = selectedSeason == s;
+                                      void choose() {
+                                        setState(() => _season = s);
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                              if (mounted) {
+                                                _first.requestFocus();
+                                              }
+                                            });
+                                      }
+
+                                      return TvFocusable(
+                                        focusNode: _seasonNode(s),
+                                        onFocusChange: (f) {
+                                          if (f && _inEpisodes) {
+                                            setState(() => _inEpisodes = false);
+                                          }
+                                        },
+                                        onPressed: choose,
+                                        child: GestureDetector(
+                                          onTap: choose,
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 160,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 10,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: active
+                                                  ? AppColors.textPrimary
+                                                  : AppColors.card,
+                                              borderRadius:
+                                                  BorderRadius.circular(24),
+                                            ),
+                                            child: Text(
+                                              'Stagione $s',
+                                              style: TextStyle(
+                                                color: active
+                                                    ? AppColors.background
+                                                    : AppColors.textPrimary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              const SizedBox(height: 12),
+                              Expanded(
+                                child: ListView.separated(
+                                  key: ValueKey(selectedSeason),
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  itemCount: episodes.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder: (context, i) => _episodeRow(
+                                    episodes[i],
+                                    i,
+                                    selectedSeason,
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            Expanded(
-                              child: ListView.separated(
-                                key: ValueKey(selectedSeason),
-                                itemCount: episodes.length,
-                                separatorBuilder: (_, _) =>
-                                    const SizedBox(height: 8),
-                                itemBuilder: (context, i) {
-                                  final episode = episodes[i];
-                                  final current =
-                                      episode.id == widget.current.id;
-                                  return TvFocusable(
-                                    focusNode: i == 0 ? _first : null,
-                                    autofocus: i == 0,
-                                    focusedScale: 1,
-                                    onPressed: () =>
-                                        Navigator.pop(context, episode),
-                                    child: ListTile(
-                                      selected: current,
-                                      leading: Icon(
-                                        current
-                                            ? Icons.play_arrow_rounded
-                                            : Icons.movie_outlined,
-                                      ),
-                                      title: Text(
-                                        episode.name,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      subtitle: Text(
-                                        'S${episode.season ?? selectedSeason} · E${episode.episode ?? i + 1}',
-                                      ),
-                                      onTap: () =>
-                                          Navigator.pop(context, episode),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        );
-                      },
+                            ],
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

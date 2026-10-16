@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/player_settings.dart';
 import 'exo_engine.dart';
+import 'fvp_engine.dart';
 import 'mediakit_engine.dart';
 import 'playback_engine.dart';
 
@@ -27,6 +28,7 @@ class PlaybackSession extends ChangeNotifier {
   final String url;
   final bool isLive;
   final bool previewMode;
+
   /// Allows deterministic playback/lifecycle tests without a native decoder.
   final PlaybackEngine Function(PlayerEngineType)? engineFactory;
 
@@ -98,15 +100,23 @@ class PlaybackSession extends ChangeNotifier {
     return pos > Duration.zero ? pos : startAt;
   }
 
-  PlaybackEngine _create(PlayerEngineType type) => engineFactory?.call(type) ?? switch (type) {
-    PlayerEngineType.exo => ExoEngine(url: currentUrl, settings: settings),
-    PlayerEngineType.mediakit => MediaKitEngine(
-      url: currentUrl,
-      settings: settings,
-      isLive: isLive,
-      previewMode: previewMode,
-    ),
-  };
+  PlaybackEngine _create(PlayerEngineType type) =>
+      engineFactory?.call(type) ??
+      switch (type) {
+        PlayerEngineType.exo => ExoEngine(url: currentUrl, settings: settings),
+        PlayerEngineType.mediakit => MediaKitEngine(
+          url: currentUrl,
+          settings: settings,
+          isLive: isLive,
+          previewMode: previewMode,
+        ),
+        PlayerEngineType.fvp => FvpEngine(
+          url: currentUrl,
+          settings: settings,
+          isLive: isLive,
+          previewMode: previewMode,
+        ),
+      };
 
   Future<void> _open(PlayerEngineType type, {Duration? resumeAt}) async {
     final gen = ++_generation;
@@ -282,7 +292,12 @@ class PlaybackSession extends ChangeNotifier {
       _notify();
       return;
     }
-    final next = failed.other;
+    // Try every engine not yet attempted for this stream, in fallback order.
+    var next = failed.other;
+    for (var i = 0; i < PlayerEngineType.values.length - 1; i++) {
+      if ((_openCount[next] ?? 0) == 0) break;
+      next = next.other;
+    }
     final otherReady = _openCount[next] ?? 0;
     final canRetrySelf = _openCount[failed] != null && _openCount[failed]! < 2;
     if (settings.autoFallback && otherReady == 0) {

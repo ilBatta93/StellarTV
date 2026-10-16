@@ -65,6 +65,8 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   Channel? _selectedChannel;
   EpgProgram? _selectedProgram;
   int _previewGeneration = 0;
+  Future<void>? _previewStart;
+  Future<void> _releaseQueue = Future<void>.value();
   late final AppProvider _app;
 
   @override
@@ -94,12 +96,29 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     _previewGeneration++;
     _previewDelay?.cancel();
     final old = _preview;
+    final starting = _previewStart;
     _preview = null;
+    _previewStart = null;
     if (old != null) {
       unawaited(old.setVolume(0));
-      old.dispose();
+      // Releasing mpv while it is still opening, or while its video surface
+      // is still mounted, crashed the app natively when moving between
+      // channels. Unmount first, let the open settle, then release; the next
+      // preview waits for this queue so two decoders never overlap.
+      _releaseQueue = _releaseQueue.then((_) async {
+        if (starting != null) {
+          await starting
+              .timeout(const Duration(seconds: 4), onTimeout: () {})
+              .catchError((_) {});
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+        try {
+          old.dispose();
+        } catch (_) {}
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      });
+      _app.setPlaybackActive(false);
     }
-    if (old != null) _app.setPlaybackActive(false);
   }
 
   void _select(Channel channel, [EpgProgram? program]) {
@@ -110,6 +129,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     });
     if (same && _preview != null) return;
     _stopPreview();
+    if (mounted) setState(() {});
     final gen = _previewGeneration;
     _previewDelay = Timer(const Duration(milliseconds: 800), () async {
       if (!mounted ||
@@ -125,6 +145,12 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
           ModalRoute.of(context)?.isCurrent != true)
         return;
       if (_app.kidsMode && !_app.isKidsContent(channel)) return;
+      await _releaseQueue;
+      if (!mounted ||
+          gen != _previewGeneration ||
+          !widget.active ||
+          ModalRoute.of(context)?.isCurrent != true)
+        return;
       final session = PlaybackSession(
         url: channel.url,
         isLive: true,
@@ -133,7 +159,11 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       );
       _app.setPlaybackActive(true);
       setState(() => _preview = session);
-      await session.start();
+      final start = session.start();
+      _previewStart = start;
+      try {
+        await start;
+      } catch (_) {}
     });
   }
 
@@ -141,6 +171,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     _stopPreview();
     setState(() {});
     await Future<void>.delayed(const Duration(milliseconds: 700));
+    await _releaseQueue;
     if (mounted && widget.active) playChannel(context, channel);
   }
 
@@ -380,6 +411,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                     TvCatalogItem(
                       index: 0,
                       columns: 1,
+                      entry: false,
                       child: TvFocusable(
                         key: const ValueKey('live-preview-focus'),
                         focusedScale: 1,
@@ -784,6 +816,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     setState(() {});
     // Native decoder/connection must be released before the parallel player opens.
     await Future<void>.delayed(const Duration(milliseconds: 700));
+    await _releaseQueue;
     if (!mounted || !widget.active) return;
     await Navigator.push(
       context,

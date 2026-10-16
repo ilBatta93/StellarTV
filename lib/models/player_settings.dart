@@ -2,14 +2,25 @@ import 'package:flutter/material.dart';
 
 enum PlayerEngineType {
   exo('ExoPlayer', 'Motore nativo Android, ottimo per HLS e HDR'),
-  mediakit('mpv (media-kit)', 'Massima compatibilità, sottotitoli e tracce audio completi');
+  mediakit(
+    'mpv (media-kit)',
+    'Massima compatibilità, sottotitoli e tracce audio completi',
+  ),
+  fvp(
+    'MDK (FFmpeg)',
+    'Terzo motore: tutti i codec FFmpeg, ideale per IPTV e Xtream',
+  );
 
   final String label;
   final String description;
   const PlayerEngineType(this.label, this.description);
 
-  PlayerEngineType get other =>
-      this == PlayerEngineType.exo ? PlayerEngineType.mediakit : PlayerEngineType.exo;
+  /// Automatic fallback order: mpv → MDK → ExoPlayer → mpv.
+  PlayerEngineType get other => switch (this) {
+    PlayerEngineType.mediakit => PlayerEngineType.fvp,
+    PlayerEngineType.fvp => PlayerEngineType.exo,
+    PlayerEngineType.exo => PlayerEngineType.mediakit,
+  };
 }
 
 enum VideoFitMode {
@@ -171,7 +182,10 @@ class PlayerSettings {
       autoFallback: b('autoFallback', d.autoFallback),
       startTimeoutSeconds: i('startTimeoutSeconds', d.startTimeoutSeconds),
       hardwareDecoding: _enum(
-          HardwareDecoding.values, j['hardwareDecoding'], d.hardwareDecoding),
+        HardwareDecoding.values,
+        j['hardwareDecoding'],
+        d.hardwareDecoding,
+      ),
       networkCachingMs: i('networkCachingMs', d.networkCachingMs),
       liveCachingMs: i('liveCachingMs', d.liveCachingMs),
       backBufferSeconds: i('backBufferSeconds', d.backBufferSeconds),
@@ -181,23 +195,36 @@ class PlayerSettings {
       audioPassthrough: b('audioPassthrough', d.audioPassthrough),
       audioTimeStretch: b('audioTimeStretch', d.audioTimeStretch),
       userAgent: s('userAgent', d.userAgent),
-      preferredAudioLanguage:
-          s('preferredAudioLanguage', d.preferredAudioLanguage),
-      preferredSubtitleLanguage:
-          s('preferredSubtitleLanguage', d.preferredSubtitleLanguage),
+      preferredAudioLanguage: s(
+        'preferredAudioLanguage',
+        d.preferredAudioLanguage,
+      ),
+      preferredSubtitleLanguage: s(
+        'preferredSubtitleLanguage',
+        d.preferredSubtitleLanguage,
+      ),
       subtitlesEnabled: b('subtitlesEnabled', d.subtitlesEnabled),
-      subtitleSize:
-          _enum(SubtitleSize.values, j['subtitleSize'], d.subtitleSize),
-      subtitleColor:
-          _enum(SubtitleColor.values, j['subtitleColor'], d.subtitleColor),
+      subtitleSize: _enum(
+        SubtitleSize.values,
+        j['subtitleSize'],
+        d.subtitleSize,
+      ),
+      subtitleColor: _enum(
+        SubtitleColor.values,
+        j['subtitleColor'],
+        d.subtitleColor,
+      ),
       subtitleBackground: b('subtitleBackground', d.subtitleBackground),
       subtitleBold: b('subtitleBold', d.subtitleBold),
       subtitleDelayMs: i('subtitleDelayMs', d.subtitleDelayMs),
       audioDelayMs: i('audioDelayMs', d.audioDelayMs),
       defaultSpeed: (j['defaultSpeed'] as num?)?.toDouble() ?? d.defaultSpeed,
       fitMode: _enum(VideoFitMode.values, j['fitMode'], d.fitMode),
-      orientation:
-          _enum(PlayerOrientation.values, j['orientation'], d.orientation),
+      orientation: _enum(
+        PlayerOrientation.values,
+        j['orientation'],
+        d.orientation,
+      ),
       resumePlayback: b('resumePlayback', d.resumePlayback),
       seekStepSeconds: i('seekStepSeconds', d.seekStepSeconds),
       controlsHideSeconds: i('controlsHideSeconds', d.controlsHideSeconds),
@@ -211,40 +238,40 @@ class PlayerSettings {
   }
 
   Map<String, dynamic> toJson() => {
-        'primaryEngine': primaryEngine.name,
-        'engineV': 2,
-        'autoFallback': autoFallback,
-        'startTimeoutSeconds': startTimeoutSeconds,
-        'hardwareDecoding': hardwareDecoding.name,
-        'networkCachingMs': networkCachingMs,
-        'liveCachingMs': liveCachingMs,
-        'backBufferSeconds': backBufferSeconds,
-        'httpReconnect': httpReconnect,
-        'dropLateFrames': dropLateFrames,
-        'skipFrames': skipFrames,
-        'audioPassthrough': audioPassthrough,
-        'audioTimeStretch': audioTimeStretch,
-        'userAgent': userAgent,
-        'preferredAudioLanguage': preferredAudioLanguage,
-        'preferredSubtitleLanguage': preferredSubtitleLanguage,
-        'subtitlesEnabled': subtitlesEnabled,
-        'subtitleSize': subtitleSize.name,
-        'subtitleColor': subtitleColor.name,
-        'subtitleBackground': subtitleBackground,
-        'subtitleBold': subtitleBold,
-        'subtitleDelayMs': subtitleDelayMs,
-        'audioDelayMs': audioDelayMs,
-        'defaultSpeed': defaultSpeed,
-        'fitMode': fitMode.name,
-        'orientation': orientation.name,
-        'resumePlayback': resumePlayback,
-        'seekStepSeconds': seekStepSeconds,
-        'controlsHideSeconds': controlsHideSeconds,
-        'gesturesEnabled': gesturesEnabled,
-        'doubleTapSeek': doubleTapSeek,
-        'autoPip': autoPip,
-        'keepScreenOn': keepScreenOn,
-        'backgroundAudio': backgroundAudio,
-        'showStats': showStats,
-      };
+    'primaryEngine': primaryEngine.name,
+    'engineV': 2,
+    'autoFallback': autoFallback,
+    'startTimeoutSeconds': startTimeoutSeconds,
+    'hardwareDecoding': hardwareDecoding.name,
+    'networkCachingMs': networkCachingMs,
+    'liveCachingMs': liveCachingMs,
+    'backBufferSeconds': backBufferSeconds,
+    'httpReconnect': httpReconnect,
+    'dropLateFrames': dropLateFrames,
+    'skipFrames': skipFrames,
+    'audioPassthrough': audioPassthrough,
+    'audioTimeStretch': audioTimeStretch,
+    'userAgent': userAgent,
+    'preferredAudioLanguage': preferredAudioLanguage,
+    'preferredSubtitleLanguage': preferredSubtitleLanguage,
+    'subtitlesEnabled': subtitlesEnabled,
+    'subtitleSize': subtitleSize.name,
+    'subtitleColor': subtitleColor.name,
+    'subtitleBackground': subtitleBackground,
+    'subtitleBold': subtitleBold,
+    'subtitleDelayMs': subtitleDelayMs,
+    'audioDelayMs': audioDelayMs,
+    'defaultSpeed': defaultSpeed,
+    'fitMode': fitMode.name,
+    'orientation': orientation.name,
+    'resumePlayback': resumePlayback,
+    'seekStepSeconds': seekStepSeconds,
+    'controlsHideSeconds': controlsHideSeconds,
+    'gesturesEnabled': gesturesEnabled,
+    'doubleTapSeek': doubleTapSeek,
+    'autoPip': autoPip,
+    'keepScreenOn': keepScreenOn,
+    'backgroundAudio': backgroundAudio,
+    'showStats': showStats,
+  };
 }

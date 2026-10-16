@@ -157,14 +157,14 @@ class _Unsupported extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(message, style: Theme.of(context).textTheme.bodyMedium),
-          if (current == PlayerEngineType.exo) ...[
+          if (current != null) ...[
             const SizedBox(height: 16),
             OutlinedButton.icon(
               icon: const Icon(Icons.swap_horiz_rounded),
-              label: const Text('Passa a mpv'),
+              label: Text('Passa a ${current.other.label}'),
               onPressed: () {
                 Navigator.pop(context);
-                session.switchEngine(PlayerEngineType.mediakit);
+                session.switchEngine(current.other);
               },
             ),
           ],
@@ -253,8 +253,7 @@ Future<void> showAudioSheet(BuildContext context, PlaybackSession session) {
   return _showSheet(context, 'Traccia audio', (ctx) {
     if (engine == null || !engine.supportsAudioTracks) {
       return _Unsupported(
-        message:
-            'Questo dispositivo non permette di cambiare traccia audio con ExoPlayer.',
+        message: 'Questo dispositivo non permette di cambiare traccia audio con ExoPlayer.',
         session: session,
       );
     }
@@ -317,8 +316,7 @@ Future<void> showSubtitleSheet(
         children: [
           onlineOption,
           _Unsupported(
-            message:
-                'ExoPlayer non mostra i sottotitoli incorporati nei flussi IPTV. Passa a mpv per vederli, oppure usa quelli online qui sopra.',
+            message: 'ExoPlayer non mostra i sottotitoli incorporati nei flussi IPTV. Passa a mpv per vederli, oppure usa quelli online qui sopra.',
             session: session,
           ),
         ],
@@ -430,8 +428,7 @@ Future<void> showSyncSheet(BuildContext context, PlaybackSession session) {
   return _showSheet(context, 'Sincronizzazione', (ctx) {
     if (session.engine?.supportsDelays != true) {
       return _Unsupported(
-        message:
-            'La regolazione del ritardo di audio e sottotitoli è disponibile con mpv.',
+        message: 'La regolazione del ritardo di audio e sottotitoli è disponibile con mpv.',
         session: session,
       );
     }

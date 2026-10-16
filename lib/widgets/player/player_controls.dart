@@ -27,6 +27,7 @@ class PlayerControls extends StatelessWidget {
   /// Opens the movie/series page; null for live TV (button hidden).
   final VoidCallback? onOpenTitle;
   final VoidCallback? onEpisodes;
+  final VoidCallback? onMultiView;
   final VoidCallback onPip;
   final VoidCallback onMenu;
   final VoidCallback onToggleLock;
@@ -58,6 +59,7 @@ class PlayerControls extends StatelessWidget {
     required this.onBack,
     this.onOpenTitle,
     this.onEpisodes,
+    this.onMultiView,
     required this.onPip,
     required this.onMenu,
     required this.onToggleLock,
@@ -173,6 +175,12 @@ class PlayerControls extends StatelessWidget {
               ],
             ),
           ),
+          if (onMultiView case final openMultiView?)
+            _TopButton(
+              icon: Icons.grid_view_rounded,
+              tooltip: 'MultiView',
+              onPressed: openMultiView,
+            ),
           if (onEpisodes case final openEpisodes?)
             _TopButton(
               icon: Icons.video_library_rounded,
