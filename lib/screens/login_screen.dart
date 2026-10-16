@@ -98,6 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _buildFieldLabel('Server URL'),
         const SizedBox(height: 6),
         TvTextField(
+          autofocus: true,
           openOnFocus: true,
           controller: _xtreamServerController,
           nextFocus: _xtreamUserFocus,
