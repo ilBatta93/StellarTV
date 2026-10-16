@@ -19,9 +19,9 @@ jobs:
         run: |
           df -h /
           sudo rm -rf /usr/share/dotnet /usr/local/lib/node_modules /opt/ghc /usr/local/.ghcup \
-            /usr/share/swift /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
-            /usr/local/share/powershell /usr/local/share/chromium /opt/microsoft /opt/google \
-            /usr/lib/jvm/temurin-8* /usr/lib/jvm/temurin-11* || true
+              /usr/share/swift /usr/local/share/boost /opt/hostedtoolcache/CodeQL \
+              /usr/local/share/powershell /usr/local/share/chromium /opt/microsoft /opt/google \
+              /usr/lib/jvm/temurin-8* /usr/lib/jvm/temurin-11* || true
           sudo docker image prune --all --force || true
           sudo apt-get clean || true
           df -h /
@@ -41,6 +41,16 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle', '**/*.gradle.kts', '**/gradle-wrapper.properties', '**/settings.gradle', 'pubspec.yaml') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
       - name: Install Flutter packages
         run: |
           set -e
@@ -50,7 +60,7 @@ jobs:
 
       - name: Build APK (Release)
         env:
-          GRADLE_OPTS: -Dorg.gradle.daemon=false
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.caching=true -Dorg.gradle.parallel=true
         run: |
           flutter build apk --release \
             --build-name="3.0.${{ github.run_number }}" \
@@ -75,10 +85,10 @@ jobs:
           tag_name: "v3.0.${{ github.run_number }}"
           name: "StellarTV v3.0.${{ github.run_number }}"
           body: |
-            ### StellarTV v3.0.${{ github.run_number }}
+            ## StellarTV v3.0.${{ github.run_number }}
             Compilazione automatica dal commit `${{ github.sha }}`.
 
-            **Note di rilascio:**
+            **Nota di rilascio:**
             ${{ github.event.head_commit.message }}
           files: dist/*.apk
           draft: false
