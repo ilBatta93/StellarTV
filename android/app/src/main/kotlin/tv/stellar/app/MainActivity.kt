@@ -3,6 +3,10 @@ package tv.stellar.app
 import android.app.PictureInPictureParams
 import android.app.UiModeManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.core.content.FileProvider
+import java.io.File
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -150,6 +154,33 @@ class MainActivity : FlutterActivity() {
                         (Build.MANUFACTURER.equals("Amazon", ignoreCase = true) ||
                          packageManager.hasSystemFeature("amazon.hardware.fire_tv")))
                     "moveToBack" -> result.success(moveTaskToBack(true))
+                    "canInstallApk" -> result.success(
+                        Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                            packageManager.canRequestPackageInstalls())
+                    "openInstallSettings" -> {
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                    Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            }
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.success(false)
+                        }
+                    }
+                    "installApk" -> {
+                        try {
+                            val path = call.arguments as String
+                            val uri = FileProvider.getUriForFile(this, "$packageName.updates", File(path))
+                            val intent = Intent(Intent.ACTION_VIEW)
+                                .setDataAndType(uri, "application/vnd.android.package-archive")
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("install", e.message, null)
+                        }
+                    }
                     "showKeyboard" -> result.success(showSoftKeyboard())
                     "setTextEditing" -> {
                         setTextEditing(call.arguments as? Boolean ?: false)
@@ -321,3 +352,4 @@ class MainActivity : FlutterActivity() {
         return mapOf("hdr" to hdr, "codecs" to codecs)
     }
 }
+

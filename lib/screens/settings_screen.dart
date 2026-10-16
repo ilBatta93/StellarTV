@@ -21,6 +21,7 @@ import 'section_layout_screen.dart';
 import 'downloads_screen.dart';
 import 'recordings_screen.dart';
 import 'multiview_settings_screen.dart';
+import '../services/app_update_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -388,15 +389,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
             ],
           ),
-          const SettingsSection(
+          SettingsSection(
             title: 'Informazioni',
             children: [
               SettingsValueTile(
                 icon: Icons.info_outline_rounded,
                 title: 'Versione',
-                value: '1.0.0',
+                value: AppUpdateService.currentVersion,
               ),
               SettingsValueTile(
+                icon: Icons.system_update_rounded,
+                title: 'Verifica aggiornamenti',
+                subtitle: 'Scarica e installa la nuova versione',
+                onTap: () => AppUpdateService.checkManually(context),
+              ),
+              const SettingsValueTile(
                 icon: Icons.phone_android_rounded,
                 title: 'Piattaforma',
                 value: 'Android e iOS',
@@ -442,3 +449,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 }
+

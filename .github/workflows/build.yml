@@ -64,7 +64,8 @@ jobs:
         run: |
           flutter build apk --release \
             --build-name="3.0.${{ github.run_number }}" \
-            --build-number=${{ github.run_number }}
+            --build-number=${{ github.run_number }} \
+            --dart-define=APP_VERSION="3.0.${{ github.run_number }}"
           df -h /
 
       - name: Prepara APK per Release
@@ -93,3 +94,4 @@ jobs:
           files: dist/*.apk
           draft: false
           prerelease: false
+

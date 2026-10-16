@@ -21,6 +21,7 @@ import 'services/sync_service.dart';
 import 'services/download_service.dart';
 import 'services/recording_service.dart';
 import 'services/tmdb_service.dart';
+import 'services/app_update_service.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -108,6 +109,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
   @override
   void initState() {
     super.initState();
+    AppUpdateService.scheduleStartupCheck();
     final syncService = SyncService(Supabase.instance.client);
     final profileService = ProfileService(Supabase.instance.client);
     _appProvider = AppProvider()..init();
@@ -247,6 +249,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
               isTv: DeviceTypeService.isTv,
             ),
             themeMode: ThemeMode.dark,
+            navigatorKey: appNavigatorKey,
             navigatorObservers: [OpenRoutesObserver.instance],
             home: const SplashScreen(),
           );
@@ -255,3 +258,4 @@ class _StellarTvAppState extends State<StellarTvApp> {
     );
   }
 }
+

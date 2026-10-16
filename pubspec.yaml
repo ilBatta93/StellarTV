@@ -1,7 +1,7 @@
 name: stellar_tv
 description: "StellarTV cross-platform TV, film and series player."
 publish_to: 'none'
-version: 1.0.0+1
+version: 3.0.0+1
 
 environment:
   sdk: ^3.13.5
@@ -43,3 +43,4 @@ flutter:
     - family: Manrope
       fonts:
         - asset: assets/fonts/Manrope.ttf
+
