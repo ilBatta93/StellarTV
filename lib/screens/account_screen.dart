@@ -149,6 +149,7 @@ class _AccountScreenState extends State<AccountScreen> {
                       ),
                       const SizedBox(height: 20),
                       TvTextField(
+                        autofocus: true,
                         openOnFocus: true,
                         controller: _email,
                         nextFocus: _passwordFocus,
