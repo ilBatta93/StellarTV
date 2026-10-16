@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/app_provider.dart';
 import '../providers/history_provider.dart';
@@ -18,6 +19,25 @@ class AccountScreen extends StatefulWidget {
 
   @override
   State<AccountScreen> createState() => _AccountScreenState();
+
+  static const _guestKey = 'stellar_guest_mode';
+
+  /// True when this device chose to use the app without an account.
+  static Future<bool> isGuest() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_guestKey) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> setGuest(bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_guestKey, value);
+    } catch (_) {}
+  }
 }
 
 class _AccountScreenState extends State<AccountScreen> {
@@ -68,6 +88,7 @@ class _AccountScreenState extends State<AccountScreen> {
       _show(error);
       return;
     }
+    await AccountScreen.setGuest(false);
     // Restore whatever this account already saved (playlist, profiles…).
     try {
       await history.pullFromCloud().timeout(
@@ -98,6 +119,21 @@ class _AccountScreenState extends State<AccountScreen> {
     _show(
       error ?? 'Ti abbiamo inviato un\'email per reimpostare la password.',
       ok: error == null,
+    );
+  }
+
+  /// Uses the app on this device only: no account, no cloud sync.
+  Future<void> _continueAsGuest() async {
+    await AccountScreen.setGuest(true);
+    if (!mounted) return;
+    final app = context.read<AppProvider>();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => app.isAuthenticated
+            ? const ProfilePickerScreen()
+            : const LoginScreen(),
+      ),
+      (_) => false,
     );
   }
 
@@ -242,6 +278,21 @@ class _AccountScreenState extends State<AccountScreen> {
                           _register
                               ? 'Hai già un account? Accedi'
                               : 'Non hai un account? Creane uno',
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      OutlinedButton.icon(
+                        onPressed: _loading ? null : _continueAsGuest,
+                        icon: const Icon(Icons.person_outline_rounded),
+                        label: const Text('Continua come ospite'),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Senza account i dati restano solo su questo dispositivo.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
                         ),
                       ),
                     ],
