@@ -51,7 +51,7 @@ class MediaKitEngine extends PlaybackEngine {
   }
 
   static int _bufferBytes(PlayerSettings settings, bool isLive) {
-    const minimum = 32 * 1024 * 1024;
+    final minimum = (isLive && DeviceTypeService.isTv ? 16 : 32) * 1024 * 1024;
     final configured =
         (isLive ? settings.liveCachingMs : settings.networkCachingMs) * 1024;
     return configured < minimum ? minimum : configured;
@@ -146,16 +146,21 @@ class MediaKitEngine extends PlaybackEngine {
     if (platform is! NativePlayer) return;
     final options = {
       'cache': 'yes',
-      'demuxer-seekable-cache': 'yes',
+      // The seekable cache made mpv jump back into already-played data on
+      // MPEG-TS timestamp resets (live replayed in a loop): keep it off and
+      // let pause/rewind use the plain back buffer.
+      'demuxer-seekable-cache': 'no',
       // No 'force-seekable': media_kit seeks to 0 every time the Android
       // surface is (re)attached; on a forced-seekable live stream that seek
       // jumped outside the stream (black picture, stalled player). The
       // seekable cache alone already allows pause/rewind (partially-seekable).
       // RAM is bounded on every TV (Fire TV/Chromecast have 1-2 GB).
       'demuxer-max-back-bytes':
-          '${DeviceTypeService.isTv ? 64 * 1024 * 1024 : timeshiftBackBytes}',
+          '${DeviceTypeService.isTv ? 32 * 1024 * 1024 : timeshiftBackBytes}',
       'demuxer-donate-buffer': 'no',
-      'cache-pause': 'yes',
+      // Pausing on every hiccup drifted the live behind until it fell out of
+      // the provider window: drop late frames and stay on the live edge.
+      'cache-pause': 'no',
     };
     for (final entry in options.entries) {
       try {
@@ -226,10 +231,16 @@ class MediaKitEngine extends PlaybackEngine {
       'user-agent': ua,
       'network-timeout': '20',
       'tls-verify': 'no',
-      'stream-lavf-o':
-          'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,'
-          'reconnect_delay_max=5',
-      'demuxer-lavf-o': 'fflags=+discardcorrupt+genpts',
+      // Live: no reconnect_streamed. It resumed with a Range request that
+      // IPTV servers reject on live channels ("Segnale interrotto" loops).
+      'stream-lavf-o': isLive
+          ? 'reconnect=1,reconnect_at_eof=1,reconnect_on_network_error=1,'
+                'reconnect_delay_max=2'
+          : 'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,'
+                'reconnect_delay_max=5',
+      'demuxer-lavf-o': isLive
+          ? 'fflags=+discardcorrupt+genpts+nobuffer'
+          : 'fflags=+discardcorrupt+genpts',
       // Enough to find the video stream of an MPEG-TS channel without
       // making the first picture wait several seconds.
       'demuxer-lavf-probesize': isLive ? '2000000' : '10000000',
@@ -238,7 +249,7 @@ class MediaKitEngine extends PlaybackEngine {
       'hls-bitrate': 'max',
       if (isLive)
         'demuxer-max-bytes':
-            '${previewMode ? 8 : (DeviceTypeService.isTv ? 32 : 64)}MiB',
+            '${previewMode ? 8 : (DeviceTypeService.isTv ? 16 : 64)}MiB',
     };
     for (final entry in options.entries) {
       try {
@@ -275,9 +286,10 @@ class MediaKitEngine extends PlaybackEngine {
         _blackWatch?.cancel();
         return;
       }
-      if (!st.playing) return;
+      // Still loading or long-GOP channel: not a black screen yet.
+      if (!st.playing || st.buffering) return;
       strikes++;
-      if (strikes >= 3) {
+      if (strikes >= 4) {
         _blackWatch?.cancel();
         _onError('Nessuna immagine dal flusso (schermo nero)');
       }
