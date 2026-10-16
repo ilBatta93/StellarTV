@@ -1,8 +1,7 @@
 name: StellarTV Android Release
 
 on:
-  push:
-    branches: [ main ]
+  # Build solo su richiesta (Run workflow o API)
   workflow_dispatch:
 
 permissions:
