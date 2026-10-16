@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/channel.dart';
+import '../providers/ui_settings.dart';
 import '../services/catalog_rating_service.dart';
 import 'tv_focusable.dart';
 import '../theme/app_theme.dart';
@@ -72,6 +73,8 @@ class TvCatalogToolbar extends StatefulWidget {
     this.category,
     this.filters,
     this.genresOnly = false,
+    this.viewMode,
+    this.onViewMode,
   });
   final TextEditingController controller;
   final String hint;
@@ -84,6 +87,10 @@ class TvCatalogToolbar extends StatefulWidget {
   final String? category;
   final WidgetBuilder? filters;
   final bool genresOnly;
+
+  /// Poster layout picker (grid / compact / list); null hides the button.
+  final CatalogViewMode? viewMode;
+  final ValueChanged<CatalogViewMode>? onViewMode;
 
   /// Shared by key events and Android system Back (Home owns the route).
   static bool handleBack(FocusNode? focus) {
@@ -104,6 +111,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   final _field = FocusNode();
   final _search = FocusNode(debugLabel: 'catalogSearch');
   final _sort = FocusNode();
+  final _view = FocusNode(debugLabel: 'catalogViewMode');
   @override
   void dispose() {
     _filterButton.dispose();
@@ -111,6 +119,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
     _field.dispose();
     _search.dispose();
     _sort.dispose();
+    _view.dispose();
     super.dispose();
   }
 
@@ -197,6 +206,43 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
     if (!mounted) return;
     if (selected != null) widget.onSort(selected);
     _sort.requestFocus();
+  }
+
+  Future<void> _chooseView() async {
+    final current = widget.viewMode ?? CatalogViewMode.grid;
+    final selected = await showDialog<CatalogViewMode>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Disposizione'),
+        content: SizedBox(
+          width: 320,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final mode in CatalogViewMode.values)
+                TvFocusable(
+                  autofocus: mode == current,
+                  focusedScale: 1,
+                  onPressed: () => Navigator.pop(ctx, mode),
+                  child: ListTile(
+                    leading: Icon(switch (mode) {
+                      CatalogViewMode.grid => Icons.grid_view_rounded,
+                      CatalogViewMode.compact => Icons.view_compact_alt_rounded,
+                      CatalogViewMode.list => Icons.view_list_rounded,
+                    }),
+                    title: Text(mode.label),
+                    trailing: current == mode ? const Icon(Icons.check) : null,
+                    onTap: () => Navigator.pop(ctx, mode),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (selected != null) widget.onViewMode?.call(selected);
+    _view.requestFocus();
   }
 
   @override
@@ -313,6 +359,23 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
                               ? Icons.style_outlined
                               : Icons.filter_list_rounded),
                   ),
+                ),
+              ),
+            if (widget.viewMode != null && widget.onViewMode != null)
+              TvFocusable(
+                focusNode: _view,
+                onPressed: _chooseView,
+                child: IconButton(
+                  tooltip: 'Disposizione: ${widget.viewMode!.label}',
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.surface,
+                  ),
+                  onPressed: _chooseView,
+                  icon: Icon(switch (widget.viewMode!) {
+                    CatalogViewMode.grid => Icons.grid_view_rounded,
+                    CatalogViewMode.compact => Icons.view_compact_alt_rounded,
+                    CatalogViewMode.list => Icons.view_list_rounded,
+                  }),
                 ),
               ),
             TvFocusable(

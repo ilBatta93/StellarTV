@@ -10,7 +10,7 @@ class AppImageCache {
     Config(
       _key,
       stalePeriod: const Duration(days: 60),
-      maxNrOfCacheObjects: 4000,
+      maxNrOfCacheObjects: 8000,
     ),
   );
 }

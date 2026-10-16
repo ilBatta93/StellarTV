@@ -6,6 +6,17 @@ import '../models/multiview_layout.dart';
 
 enum AppSection { home, live, movies, series }
 
+/// How movie/series catalogs show their posters.
+enum CatalogViewMode { grid, compact, list }
+
+extension CatalogViewModeInfo on CatalogViewMode {
+  String get label => switch (this) {
+    CatalogViewMode.grid => 'Griglia',
+    CatalogViewMode.compact => 'Griglia compatta',
+    CatalogViewMode.list => 'Lista',
+  };
+}
+
 extension AppSectionInfo on AppSection {
   String get id => name;
   String get label => switch (this) {
@@ -22,6 +33,7 @@ class UiSettings extends ChangeNotifier {
   static const _postersKey = 'ui_show_posters';
   static const _animationsKey = 'ui_animations';
   static const _compactKey = 'ui_compact';
+  static const _viewModeKey = 'ui_catalog_view';
   static const sectionOrderKey = 'ui_section_order';
   static const startSectionKey = 'ui_start_section';
   static const multiViewLayoutKey = 'ui_multiview_layout';
@@ -50,6 +62,7 @@ class UiSettings extends ChangeNotifier {
   bool _showPosters = true;
   bool _animations = true;
   bool _compact = false;
+  CatalogViewMode _viewMode = CatalogViewMode.grid;
   bool _loaded = false;
   List<AppSection> _sectionOrder = List.of(AppSection.values);
   AppSection _startSection = AppSection.home;
@@ -60,6 +73,7 @@ class UiSettings extends ChangeNotifier {
   bool get showPosters => _showPosters;
   bool get animations => _animations;
   bool get compact => _compact;
+  CatalogViewMode get viewMode => _viewMode;
   bool get loaded => _loaded;
   List<AppSection> get sectionOrder => List.unmodifiable(_sectionOrder);
   AppSection get startSection => _startSection;
@@ -74,6 +88,9 @@ class UiSettings extends ChangeNotifier {
     _showPosters = prefs.getBool(_postersKey) ?? true;
     _animations = prefs.getBool(_animationsKey) ?? true;
     _compact = prefs.getBool(_compactKey) ?? false;
+    _viewMode =
+        CatalogViewMode.values.asNameMap()[prefs.getString(_viewModeKey)] ??
+        CatalogViewMode.grid;
     _sectionOrder = _parseSectionOrder(prefs.getStringList(sectionOrderKey));
     _startSection =
         _parseSection(prefs.getString(startSectionKey)) ?? AppSection.home;
@@ -181,6 +198,13 @@ class UiSettings extends ChangeNotifier {
   Future<void> setCompact(bool value) async {
     _compact = value;
     await _save(_compactKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setCatalogViewMode(CatalogViewMode value) async {
+    if (value == _viewMode) return;
+    _viewMode = value;
+    await _save(_viewModeKey, value.name);
     notifyListeners();
   }
 }

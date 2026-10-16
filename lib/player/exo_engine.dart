@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:video_player/video_player.dart';
 
@@ -29,6 +31,8 @@ class ExoEngine extends PlaybackEngine {
   final Map<String, VideoTrack> _videoTracks = {};
   PlaybackSnapshot _value = const PlaybackSnapshot();
   bool _disposed = false;
+  Timer? _blackWatch;
+  String? _blackError;
 
   static VideoFormat? _formatHint(String url) {
     final path = Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
@@ -73,7 +77,7 @@ class ExoEngine extends PlaybackEngine {
       bufferedUntil: buffered,
       size: v.size,
       speed: v.playbackSpeed,
-      error: v.errorDescription,
+      error: _blackError ?? v.errorDescription,
       caption: v.caption.text,
     );
     notifyListeners();
@@ -99,6 +103,36 @@ class ExoEngine extends PlaybackEngine {
       throw PlaybackException(_describeInitError(e));
     }
     _sync();
+    _watchBlackScreen();
+  }
+
+  /// Some live streams decode audio but never produce a video frame on the
+  /// texture (codec not supported by the device): the sound plays while the
+  /// picture stays black. After a few seconds this reports an error so the
+  /// session tries the next format or engine instead of a black screen.
+  void _watchBlackScreen() {
+    _blackWatch?.cancel();
+    var strikes = 0;
+    _blackWatch = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (_disposed) {
+        _blackWatch?.cancel();
+        return;
+      }
+      final v = _controller.value;
+      if (v.hasError || !v.isInitialized) return;
+      final hasFrame = v.size.width > 0 && v.size.height > 0;
+      if (hasFrame) {
+        _blackWatch?.cancel();
+        return;
+      }
+      if (!v.isPlaying || v.isBuffering) return;
+      strikes++;
+      if (strikes >= 3) {
+        _blackWatch?.cancel();
+        _blackError = 'Nessuna immagine dal flusso (schermo nero)';
+        _sync();
+      }
+    });
   }
 
   /// Platform init errors are often opaque (Future timeouts, generic Platform
@@ -209,6 +243,7 @@ class ExoEngine extends PlaybackEngine {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    _blackWatch?.cancel();
     _controller.removeListener(_sync);
     try {
       await _controller.pause();

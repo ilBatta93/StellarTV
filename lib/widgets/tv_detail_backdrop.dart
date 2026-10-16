@@ -1,4 +1,5 @@
 import '../services/image_cache_service.dart';
+
 import "package:cached_network_image/cached_network_image.dart";
 import 'package:flutter/material.dart';
 
@@ -14,10 +15,10 @@ class TvDetailBackdrop extends StatelessWidget {
 
   const TvDetailBackdrop({super.key, required this.image, required this.child});
 
-  /// Space above the title, so the first screen shows the picture like the
-  /// Home banner.
+  /// Small space above the title: the picture stays visible behind it, but
+  /// the content starts near the top so more of the page fits on screen.
   static double topSpace(BuildContext context) =>
-      (MediaQuery.sizeOf(context).height * 0.30).clamp(120.0, 320.0);
+      (MediaQuery.sizeOf(context).height * 0.12).clamp(56.0, 140.0);
 
   @override
   Widget build(BuildContext context) {

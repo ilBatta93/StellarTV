@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -16,6 +17,8 @@ import '../widgets/tv_filter_panel.dart';
 import '../widgets/tv_catalog_navigation.dart';
 import '../widgets/tv_focusable.dart';
 import '../services/catalog_rating_service.dart';
+import '../services/image_warmup_service.dart';
+import '../widgets/poster_card.dart';
 import '../widgets/tv_category_panel.dart';
 import '../widgets/tv_text_field.dart';
 import '../widgets/section_row.dart';
@@ -403,6 +406,11 @@ class _CatalogPageState extends State<CatalogPage> {
         if (!mounted) return;
         final provider = this.context.read<AppProvider>();
         provider.requestTitleInfo(provider.catalogOf(widget.type));
+        // Pre-download the posters of the first visible titles so opening a
+        // category does not wait on the network.
+        ImageWarmupService.warm(
+          provider.recentEntries(widget.type).map((e) => e.primary.logo),
+        );
       });
     }
 
@@ -459,6 +467,9 @@ class _CatalogPageState extends State<CatalogPage> {
               onChanged: (v) => setState(() => _query = v),
               sort: _sort,
               onSort: (value) => setState(() => _sort = value),
+              viewMode: context.watch<UiSettings>().viewMode,
+              onViewMode: (mode) =>
+                  context.read<UiSettings>().setCatalogViewMode(mode),
               scaffoldKey: _scaffoldKey,
               genresOnly: true,
               filters: (_) => _buildTvFilters(app, groups),
@@ -479,6 +490,26 @@ class _CatalogPageState extends State<CatalogPage> {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  Builder(
+                    builder: (context) {
+                      final ui = context.watch<UiSettings>();
+                      final next = switch (ui.viewMode) {
+                        CatalogViewMode.grid => CatalogViewMode.compact,
+                        CatalogViewMode.compact => CatalogViewMode.list,
+                        CatalogViewMode.list => CatalogViewMode.grid,
+                      };
+                      return IconButton(
+                        tooltip: 'Disposizione: ${ui.viewMode.label}',
+                        icon: Icon(switch (ui.viewMode) {
+                          CatalogViewMode.grid => Icons.grid_view_rounded,
+                          CatalogViewMode.compact =>
+                            Icons.view_compact_alt_rounded,
+                          CatalogViewMode.list => Icons.view_list_rounded,
+                        }),
+                        onPressed: () => ui.setCatalogViewMode(next),
+                      );
+                    },
+                  ),
                   IconButton(
                     tooltip: 'Categorie',
                     icon: const Icon(Icons.category_outlined),
@@ -644,13 +675,43 @@ class _CatalogPageState extends State<CatalogPage> {
         message: 'Prova con un altro titolo o categoria.',
       );
     }
+    return _buildEntries(app, entries);
+  }
+
+  /// Grid (normal or compact) or list, following the layout picker in the
+  /// toolbar. The choice is shared by every catalog and remembered.
+  Widget _buildEntries(AppProvider app, List<CatalogEntry> entries) {
     final ui = context.watch<UiSettings>();
+    if (ui.viewMode == CatalogViewMode.list) {
+      return ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        itemCount: entries.length,
+        itemBuilder: (context, i) {
+          final tile = _CatalogListTile(
+            entry: entries[i],
+            isFavorite: app.favoriteIds.contains(entries[i].primary.id),
+            onTap: () => _openEntry(context, entries[i]),
+            onFavoriteTap: () => app.toggleFavorite(entries[i].primary),
+          );
+          if (!DeviceTypeService.isTv) return tile;
+          return TvCatalogItem(
+            index: i,
+            columns: 1,
+            child: TvCategoryEdge(
+              scaffoldKey: _scaffoldKey,
+              onOpen: _openCategories,
+              child: tile,
+            ),
+          );
+        },
+      );
+    }
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       gridDelegate: channelGridDelegate(
         widget.type,
         maxExtent: ui.gridMaxExtent,
-        compact: ui.compact,
+        compact: ui.compact || ui.viewMode == CatalogViewMode.compact,
       ),
       itemCount: entries.length,
       itemBuilder: (context, i) => _gridItem(app, entries[i], i),
@@ -658,10 +719,14 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 
   Widget _buildAllGrid(AppProvider app) {
-    final ui = context.watch<UiSettings>();
     final all = app.allEntries(widget.type);
     final entries = _ordered(
-      _filtered(app, all, 'all', () => all.where((e) => _matchesGenre(app, e)).toList()),
+      _filtered(
+        app,
+        all,
+        'all',
+        () => all.where((e) => _matchesGenre(app, e)).toList(),
+      ),
     );
     if (entries.isEmpty) {
       return EmptyState(
@@ -670,23 +735,17 @@ class _CatalogPageState extends State<CatalogPage> {
         message: 'Nessun titolo di questo genere.',
       );
     }
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      gridDelegate: channelGridDelegate(
-        widget.type,
-        maxExtent: ui.gridMaxExtent,
-        compact: ui.compact,
-      ),
-      itemCount: entries.length,
-      itemBuilder: (context, i) => _gridItem(app, entries[i], i),
-    );
+    return _buildEntries(app, entries);
   }
 
   Widget _buildGroupGrid(AppProvider app, CatalogGroup group) {
-    final ui = context.watch<UiSettings>();
     final entries = _ordered(
-      _filtered(app, group.entries, 'group:${group.label}',
-          () => group.entries.where((e) => _matchesGenre(app, e)).toList()),
+      _filtered(
+        app,
+        group.entries,
+        'group:${group.label}',
+        () => group.entries.where((e) => _matchesGenre(app, e)).toList(),
+      ),
     );
     if (entries.isEmpty) {
       return EmptyState(
@@ -695,16 +754,7 @@ class _CatalogPageState extends State<CatalogPage> {
         message: 'Nessun titolo di questo genere nella categoria.',
       );
     }
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      gridDelegate: channelGridDelegate(
-        widget.type,
-        maxExtent: ui.gridMaxExtent,
-        compact: ui.compact,
-      ),
-      itemCount: entries.length,
-      itemBuilder: (context, i) => _gridItem(app, entries[i], i),
-    );
+    return _buildEntries(app, entries);
   }
 
   Widget _buildSearchResults(AppProvider app) {
@@ -735,17 +785,7 @@ class _CatalogPageState extends State<CatalogPage> {
         message: 'Prova con un altro titolo o categoria.',
       );
     }
-    final ui = context.watch<UiSettings>();
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      gridDelegate: channelGridDelegate(
-        widget.type,
-        maxExtent: ui.gridMaxExtent,
-        compact: ui.compact,
-      ),
-      itemCount: matches.length,
-      itemBuilder: (context, i) => _gridItem(app, matches[i], i),
-    );
+    return _buildEntries(app, matches);
   }
 
   // Remembers the last filtered list so rebuilds (focus moves, rating
@@ -835,6 +875,111 @@ class _CatalogPageState extends State<CatalogPage> {
     final channel = await pickVariant(context, entry);
     if (channel == null || !context.mounted) return;
     openChannel(context, channel);
+  }
+}
+
+/// One row of the "Lista" layout: small poster, title, category and rating,
+/// reachable with the remote like any grid poster.
+class _CatalogListTile extends StatelessWidget {
+  final CatalogEntry entry;
+  final bool isFavorite;
+  final VoidCallback onTap;
+  final VoidCallback onFavoriteTap;
+
+  const _CatalogListTile({
+    required this.entry,
+    required this.isFavorite,
+    required this.onTap,
+    required this.onFavoriteTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final channel = entry.primary;
+    final rating = CatalogRatingService.instance.ratingOf(channel);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Pressable(
+        onTap: onTap,
+        onLongPress: onFavoriteTap,
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: DeviceTypeService.isTv
+                  ? AppColors.clear
+                  : AppColors.border,
+            ),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  width: 56,
+                  height: 84,
+                  child: PosterImage(url: channel.logo),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      channel.displaySeriesName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: DeviceTypeService.isTv ? 16 : 14,
+                        fontWeight: FontWeight.w600,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        if (rating != null && rating > 0) ...[
+                          RatingBadge(value: rating),
+                          const SizedBox(width: 8),
+                        ],
+                        Expanded(
+                          child: Text(
+                            channel.group,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: isFavorite
+                    ? 'Rimuovi dai preferiti'
+                    : 'Aggiungi ai preferiti',
+                icon: Icon(
+                  isFavorite
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: isFavorite ? AppColors.primary : AppColors.textPrimary,
+                  size: 20,
+                ),
+                onPressed: onFavoriteTap,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
