@@ -95,3 +95,22 @@ jobs:
           draft: false
           prerelease: false
 
+      - name: Pubblica su StellarTV-releases (pubblica)
+        if: ${{ env.RELEASE_TOKEN != '' }}
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: ilBatta93/StellarTV-releases
+          token: ${{ secrets.RELEASE_TOKEN }}
+          tag_name: "v3.0.${{ github.run_number }}"
+          name: "StellarTV v3.0.${{ github.run_number }}"
+          body: |
+            ## StellarTV v3.0.${{ github.run_number }}
+            Nuovo aggiornamento ufficiale di StellarTV per Android / Google TV / Fire TV.
+
+            **Note di versione:**
+            ${{ github.event.head_commit.message }}
+          files: dist/*.apk
+          draft: false
+          prerelease: false
