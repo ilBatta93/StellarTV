@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'sync_hooks.dart';
 import '../models/epg_program.dart';
 
 /// Parsed guide: programmes grouped by XMLTV channel id, plus the
@@ -76,15 +77,22 @@ class EpgService {
       (await SharedPreferences.getInstance()).getStringList(_sourcesKey) ??
       const [];
 
-  Future<void> saveManualSources(List<String> urls) async =>
-      (await SharedPreferences.getInstance()).setStringList(_sourcesKey, urls);
+  Future<void> saveManualSources(List<String> urls) async {
+    await (await SharedPreferences.getInstance()).setStringList(
+      _sourcesKey,
+      urls,
+    );
+    SyncHooks.settingsChanged();
+  }
 
   /// Default: update the guide every 12 hours.
   Future<int> intervalMinutes() async =>
       (await SharedPreferences.getInstance()).getInt(_intervalKey) ?? 720;
 
-  Future<void> saveIntervalMinutes(int minutes) async =>
-      (await SharedPreferences.getInstance()).setInt(_intervalKey, minutes);
+  Future<void> saveIntervalMinutes(int minutes) async {
+    await (await SharedPreferences.getInstance()).setInt(_intervalKey, minutes);
+    SyncHooks.settingsChanged();
+  }
 
   Future<DateTime?> lastRun() async => DateTime.tryParse(
       (await SharedPreferences.getInstance()).getString(_lastRunKey) ?? '');

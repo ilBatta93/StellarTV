@@ -180,7 +180,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
       builder: (ctx) => AlertDialog(
         title: const Text('Ordina'),
         content: SizedBox(
-          width: 320,
+          width: 420,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -225,12 +225,9 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
                   focusedScale: 1,
                   onPressed: () => Navigator.pop(ctx, mode),
                   child: ListTile(
-                    leading: Icon(switch (mode) {
-                      CatalogViewMode.grid => Icons.grid_view_rounded,
-                      CatalogViewMode.compact => Icons.view_compact_alt_rounded,
-                      CatalogViewMode.list => Icons.view_list_rounded,
-                    }),
+                    leading: Icon(mode.icon),
                     title: Text(mode.label),
+                    subtitle: Text(mode.description),
                     trailing: current == mode ? const Icon(Icons.check) : null,
                     onTap: () => Navigator.pop(ctx, mode),
                   ),
@@ -371,11 +368,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
                     backgroundColor: AppColors.surface,
                   ),
                   onPressed: _chooseView,
-                  icon: Icon(switch (widget.viewMode!) {
-                    CatalogViewMode.grid => Icons.grid_view_rounded,
-                    CatalogViewMode.compact => Icons.view_compact_alt_rounded,
-                    CatalogViewMode.list => Icons.view_list_rounded,
-                  }),
+                  icon: Icon(widget.viewMode!.icon),
                 ),
               ),
             TvFocusable(

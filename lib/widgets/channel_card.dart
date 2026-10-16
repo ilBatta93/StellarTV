@@ -5,6 +5,8 @@ import '../models/content_type.dart';
 import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
 import 'poster_card.dart';
+import '../providers/ui_settings.dart';
+import 'package:provider/provider.dart';
 import '../services/catalog_rating_service.dart';
 
 class ChannelCard extends StatelessWidget {
@@ -25,6 +27,10 @@ class ChannelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Subscribes to the poster preferences; [_card] reads them.
+    context.select<UiSettings, String>(
+      (ui) => '${ui.showRatings}${ui.showTitles}',
+    );
     if (DeviceTypeService.isTv && !_isLive) {
       return _TvRatedPoster(
         channel: channel,
@@ -82,7 +88,9 @@ class ChannelCard extends StatelessWidget {
                         onTap: onFavoriteTap,
                       ),
                     ),
-                    if (rating != null && rating > 0)
+                    if (rating != null &&
+                        rating > 0 &&
+                        context.read<UiSettings>().showRatings)
                       Positioned(
                         left: 6,
                         bottom: 6,
@@ -94,6 +102,7 @@ class ChannelCard extends StatelessWidget {
                 ),
               ),
             ),
+            if (_isLive || context.read<UiSettings>().showTitles)
             Padding(
               padding: DeviceTypeService.isTv
                   ? const EdgeInsets.fromLTRB(9, 8, 9, 9)

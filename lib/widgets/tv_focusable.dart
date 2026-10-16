@@ -86,6 +86,9 @@ class _TvFocusableState extends State<TvFocusable> {
     final ui = context.select<UiSettings?, bool>(
       (settings) => settings?.animations ?? true,
     );
+    final glow = context.select<UiSettings?, bool>(
+      (settings) => settings?.focusGlow ?? true,
+    );
     final motion = ui && !MediaQuery.disableAnimationsOf(context);
     final duration = motion ? const Duration(milliseconds: 150) : Duration.zero;
     return Focus(
@@ -131,11 +134,12 @@ class _TvFocusableState extends State<TvFocusable> {
                           blurRadius: 16,
                           offset: const Offset(0, 12),
                         ),
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.28),
-                          blurRadius: 10,
-                          spreadRadius: 1,
-                        ),
+                        if (glow)
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.28),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
                       ]
                     : const [],
               ),

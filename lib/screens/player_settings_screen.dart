@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../widgets/player/player_format.dart';
 import '../widgets/player/video_surface.dart';
 import '../widgets/settings_tiles.dart';
+import '../widgets/tv_focusable.dart';
 
 class PlayerSettingsScreen extends StatefulWidget {
   const PlayerSettingsScreen({super.key, this.scope});
@@ -89,38 +90,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
   Widget build(BuildContext context) {
     final s = _s;
     if (DeviceTypeService.isTv && widget.scope == null) {
-      return ApplePageScaffold(
-        title: 'Player video',
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            SettingsValueTile(
-              icon: Icons.live_tv_rounded,
-              title: 'Dirette TV',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const PlayerSettingsScreen(
-                    scope: PlayerSettingsScope.liveTv,
-                  ),
-                ),
-              ),
-            ),
-            SettingsValueTile(
-              icon: Icons.movie_outlined,
-              title: 'Film/Serie',
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const PlayerSettingsScreen(
-                    scope: PlayerSettingsScope.filmSeriesTv,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
+      return const _PlayerProfilesHub();
     }
     return ApplePageScaffold(
       title: _tvProfile
@@ -151,8 +121,8 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
       description:
           'Se il motore principale non riesce ad aprire un canale, l\'app prova '
           'prima gli altri formati del canale e poi il motore di riserva. '
-          'Anteprima della Diretta e MultiView usano sempre ExoPlayer su Android, '
-          'il più leggero. Le opzioni qui sotto cambiano in base al motore scelto.',
+          'Anteprima e MultiView partono con ExoPlayer e passano a mpv se serve. '
+          'Le opzioni qui sotto cambiano in base al motore scelto.',
       children: [
         SettingsValueTile(
           icon: Icons.memory_rounded,
@@ -822,6 +792,246 @@ class _EngineFeatures extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// TV entry page of "Player video": two large tvOS-style cards, one per
+/// profile, each showing the engine and the main choices at a glance.
+class _PlayerProfilesHub extends StatefulWidget {
+  const _PlayerProfilesHub();
+
+  @override
+  State<_PlayerProfilesHub> createState() => _PlayerProfilesHubState();
+}
+
+class _PlayerProfilesHubState extends State<_PlayerProfilesHub> {
+  final _service = PlayerSettingsService();
+  PlayerSettings? _live;
+  PlayerSettings? _vod;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final live = await _service.load(scope: PlayerSettingsScope.liveTv);
+    final vod = await _service.load(scope: PlayerSettingsScope.filmSeriesTv);
+    if (!mounted) return;
+    setState(() {
+      _live = live;
+      _vod = vod;
+    });
+  }
+
+  Future<void> _open(PlayerSettingsScope scope) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PlayerSettingsScreen(scope: scope)),
+    );
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final live = _live;
+    final vod = _vod;
+    return ApplePageScaffold(
+      title: 'Player video',
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(4, 0, 4, 20),
+            child: Text(
+              'Dirette e film usano impostazioni separate: scegli un profilo da modificare.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 15),
+            ),
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _ProfileCard(
+                  autofocus: true,
+                  icon: Icons.live_tv_rounded,
+                  title: 'Dirette TV',
+                  caption: 'Canali, anteprima e guida',
+                  settings: live,
+                  lines: live == null
+                      ? const []
+                      : [
+                          ('Motore', live.primaryEngine.label),
+                          ('Formato flusso', live.liveStreamFormat.label),
+                          ('Immagine', live.fitMode.label),
+                          (
+                            'Motore di riserva',
+                            live.autoFallback ? 'Attivo' : 'Spento',
+                          ),
+                        ],
+                  onPressed: () => _open(PlayerSettingsScope.liveTv),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: _ProfileCard(
+                  icon: Icons.movie_filter_rounded,
+                  title: 'Film e Serie TV',
+                  caption: 'On demand, episodi e download',
+                  settings: vod,
+                  lines: vod == null
+                      ? const []
+                      : [
+                          ('Motore', vod.primaryEngine.label),
+                          ('Velocità', formatSpeed(vod.defaultSpeed)),
+                          (
+                            'Riprendi visione',
+                            vod.resumePlayback ? 'Attivo' : 'Spento',
+                          ),
+                          ('Salto', '${vod.seekStepSeconds} s'),
+                        ],
+                  onPressed: () => _open(PlayerSettingsScope.filmSeriesTv),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileCard extends StatelessWidget {
+  const _ProfileCard({
+    required this.icon,
+    required this.title,
+    required this.caption,
+    required this.settings,
+    required this.lines,
+    required this.onPressed,
+    this.autofocus = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String caption;
+  final PlayerSettings? settings;
+  final List<(String, String)> lines;
+  final VoidCallback onPressed;
+  final bool autofocus;
+
+  @override
+  Widget build(BuildContext context) {
+    final engine = settings?.primaryEngine;
+    return TvFocusable(
+      autofocus: autofocus,
+      focusedScale: 1.03,
+      borderRadius: BorderRadius.circular(22),
+      onPressed: onPressed,
+      child: Container(
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: AppColors.primary, size: 28),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        caption,
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textMuted,
+                ),
+              ],
+            ),
+            if (engine != null) ...[
+              const SizedBox(height: 16),
+              Text(
+                engine.description,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            if (settings == null)
+              Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              )
+            else
+              for (final (k, v) in lines)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: AppColors.border, width: 0.5),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          k,
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        v,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        ),
       ),
     );
   }

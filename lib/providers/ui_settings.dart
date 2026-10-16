@@ -6,15 +6,39 @@ import '../models/multiview_layout.dart';
 
 enum AppSection { home, live, movies, series }
 
-/// How movie/series catalogs show their posters.
-enum CatalogViewMode { grid, compact, list }
+/// How movie/series catalogs show their posters. Inspired by popular apps:
+/// poster wall (Netflix), dense grid (TiviMate), detailed list (Plex),
+/// wide artwork (Apple TV) and a spotlight panel for the focused title
+/// (Infuse).
+enum CatalogViewMode { grid, compact, list, landscape, spotlight }
 
 extension CatalogViewModeInfo on CatalogViewMode {
   String get label => switch (this) {
-    CatalogViewMode.grid => 'Griglia',
-    CatalogViewMode.compact => 'Griglia compatta',
-    CatalogViewMode.list => 'Lista',
+    CatalogViewMode.grid => 'Poster',
+    CatalogViewMode.compact => 'Griglia densa',
+    CatalogViewMode.list => 'Lista dettagliata',
+    CatalogViewMode.landscape => 'Panoramica',
+    CatalogViewMode.spotlight => 'In evidenza',
   };
+
+  String get description => switch (this) {
+    CatalogViewMode.grid => 'Locandine grandi, come Netflix',
+    CatalogViewMode.compact => 'Tanti titoli insieme, come TiviMate',
+    CatalogViewMode.list => 'Locandina, categoria e voto in righe',
+    CatalogViewMode.landscape => 'Copertine larghe, come Apple TV',
+    CatalogViewMode.spotlight => 'Scheda grande del titolo selezionato, come Infuse',
+  };
+
+  IconData get icon => switch (this) {
+    CatalogViewMode.grid => Icons.grid_view_rounded,
+    CatalogViewMode.compact => Icons.apps_rounded,
+    CatalogViewMode.list => Icons.view_list_rounded,
+    CatalogViewMode.landscape => Icons.view_carousel_rounded,
+    CatalogViewMode.spotlight => Icons.featured_video_rounded,
+  };
+
+  CatalogViewMode get next =>
+      CatalogViewMode.values[(index + 1) % CatalogViewMode.values.length];
 }
 
 extension AppSectionInfo on AppSection {
@@ -37,6 +61,13 @@ class UiSettings extends ChangeNotifier {
   static const sectionOrderKey = 'ui_section_order';
   static const startSectionKey = 'ui_start_section';
   static const multiViewLayoutKey = 'ui_multiview_layout';
+  static const _textScaleKey = 'ui_text_scale';
+  static const _ratingsKey = 'ui_show_ratings';
+  static const _qualityKey = 'ui_show_quality';
+  static const _titlesKey = 'ui_show_titles';
+  static const _focusGlowKey = 'ui_focus_glow';
+
+  static const textScales = {'normale': 1.0, 'grande': 1.12, 'molto_grande': 1.25};
   MultiViewLayout _multiViewLayout = MultiViewLayout.automatic;
   MultiViewLayout get multiViewLayout => _multiViewLayout;
   Future<void> setMultiViewLayout(MultiViewLayout layout) async {
@@ -53,6 +84,10 @@ class UiSettings extends ChangeNotifier {
     'giallo': Color(0xFFFBBF24),
     'ciano': Color(0xFF2EC4B6),
     'rosa': Color(0xFFEC4899),
+    'viola': Color(0xFFA855F7),
+    'blu': Color(0xFF3B82F6),
+    'smeraldo': Color(0xFF10B981),
+    'titanio': Color(0xFFC7C7CC),
   };
 
   static const gridSizes = {'piccola': 120.0, 'media': 140.0, 'grande': 170.0};
@@ -63,6 +98,11 @@ class UiSettings extends ChangeNotifier {
   bool _animations = true;
   bool _compact = false;
   CatalogViewMode _viewMode = CatalogViewMode.grid;
+  String _textScale = 'normale';
+  bool _showRatings = true;
+  bool _showQuality = true;
+  bool _showTitles = true;
+  bool _focusGlow = true;
   bool _loaded = false;
   List<AppSection> _sectionOrder = List.of(AppSection.values);
   AppSection _startSection = AppSection.home;
@@ -75,6 +115,31 @@ class UiSettings extends ChangeNotifier {
   bool get compact => _compact;
   CatalogViewMode get viewMode => _viewMode;
   bool get loaded => _loaded;
+  String get textScale => _textScale;
+  double get textScaleFactor => textScales[_textScale] ?? 1.0;
+  bool get showRatings => _showRatings;
+  bool get showQuality => _showQuality;
+  bool get showTitles => _showTitles;
+  bool get focusGlow => _focusGlow;
+
+  /// Changes whenever any saved look-and-feel preference changes: used to
+  /// push the new values to the cloud at once.
+  String get signature => [
+    accentName,
+    _gridSize,
+    _showPosters,
+    _animations,
+    _compact,
+    _viewMode.name,
+    _sectionOrder.map((e) => e.id).join(','),
+    _startSection.id,
+    _multiViewLayout.name,
+    _textScale,
+    _showRatings,
+    _showQuality,
+    _showTitles,
+    _focusGlow,
+  ].join('|');
   List<AppSection> get sectionOrder => List.unmodifiable(_sectionOrder);
   AppSection get startSection => _startSection;
 
@@ -97,6 +162,12 @@ class UiSettings extends ChangeNotifier {
     _multiViewLayout = MultiViewLayout.parse(
       prefs.getString(multiViewLayoutKey),
     );
+    _textScale = prefs.getString(_textScaleKey) ?? 'normale';
+    if (!textScales.containsKey(_textScale)) _textScale = 'normale';
+    _showRatings = prefs.getBool(_ratingsKey) ?? true;
+    _showQuality = prefs.getBool(_qualityKey) ?? true;
+    _showTitles = prefs.getBool(_titlesKey) ?? true;
+    _focusGlow = prefs.getBool(_focusGlowKey) ?? true;
     _loaded = true;
     AppColors.primary = _accent;
     notifyListeners();
@@ -206,5 +277,57 @@ class UiSettings extends ChangeNotifier {
     _viewMode = value;
     await _save(_viewModeKey, value.name);
     notifyListeners();
+  }
+
+  Future<void> setTextScale(String value) async {
+    if (!textScales.containsKey(value)) return;
+    _textScale = value;
+    await _save(_textScaleKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setShowRatings(bool value) async {
+    _showRatings = value;
+    await _save(_ratingsKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setShowQuality(bool value) async {
+    _showQuality = value;
+    await _save(_qualityKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setShowTitles(bool value) async {
+    _showTitles = value;
+    await _save(_titlesKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setFocusGlow(bool value) async {
+    _focusGlow = value;
+    await _save(_focusGlowKey, value);
+    notifyListeners();
+  }
+
+  /// Restores every look-and-feel preference to its default value.
+  Future<void> resetAppearance() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in [
+      _accentKey,
+      _gridSizeKey,
+      _postersKey,
+      _animationsKey,
+      _compactKey,
+      _viewModeKey,
+      _textScaleKey,
+      _ratingsKey,
+      _qualityKey,
+      _titlesKey,
+      _focusGlowKey,
+    ]) {
+      await prefs.remove(key);
+    }
+    await load();
   }
 }

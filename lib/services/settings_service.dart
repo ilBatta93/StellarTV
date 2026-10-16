@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'sync_hooks.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsService {
@@ -22,6 +23,7 @@ class SettingsService {
   Future<void> setThemeMode(String mode) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_themeKey, mode);
+    SyncHooks.settingsChanged();
   }
 
   Future<String?> getAuthMethod() async {
@@ -85,5 +87,6 @@ class SettingsService {
   Future<void> setHiddenCategories(Map<String, List<String>> map) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_hiddenCategoriesKey, jsonEncode(map));
+    SyncHooks.settingsChanged();
   }
 }

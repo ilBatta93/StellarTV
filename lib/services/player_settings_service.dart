@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/player_settings.dart';
+import 'sync_hooks.dart';
 import 'device_type_service.dart';
 
 enum PlayerSettingsScope { shared, liveTv, filmSeriesTv }
@@ -65,6 +66,7 @@ class PlayerSettingsService {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key(scope), jsonEncode(settings.toJson()));
+    SyncHooks.settingsChanged();
   }
 
   Future<void> reset({

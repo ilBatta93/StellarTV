@@ -39,9 +39,6 @@ class PlayerControls extends StatelessWidget {
   final VoidCallback? onLoadOnlineSubs;
   final VoidCallback? onDisableOnlineSubs;
 
-  /// Live recording toggle (null = not recordable).
-  final VoidCallback? onRecord;
-  final bool recording;
 
   const PlayerControls({
     super.key,
@@ -68,8 +65,6 @@ class PlayerControls extends StatelessWidget {
     this.onlineSubsLoading = false,
     this.onLoadOnlineSubs,
     this.onDisableOnlineSubs,
-    this.onRecord,
-    this.recording = false,
   });
 
   void _act(VoidCallback action) {
@@ -359,14 +354,6 @@ class PlayerControls extends StatelessWidget {
                 label: 'Blocca',
                 onPressed: () => _act(onToggleLock),
               ),
-              if (onRecord != null)
-                _BarButton(
-                  icon: recording
-                      ? Icons.stop_circle_rounded
-                      : Icons.fiber_manual_record_rounded,
-                  label: recording ? 'Ferma reg.' : 'Registra',
-                  onPressed: () => _act(onRecord!),
-                ),
               Expanded(
                 child: Align(
                   alignment: Alignment.centerRight,

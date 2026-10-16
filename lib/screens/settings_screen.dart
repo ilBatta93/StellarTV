@@ -8,6 +8,7 @@ import '../providers/ui_settings.dart';
 import '../services/playlist_refresh_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_tiles.dart';
+import '../widgets/tv_focusable.dart';
 import 'login_screen.dart';
 import 'history_settings_screen.dart';
 import 'hidden_categories_screen.dart';
@@ -19,7 +20,6 @@ import 'expiry_reminder_screen.dart';
 import 'xtream_account_screen.dart';
 import 'section_layout_screen.dart';
 import 'downloads_screen.dart';
-import 'recordings_screen.dart';
 import 'multiview_settings_screen.dart';
 import '../services/app_update_service.dart';
 
@@ -70,89 +70,192 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildUiCustomization(BuildContext context) {
     final ui = context.watch<UiSettings>();
-    return SettingsSection(
-      title: 'Personalizzazione',
-      description: 'Adatta l\'aspetto dell\'app ai tuoi gusti.',
+    Future<void> pick<T>(
+      String title,
+      List<T> options,
+      T current,
+      String Function(T) label,
+      Future<void> Function(T) apply, {
+      String? Function(T)? detail,
+    }) async {
+      final chosen = await pickOption<T>(
+        context,
+        title: title,
+        options: options,
+        current: current,
+        label: label,
+        detail: detail,
+      );
+      if (chosen != null) await apply(chosen);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SettingsValueTile(
-          icon: Icons.palette_outlined,
-          title: 'Colore principale',
-          value: _accentLabel(ui.accentName),
-          onTap: () async {
-            final chosen = await pickOption<String>(
-              context,
-              title: 'Colore principale',
-              options: UiSettings.accents.keys.toList(),
+        SettingsSection(
+          title: 'Aspetto',
+          description: 'Colori, testo ed effetti. Tutto viene salvato nel cloud.',
+          children: [
+            _AccentPalette(
               current: ui.accentName,
               label: _accentLabel,
-            );
-            if (chosen != null) await ui.setAccent(chosen);
-          },
+              onSelected: ui.setAccent,
+            ),
+            SettingsValueTile(
+              icon: Icons.text_fields_rounded,
+              title: 'Dimensione testo',
+              subtitle: 'Utile sulle TV lontane dal divano',
+              value: _textScaleLabel(ui.textScale),
+              onTap: () => pick<String>(
+                'Dimensione testo',
+                UiSettings.textScales.keys.toList(),
+                ui.textScale,
+                _textScaleLabel,
+                ui.setTextScale,
+              ),
+            ),
+            SettingsSwitchTile(
+              icon: Icons.auto_awesome_outlined,
+              title: 'Bagliore di selezione',
+              subtitle: 'Alone colorato attorno all\'elemento selezionato col telecomando',
+              value: ui.focusGlow,
+              onChanged: ui.setFocusGlow,
+            ),
+            SettingsSwitchTile(
+              icon: Icons.animation_outlined,
+              title: 'Animazioni',
+              subtitle: 'Transizioni ed effetti al tocco',
+              value: ui.animations,
+              onChanged: ui.setAnimations,
+            ),
+          ],
         ),
-        SettingsValueTile(
-          icon: Icons.download_for_offline_outlined,
-          title: 'Download',
-          subtitle: 'Film ed episodi da guardare senza connessione',
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const DownloadsScreen())),
-        ),
-        SettingsValueTile(
-          icon: Icons.fiber_smart_record_outlined,
-          title: 'Registrazioni',
-          subtitle: 'Dirette registrate e programmi programmati dalla guida',
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const RecordingsScreen())),
-        ),
-        SettingsValueTile(
-          icon: Icons.view_week_outlined,
-          title: 'Ordine delle sezioni',
-          subtitle: 'Riordina Home, Diretta, Film e Serie TV',
-          value: ui.startSection.label,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const SectionLayoutScreen()),
-          ),
-        ),
-        SettingsValueTile(
-          icon: Icons.grid_view_outlined,
-          title: 'Dimensione dei poster',
-          value: _gridLabel(ui.gridSize),
-          onTap: () async {
-            final chosen = await pickOption<String>(
-              context,
+        SettingsSection(
+          title: 'Cataloghi',
+          description: 'Come appaiono Film e Serie TV.',
+          children: [
+            SettingsValueTile(
+              icon: ui.viewMode.icon,
+              title: 'Disposizione delle schede',
+              subtitle: ui.viewMode.description,
+              value: ui.viewMode.label,
+              onTap: () => pick<CatalogViewMode>(
+                'Disposizione delle schede',
+                CatalogViewMode.values,
+                ui.viewMode,
+                (m) => m.label,
+                ui.setCatalogViewMode,
+                detail: (m) => m.description,
+              ),
+            ),
+            SettingsValueTile(
+              icon: Icons.photo_size_select_large_rounded,
               title: 'Dimensione dei poster',
-              options: UiSettings.gridSizes.keys.toList(),
-              current: ui.gridSize,
-              label: _gridLabel,
-            );
-            if (chosen != null) await ui.setGridSize(chosen);
-          },
+              value: _gridLabel(ui.gridSize),
+              onTap: () => pick<String>(
+                'Dimensione dei poster',
+                UiSettings.gridSizes.keys.toList(),
+                ui.gridSize,
+                _gridLabel,
+                ui.setGridSize,
+              ),
+            ),
+            SettingsSwitchTile(
+              icon: Icons.title_rounded,
+              title: 'Titoli sotto le locandine',
+              subtitle: 'Spegnili per un muro di sole copertine',
+              value: ui.showTitles,
+              onChanged: ui.setShowTitles,
+            ),
+            SettingsSwitchTile(
+              icon: Icons.star_outline_rounded,
+              title: 'Voti sulle locandine',
+              value: ui.showRatings,
+              onChanged: ui.setShowRatings,
+            ),
+            SettingsSwitchTile(
+              icon: Icons.hd_outlined,
+              title: 'Etichette qualità',
+              subtitle: '4K, FHD, HD sulle copertine',
+              value: ui.showQuality,
+              onChanged: ui.setShowQuality,
+            ),
+            SettingsSwitchTile(
+              icon: Icons.image_outlined,
+              title: 'Mostra anteprime',
+              subtitle: 'Locandine e loghi nei cataloghi',
+              value: ui.showPosters,
+              onChanged: ui.setShowPosters,
+            ),
+            SettingsSwitchTile(
+              icon: Icons.view_agenda_outlined,
+              title: 'Modalità compatta',
+              subtitle: 'Righe più fitte per vedere più contenuti',
+              value: ui.compact,
+              onChanged: ui.setCompact,
+            ),
+          ],
         ),
-        SettingsSwitchTile(
-          icon: Icons.image_outlined,
-          title: 'Mostra anteprime',
-          subtitle: 'Locandine e loghi nei cataloghi',
-          value: ui.showPosters,
-          onChanged: ui.setShowPosters,
-        ),
-        SettingsSwitchTile(
-          icon: Icons.animation_outlined,
-          title: 'Animazioni',
-          subtitle: 'Transizioni ed effetti al tocco',
-          value: ui.animations,
-          onChanged: ui.setAnimations,
-        ),
-        SettingsSwitchTile(
-          icon: Icons.view_agenda_outlined,
-          title: 'Modalità compatta',
-          subtitle: 'Righe più fitte per vedere più contenuti',
-          value: ui.compact,
-          onChanged: ui.setCompact,
+        SettingsSection(
+          title: 'Navigazione',
+          children: [
+            SettingsValueTile(
+              icon: Icons.view_week_outlined,
+              title: 'Ordine e sezione iniziale',
+              subtitle: 'Riordina Home, Diretta, Film e Serie TV',
+              value: ui.startSection.label,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SectionLayoutScreen()),
+              ),
+            ),
+            SettingsValueTile(
+              icon: Icons.download_for_offline_outlined,
+              title: 'Download',
+              subtitle: 'Film ed episodi da guardare senza connessione',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const DownloadsScreen()),
+              ),
+            ),
+            SettingsValueTile(
+              icon: Icons.restart_alt_rounded,
+              title: 'Ripristina aspetto predefinito',
+              subtitle: 'Colore, testo e cataloghi tornano come all\'inizio',
+              onTap: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Ripristinare l\'aspetto?'),
+                    content: const Text(
+                      'Le altre impostazioni (player, playlist, account) non cambiano.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Annulla'),
+                      ),
+                      TextButton(
+                        autofocus: true,
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Ripristina'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok == true) await ui.resetAppearance();
+              },
+            ),
+          ],
         ),
       ],
     );
   }
+
+  String _textScaleLabel(String key) => switch (key) {
+    'normale' => 'Normale',
+    'grande' => 'Grande',
+    'molto_grande' => 'Molto grande',
+    _ => key,
+  };
 
   String _accentLabel(String key) => switch (key) {
     'arancio' => 'Arancione',
@@ -162,6 +265,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     'giallo' => 'Giallo',
     'ciano' => 'Ciano',
     'rosa' => 'Rosa',
+    'viola' => 'Viola cosmico',
+    'blu' => 'Blu spaziale',
+    'smeraldo' => 'Smeraldo',
+    'titanio' => 'Titanio',
     _ => key,
   };
 
@@ -450,3 +557,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
+/// Row of colour dots: pick the accent directly with the remote.
+class _AccentPalette extends StatelessWidget {
+  const _AccentPalette({
+    required this.current,
+    required this.label,
+    required this.onSelected,
+  });
+
+  final String current;
+  final String Function(String) label;
+  final Future<void> Function(String) onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Colore principale · ${label(current)}',
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final e in UiSettings.accents.entries)
+                TvFocusable(
+                  borderRadius: BorderRadius.circular(22),
+                  focusedScale: 1.15,
+                  onPressed: () => onSelected(e.key),
+                  child: GestureDetector(
+                    onTap: () => onSelected(e.key),
+                    child: Tooltip(
+                      message: label(e.key),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: e.value,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: e.key == current
+                                ? AppColors.textPrimary
+                                : AppColors.clear,
+                            width: 3,
+                          ),
+                        ),
+                        child: e.key == current
+                            ? const Icon(
+                                Icons.check_rounded,
+                                color: AppColors.background,
+                              )
+                            : null,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

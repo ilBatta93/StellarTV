@@ -12,6 +12,8 @@ import '../services/catalog_builder.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
+import '../widgets/catalog_layouts.dart';
+import '../widgets/settings_tiles.dart';
 import '../widgets/tv_catalog_toolbar.dart';
 import '../widgets/tv_filter_panel.dart';
 import '../widgets/tv_catalog_navigation.dart';
@@ -75,7 +77,9 @@ class CatalogEntryCard extends StatelessWidget {
       onTap: onTap,
       onFavoriteTap: onFavoriteTap,
     );
-    if (quality == null) return card;
+    if (quality == null || !context.watch<UiSettings>().showQuality) {
+      return card;
+    }
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -353,6 +357,7 @@ class _CatalogPageState extends State<CatalogPage> {
     CatalogRatingService.instance.removeListener(_ratingsChanged);
     _ratingsTimer?.cancel();
     _searchController.dispose();
+    _spotlight.dispose();
     super.dispose();
   }
 
@@ -493,20 +498,22 @@ class _CatalogPageState extends State<CatalogPage> {
                   Builder(
                     builder: (context) {
                       final ui = context.watch<UiSettings>();
-                      final next = switch (ui.viewMode) {
-                        CatalogViewMode.grid => CatalogViewMode.compact,
-                        CatalogViewMode.compact => CatalogViewMode.list,
-                        CatalogViewMode.list => CatalogViewMode.grid,
-                      };
                       return IconButton(
                         tooltip: 'Disposizione: ${ui.viewMode.label}',
-                        icon: Icon(switch (ui.viewMode) {
-                          CatalogViewMode.grid => Icons.grid_view_rounded,
-                          CatalogViewMode.compact =>
-                            Icons.view_compact_alt_rounded,
-                          CatalogViewMode.list => Icons.view_list_rounded,
-                        }),
-                        onPressed: () => ui.setCatalogViewMode(next),
+                        icon: Icon(ui.viewMode.icon),
+                        onPressed: () async {
+                          final chosen = await pickOption<CatalogViewMode>(
+                            context,
+                            title: 'Disposizione',
+                            options: CatalogViewMode.values,
+                            current: ui.viewMode,
+                            label: (m) => m.label,
+                            detail: (m) => m.description,
+                          );
+                          if (chosen != null) {
+                            await ui.setCatalogViewMode(chosen);
+                          }
+                        },
                       );
                     },
                   ),
@@ -706,17 +713,87 @@ class _CatalogPageState extends State<CatalogPage> {
         },
       );
     }
-    return GridView.builder(
+    if (ui.viewMode == CatalogViewMode.landscape) {
+      final tv = DeviceTypeService.isTv;
+      return GridView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: (tv ? 380 : 340) * (ui.gridMaxExtent / 140),
+          childAspectRatio: 16 / 9,
+          crossAxisSpacing: tv ? 18 : 12,
+          mainAxisSpacing: tv ? 18 : 12,
+        ),
+        itemCount: entries.length,
+        itemBuilder: (context, i) {
+          final e = entries[i];
+          final card = CatalogLandscapeCard(
+            entry: e,
+            isFavorite: app.favoriteIds.contains(e.primary.id),
+            onTap: () => _openEntry(context, e),
+            onFavoriteTap: () => app.toggleFavorite(e.primary),
+          );
+          return TvCatalogItem(
+            index: i,
+            columns: 2,
+            child: DeviceTypeService.isTv
+                ? TvCategoryEdge(
+                    scaffoldKey: _scaffoldKey,
+                    onOpen: _openCategories,
+                    child: card,
+                  )
+                : card,
+          );
+        },
+      );
+    }
+    final dense =
+        ui.compact ||
+        ui.viewMode == CatalogViewMode.compact ||
+        ui.viewMode == CatalogViewMode.spotlight;
+    final grid = GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       gridDelegate: channelGridDelegate(
         widget.type,
-        maxExtent: ui.gridMaxExtent,
-        compact: ui.compact || ui.viewMode == CatalogViewMode.compact,
+        maxExtent: ui.viewMode == CatalogViewMode.compact
+            ? ui.gridMaxExtent * 0.82
+            : ui.gridMaxExtent,
+        compact: dense,
       ),
       itemCount: entries.length,
-      itemBuilder: (context, i) => _gridItem(app, entries[i], i),
+      itemBuilder: (context, i) {
+        final item = _gridItem(app, entries[i], i);
+        if (ui.viewMode != CatalogViewMode.spotlight) return item;
+        // The header follows whichever poster has the remote focus.
+        return Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onFocusChange: (has) {
+            if (has && _spotlight.value?.primary.id != entries[i].primary.id) {
+              _spotlight.value = entries[i];
+            }
+          },
+          child: item,
+        );
+      },
+    );
+    if (ui.viewMode != CatalogViewMode.spotlight) return grid;
+    final current = _spotlight.value;
+    if (current == null || !entries.any((e) => e.primary.id == current.primary.id)) {
+      _spotlight.value = entries.first;
+    }
+    return Column(
+      children: [
+        ValueListenableBuilder<CatalogEntry?>(
+          valueListenable: _spotlight,
+          builder: (_, e, _) => CatalogSpotlightHeader(entry: e),
+        ),
+        Expanded(child: grid),
+      ],
     );
   }
+
+  /// Title shown in the "In evidenza" header.
+  final _spotlight = ValueNotifier<CatalogEntry?>(null);
 
   Widget _buildAllGrid(AppProvider app) {
     final all = app.allEntries(widget.type);

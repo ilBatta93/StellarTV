@@ -19,9 +19,9 @@ import 'services/expiry_reminder_service.dart';
 import 'services/tv_remote_keys.dart';
 import 'services/sync_service.dart';
 import 'services/download_service.dart';
-import 'services/recording_service.dart';
 import 'services/tmdb_service.dart';
 import 'services/app_update_service.dart';
+import 'services/sync_hooks.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -124,6 +124,8 @@ class _StellarTvAppState extends State<StellarTvApp> {
     // know which profile is active on this device.
     // Each profile has a private history; kids profiles see kids content only.
     _reactions.onSaved = _syncProvider.schedulePush;
+    // Every saved preference (player, look, layouts...) reaches the cloud.
+    SyncHooks.onSettingsChanged = _syncProvider.schedulePush;
     _reactions.reload();
     _profileProvider.onSelectionChanged = (profile) {
       _reactions.switchProfile(profile?.id);
@@ -172,7 +174,6 @@ class _StellarTvAppState extends State<StellarTvApp> {
       Future.delayed(const Duration(seconds: 8), () {
         ExpiryReminderService.instance.start(_appProvider.xtreamCredentials);
         DownloadService.instance.init();
-        RecordingService.instance.init();
       });
     });
     _syncProvider.load();
@@ -182,10 +183,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
 
   void _onUiSettingsChanged() {
     if (!_uiSettings.loaded) return;
-    final sig =
-        '${_uiSettings.sectionOrder.map((e) => e.id).join(',')}:'
-        '${_uiSettings.startSection.id}:'
-        '${_uiSettings.multiViewLayout.name}';
+    final sig = _uiSettings.signature;
     if (sig == _uiSignature) return;
     final first = _uiSignature.isEmpty;
     _uiSignature = sig;
@@ -252,6 +250,20 @@ class _StellarTvAppState extends State<StellarTvApp> {
             navigatorKey: appNavigatorKey,
             navigatorObservers: [OpenRoutesObserver.instance],
             home: const SplashScreen(),
+            // "Dimensione testo" in Personalizzazione scales every label.
+            builder: (context, child) {
+              final factor = ui.textScaleFactor;
+              if (factor == 1.0 || child == null) return child ?? const SizedBox();
+              final mq = MediaQuery.of(context);
+              return MediaQuery(
+                data: mq.copyWith(
+                  textScaler: TextScaler.linear(
+                    mq.textScaler.scale(1) * factor,
+                  ),
+                ),
+                child: child,
+              );
+            },
           );
         },
       ),

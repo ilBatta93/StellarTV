@@ -18,7 +18,6 @@ import '../services/imdb_resolver.dart';
 import '../services/introdb_service.dart';
 import '../services/native_player_bridge.dart';
 import '../services/player_settings_service.dart';
-import '../services/recording_service.dart';
 import '../services/subtitles_service.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
@@ -513,44 +512,6 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   /// Commands of the TV overlay, row by row.
-  bool get _canRecord => _isLive && RecordingService.canRecord(widget.channel);
-  bool get _recording =>
-      RecordingService.instance.activeFor(widget.channel) != null;
-
-  /// Starts recording until the end of the current programme (or one hour),
-  /// or stops the running one.
-  Future<void> _toggleRecording() async {
-    final rec = RecordingService.instance;
-    final active = rec.activeFor(widget.channel);
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (active != null) {
-      await rec.stop(active.id);
-      messenger?.showSnackBar(
-        const SnackBar(content: Text('Registrazione salvata in Registrazioni')),
-      );
-    } else {
-      final now = context.read<EpgProvider>().nowFor(widget.channel);
-      final item = await rec.recordNow(
-        widget.channel,
-        title: now?.title ?? widget.channel.name,
-        end: now?.endTime,
-      );
-      messenger?.showSnackBar(
-        SnackBar(
-          content: Text(
-            item == null
-                ? 'Questo canale non può essere registrato'
-                : 'Registrazione avviata fino alle '
-                      '${item.end.hour.toString().padLeft(2, '0')}:'
-                      '${item.end.minute.toString().padLeft(2, '0')}. '
-                      'Alcuni provider permettono una sola connessione.',
-          ),
-        ),
-      );
-    }
-    if (mounted) setState(() {});
-  }
-
   List<TvPlayerRow> _tvRows(PlaybackSession session) {
     if (_locked) {
       return [
@@ -720,15 +681,6 @@ class _PlayerScreenState extends State<PlayerScreen>
           label: session.muted ? 'Muto' : 'Volume',
           onPressed: session.toggleMute,
         ),
-        if (_canRecord)
-          TvPlayerAction(
-            id: 'record',
-            icon: _recording
-                ? Icons.stop_circle_rounded
-                : Icons.fiber_manual_record_rounded,
-            label: _recording ? 'Ferma registrazione' : 'Registra',
-            onPressed: _toggleRecording,
-          ),
         TvPlayerAction(
           id: 'lock',
           icon: Icons.lock_open_rounded,
@@ -1522,8 +1474,6 @@ class _PlayerScreenState extends State<PlayerScreen>
               duration: const Duration(milliseconds: 220),
               child: PlayerControls(
                 session: session,
-                onRecord: _canRecord ? _toggleRecording : null,
-                recording: _canRecord && _recording,
                 playFocusNode: null,
                 title: widget.channel.name,
                 subtitle: _isLive

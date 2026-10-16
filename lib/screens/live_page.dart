@@ -13,7 +13,6 @@ import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/epg_provider.dart';
 import '../services/device_type_service.dart';
-import '../services/recording_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
@@ -1096,47 +1095,7 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                                 playChannel(context, channel);
                                 return;
                               }
-                              // Future programme: OK schedules/cancels it.
-                              final rec = RecordingService.instance;
-                              final messenger = ScaffoldMessenger.maybeOf(ctx);
-                              if (!RecordingService.canRecord(channel)) {
-                                messenger?.showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Questo canale non può essere registrato',
-                                    ),
-                                  ),
-                                );
-                                return;
-                              }
-                              final existing = rec.scheduledFor(
-                                channel,
-                                p.startTime,
-                              );
-                              if (existing != null) {
-                                await rec.stop(existing.id);
-                                messenger?.showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Registrazione annullata'),
-                                  ),
-                                );
-                              } else {
-                                await rec.schedule(
-                                  channel,
-                                  title: p.title,
-                                  start: p.startTime,
-                                  end: p.endTime,
-                                );
-                                messenger?.showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Registrazione programmata: ${p.title}. '
-                                      'Lascia l\'app aperta durante il programma.',
-                                    ),
-                                  ),
-                                );
-                              }
-                              (ctx as Element).markNeedsBuild();
+                              // Future programmes are only listed.
                             },
                             child: Container(
                               padding: const EdgeInsets.all(12),
@@ -1166,29 +1125,6 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                      if (!live &&
-                                          RecordingService.instance
-                                                  .scheduledFor(
-                                                    channel,
-                                                    p.startTime,
-                                                  ) !=
-                                              null) ...[
-                                        const SizedBox(width: 8),
-                                        const Icon(
-                                          Icons.fiber_manual_record_rounded,
-                                          color: AppColors.error,
-                                          size: 12,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        const Text(
-                                          'REGISTRAZIONE PROGRAMMATA',
-                                          style: TextStyle(
-                                            color: AppColors.error,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ],
                                       if (live) ...[
                                         const SizedBox(width: 8),
                                         const Text(

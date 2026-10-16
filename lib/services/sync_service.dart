@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../providers/ui_settings.dart';
 import '../providers/reactions_provider.dart';
 
 /// A snapshot of everything the user cares about, serializable to JSON.
@@ -67,34 +66,34 @@ class SyncService {
     'xtream_password',
     'playlist_url',
   ];
-  static const _uiKeys = [
-    'kids_pin',
-    'ui_accent',
-    'ui_grid_size',
-    'theme_mode',
-    'ui_animations',
-    'ui_show_posters',
-    'ui_compact',
-    UiSettings.sectionOrderKey,
-    UiSettings.startSectionKey,
-    UiSettings.multiViewLayoutKey,
-    'show_adult_content',
-    'hidden_categories',
-    'playlist_refresh_minutes',
-    'epg_use_playlist',
-    'epg_sources',
-    'epg_refresh_minutes',
-    'expiry_reminders_v1',
-    ReactionsProvider.storageKey,
-  ];
-  static const _syncedKeys = [
-    ..._credentialsKeys,
-    'player_settings_v1',
-    'player_resume_positions',
-    ..._uiKeys,
-    'favorite_channels',
-    'favorite_tmdb_items',
-  ];
+  /// Keys that must never leave the device: caches, device state, local
+  /// files (downloads) and the sync bookkeeping itself. Every other saved
+  /// preference is synced, so new settings reach the cloud automatically.
+  static const _localOnlyKeys = {
+    codeKey,
+    _lastPushKey,
+    _lastPullKey,
+    'stellar_guest_mode',
+    'selected_profile_id',
+    'legacy_history_migrated',
+    'offline_downloads_v1',
+    'live_recordings_v1',
+    'epg_last_run',
+    'playlist_refresh_last_run',
+    'expiry_reminder_state_v1',
+  };
+  static const _localOnlyFragments = ['cache', 'images', 'verdicts', 'genres_v1', 'warmup', 'last_run'];
+
+  /// Whether a saved preference belongs in the cloud copy.
+  static bool isSyncedKey(String key) {
+    if (key.startsWith(_localHistoryKey)) return false;
+    if (_localOnlyKeys.contains(key)) return false;
+    final k = key.toLowerCase();
+    for (final f in _localOnlyFragments) {
+      if (k.contains(f)) return false;
+    }
+    return true;
+  }
 
   /// The cloud "code" is now the id of the signed-in account: every row in
   /// the cloud is tied to it and protected so only that account can read it.
@@ -278,8 +277,8 @@ class SyncService {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final settings = <String, dynamic>{};
-    for (final key in _syncedKeys) {
-      if (!prefs.containsKey(key)) continue;
+    for (final key in prefs.getKeys()) {
+      if (!isSyncedKey(key)) continue;
       settings[key] = prefs.get(key);
     }
     final localHistory = await loadLocalHistory();
@@ -308,7 +307,7 @@ class SyncService {
     var changed = false;
     for (final entry in settings.entries) {
       final key = entry.key;
-      if (!_syncedKeys.contains(key) || key == 'local_watch_history') continue;
+      if (!isSyncedKey(key)) continue;
       final value = key == ReactionsProvider.storageKey && entry.value is String
           ? ReactionsProvider.merge(
               prefs.getString(key) ?? '{}',
