@@ -142,15 +142,28 @@ class SyncService {
         email: email.trim(),
         password: password,
       );
-      if (res.session == null) {
-        return 'Account creato: controlla la tua email per confermarlo.';
-      }
+      if (res.session == null) return confirmPending;
       await getStoredCode();
       return null;
     } on AuthException catch (e) {
       return _authMessage(e);
     } catch (_) {
       return 'Registrazione non riuscita. Controlla la connessione.';
+    }
+  }
+
+  /// Returned by [signUp] when the account waits for email confirmation.
+  static const confirmPending = '__confirm_email_pending__';
+
+  /// Sends the signup confirmation email again.
+  Future<String?> resendConfirmation(String email) async {
+    try {
+      await _client.auth.resend(type: OtpType.signup, email: email.trim());
+      return null;
+    } on AuthException catch (e) {
+      return _authMessage(e);
+    } catch (_) {
+      return 'Invio non riuscito. Controlla la connessione.';
     }
   }
 
@@ -165,8 +178,15 @@ class SyncService {
     }
   }
 
+  static const notConfirmed =
+      'Email non ancora confermata. Apri il link che ti abbiamo inviato, poi accedi.';
+
   String _authMessage(AuthException e) {
     final m = e.message.toLowerCase();
+    if (m.contains('not confirmed')) return notConfirmed;
+    if (m.contains('rate limit') || m.contains('security purposes')) {
+      return 'Troppi tentativi: attendi un minuto e riprova.';
+    }
     if (m.contains('invalid login')) return 'Email o password non corretti.';
     if (m.contains('already registered') || m.contains('already exists')) {
       return 'Esiste già un account con questa email: accedi.';
@@ -386,3 +406,4 @@ class SyncService {
     await prefs.setString(_lastPullKey, DateTime.now().toIso8601String());
   }
 }
+

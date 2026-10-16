@@ -57,6 +57,9 @@ class SyncProvider extends ChangeNotifier {
 
   Future<String?> resetPassword(String email) => _sync.resetPassword(email);
 
+  Future<String?> resendConfirmation(String email) =>
+      _sync.resendConfirmation(email);
+
   Future<String?> _auth(Future<String?> Function() action) async {
     _busy = true;
     _message = null;
@@ -211,3 +214,4 @@ class SnapshotPart {
     required this.tmdbFavorites,
   });
 }
+

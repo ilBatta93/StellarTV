@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_provider.dart';
 import '../providers/history_provider.dart';
 import '../providers/sync_provider.dart';
+import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/tv_text_field.dart';
@@ -83,6 +84,15 @@ class _AccountScreenState extends State<AccountScreen> {
         ? await sync.signUp(email, password)
         : await sync.signIn(email, password);
     if (!mounted) return;
+    if (error == SyncService.confirmPending ||
+        error == SyncService.notConfirmed) {
+      setState(() {
+        _loading = false;
+        _register = false;
+      });
+      await _showConfirmDialog(email, justCreated: error == SyncService.confirmPending);
+      return;
+    }
     if (error != null) {
       setState(() => _loading = false);
       _show(error);
@@ -105,6 +115,40 @@ class _AccountScreenState extends State<AccountScreen> {
             : const LoginScreen(),
       ),
       (_) => false,
+    );
+  }
+
+  /// TV-friendly dialog: the user confirms the email from a phone or PC,
+  /// then comes back and presses Accedi. OK button focused for the remote.
+  Future<void> _showConfirmDialog(String email, {required bool justCreated}) async {
+    final sync = context.read<SyncProvider>();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text(justCreated ? 'Account creato!' : 'Conferma la tua email'),
+        content: Text(
+          'Ti abbiamo inviato un\'email di conferma a $email.\n\n'
+          'Apri il link dal telefono o dal computer (controlla anche lo spam), '
+          'poi torna qui e premi Accedi.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final err = await sync.resendConfirmation(email);
+              if (!ctx.mounted) return;
+              Navigator.of(ctx).pop();
+              _show(err ?? 'Email di conferma inviata di nuovo.', ok: err == null);
+            },
+            child: const Text('Invia di nuovo'),
+          ),
+          FilledButton(
+            autofocus: true,
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Ho capito'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -306,3 +350,4 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 }
+
