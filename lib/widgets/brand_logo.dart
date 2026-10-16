@@ -1,7 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
+/// "Orbit Stellar" mark: a titanium four-point star with an orange core and a
+/// tilted orbit ring. Pure vector, so it stays crisp from the app bar to TV.
 class BrandMark extends StatelessWidget {
   final double size;
 
@@ -18,6 +22,7 @@ class BrandMark extends StatelessWidget {
   }
 }
 
+/// STELLAR ✦ [TV] — spaced satin wordmark, star separator and a glass pill.
 class BrandWordmark extends StatelessWidget {
   final double fontSize;
 
@@ -25,30 +30,66 @@ class BrandWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text.rich(
-      TextSpan(
-        children: [
-          const TextSpan(
-            text: 'STELLAR',
-            style: TextStyle(fontWeight: FontWeight.w800),
+    final f = fontSize;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          'STELLAR',
+          maxLines: 1,
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            color: const Color(0xFFF5F5F7),
+            fontFamily: 'Sora',
+            fontSize: f,
+            fontWeight: FontWeight.w300,
+            letterSpacing: f * 0.28,
+            height: 1,
           ),
-          TextSpan(
-            text: 'TV',
+        ),
+        SizedBox(
+          width: f * 0.7,
+          height: f * 0.7,
+          child: CustomPaint(
+            painter: _SparkPainter(color: AppColors.primary),
+          ),
+        ),
+        SizedBox(width: f * 0.18),
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: f * 0.32,
+            vertical: f * 0.12,
+          ),
+          decoration: BoxDecoration(
+            color: const Color(0x1FFFFFFF),
+            borderRadius: BorderRadius.circular(f),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.85),
+              width: math.max(1.0, f * 0.05),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.28),
+                blurRadius: f * 0.5,
+              ),
+            ],
+          ),
+          child: Text(
+            'TV',
+            maxLines: 1,
+            textScaler: TextScaler.noScaling,
             style: TextStyle(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w300,
+              color: const Color(0xFFF5F5F7),
+              fontFamily: 'Sora',
+              fontSize: f * 0.62,
+              fontWeight: FontWeight.w600,
+              letterSpacing: f * 0.08,
+              height: 1,
             ),
           ),
-        ],
-      ),
-      maxLines: 1,
-      textScaler: TextScaler.noScaling,
-      style: TextStyle(
-        color: AppColors.textPrimary,
-        fontFamily: 'Sora',
-        fontSize: fontSize,
-        height: 1,
-      ),
+        ),
+      ],
     );
   }
 }
@@ -64,15 +105,23 @@ class BrandLogo extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         BrandMark(size: size),
-        SizedBox(width: size * 0.34),
-        BrandWordmark(fontSize: size * 0.58),
+        SizedBox(width: size * 0.3),
+        BrandWordmark(fontSize: size * 0.5),
       ],
     );
   }
 }
 
-/// A four-point stellar flare cut by a play-shaped void. It stays crisp from
-/// the compact app bar to TV-sized splash screens and needs no bitmap asset.
+Path _starPath(Offset c, double rx, double ry, double waist) {
+  return Path()
+    ..moveTo(c.dx, c.dy - ry)
+    ..quadraticBezierTo(c.dx + waist, c.dy - waist, c.dx + rx, c.dy)
+    ..quadraticBezierTo(c.dx + waist, c.dy + waist, c.dx, c.dy + ry)
+    ..quadraticBezierTo(c.dx - waist, c.dy + waist, c.dx - rx, c.dy)
+    ..quadraticBezierTo(c.dx - waist, c.dy - waist, c.dx, c.dy - ry)
+    ..close();
+}
+
 class _StellarMarkPainter extends CustomPainter {
   const _StellarMarkPainter({required this.color});
 
@@ -80,63 +129,88 @@ class _StellarMarkPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final glow = Paint()
-      ..color = color.withValues(alpha: 0.22)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, size.width * 0.16);
-    canvas.drawCircle(center, size.width * 0.34, glow);
+    final s = size.width;
+    final c = Offset(s / 2, size.height / 2);
+    final orbitRect = Rect.fromCenter(center: c, width: s * 0.94, height: s * 0.36);
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.0, s * 0.035)
+      ..strokeCap = StrokeCap.round
+      ..shader = LinearGradient(
+        colors: [const Color(0xFFFF5E00), color, const Color(0xFFFFA000)],
+      ).createShader(orbitRect);
 
-    final flare = Path()
-      ..moveTo(center.dx, size.height * 0.03)
-      ..cubicTo(
-        size.width * 0.56,
-        size.height * 0.36,
-        size.width * 0.64,
-        size.height * 0.44,
-        size.width * 0.97,
-        center.dy,
-      )
-      ..cubicTo(
-        size.width * 0.64,
-        size.height * 0.56,
-        size.width * 0.56,
-        size.height * 0.64,
-        center.dx,
-        size.height * 0.97,
-      )
-      ..cubicTo(
-        size.width * 0.44,
-        size.height * 0.64,
-        size.width * 0.36,
-        size.height * 0.56,
-        size.width * 0.03,
-        center.dy,
-      )
-      ..cubicTo(
-        size.width * 0.36,
-        size.height * 0.44,
-        size.width * 0.44,
-        size.height * 0.36,
-        center.dx,
-        size.height * 0.03,
-      )
-      ..close();
+    void orbitArc(double start, double sweep) {
+      canvas.save();
+      canvas.translate(c.dx, c.dy);
+      canvas.rotate(-math.pi / 9);
+      canvas.translate(-c.dx, -c.dy);
+      canvas.drawArc(orbitRect, start, sweep, false, ring);
+      canvas.restore();
+    }
 
-    final play = Path()
-      ..moveTo(size.width * 0.43, size.height * 0.34)
-      ..lineTo(size.width * 0.70, center.dy)
-      ..lineTo(size.width * 0.43, size.height * 0.66)
-      ..close();
-    final mark = Path.combine(PathOperation.difference, flare, play);
-    canvas.drawPath(mark, Paint()..color = color);
+    // Soft core glow.
     canvas.drawCircle(
-      Offset(size.width * 0.74, size.height * 0.25),
-      size.width * 0.045,
-      Paint()..color = AppColors.textPrimary,
+      c,
+      s * 0.3,
+      Paint()
+        ..color = color.withValues(alpha: 0.22)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, s * 0.14),
     );
+    // Back half of the orbit passes behind the star.
+    orbitArc(math.pi, math.pi);
+
+    final star = _starPath(c, s * 0.44, s * 0.47, s * 0.06);
+    final bounds = star.getBounds();
+    canvas.drawPath(
+      star,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFFFFF), Color(0xFFC9CBD1), Color(0xFF7D8088)],
+        ).createShader(bounds),
+    );
+    // Orange core.
+    canvas.drawPath(
+      _starPath(c, s * 0.2, s * 0.2, s * 0.025),
+      Paint()
+        ..shader = RadialGradient(
+          colors: [const Color(0xFFFFF3E0), color, color.withValues(alpha: 0)],
+          stops: const [0, 0.45, 1],
+        ).createShader(Rect.fromCircle(center: c, radius: s * 0.2)),
+    );
+    // Front half of the orbit crosses in front.
+    orbitArc(0, math.pi);
   }
 
   @override
   bool shouldRepaint(covariant _StellarMarkPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+class _SparkPainter extends CustomPainter {
+  const _SparkPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    canvas.drawCircle(
+      c,
+      size.width * 0.3,
+      Paint()
+        ..color = color.withValues(alpha: 0.35)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, size.width * 0.2),
+    );
+    canvas.drawPath(
+      _starPath(c, size.width * 0.42, size.height * 0.36, size.width * 0.05),
+      Paint()..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _SparkPainter oldDelegate) =>
       oldDelegate.color != color;
 }
