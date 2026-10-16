@@ -36,8 +36,13 @@ class PlaybackSession extends ChangeNotifier {
     required this.settings,
     this.startAt,
     this.previewMode = false,
+    this.previewFallback = false,
     this.engineFactory,
-  }) : _candidates = liveCandidates(url, isLive),
+  }) : _candidates = liveCandidates(
+         url,
+         isLive,
+         format: settings.liveStreamFormat,
+       ),
        speed = isLive ? 1.0 : settings.defaultSpeed,
        fitMode = settings.fitMode,
        subtitleDelay = Duration(milliseconds: settings.subtitleDelayMs),
@@ -48,6 +53,10 @@ class PlaybackSession extends ChangeNotifier {
 
   /// Small/parallel players (Diretta preview, MultiView tiles).
   final bool previewMode;
+
+  /// MultiView tiles: a tile whose hardware decoder is busy (cheap TV sticks
+  /// have one) may fall back to mpv/FFmpeg instead of staying black.
+  final bool previewFallback;
 
   /// Allows deterministic playback/lifecycle tests without a native decoder.
   final PlaybackEngine Function(PlayerEngineType)? engineFactory;
@@ -64,7 +73,11 @@ class PlaybackSession extends ChangeNotifier {
     r'^(https?://[^/]+)/(?:live/)?([^/]+)/([^/]+)/(\d+)(?:\.(m3u8|ts))?$',
   );
 
-  static List<String> liveCandidates(String url, bool isLive) {
+  static List<String> liveCandidates(
+    String url,
+    bool isLive, {
+    LiveStreamFormat format = LiveStreamFormat.auto,
+  }) {
     if (!isLive) return [url];
     final m = _xtreamLive.firstMatch(url.trim());
     if (m == null || url.contains('/movie/') || url.contains('/series/')) {
@@ -76,12 +89,16 @@ class PlaybackSession extends ChangeNotifier {
     // a black picture and a second connection refused by the server). Only
     // addresses missing the `/live/` segment (HTTP 404) are rewritten.
     final original = url.trim();
-    return {
-      if (original.contains('/live/')) original,
-      '$base.ts',
-      '$base.m3u8',
-      original,
-    }.toList();
+    return switch (format) {
+      LiveStreamFormat.ts => {'$base.ts', '$base.m3u8', original}.toList(),
+      LiveStreamFormat.m3u8 => {'$base.m3u8', '$base.ts', original}.toList(),
+      LiveStreamFormat.auto => {
+        if (original.contains('/live/')) original,
+        '$base.ts',
+        '$base.m3u8',
+        original,
+      }.toList(),
+    };
   }
 
   /// Engine used by preview/MultiView tiles: ExoPlayer on Android (Java,
@@ -136,7 +153,10 @@ class PlaybackSession extends ChangeNotifier {
   List<_Attempt> _buildPlan(PlayerEngineType primary, {bool fallback = true}) {
     final plan = [for (final u in _candidates) _Attempt(primary, u)];
     final other = primary.other;
-    if (fallback && !previewMode && settings.autoFallback && other != primary) {
+    if (fallback &&
+        (!previewMode || previewFallback) &&
+        settings.autoFallback &&
+        other != primary) {
       plan.addAll([for (final u in _candidates) _Attempt(other, u)]);
     }
     return plan;
@@ -403,8 +423,10 @@ class PlaybackSession extends ChangeNotifier {
       if (gen != _generation) return;
       _status = SessionStatus.failed;
       _error =
-          'Il server TV ha rifiutato la connessione. Verifica che non ci '
-          'siano altri dispositivi collegati con lo stesso abbonamento e riprova.';
+          previewMode
+          ? 'Il provider IPTV non consente più connessioni simultanee.'
+          : 'Il server TV ha rifiutato la connessione. Verifica che non ci '
+                'siano altri dispositivi collegati con lo stesso abbonamento e riprova.';
       _notify();
       return;
     }
@@ -615,6 +637,13 @@ class PlaybackSession extends ChangeNotifier {
     muted = volume == 0;
     await _engine?.setVolume(volume);
     _notify();
+  }
+
+  /// Resumes a player paused by the system (e.g. Android audio focus).
+  Future<void> ensurePlaying() async {
+    final engine = _engine;
+    if (engine == null || _disposed) return;
+    if (!engine.value.isPlaying) await engine.play();
   }
 
   Future<void> toggleMute() async {

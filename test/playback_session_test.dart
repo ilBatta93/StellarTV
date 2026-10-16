@@ -191,4 +191,30 @@ void main() {
       expect(e.other, isNot(PlayerEngineType.fvp));
     }
   });
+
+  test('formato flusso dirette sceglie il primo indirizzo provato', () {
+    const url = 'http://srv.example:8080/live/u/p/42.ts';
+    expect(
+      PlaybackSession.liveCandidates(url, true,
+          format: LiveStreamFormat.m3u8).first,
+      'http://srv.example:8080/live/u/p/42.m3u8',
+    );
+    expect(
+      PlaybackSession.liveCandidates(
+        'http://srv.example:8080/u/p/42',
+        true,
+        format: LiveStreamFormat.ts,
+      ).first,
+      'http://srv.example:8080/live/u/p/42.ts',
+    );
+    expect(PlaybackSession.liveCandidates(url, true).first, url);
+  });
+
+  test('il formato flusso viene salvato e ricaricato', () {
+    final s = PlayerSettings()..liveStreamFormat = LiveStreamFormat.m3u8;
+    expect(
+      PlayerSettings.fromJson(s.toJson()).liveStreamFormat,
+      LiveStreamFormat.m3u8,
+    );
+  });
 }

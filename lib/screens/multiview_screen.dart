@@ -55,7 +55,12 @@ class _MultiViewScreenState extends State<MultiViewScreen>
   void initState() {
     super.initState();
     _app = context.read<AppProvider>();
-    _audio = MultiViewAudio((session, volume) => session.setVolume(volume));
+    _audio = MultiViewAudio((session, volume) async {
+      // Tiles always keep playing: only the volume changes, and a tile
+      // paused by Android's audio focus is resumed.
+      await session.setVolume(volume);
+      await session.ensurePlaying();
+    });
     _app.setPlaybackActive(true);
     _app.addListener(_checkAllowed);
     WidgetsBinding.instance.addObserver(this);
@@ -114,6 +119,7 @@ class _MultiViewScreenState extends State<MultiViewScreen>
       isLive: true,
       settings: settings,
       previewMode: true,
+      previewFallback: true,
       engineFactory: widget.engineFactory,
     )..muted = true;
     final slot = _Slot(channel, session);
@@ -136,7 +142,7 @@ class _MultiViewScreenState extends State<MultiViewScreen>
   void _select(_Slot slot) {
     if (_selected == slot) return;
     setState(() => _selected = slot);
-    _syncAudio();
+    _syncAudio().then((_) => slot.session.ensurePlaying());
   }
 
   void _remove(_Slot slot) {

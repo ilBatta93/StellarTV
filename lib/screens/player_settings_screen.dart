@@ -168,6 +168,21 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           ),
         ),
         _EngineFeatures(engine: s.primaryEngine),
+        if (!_tvProfile || _live)
+          SettingsValueTile(
+            icon: Icons.stream_rounded,
+            title: 'Formato flusso dirette',
+            subtitle: 'Per i canali Xtream',
+            value: s.liveStreamFormat.label,
+            onTap: () => _pick(
+              'Formato flusso dirette',
+              LiveStreamFormat.values,
+              s.liveStreamFormat,
+              (f) => f.label,
+              (s, v) => s.liveStreamFormat = v,
+              detail: (f) => f.description,
+            ),
+          ),
         SettingsSwitchTile(
           icon: Icons.swap_horiz_rounded,
           title: 'Cambio automatico del motore',

@@ -36,6 +36,25 @@ enum PlayerEngineType {
   bool get supportsQuality => this == PlayerEngineType.exo;
 }
 
+enum LiveStreamFormat {
+  auto(
+    'Automatico',
+    'Indirizzo originale del provider, poi MPEG-TS e HLS se non risponde',
+  ),
+  ts(
+    'MPEG-TS (.ts)',
+    'Flusso diretto: avvio più rapido, adatto alla maggior parte dei server Xtream',
+  ),
+  m3u8(
+    'HLS (.m3u8)',
+    'Flusso a segmenti: utile con connessioni instabili o server che lo ottimizzano',
+  );
+
+  final String label;
+  final String description;
+  const LiveStreamFormat(this.label, this.description);
+}
+
 enum VideoFitMode {
   fit('Adatta'),
   fill('Allunga'),
@@ -107,6 +126,7 @@ class PlayerSettings {
   PlayerEngineType primaryEngine;
   bool autoFallback;
   int startTimeoutSeconds;
+  LiveStreamFormat liveStreamFormat;
 
   HardwareDecoding hardwareDecoding;
   int networkCachingMs;
@@ -146,6 +166,7 @@ class PlayerSettings {
     this.primaryEngine = PlayerEngineType.mediakit,
     this.autoFallback = true,
     this.startTimeoutSeconds = 12,
+    this.liveStreamFormat = LiveStreamFormat.auto,
     this.hardwareDecoding = HardwareDecoding.auto,
     this.networkCachingMs = 1500,
     this.liveCachingMs = 1500,
@@ -194,6 +215,11 @@ class PlayerSettings {
           : PlayerEngineType.mediakit,
       autoFallback: b('autoFallback', d.autoFallback),
       startTimeoutSeconds: i('startTimeoutSeconds', d.startTimeoutSeconds),
+      liveStreamFormat: _enum(
+        LiveStreamFormat.values,
+        j['liveStreamFormat'],
+        d.liveStreamFormat,
+      ),
       hardwareDecoding: _enum(
         HardwareDecoding.values,
         j['hardwareDecoding'],
@@ -256,6 +282,7 @@ class PlayerSettings {
     'liveEngineV': 3,
     'autoFallback': autoFallback,
     'startTimeoutSeconds': startTimeoutSeconds,
+    'liveStreamFormat': liveStreamFormat.name,
     'hardwareDecoding': hardwareDecoding.name,
     'networkCachingMs': networkCachingMs,
     'liveCachingMs': liveCachingMs,
