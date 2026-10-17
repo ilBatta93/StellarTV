@@ -63,6 +63,7 @@ class HorizontalRow extends StatelessWidget {
   final int itemCount;
   final IndexedWidgetBuilder itemBuilder;
   final double spacing;
+  final String? horizontalFocusLabelPrefix;
 
   const HorizontalRow({
     super.key,
@@ -70,6 +71,7 @@ class HorizontalRow extends StatelessWidget {
     required this.itemCount,
     required this.itemBuilder,
     this.spacing = 12,
+    this.horizontalFocusLabelPrefix,
   });
 
   @override
@@ -93,28 +95,32 @@ class HorizontalRow extends StatelessWidget {
           itemBuilder: (context, index) {
             final child = itemBuilder(context, index);
             if (!DeviceTypeService.isTv) return child;
-            return Builder(builder: (cardContext) => Focus(
-              canRequestFocus: false,
-              skipTraversal: true,
-              onFocusChange: (focused) {
-                if (!focused) return;
-                // Home's banner callback reveals the vertical heading only.
-                // Reveal through this position, not Scrollable.ensureVisible,
-                // so horizontal movement never fights the vertical heading.
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!cardContext.mounted) return;
-                  final target = cardContext.findRenderObject();
-                  final scrollable = Scrollable.maybeOf(cardContext);
-                  if (target == null || !target.attached || scrollable == null) {
-                    return;
-                  }
-                  // Immediate reveal keeps lazy neighbours built even while
-                  // the remote repeats faster than a scroll animation.
-                  scrollable.position.ensureVisible(target, alignment: 0.5);
-                });
-              },
-              child: child,
-            ));
+            return Builder(
+              builder: (cardContext) => Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onFocusChange: (focused) {
+                  if (!focused) return;
+                  // Home's banner callback reveals the vertical heading only.
+                  // Reveal through this position, not Scrollable.ensureVisible,
+                  // so horizontal movement never fights the vertical heading.
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!cardContext.mounted) return;
+                    final target = cardContext.findRenderObject();
+                    final scrollable = Scrollable.maybeOf(cardContext);
+                    if (target == null ||
+                        !target.attached ||
+                        scrollable == null) {
+                      return;
+                    }
+                    // Immediate reveal keeps lazy neighbours built even while
+                    // the remote repeats faster than a scroll animation.
+                    scrollable.position.ensureVisible(target, alignment: 0.5);
+                  });
+                },
+                child: child,
+              ),
+            );
           },
         ),
       ),
@@ -123,7 +129,7 @@ class HorizontalRow extends StatelessWidget {
 
   /// Left/Right never leave the row: at the first or last card the focus
   /// stays put instead of jumping to the row below or above.
-  static KeyEventResult _keepInRow(FocusNode row, KeyEvent event) {
+  KeyEventResult _keepInRow(FocusNode row, KeyEvent event) {
     if (!DeviceTypeService.isTv) return KeyEventResult.ignored;
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
@@ -148,6 +154,9 @@ class HorizontalRow extends StatelessWidget {
     for (final node in row.traversalDescendants) {
       if (node == current || !node.canRequestFocus || node.context == null) {
         continue;
+      }
+      if (horizontalFocusLabelPrefix case final prefix?) {
+        if (!(node.debugLabel?.startsWith(prefix) ?? false)) continue;
       }
       final dx = direction == TraversalDirection.right
           ? node.rect.center.dx - here.center.dx

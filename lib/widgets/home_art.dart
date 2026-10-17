@@ -12,7 +12,8 @@ import 'poster_card.dart';
 
 /// Same bounded presentation on TV and touch, no new focus stops.
 class HomeTitleArt extends StatefulWidget {
-  const HomeTitleArt({super.key, required this.item});
+  const HomeTitleArt({super.key, required this.item, this.height});
+  final double? height;
   final TmdbItem item;
   @override
   State<HomeTitleArt> createState() => _HomeTitleArtState();
@@ -41,7 +42,7 @@ class _HomeTitleArtState extends State<HomeTitleArt> {
 
   @override
   Widget build(BuildContext context) {
-    final height = DeviceTypeService.isTv ? 86.0 : 72.0;
+    final height = widget.height ?? (DeviceTypeService.isTv ? 86.0 : 72.0);
     final title = displayTitle(widget.item.title);
     final fallback = Align(
       alignment: Alignment.centerLeft,

@@ -72,6 +72,8 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
           return;
         }
       }
+      if (!mounted) return;
+      setState(() => _item = item);
       final similar = item == null
           ? <TmdbItem>[]
           : await tmdb.recommendations(item);

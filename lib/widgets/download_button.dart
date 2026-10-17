@@ -10,6 +10,7 @@ import 'tv_focusable.dart';
 /// cannot be saved offline. On TV it is one focus stop activated with OK.
 class DownloadButton extends StatelessWidget {
   final Channel channel;
+  final FocusNode? focusNode;
 
   /// Full-width labelled button (title page) instead of a compact icon.
   final bool expanded;
@@ -17,6 +18,7 @@ class DownloadButton extends StatelessWidget {
   const DownloadButton({
     super.key,
     required this.channel,
+    this.focusNode,
     this.expanded = false,
   });
 
@@ -85,18 +87,18 @@ class DownloadButton extends StatelessWidget {
           null => (Icons.download_rounded, 'Scarica'),
           DownloadStatus.queued => (Icons.schedule_rounded, 'In coda · pausa'),
           DownloadStatus.running => (
-              Icons.pause_rounded,
-              'Download $percent% · pausa',
-            ),
+            Icons.pause_rounded,
+            'Download $percent% · pausa',
+          ),
           DownloadStatus.paused => (
-              Icons.play_arrow_rounded,
-              'Riprendi download',
-            ),
+            Icons.play_arrow_rounded,
+            'Riprendi download',
+          ),
           DownloadStatus.failed => (Icons.refresh_rounded, 'Riprova download'),
           DownloadStatus.completed => (
-              Icons.download_done_rounded,
-              'Scaricato · elimina',
-            ),
+            Icons.download_done_rounded,
+            'Scaricato · elimina',
+          ),
         };
         final color = status == DownloadStatus.completed
             ? AppColors.primary
@@ -124,6 +126,7 @@ class DownloadButton extends StatelessWidget {
               );
         if (!DeviceTypeService.isTv) return button;
         return TvFocusable(
+          focusNode: focusNode,
           onPressed: press,
           focusedScale: 1.0,
           borderRadius: BorderRadius.circular(expanded ? 12 : 24),

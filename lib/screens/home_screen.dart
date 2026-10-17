@@ -315,9 +315,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Scaffold(
         body: Stack(
           children: [
-            // Home draws its hero under the menu; other tabs start below it.
+            // Foreground content always starts below the actual TV menu.
             Positioned.fill(
-              top: _currentSection == AppSection.home ? 0 : _TvTopBar.height,
+              top: _TvTopBar.height,
               child: Focus(
                 canRequestFocus: false,
                 skipTraversal: true,

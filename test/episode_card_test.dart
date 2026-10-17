@@ -9,65 +9,114 @@ import 'package:stellar_tv/models/series_details.dart';
 import 'package:stellar_tv/providers/ui_settings.dart';
 import 'package:stellar_tv/services/device_type_service.dart';
 import 'package:stellar_tv/widgets/episode_card.dart';
+import 'package:stellar_tv/widgets/section_row.dart';
 
 void main() {
-  testWidgets('Horizontal episodes fit TV and D-pad selects the next episode', (
-    tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          const MethodChannel('stellartv/device'),
-          (_) async => true,
-        );
-    await DeviceTypeService.initialize();
-    debugDefaultTargetPlatformOverride = null;
-    var played = -1;
-    await tester.pumpWidget(
-      ChangeNotifierProvider(
-        create: (_) => UiSettings(),
-        child: MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              height: 320,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: 4,
-                separatorBuilder: (_, _) => const SizedBox(width: 20),
-                itemBuilder: (_, i) => EpisodeCard(
-                  episode: SeriesEpisode(
-                    channel: Channel(
-                      id: '$i',
-                      name: 'Episode $i',
-                      url: '',
-                      logo: '',
-                      group: '',
-                      type: ContentType.series,
+  for (final downloadable in [true, false]) {
+    testWidgets(
+      'Episode horizontal lane and Down actions download=$downloadable',
+      (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(
+              const MethodChannel('stellartv/device'),
+              (_) async => true,
+            );
+        await DeviceTypeService.initialize();
+        debugDefaultTargetPlatformOverride = null;
+        var played = -1;
+        await tester.pumpWidget(
+          ChangeNotifierProvider(
+            create: (_) => UiSettings(),
+            child: MaterialApp(
+              home: Scaffold(
+                body: SizedBox(
+                  height: 320,
+                  child: HorizontalRow(
+                    horizontalFocusLabelPrefix: 'episode-play:',
+                    height: 300,
+                    spacing: 20,
+                    itemCount: 4,
+                    itemBuilder: (_, i) => EpisodeCard(
+                      episode: SeriesEpisode(
+                        channel: Channel(
+                          id: '$i',
+                          name: 'Episode $i',
+                          url: downloadable
+                              ? 'https://example.invalid/$i.mp4'
+                              : '',
+                          logo: '',
+                          group: '',
+                          type: ContentType.series,
+                        ),
+                        season: 1,
+                        number: i + 1,
+                        title: 'Long episode title',
+                      ),
+                      onPlay: () => played = i,
+                      onToggleWatched: () {},
                     ),
-                    season: 1,
-                    number: i + 1,
-                    title: 'Long episode title',
                   ),
-                  onPlay: () => played = i,
-                  onToggleWatched: () {},
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+        await tester.pump();
+        FocusManager.instance.primaryFocus?.nextFocus();
+        await tester.pump();
+        await tester.sendKeyEvent(
+          LogicalKeyboardKey.select,
+          platform: 'android',
+        );
+        await tester.pump();
+        expect(played, 0);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+        await tester.sendKeyEvent(
+          LogicalKeyboardKey.select,
+          platform: 'android',
+        );
+        await tester.pump();
+        expect(played, 1);
+        expect(
+          FocusManager.instance.primaryFocus?.debugLabel,
+          'episode-play:1',
+        );
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pump();
+        expect(
+          FocusManager.instance.primaryFocus?.debugLabel,
+          downloadable ? 'episode-download:1' : 'episode-watched:1',
+        );
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+        expect(
+          FocusManager.instance.primaryFocus?.debugLabel,
+          'episode-watched:1',
+        );
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+        expect(
+          FocusManager.instance.primaryFocus?.debugLabel,
+          'episode-watched:1',
+        );
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pump();
+        expect(
+          FocusManager.instance.primaryFocus?.debugLabel,
+          'episode-play:1',
+        );
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await tester.pump();
+        expect(
+          FocusManager.instance.primaryFocus?.debugLabel,
+          'episode-play:0',
+        );
+        expect(tester.takeException(), isNull);
+      },
     );
-    await tester.pump();
-    FocusManager.instance.primaryFocus?.nextFocus();
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.select, platform: 'android');
-    await tester.pump();
-    expect(played, 0);
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.select, platform: 'android');
-    await tester.pump();
-    expect(played, 1);
-    expect(tester.takeException(), isNull);
-  });
+  }
 }

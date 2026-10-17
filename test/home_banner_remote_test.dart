@@ -51,7 +51,8 @@ class FakeTmdb extends TmdbService {
   @override
   Future<String?> titleLogo(TmdbItem item) async => null;
   @override
-  Future<TmdbItem?> homeArtwork(String title, {required bool isMovie}) async => null;
+  Future<TmdbItem?> homeArtwork(String title, {required bool isMovie}) async =>
+      null;
   @override
   Future<TmdbItem?> findByTitle(String title, {required bool isMovie}) async {
     calls++;
@@ -104,8 +105,14 @@ void main() {
   fixtures.mainSetupForRemote();
   setUp(() async {
     for (final family in ['Sora', 'Manrope', 'MaterialIcons']) {
-      final loader = FontLoader(family)..addFont(rootBundle.load(
-        family == 'MaterialIcons' ? 'fonts/MaterialIcons-Regular.otf' : 'assets/fonts/$family.ttf'));
+      final loader = FontLoader(family)
+        ..addFont(
+          rootBundle.load(
+            family == 'MaterialIcons'
+                ? 'fonts/MaterialIcons-Regular.otf'
+                : 'assets/fonts/$family.ttf',
+          ),
+        );
       await loader.load();
     }
   });
@@ -151,7 +158,9 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.text('Titolo ultima visione'), findsOneWidget);
 
-        final title = tester.getRect(find.byKey(const ValueKey('tv-home-banner-title')));
+        final title = tester.getRect(
+          find.byKey(const ValueKey('tv-home-banner-title')),
+        );
         expect(title.top, greaterThanOrEqualTo(0));
         expect(title.bottom, lessThan(size.height));
         expect(find.text('★ 8.0'), findsNothing);
@@ -176,21 +185,37 @@ void main() {
           });
         }
         final top = find.ancestor(
-          of: find.text('Top 10 della settimana'),
+          of: find.text('Top 10 della settimana', skipOffstage: false),
           matching: find.byWidgetPredicate(
             (w) => w.runtimeType.toString() == '_TvTopRow',
+            skipOffstage: false,
           ),
         );
         final poster = find
-            .descendant(of: top, matching: find.byWidgetPredicate((w) => w is HomeLandscapeCard && w.rank != null))
+            .descendant(
+              of: top,
+              matching: find.byWidgetPredicate(
+                (w) => w is HomeLandscapeCard && w.rank != null,
+                skipOffstage: false,
+              ),
+              skipOffstage: false,
+            )
             .first;
         final stop = find
-            .descendant(of: poster, matching: find.byType(TvFocusable))
+            .descendant(
+              of: poster,
+              matching: find.byType(TvFocusable, skipOffstage: false),
+              skipOffstage: false,
+            )
             .first;
         Focus.of(
           tester.element(
             find
-                .descendant(of: stop, matching: find.byType(RepaintBoundary))
+                .descendant(
+                  of: stop,
+                  matching: find.byType(RepaintBoundary, skipOffstage: false),
+                  skipOffstage: false,
+                )
                 .first,
           ),
         ).parent?.requestFocus();
@@ -198,7 +223,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
         await tester.pump();
         final header = tester.getRect(find.text('Top 10 della settimana'));
-        expect(header.top, greaterThanOrEqualTo(210));
+        expect(header.top, greaterThanOrEqualTo(170));
         expect(header.bottom, lessThan(size.height));
         expect(tester.takeException(), isNull);
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);

@@ -18,6 +18,8 @@ import '../widgets/tv_focusable.dart';
 import '../widgets/tv_detail_backdrop.dart';
 import '../widgets/reaction_buttons.dart';
 import '../widgets/episode_card.dart';
+import '../widgets/home_art.dart';
+import '../services/title_display.dart';
 
 class SeriesDetailScreen extends StatefulWidget {
   final Channel series;
@@ -58,7 +60,8 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
             widget.series.displaySeriesName,
             isMovie: false,
           );
-      if (item == null) return;
+      if (item == null || !mounted) return;
+      setState(() => _item = item);
       final cast = await tmdb.cast(item);
       final recommendations = await tmdb.recommendations(item);
       if (!mounted) return;
@@ -173,10 +176,18 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  series.displaySeriesName,
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
+                if (DeviceTypeService.isTv && item != null)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: HomeTitleArt(item: item),
+                  )
+                else
+                  Text(
+                    DeviceTypeService.isTv
+                        ? displayTitle(series.displaySeriesName)
+                        : series.displaySeriesName,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -291,6 +302,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
           SliverToBoxAdapter(
             child: HorizontalRow(
               key: ValueKey(currentSeason.number),
+              horizontalFocusLabelPrefix: 'episode-play:',
               height: 300,
               itemCount: currentSeason.episodes.length,
               itemBuilder: (context, i) {

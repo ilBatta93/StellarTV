@@ -1,4 +1,5 @@
 import '../widgets/home_art.dart';
+import '../widgets/tv_home_rows.dart';
 import '../services/title_display.dart';
 import 'dart:async';
 
@@ -829,7 +830,12 @@ void _revealTvHeading(BuildContext context) {
   final viewport = RenderAbstractViewport.maybeOf(target);
   if (viewport == null) return;
   final position = scroll.position;
-  final offset = viewport.getOffsetToReveal(target, 0).offset;
+  final headingOffset = viewport.getOffsetToReveal(target, 0).offset;
+  // Snap to the enclosing full-height section, not the heading’s inner padding.
+  final extent = position.viewportDimension;
+  final offset = extent > 0
+      ? (headingOffset / extent).floor() * extent
+      : headingOffset;
   position.jumpTo(
     offset.clamp(position.minScrollExtent, position.maxScrollExtent),
   );
@@ -1049,7 +1055,8 @@ class _TvDiscoverState extends State<_TvDiscover> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final heroHeight = (c.maxHeight * 0.36).clamp(210.0, 260.0);
+        final rowViewport = homeRowHeight(context) + 104;
+        final heroHeight = (c.maxHeight - rowViewport).clamp(0.0, c.maxHeight);
         return Stack(
           children: [
             Positioned.fill(
@@ -1063,19 +1070,21 @@ class _TvDiscoverState extends State<_TvDiscover> {
                 SizedBox(
                   width: double.infinity,
                   height: heroHeight,
-                  child: ValueListenableBuilder<TmdbItem?>(
-                    valueListenable: _hero,
-                    builder: (_, item, _) => _TvHeroInfo(item: item),
+                  child: Column(
+                    children: [
+                      const ExpiryBanner(),
+                      Expanded(
+                        child: ValueListenableBuilder<TmdbItem?>(
+                          valueListenable: _hero,
+                          builder: (_, item, _) => _TvHeroInfo(item: item),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(
-                  child: ListView(
-                    // Rows are pre-built so pressing Down always finds the
-                    // next row instead of stopping on unbuilt content.
-                    cacheExtent: 2400,
-                    padding: const EdgeInsets.only(top: 12, bottom: 48),
-                    children: [
-                      const ExpiryBanner(),
+                  child: TvHomeRows(
+                    sections: [
                       if (widget.startedSeries.isNotEmpty)
                         _historySection(
                           'Serie viste di recente',
@@ -1248,6 +1257,7 @@ class _TvTopRowState extends State<_TvTopRow> {
   ) {
     return TvFocusable(
       focusNode: focus,
+      revealOnFocus: false,
       onPressed: onTap,
       borderRadius: BorderRadius.circular(22),
       child: Container(
@@ -1374,43 +1384,58 @@ class _TvHeroInfo extends StatelessWidget {
       if (it.voteAverage > 0) '★ ${it.voteAverage.toStringAsFixed(1)}',
       it.mediaType == 'movie' ? 'Film' : 'Serie TV',
     ].join('  ·  ');
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 24, 24, 8),
-      child: FractionallySizedBox(
-        alignment: Alignment.topLeft,
-        widthFactor: 0.55,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            HomeTitleArt(item: it),
-            const SizedBox(height: 6),
-            Text(
-              meta,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            if (it.overview.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                it.overview,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                  height: 1.35,
+    return LayoutBuilder(
+      builder: (context, bounds) {
+        // Same composition as the title sheet: flush to the left edge and
+        // grown to fill the free band between the top bar and the row.
+        const vPad = 14.0;
+        final showOverview = it.overview.isNotEmpty && bounds.maxHeight >= 150;
+        final overviewLines = bounds.maxHeight < 220 ? 2 : 3;
+        final textBlock = 8 + 20 + (showOverview ? 10 + overviewLines * 21.0 : 0);
+        final logoH = (bounds.maxHeight - vPad * 2 - textBlock)
+            .clamp(56.0, 200.0)
+            .toDouble();
+        return Container(
+          width: double.infinity,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.fromLTRB(16, vPad, 24, vPad),
+          child: FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: 0.55,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                HomeTitleArt(item: it, height: logoH),
+                const SizedBox(height: 8),
+                Text(
+                  meta,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
-          ],
-        ),
-      ),
+                if (showOverview) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    it.overview,
+                    maxLines: overviewLines,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 15,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

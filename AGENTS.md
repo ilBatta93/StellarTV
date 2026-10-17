@@ -29,7 +29,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Every new TV control must be a TvFocusable stop reachable with the D-Pad: the app is used with a remote only.
 
 - Reactions use timestamped per-profile entries with neutral tombstones inside the existing authenticated settings snapshot, so cloud merges preserve reversals and profile privacy without a second sync path.
-- Episode presentation is a shared fixed-width horizontal card with separate playback/download/watched stops; the player episode picker owns modal focus, shows history progress/watched state, steps Back from episodes to seasons before closing, and retires the old connection before episode replacement.
+- Episode playback targets form an explicit horizontal lane; Down enters that episode’s actions and Up restores playback, keeping action geometry out of episode traversal. Episode presentation is a shared fixed-width horizontal card with separate playback/download/watched stops; the player episode picker owns modal focus, shows history progress/watched state, steps Back from episodes to seasons before closing, and retires the old connection before episode replacement.
 - Live previews are audible, focus-debounced, active-tab gated and silenced before retirement on route pushes or backgrounding, so hidden tabs cannot compete with playback.
 - PlaybackSession owns at most one native player: every swap unmounts the view, awaits full engine release and a provider-connection pause before creating the next, and exposes `released` so screens wait before opening another stream; repeated or stale engine errors trigger one recovery only.
 - MultiView owns an isolated session per tile, serial mute-before-unmute audio ownership, bounded preview buffers and shared persisted layout preferences; its picker rechecks catalog and Kids permissions before opening streams.
@@ -51,3 +51,5 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 
 - Home artwork uses landscape-only presentation widgets and focus-triggered cached official TMDB logos with text fallbacks; display title formatting never mutates catalog or sync identifiers.
 - Player resume writes share a serialized per-screen writer; only the automatic next-episode overlay completes history and clears URL resume before the existing decoder release, so manual next and late lifecycle saves cannot change that intent.
+
+- TV Home foreground starts below the real menu; TvHomeRows owns a snap-locked vertical viewport and retained row focus so each row occupies the entire remaining space and implicit child reveals cannot leak adjacent rows. Both actual series and movie routes publish resolved identity before optional metadata and use bounded official title art.

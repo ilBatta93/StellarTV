@@ -18,7 +18,7 @@ class TvDetailBackdrop extends StatelessWidget {
   /// Small space above the title: the picture stays visible behind it, but
   /// the content starts near the top so more of the page fits on screen.
   static double topSpace(BuildContext context) =>
-      (MediaQuery.sizeOf(context).height * 0.12).clamp(56.0, 140.0);
+      (MediaQuery.sizeOf(context).height * 0.08).clamp(40.0, 100.0);
 
   @override
   Widget build(BuildContext context) {

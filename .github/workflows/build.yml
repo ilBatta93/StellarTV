@@ -33,9 +33,9 @@ jobs:
       - name: Versione e note di rilascio
         run: |
           set -e
-          # Dalla build 13 si passa alla serie 3.1 (3.1.0, 3.1.1, ...)
-          PATCH=$(( ${{ github.run_number }} - 13 ))
-          VERSION="3.1.${PATCH}"
+          # Dalla build 25 si passa alla serie 3.2 (3.2.0, 3.2.1, ...)
+          PATCH=$(( ${{ github.run_number }} - 25 ))
+          VERSION="3.2.${PATCH}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           git fetch --tags --force
           PREV=$(git tag --list 'v3.*' --sort=-v:refname | grep -vx "v$VERSION" | head -n1 || true)

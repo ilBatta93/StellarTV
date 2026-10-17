@@ -144,7 +144,8 @@ class TmdbService {
         });
         return selectTitleLogo(body);
       } catch (_) {
-        return null; // Logo failure must never block catalog or playback.
+        _titleLogos.remove(item.key);
+        return null; // Retry on the next presentation after a transient failure.
       }
     });
   }
