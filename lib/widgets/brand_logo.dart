@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Official STELLAR TV wordmark asset (star + bold STELLAR + TV pill, high-legibility version).
+/// Official STELLAR TV wordmark asset (star + bold STELLAR + stylized TV icon, high-legibility version).
 const String kBrandWordmarkAsset = 'assets/branding/stellartv_wordmark.png';
 
 /// Aspect ratio (width / height) of the official wordmark asset.
-const double kBrandWordmarkAspect = 1654 / 375;
+const double kBrandWordmarkAspect = 1920 / 640;
 
 /// "Orbit Stellar" mark: a titanium four-point star with an orange core and a
 /// tilted orbit ring. Pure vector, so it stays crisp from the app bar to TV.
