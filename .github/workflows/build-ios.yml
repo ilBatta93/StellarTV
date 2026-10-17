@@ -1,0 +1,161 @@
+name: StellarTV iOS Release (Unsigned)
+
+on:
+  # Build solo su richiesta (Run workflow o API)
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versione (es. 3.0.12). Vuoto = ultima release esistente (l'IPA si aggiunge accanto all'APK)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release iOS IPA (unsigned)
+    runs-on: macos-14
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determina versione
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -e
+          V="${INPUT_VERSION#v}"
+          if [ -z "$V" ]; then
+            V=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName 2>/dev/null | sed 's/^v//' || true)
+          fi
+          if [ -z "$V" ]; then V="3.0.${{ github.run_number }}"; fi
+          BUILD="${V##*.}"
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          echo "BUILD_NUM=$BUILD" >> "$GITHUB_ENV"
+          echo "Versione: $V (build $BUILD)"
+
+      - name: Setup Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      # Stessi passaggi del workflow Codemagic "ios-unsigned"
+      - name: Static analysis of Dart code
+        run: |
+          set -e
+          rm -f ios/Runner/GeneratedPluginRegistrant.h ios/Runner/GeneratedPluginRegistrant.m
+          flutter pub get
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Install CocoaPods dependencies
+        run: |
+          set -e
+          flutter --version
+          rm -f ios/Flutter/Generated.xcconfig ios/Flutter/flutter_export_environment.sh
+          rm -rf ios/Flutter/ephemeral
+          flutter pub get
+          test "$(grep -o 'FLUTTER_ROOT=.*' ios/Flutter/Generated.xcconfig)" != "FLUTTER_ROOT=/tmp/flutter-sdk" || {
+            echo "FATAL: Generated.xcconfig still points to /tmp/flutter-sdk"
+            exit 1
+          }
+          sed -i '' "s/platform :ios, '[0-9]*'/platform :ios, '15.0'/" ios/Podfile
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*/IPHONEOS_DEPLOYMENT_TARGET = 15.0/g' ios/Runner.xcodeproj/project.pbxproj
+          cd ios
+          pod install --repo-update
+
+      - name: Prepara Flutter build (versione)
+        run: |
+          set -e
+          flutter build ios --release --no-codesign --config-only \
+            --build-name="$VERSION" \
+            --build-number="$BUILD_NUM" \
+            --dart-define=APP_VERSION="$VERSION"
+
+      - name: Build iOS app with Xcode (signing disabled)
+        run: |
+          set -e
+          set -o pipefail
+          xcodebuild -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/ios \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee xcodebuild.log | tail -25
+
+      - name: Validate app bundle
+        run: |
+          set -e
+          APP=build/ios/Build/Products/Release-iphoneos/Runner.app
+          du -sh $APP
+          SIZE=$(du -sk $APP | cut -f1)
+          if [ "$SIZE" -lt 10000 ]; then
+            echo "Runner.app is only ${SIZE}KB - build is incomplete"
+            ls -laR $APP | head -50
+            tail -80 xcodebuild.log
+            exit 1
+          fi
+          test -f $APP/Runner
+          test -d $APP/Frameworks
+
+      - name: Generate unsigned IPA
+        run: |
+          set -e
+          APP=build/ios/Build/Products/Release-iphoneos/Runner.app
+          rm -rf build/ios/ipa dist
+          mkdir -p build/ios/ipa/Payload dist
+          cp -R $APP build/ios/ipa/Payload/Runner.app
+          cd build/ios/ipa
+          zip -r -q "../../../dist/StellarTV-v${VERSION}-unsigned.ipa" Payload
+          ls -lh ../../../dist
+
+      - name: Carica Artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: "StellarTV-iOS-v${{ env.VERSION }}"
+          path: dist/*.ipa
+          retention-days: 14
+
+      - name: Crea GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ env.VERSION }}"
+          name: "StellarTV v${{ env.VERSION }}"
+          body: |
+            ## StellarTV v${{ env.VERSION }}
+            Compilazione dal commit `${{ github.sha }}`.
+
+            **iOS:** IPA non firmato, da installare con Sideloadly / AltStore / TrollStore.
+          files: dist/*.ipa
+          append_body: true
+          draft: false
+          prerelease: false
+
+      - name: Pubblica su StellarTV-releases (pubblica)
+        if: ${{ env.RELEASE_TOKEN != '' }}
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: ilBatta93/StellarTV-releases
+          token: ${{ secrets.RELEASE_TOKEN }}
+          tag_name: "v${{ env.VERSION }}"
+          name: "StellarTV v${{ env.VERSION }}"
+          body: |
+            ## StellarTV v${{ env.VERSION }}
+            Aggiornamento ufficiale di StellarTV.
+
+            **iOS:** IPA non firmato, da installare con Sideloadly / AltStore / TrollStore.
+          files: dist/*.ipa
+          append_body: true
+          draft: false
+          prerelease: false
