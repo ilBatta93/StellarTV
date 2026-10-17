@@ -48,3 +48,6 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - BrandIntro crops the approved raster asset without regeneration or new lettering; its controller is presentation-only and never gates startup/session routing, and independent orbit motion requires original separated layers.
 
 - Xtream edits authenticate and recheck refresh activity before persistence, push the complete existing settings snapshot immediately, and refresh through AppProvider.loadFromXtream with explicit partial-download feedback; settings logout uses SyncProvider.signOut before routing to the initial AccountScreen so a saved session cannot bypass login.
+
+- Home artwork uses landscape-only presentation widgets and focus-triggered cached official TMDB logos with text fallbacks; display title formatting never mutates catalog or sync identifiers.
+- Player resume writes share a serialized per-screen writer; only the automatic next-episode overlay completes history and clears URL resume before the existing decoder release, so manual next and late lifecycle saves cannot change that intent.

@@ -22,16 +22,24 @@ class PlatformTops {
 class TmdbService {
   static const _fallbackRegion = 'US';
 
-  Future<Map<String, dynamic>> _get(String path,
-      [Map<String, String> params = const {}]) async {
-    final uri = Uri.parse(SupabaseConfig.tmdbProxyUrl)
-        .replace(queryParameters: {'path': path, ...params});
+  Future<Map<String, dynamic>> _get(
+    String path, [
+    Map<String, String> params = const {},
+  ]) async {
+    final uri = Uri.parse(
+      SupabaseConfig.tmdbProxyUrl,
+    ).replace(queryParameters: {'path': path, ...params});
     final http.Response res;
     try {
-      res = await http.get(uri, headers: {
-        'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
-        'apikey': SupabaseConfig.anonKey,
-      }).timeout(const Duration(seconds: 15));
+      res = await http
+          .get(
+            uri,
+            headers: {
+              'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
+              'apikey': SupabaseConfig.anonKey,
+            },
+          )
+          .timeout(const Duration(seconds: 15));
     } catch (_) {
       throw TmdbException('Connessione non disponibile');
     }
@@ -63,8 +71,9 @@ class TmdbService {
   Future<List<TmdbItem>> trending(String mediaType) async {
     final pages = await Future.wait([
       _get('trending/$mediaType/week', {'page': '1'}),
-      _get('trending/$mediaType/week', {'page': '2'})
-          .catchError((_) => <String, dynamic>{}),
+      _get('trending/$mediaType/week', {
+        'page': '2',
+      }).catchError((_) => <String, dynamic>{}),
     ]);
     return _dedupe([
       for (final p in pages) ..._parseResults(p, type: mediaType),
@@ -81,7 +90,9 @@ class TmdbService {
   }
 
   Future<PlatformTops> _platformTopForRegion(
-      StreamingPlatform platform, String region) async {
+    StreamingPlatform platform,
+    String region,
+  ) async {
     Future<List<TmdbItem>> fetch(String type) async {
       final pages = await Future.wait([
         for (final page in ['1', '2'])
@@ -92,9 +103,7 @@ class TmdbService {
             'page': page,
           }).catchError((_) => <String, dynamic>{}),
       ]);
-      return _dedupe([
-        for (final p in pages) ..._parseResults(p, type: type),
-      ]);
+      return _dedupe([for (final p in pages) ..._parseResults(p, type: type)]);
     }
 
     final results = await Future.wait([fetch('movie'), fetch('tv')]);
@@ -103,7 +112,76 @@ class TmdbService {
 
   static List<TmdbItem> _dedupe(List<TmdbItem> items) {
     final seen = <String>{};
-    return [for (final i in items) if (seen.add(i.key)) i];
+    return [
+      for (final i in items)
+        if (seen.add(i.key)) i,
+    ];
+  }
+
+  final Map<String, Future<TmdbItem?>> _homeArtwork = {};
+  Future<TmdbItem?> homeArtwork(String title, {required bool isMovie}) {
+    final key = '${isMovie ? 'movie' : 'tv'}:$title';
+    if (_homeArtwork.length >= 160 && !_homeArtwork.containsKey(key)) {
+      _homeArtwork.remove(_homeArtwork.keys.first);
+    }
+    return _homeArtwork.putIfAbsent(
+      key,
+      () => findByTitle(title, isMovie: isMovie).catchError((_) => null),
+    );
+  }
+
+  // Only focused banners request logos; share in-flight and cached results.
+  final Map<String, Future<String?>> _titleLogos = {};
+  Future<String?> titleLogo(TmdbItem item) {
+    if (item.id <= 0) return Future<String?>.value(null);
+    if (_titleLogos.length >= 160 && !_titleLogos.containsKey(item.key)) {
+      _titleLogos.remove(_titleLogos.keys.first);
+    }
+    return _titleLogos.putIfAbsent(item.key, () async {
+      try {
+        final body = await _get('${item.mediaType}/${item.id}/images', {
+          'include_image_language': 'it,null,en',
+        });
+        return selectTitleLogo(body);
+      } catch (_) {
+        return null; // Logo failure must never block catalog or playback.
+      }
+    });
+  }
+
+  static String? selectTitleLogo(Map<String, dynamic> body) {
+    final raw = body['logos'];
+    if (raw is! List) return null;
+    final logos = raw
+        .whereType<Map<String, dynamic>>()
+        .where(
+          (e) =>
+              e['file_path'] is String &&
+              (e['file_path'] as String).startsWith('/') &&
+              RegExp(
+                r'^/[a-zA-Z0-9_.-]+\.(png|jpg|webp)$',
+              ).hasMatch(e['file_path'] as String),
+        )
+        .toList();
+    int priority(Object? language) => language == 'it'
+        ? 0
+        : language == null
+        ? 1
+        : language == 'en'
+        ? 2
+        : 3;
+    logos.sort((a, b) {
+      final language = priority(
+        a['iso_639_1'],
+      ).compareTo(priority(b['iso_639_1']));
+      if (language != 0) return language;
+      return ((b['vote_average'] as num?) ?? 0).compareTo(
+        (a['vote_average'] as num?) ?? 0,
+      );
+    });
+    final preferred = logos.where((e) => priority(e['iso_639_1']) < 3);
+    if (preferred.isEmpty) return null;
+    return 'https://image.tmdb.org/t/p/w500${preferred.first['file_path']}';
   }
 
   Future<List<TmdbItem>> recommendations(TmdbItem item) async {
@@ -135,8 +213,10 @@ class TmdbService {
     }
   }
 
-  Future<TmdbPerson?> personDetails(int personId,
-      {String language = 'it-IT'}) async {
+  Future<TmdbPerson?> personDetails(
+    int personId, {
+    String language = 'it-IT',
+  }) async {
     try {
       final body = await _get('person/$personId', {'language': language});
       return TmdbPerson.tryParse(body);
@@ -145,10 +225,13 @@ class TmdbService {
     }
   }
 
-  Future<List<TmdbItem>> personCredits(int personId,
-      {String language = 'it-IT'}) async {
-    final body =
-        await _get('person/$personId/combined_credits', {'language': language});
+  Future<List<TmdbItem>> personCredits(
+    int personId, {
+    String language = 'it-IT',
+  }) async {
+    final body = await _get('person/$personId/combined_credits', {
+      'language': language,
+    });
     final cast = body['cast'];
     if (cast is! List) return [];
     final seen = <String>{};
@@ -174,11 +257,15 @@ class TmdbService {
         .toList();
   }
 
-  Future<TmdbItem?> findByTitle(String rawTitle, {required bool isMovie}) async {
+  Future<TmdbItem?> findByTitle(
+    String rawTitle, {
+    required bool isMovie,
+  }) async {
     final cleaned = cleanTitle(rawTitle);
     if (cleaned.isEmpty) return null;
-    final body =
-        await _get(isMovie ? 'search/movie' : 'search/tv', {'query': cleaned});
+    final body = await _get(isMovie ? 'search/movie' : 'search/tv', {
+      'query': cleaned,
+    });
     final items = _parseResults(body, type: isMovie ? 'movie' : 'tv');
     if (items.isEmpty) return null;
     // Prefer an exact title match (and the playlist year when present).
@@ -200,9 +287,12 @@ class TmdbService {
     t = t.replaceAll(RegExp(r'^\s*[A-Z]{2,3}\s*[:|\-]\s*'), '');
     t = t.replaceAll(RegExp(r'\[[^\]]*\]|\([^)]*\)'), ' ');
     t = t.replaceAll(
-        RegExp(r'\b(4K|UHD|FHD|HD|SD|HEVC|H265|MULTI|SUB ITA|ITA|ENG)\b',
-            caseSensitive: false),
-        ' ');
+      RegExp(
+        r'\b(4K|UHD|FHD|HD|SD|HEVC|H265|MULTI|SUB ITA|ITA|ENG)\b',
+        caseSensitive: false,
+      ),
+      ' ',
+    );
     t = t.replaceAll(RegExp(r'\b(19|20)\d{2}\b'), ' ');
     t = t.replaceAll(RegExp(r'[_.|]'), ' ');
     return t.replaceAll(RegExp(r'\s+'), ' ').trim();

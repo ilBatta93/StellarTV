@@ -76,6 +76,9 @@ jobs:
           rm -f ios/Runner/GeneratedPluginRegistrant.h ios/Runner/GeneratedPluginRegistrant.m
           flutter pub get
 
+      - name: Verify Home and episode completion
+        run: flutter test test/home_progress_rules_test.dart test/overlay_history_completion_test.dart test/horizontal_row_remote_test.dart test/home_banner_remote_test.dart test/sync_keys_test.dart
+
       - name: Build APK (Release)
         env:
           GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.caching=true -Dorg.gradle.parallel=true

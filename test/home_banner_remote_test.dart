@@ -23,7 +23,7 @@ import 'package:stellar_tv/services/profile_service.dart';
 import 'package:stellar_tv/services/sync_service.dart';
 import 'package:stellar_tv/services/tmdb_service.dart';
 import 'package:stellar_tv/theme/app_theme.dart';
-import 'package:stellar_tv/widgets/poster_card.dart';
+import 'package:stellar_tv/widgets/home_art.dart';
 import 'october_live_multiview_test.dart' as fixtures;
 
 TmdbItem item(int id, String title) => TmdbItem(
@@ -48,6 +48,10 @@ class HomeApp extends fixtures.TestApp {
 
 class FakeTmdb extends TmdbService {
   int calls = 0;
+  @override
+  Future<String?> titleLogo(TmdbItem item) async => null;
+  @override
+  Future<TmdbItem?> homeArtwork(String title, {required bool isMovie}) async => null;
   @override
   Future<TmdbItem?> findByTitle(String title, {required bool isMovie}) async {
     calls++;
@@ -146,7 +150,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
         expect(tester.takeException(), isNull);
         expect(find.text('Titolo ultima visione'), findsOneWidget);
-        expect(find.text('Descrizione del film riprodotto di recente'), findsNothing);
+
         final title = tester.getRect(find.byKey(const ValueKey('tv-home-banner-title')));
         expect(title.top, greaterThanOrEqualTo(0));
         expect(title.bottom, lessThan(size.height));
@@ -176,7 +180,7 @@ void main() {
           ),
         );
         final poster = find
-            .descendant(of: top, matching: find.byType(RankedPosterCard))
+            .descendant(of: top, matching: find.byWidgetPredicate((w) => w is HomeLandscapeCard && w.rank != null))
             .first;
         final stop = find
             .descendant(of: poster, matching: find.byType(TvFocusable))

@@ -1,3 +1,5 @@
+import '../widgets/home_art.dart';
+import '../services/title_display.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -612,12 +614,7 @@ class _BannerSlide extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  item.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
+                HomeTitleArt(item: item),
                 const SizedBox(height: 8),
                 Text(
                   item.overview,
@@ -675,7 +672,7 @@ class _HistoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tv = DeviceTypeService.isTv;
     return HorizontalRow(
-      height: tv ? tmdbPosterRowHeight(context) + 4 : 200,
+      height: homeRowHeight(context),
       spacing: tv ? 20 : 12,
       itemCount: items.length,
       itemBuilder: (context, i) => _HistoryCard(
@@ -695,9 +692,7 @@ class _HistoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (entry, channel) = item;
-    final progress = entry.duration > Duration.zero
-        ? (entry.position.inSeconds / entry.duration.inSeconds).clamp(0.0, 1.0)
-        : 0.0;
+    final progress = entry.progress ?? 0.0;
     final isEpisode = entry.type != ContentType.movie;
     final app = context.read<AppProvider>();
     final seriesKey =
@@ -725,80 +720,19 @@ class _HistoryCard extends StatelessWidget {
         ? channel.copyWith(seriesKey: seriesKey)
         : channel;
     // Resume the exact movie/episode from where it was left.
-    return Pressable(
-      onFocus: onFocus,
-      onTap: () => playChannel(
-        context,
-        playable,
-        startAt: entry.resumePosition ?? entry.position,
-      ),
-      child: SizedBox(
-        width: DeviceTypeService.isTv ? 112 : 120,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    PosterImage(url: poster),
-                    // Thin rounded bar at the poster bottom, like the site
-                    // mockups: orange fill over a dark track.
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        height: 4,
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.vertical(
-                            bottom: Radius.circular(10),
-                          ),
-                        ),
-                        child: FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: progress,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              borderRadius: const BorderRadius.vertical(
-                                bottom: Radius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              // TV: keep the title inside the orange focus frame.
-              padding: DeviceTypeService.isTv
-                  ? const EdgeInsets.fromLTRB(9, 0, 9, 9)
-                  : EdgeInsets.zero,
-              child: DeviceTypeService.isTv
-                  ? TvPosterTitle(title)
-                  : Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: DeviceTypeService.isTv ? 14 : 13,
-                        fontWeight: DeviceTypeService.isTv
-                            ? FontWeight.w700
-                            : FontWeight.w600,
-                        height: 1.2,
-                      ),
-                    ),
-            ),
-          ],
+    return HomeHistoryArtwork(
+      title: seriesName ?? channel.name,
+      isMovie: !isEpisode,
+      fallback: poster,
+      builder: (image) => HomeLandscapeCard(
+        title: title,
+        image: image,
+        progress: progress,
+        onFocus: onFocus,
+        onTap: () => playChannel(
+          context,
+          playable,
+          startAt: entry.resumePosition ?? entry.position,
         ),
       ),
     );
@@ -813,10 +747,12 @@ class _PosterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return HorizontalRow(
-      height: tmdbPosterRowHeight(context),
+      height: homeRowHeight(context),
       itemCount: items.length,
-      itemBuilder: (context, i) => TmdbPosterCard(
-        item: items[i],
+      itemBuilder: (context, i) => HomeLandscapeCard(
+        title: items[i].title,
+        image: items[i].backdropUrl,
+        rating: items[i].voteAverage,
         onTap: () => openTmdbItem(context, items[i]),
       ),
     );
@@ -831,11 +767,12 @@ class _RankedRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return HorizontalRow(
-      height: 180,
+      height: homeRowHeight(context),
       spacing: 4,
       itemCount: items.length,
-      itemBuilder: (context, i) => RankedPosterCard(
-        item: items[i],
+      itemBuilder: (context, i) => HomeLandscapeCard(
+        title: items[i].title,
+        image: items[i].backdropUrl,
         rank: i + 1,
         onTap: () => openTmdbItem(context, items[i]),
       ),
@@ -1088,11 +1025,13 @@ class _TvDiscoverState extends State<_TvDiscover> {
         _TvRowTitle(title),
         HorizontalRow(
           // Poster + two full title lines + focus frame, never clipped.
-          height: tmdbPosterRowHeight(context, mobile: 212),
+          height: homeRowHeight(context),
           spacing: 20,
           itemCount: items.length,
-          itemBuilder: (context, i) => TmdbPosterCard(
-            item: items[i],
+          itemBuilder: (context, i) => HomeLandscapeCard(
+            title: items[i].title,
+            image: items[i].backdropUrl,
+            rating: items[i].voteAverage,
             onTap: () => openTmdbItem(context, items[i]),
             onFocus: () {
               _focus(items[i]);
@@ -1150,7 +1089,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
                           widget.forYouSource == null
                               ? 'Consigliati per te'
                               : 'Consigliati per te · perché hai guardato '
-                                    '${widget.forYouSource}',
+                                    '${displayTitle(widget.forYouSource ?? "")}',
                           widget.forYou,
                         ),
                       if (widget.forYouSeries.isNotEmpty)
@@ -1158,7 +1097,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
                           widget.forYouSeriesSource == null
                               ? 'Serie consigliate per te'
                               : 'Serie consigliate per te · perché hai '
-                                    'guardato ${widget.forYouSeriesSource}',
+                                    'guardato ${displayTitle(widget.forYouSeriesSource ?? "")}',
                           widget.forYouSeries,
                         ),
                       for (final t in widget.tops)
@@ -1265,7 +1204,7 @@ class _TvTopRowState extends State<_TvTopRow> {
         ),
         HorizontalRow(
           key: ValueKey('${title}_$showSeries'),
-          height: 204,
+          height: homeRowHeight(context),
           spacing: 16,
           itemCount: items.length,
           itemBuilder: (context, i) => Focus(
@@ -1280,8 +1219,9 @@ class _TvTopRowState extends State<_TvTopRow> {
               }
               return KeyEventResult.ignored;
             },
-            child: RankedPosterCard(
-              item: items[i],
+            child: HomeLandscapeCard(
+              title: items[i].title,
+              image: items[i].backdropUrl,
               rank: i + 1,
               onTap: () => openTmdbItem(context, items[i]),
               onFocus: () {
@@ -1432,9 +1372,8 @@ class _TvHeroInfo extends StatelessWidget {
       if (it.voteAverage > 0) '★ ${it.voteAverage.toStringAsFixed(1)}',
       it.mediaType == 'movie' ? 'Film' : 'Serie TV',
     ].join('  ·  ');
-    final width = MediaQuery.sizeOf(context).width * 0.5;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 70, 24, 8),
+      padding: const EdgeInsets.fromLTRB(32, 24, 24, 8),
       child: FractionallySizedBox(
         alignment: Alignment.topLeft,
         widthFactor: 0.55,
@@ -1442,27 +1381,7 @@ class _TvHeroInfo extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Align(
-              alignment: Alignment.topLeft,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.topLeft,
-                child: SizedBox(
-                  width: width,
-                  child: Text(
-                    it.title,
-                    key: const ValueKey('tv-home-banner-title'),
-                    style: const TextStyle(
-                      fontFamily: 'Sora',
-                      color: AppColors.textPrimary,
-                      fontSize: 26,
-                      height: 1.15,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            HomeTitleArt(item: it),
             const SizedBox(height: 6),
             Text(
               meta,

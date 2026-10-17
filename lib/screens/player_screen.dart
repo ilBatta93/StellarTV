@@ -1,3 +1,4 @@
+import '../services/playback_progress_writer.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -74,6 +75,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   int? _lastSignature;
   DateTime _lastPositionBuild = DateTime(2000);
   final _settingsService = PlayerSettingsService();
+  final _progressWriter = PlaybackProgressWriter();
   final _bridge = NativePlayerBridge.instance;
   late final HistoryProvider _history;
 
@@ -827,8 +829,10 @@ class _PlayerScreenState extends State<PlayerScreen>
     setState(() => _session = null);
     previous?.dispose();
     // Wait until decoder, surface and provider connection are really free.
-    await (previous?.released ?? Future<void>.value())
-        .timeout(const Duration(seconds: 6), onTimeout: () {});
+    await (previous?.released ?? Future<void>.value()).timeout(
+      const Duration(seconds: 6),
+      onTimeout: () {},
+    );
     if (!mounted) return;
     unawaited(
       Navigator.of(context).pushReplacement(
@@ -871,8 +875,10 @@ class _PlayerScreenState extends State<PlayerScreen>
     setState(() => _session = null);
     previous?.dispose();
     // Wait until decoder, surface and provider connection are really free.
-    await (previous?.released ?? Future<void>.value())
-        .timeout(const Duration(seconds: 6), onTimeout: () {});
+    await (previous?.released ?? Future<void>.value()).timeout(
+      const Duration(seconds: 6),
+      onTimeout: () {},
+    );
     if (!mounted) return;
     playChannel(
       context,
@@ -976,22 +982,33 @@ class _PlayerScreenState extends State<PlayerScreen>
     });
   }
 
-  void playNextEpisode() => _playNext();
+  void playNextEpisode() => _playNext(completeCurrent: true);
 
-  Future<void> _playNext() async {
+  Future<void> _playNext({bool completeCurrent = false}) async {
     final next = _next;
     if (next == null || _advancing) return;
     _advancing = true;
     _outroTimer?.cancel();
-    await _saveResume();
+    _resumeTimer?.cancel();
+    if (completeCurrent) {
+      final runtime = _session?.value.duration;
+      await _progressWriter.complete(() async {
+        await _history.markWatched(widget.channel, duration: runtime);
+        await _settingsService.saveResumePosition(widget.channel.url, null);
+      });
+    } else {
+      await _saveResume();
+    }
     if (!mounted) return;
     final previous = _session;
     previous?.removeListener(_onSessionChanged);
     setState(() => _session = null);
     previous?.dispose();
     // Wait until decoder, surface and provider connection are really free.
-    await (previous?.released ?? Future<void>.value())
-        .timeout(const Duration(seconds: 6), onTimeout: () {});
+    await (previous?.released ?? Future<void>.value()).timeout(
+      const Duration(seconds: 6),
+      onTimeout: () {},
+    );
     if (!mounted) return;
     final entry = _history.entryFor(next.id);
     playChannel(
@@ -1033,8 +1050,10 @@ class _PlayerScreenState extends State<PlayerScreen>
     setState(() => _session = null);
     previous?.dispose();
     // Wait until decoder, surface and provider connection are really free.
-    await (previous?.released ?? Future<void>.value())
-        .timeout(const Duration(seconds: 6), onTimeout: () {});
+    await (previous?.released ?? Future<void>.value()).timeout(
+      const Duration(seconds: 6),
+      onTimeout: () {},
+    );
     if (!mounted) return;
     playChannel(context, channel, replace: true);
   }
@@ -1247,16 +1266,18 @@ class _PlayerScreenState extends State<PlayerScreen>
       if (!landed && !gaveUp) return;
       _pendingResume = null;
     }
-    _history.updatePosition(widget.channel.id, v.position, v.duration);
-    if (_settings?.resumePlayback != true) return;
-    final remaining = v.duration - v.position;
-    final keep =
-        v.position > const Duration(seconds: 5) &&
-        remaining > const Duration(minutes: 1);
-    await _settingsService.saveResumePosition(
-      widget.channel.url,
-      keep ? v.position : null,
-    );
+    await _progressWriter.save(() async {
+      await _history.updatePosition(widget.channel.id, v.position, v.duration);
+      if (_settings?.resumePlayback != true) return;
+      final remaining = v.duration - v.position;
+      final keep =
+          v.position > const Duration(seconds: 5) &&
+          remaining > const Duration(minutes: 1);
+      await _settingsService.saveResumePosition(
+        widget.channel.url,
+        keep ? v.position : null,
+      );
+    });
   }
 
   void _scheduleHide() {
@@ -1356,11 +1377,12 @@ class _PlayerScreenState extends State<PlayerScreen>
           if (_activePlayers == 0) _bridge.setOrientation('landscape');
         });
       } else {
-        SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp])
-            .then((_) {
-              // Re-check: a new player may have opened meanwhile.
-              if (_activePlayers == 0) _bridge.setOrientation('portrait');
-            });
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+        ]).then((_) {
+          // Re-check: a new player may have opened meanwhile.
+          if (_activePlayers == 0) _bridge.setOrientation('portrait');
+        });
       }
     }
     super.dispose();
