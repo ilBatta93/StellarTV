@@ -113,15 +113,16 @@ class _DiscoverPageState extends State<DiscoverPage> {
             case final c?)
           if (!app.kidsMode || app.isKidsContent(c)) (e, c),
     ];
+    // "Continua a guardare" rows show at most 50 titles each.
     final startedMovies = <ResumeItem>[
       for (final it in started)
         if (it.$1.type == ContentType.movie) it,
-    ];
+    ].take(50).toList();
     final startedSeries = <ResumeItem>[
       for (final it in started)
         if (it.$1.type == ContentType.series || it.$1.type == ContentType.anime)
           it,
-    ];
+    ].take(50).toList();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted)
         context.read<DiscoverProvider>().loadForYou(

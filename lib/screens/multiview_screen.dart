@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/multiview_layout.dart';
@@ -13,6 +15,7 @@ import '../providers/ui_settings.dart';
 import '../services/device_type_service.dart';
 import '../services/player_settings_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/poster_card.dart';
 import '../widgets/tv_focusable.dart';
 import '../widgets/tv_text_field.dart';
 import '../widgets/settings_tiles.dart';
@@ -248,10 +251,9 @@ class _MultiViewScreenState extends State<MultiViewScreen>
     _modal = true;
     await _syncAudio();
     if (!mounted) return;
-    final channel = await showModalBottomSheet<Channel>(
+    final channel = await showDialog<Channel>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface,
+      barrierColor: AppColors.background.withValues(alpha: 0.35),
       builder: (_) => _MultiViewChannelPicker(
         excluded: _slots.map((s) => s.channel.id).toSet(),
       ),
@@ -335,10 +337,8 @@ class _MultiViewScreenState extends State<MultiViewScreen>
     setState(() => _expanded = _expanded == slot ? null : slot);
   }
 
-  Widget _tile(_Slot slot) => KeyedSubtree(
-    key: slot.viewKey,
-    child: _tileBody(slot),
-  );
+  Widget _tile(_Slot slot) =>
+      KeyedSubtree(key: slot.viewKey, child: _tileBody(slot));
 
   Widget _tileBody(_Slot slot) => TvFocusable(
     focusNode: slot.focus,
@@ -588,59 +588,254 @@ class _MultiViewChannelPicker extends StatefulWidget {
       _MultiViewChannelPickerState();
 }
 
+/// Apple-style side panel, like the episode panel of the player: category
+/// pills on top (instead of seasons) and a compact grid of channel logos.
+/// Back from the grid returns to the categories, a second Back closes.
 class _MultiViewChannelPickerState extends State<_MultiViewChannelPicker> {
   final _search = TextEditingController();
+  final _firstChannel = FocusNode(debugLabel: 'multiview picker first');
+  final _categoryNodes = <String, FocusNode>{};
   String _query = '';
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    final channels = app.allChannels
-        .where(
-          (c) =>
-              c.type == ContentType.live &&
-              c.isPlayable &&
-              !widget.excluded.contains(c.id) &&
-              (!app.kidsMode || app.isKidsContent(c)) &&
-              c.name.toLowerCase().contains(_query.toLowerCase()),
-        )
-        .toList();
-    return SafeArea(
-      child: SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.85,
-        child: FocusTraversalGroup(
+  String? _category;
+  bool _inGrid = true;
+
+  FocusNode _categoryNode(String label) => _categoryNodes.putIfAbsent(
+    label,
+    () => FocusNode(debugLabel: 'multiview category $label'),
+  );
+
+  /// Standard category: "TV Sat" when present (same as the Diretta tab),
+  /// otherwise the first category of the playlist.
+  String? _defaultCategory(List<String> labels) {
+    String n(String s) => s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return labels.where((l) => n(l) == 'tvsat').firstOrNull ??
+        labels.where((l) => n(l).contains('tvsat')).firstOrNull ??
+        labels.firstOrNull;
+  }
+
+  void _back() {
+    if (_inGrid && _category != null) {
+      _categoryNodes[_category]?.requestFocus();
+      setState(() => _inGrid = false);
+      return;
+    }
+    Navigator.pop(context);
+  }
+
+  void _choose(String label) {
+    setState(() => _category = label);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _firstChannel.context != null) {
+        _firstChannel.requestFocus();
+      }
+    });
+  }
+
+  bool _allowed(AppProvider app, Channel c) =>
+      c.isPlayable &&
+      !widget.excluded.contains(c.id) &&
+      (!app.kidsMode || app.isKidsContent(c));
+
+  Widget _channelTile(Channel channel, int i) {
+    final tv = DeviceTypeService.isTv;
+    return TvFocusable(
+      focusNode: i == 0 ? _firstChannel : null,
+      autofocus: i == 0,
+      focusedScale: 1.05,
+      borderRadius: BorderRadius.circular(14),
+      onFocusChange: (f) {
+        if (f && !_inGrid) setState(() => _inGrid = true);
+      },
+      onPressed: () => Navigator.pop(context, channel),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => Navigator.pop(context, channel),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.card.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
+          ),
           child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: TvTextField(
-                  controller: _search,
-                  onChanged: (query) => setState(() => _query = query),
-                  decoration: const InputDecoration(
-                    hintText: 'Cerca canale',
-                    prefixIcon: Icon(Icons.search_rounded),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: PosterImage(
+                    url: channel.logo,
+                    fit: BoxFit.contain,
+                    fallbackIcon: Icons.live_tv_rounded,
                   ),
                 ),
               ),
-              Expanded(
-                child: channels.isEmpty
-                    ? const Center(child: Text('Nessun canale disponibile'))
-                    : ListView.builder(
-                        itemCount: channels.length,
-                        itemBuilder: (ctx, i) {
-                          final channel = channels[i];
-                          return TvFocusable(
-                            autofocus: i == 0,
-                            focusedScale: 1,
-                            onPressed: () => Navigator.pop(context, channel),
-                            child: ListTile(
-                              title: Text(channel.name),
-                              onTap: () => Navigator.pop(context, channel),
-                            ),
-                          );
-                        },
-                      ),
+              const SizedBox(height: 6),
+              Text(
+                channel.name,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: tv ? 12 : 11,
+                  height: 1.15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pill(String label, bool active) {
+    void choose() => _choose(label);
+    return TvFocusable(
+      focusNode: _categoryNode(label),
+      onFocusChange: (f) {
+        if (f && _inGrid) setState(() => _inGrid = false);
+      },
+      onPressed: choose,
+      child: GestureDetector(
+        onTap: choose,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? AppColors.textPrimary : AppColors.card,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: active ? AppColors.background : AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
+    final groups = app.groupedCatalog(ContentType.live);
+    final labels = [for (final g in groups) g.label];
+    _category ??= _defaultCategory(labels);
+    final q = _query.toLowerCase();
+    final List<Channel> channels;
+    if (q.isNotEmpty) {
+      // Searching looks through every category.
+      channels = [
+        for (final c in app.allChannels)
+          if (c.type == ContentType.live &&
+              _allowed(app, c) &&
+              c.name.toLowerCase().contains(q))
+            c,
+      ];
+    } else {
+      final group = groups.where((g) => g.label == _category).firstOrNull;
+      channels = [
+        for (final e in group?.entries ?? const [])
+          if (_allowed(app, e.primary)) e.primary,
+      ];
+    }
+    final width = MediaQuery.sizeOf(context).width;
+    final panelWidth = width < 620 ? width * .96 : 600.0;
+    final columns = panelWidth < 420 ? 3 : 4;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _back();
+      },
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: SizedBox(
+          width: panelWidth,
+          height: MediaQuery.sizeOf(context).height,
+          child: Material(
+            color: AppColors.glass,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 22, 22, 12),
+                child: FocusTraversalGroup(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'MULTIVIEW',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11,
+                          letterSpacing: 1.2,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Aggiungi canale',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TvTextField(
+                        controller: _search,
+                        onChanged: (query) => setState(() => _query = query),
+                        decoration: const InputDecoration(
+                          hintText: 'Cerca canale',
+                          prefixIcon: Icon(Icons.search_rounded),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (labels.length > 1 && q.isEmpty)
+                        SizedBox(
+                          height: 48,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: labels.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(width: 8),
+                            itemBuilder: (_, i) =>
+                                _pill(labels[i], labels[i] == _category),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: channels.isEmpty
+                            ? const Center(
+                                child: Text('Nessun canale disponibile'),
+                              )
+                            : GridView.builder(
+                                key: ValueKey('$_category|$q'),
+                                padding: const EdgeInsets.only(bottom: 12),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: columns,
+                                      mainAxisSpacing: 10,
+                                      crossAxisSpacing: 10,
+                                      childAspectRatio: 0.95,
+                                    ),
+                                itemCount: channels.length,
+                                itemBuilder: (_, i) =>
+                                    _channelTile(channels[i], i),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -650,6 +845,10 @@ class _MultiViewChannelPickerState extends State<_MultiViewChannelPicker> {
   @override
   void dispose() {
     _search.dispose();
+    _firstChannel.dispose();
+    for (final n in _categoryNodes.values) {
+      n.dispose();
+    }
     super.dispose();
   }
 }

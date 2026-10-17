@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
@@ -75,17 +76,48 @@ class HorizontalRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: height,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(
-          horizontal: DeviceTypeService.isTv ? 32 : 16,
-          vertical: DeviceTypeService.isTv ? 8 : 0,
+      child: Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: _keepInRow,
+        child: ListView.separated(
+          // Neighbours are pre-built so Right always finds the next card.
+          cacheExtent: DeviceTypeService.isTv ? 1200 : null,
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.symmetric(
+            horizontal: DeviceTypeService.isTv ? 32 : 16,
+            vertical: DeviceTypeService.isTv ? 8 : 0,
+          ),
+          itemCount: itemCount,
+          separatorBuilder: (_, _) => SizedBox(width: spacing),
+          itemBuilder: itemBuilder,
         ),
-        itemCount: itemCount,
-        separatorBuilder: (_, _) => SizedBox(width: spacing),
-        itemBuilder: itemBuilder,
       ),
     );
+  }
+
+  /// Left/Right never leave the row: at the first or last card the focus
+  /// stays put instead of jumping to the row below or above.
+  static KeyEventResult _keepInRow(FocusNode row, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    final direction = key == LogicalKeyboardKey.arrowRight
+        ? TraversalDirection.right
+        : key == LogicalKeyboardKey.arrowLeft
+        ? TraversalDirection.left
+        : null;
+    final current = FocusManager.instance.primaryFocus;
+    if (direction == null || current == null || current == row) {
+      return KeyEventResult.ignored;
+    }
+    current.focusInDirection(direction);
+    final now = FocusManager.instance.primaryFocus;
+    if (now != null && now != current && !now.ancestors.contains(row)) {
+      current.requestFocus();
+    }
+    return KeyEventResult.handled;
   }
 }
 

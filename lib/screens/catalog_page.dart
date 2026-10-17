@@ -7,6 +7,7 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
+import '../providers/history_provider.dart';
 import '../providers/ui_settings.dart';
 import '../services/catalog_builder.dart';
 import '../services/device_type_service.dart';
@@ -311,6 +312,7 @@ class _CatalogPageState extends State<CatalogPage> {
   bool _infoRequested = false;
 
   static const _recentLabel = 'Ultimi Aggiunti';
+  static const _watchedLabel = 'Visti di recente';
   String get _allLabel =>
       widget.type == ContentType.movie ? 'Tutti i Film' : 'Tutte le Serie';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
@@ -419,8 +421,13 @@ class _CatalogPageState extends State<CatalogPage> {
       });
     }
 
+    final watched = app.recentlyWatchedEntries(
+      widget.type,
+      context.watch<HistoryProvider>().entries,
+    );
     final selected = _selectedCategory;
     final showAll = selected == _allLabel;
+    final showWatched = selected == _watchedLabel;
     final visibleGroup = selected == null || showAll
         ? null
         : groups.where((g) => g.label == selected).firstOrNull;
@@ -434,6 +441,7 @@ class _CatalogPageState extends State<CatalogPage> {
           ? TvCategoryPanel(
               categories: {
                 _recentLabel: app.recentEntries(widget.type).length,
+                _watchedLabel: watched.length,
                 _allLabel: app.allEntries(widget.type).length,
                 for (final g in groups)
                   if (g.label != _allLabel) g.label: g.entries.length,
@@ -449,6 +457,7 @@ class _CatalogPageState extends State<CatalogPage> {
           : _CategoryDrawer(
               categories: {
                 _recentLabel: app.recentEntries(widget.type).length,
+                _watchedLabel: watched.length,
                 _allLabel: app.allEntries(widget.type).length,
                 for (final g in groups)
                   if (g.label != _allLabel) g.label: g.entries.length,
@@ -529,6 +538,8 @@ class _CatalogPageState extends State<CatalogPage> {
           Expanded(
             child: _query.isNotEmpty
                 ? _buildSearchResults(app)
+                : showWatched
+                ? _buildWatchedGrid(app, watched)
                 : showAll
                 ? _buildAllGrid(app)
                 : visibleGroup != null
@@ -671,6 +682,19 @@ class _CatalogPageState extends State<CatalogPage> {
     ];
   }
 
+  /// Titles watched or started, newest first (chronological, not sorted).
+  Widget _buildWatchedGrid(AppProvider app, List<CatalogEntry> watched) {
+    final entries = watched.where((e) => _matchesGenre(app, e)).toList();
+    if (entries.isEmpty) {
+      return EmptyState(
+        icon: Icons.history_rounded,
+        title: 'Nessun titolo visto',
+        message: 'Qui trovi gli ultimi 100 $_noun che hai iniziato o visto.',
+      );
+    }
+    return _buildEntries(app, entries);
+  }
+
   Widget _buildRecentGrid(AppProvider app) {
     final entries = _ordered(
       _genreId != null ? _allOfGenre(app) : app.recentEntries(widget.type),
@@ -778,7 +802,8 @@ class _CatalogPageState extends State<CatalogPage> {
     );
     if (ui.viewMode != CatalogViewMode.spotlight) return grid;
     final current = _spotlight.value;
-    if (current == null || !entries.any((e) => e.primary.id == current.primary.id)) {
+    if (current == null ||
+        !entries.any((e) => e.primary.id == current.primary.id)) {
       _spotlight.value = entries.first;
     }
     return Column(
@@ -842,6 +867,7 @@ class _CatalogPageState extends State<CatalogPage> {
       if (DeviceTypeService.isTv &&
           _selectedCategory != null &&
           _selectedCategory != _allLabel &&
+          _selectedCategory != _watchedLabel &&
           g.label != _selectedCategory) {
         continue;
       }

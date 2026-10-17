@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/channel.dart';
 import '../models/content_type.dart';
+import '../models/history_entry.dart';
 import '../models/catalog_load_state.dart';
 import '../models/series_details.dart';
 import '../models/tmdb_item.dart';
@@ -401,9 +402,9 @@ class AppProvider extends ChangeNotifier {
   List<CatalogGroup> groupedCatalog(ContentType type) =>
       _groupedCache[type] ??= CatalogBuilder.groupsOf(
         _visibleChannels(type),
-        categoryOrderOf(
-          type,
-        ).where((g) => !hiddenCategoriesOf(type).contains(g)).toList(),
+        categoryOrderOf(type)
+            .where((g) => !hiddenCategoriesOf(type).contains(g))
+            .toList(),
       );
 
   /// Recently added items of a type, in the playlist's own order (the
@@ -427,6 +428,32 @@ class AppProvider extends ChangeNotifier {
               CatalogEntry(primary: c, variants: [c]),
         ].toList(growable: false);
       }()).take(limit).toList(growable: false);
+
+  /// "Visti di recente": up to [limit] titles of [type] watched or started,
+  /// newest first. Episodes count for their series.
+  List<CatalogEntry> recentlyWatchedEntries(
+    ContentType type,
+    List<HistoryEntry> history, {
+    int limit = 100,
+  }) {
+    final sorted = [...history]
+      ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
+    final seen = <String>{};
+    final out = <CatalogEntry>[];
+    for (final e in sorted) {
+      if (out.length >= limit) break;
+      if (e.type != type) continue;
+      final isSeries = type == ContentType.series || type == ContentType.anime;
+      final Channel? c = isSeries
+          ? (e.seriesKey.isNotEmpty ? seriesFolderFor(e.seriesKey) : null) ??
+                channelById(e.contentId)
+          : channelById(e.contentId);
+      if (c == null || (_kidsMode && !isKidsContent(c))) continue;
+      if (!seen.add(c.id)) continue;
+      out.add(CatalogEntry(primary: c, variants: [c]));
+    }
+    return out;
+  }
 
   /// Basic handling: every playlist item is played as it is, no merging of
   /// copies with different quality (that matching opened the wrong title).

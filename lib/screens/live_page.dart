@@ -11,6 +11,7 @@ import '../services/player_settings_service.dart';
 import '../widgets/player/video_surface.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
+import '../providers/history_provider.dart';
 import '../providers/epg_provider.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
@@ -56,6 +57,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   CatalogSort? _sort = CatalogSort.provider;
   String _query = '';
   String? _category;
+  static const _watchedLabel = 'Visti di recente';
   bool _defaultApplied = false;
   Timer? _tick;
   Timer? _previewDelay;
@@ -581,8 +583,15 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
           )
           .firstOrNull;
     }
+    final watched = app.recentlyWatchedEntries(
+      ContentType.live,
+      context.watch<HistoryProvider>().entries,
+    );
+    final showWatched = _category == _watchedLabel;
     final selected = groups.where((g) => g.label == _category).firstOrNull;
-    var channels = selected != null
+    var channels = showWatched
+        ? [for (final e in watched) e.primary]
+        : selected != null
         ? [for (final e in selected.entries) e.primary]
         : [
             for (final g in groups)
@@ -599,7 +608,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
           .toList();
     }
 
-    if (DeviceTypeService.isTv) {
+    if (DeviceTypeService.isTv && !showWatched) {
       channels = sortCatalog(channels, _sort, (c) => c);
     }
 
@@ -635,6 +644,11 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                   'Tutti',
                   _category == null,
                   () => setState(() => _category = null),
+                ),
+                TvFilterOption(
+                  _watchedLabel,
+                  showWatched,
+                  () => setState(() => _category = _watchedLabel),
                 ),
                 for (final group in groups)
                   TvFilterOption(
@@ -726,6 +740,11 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                     () => setState(() => _category = null),
                   ),
                 ),
+                _chip(
+                  _watchedLabel,
+                  showWatched,
+                  () => setState(() => _category = _watchedLabel),
+                ),
                 for (final g in groups)
                   _chip(
                     g.label,
@@ -787,6 +806,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
             0,
             (count, group) => count + group.entries.length,
           ),
+          _watchedLabel: watched.length,
           for (final group in groups) group.label: group.entries.length,
         },
         selected: _category ?? 'Tutti',
