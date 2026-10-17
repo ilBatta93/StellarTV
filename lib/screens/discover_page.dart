@@ -711,11 +711,12 @@ class _HistoryCard extends StatelessWidget {
         folder?.displaySeriesName ??
         (entry.seriesName.isNotEmpty ? entry.seriesName : null);
     final code = channel.season != null && channel.episode != null
-        ? ' · S${channel.season} E${channel.episode}'
-        : '';
+        ? 'S${channel.season} · E${channel.episode}'
+        : null;
+    // Clean name only: season/episode move to the badge on the right.
     final title = isEpisode && seriesName != null
-        ? '$seriesName$code'
-        : channel.name;
+        ? displayTitle(seriesName)
+        : displayTitle(channel.name);
     final playable = seriesKey != null && channel.seriesKey == null
         ? channel.copyWith(seriesKey: seriesKey)
         : channel;
@@ -728,6 +729,7 @@ class _HistoryCard extends StatelessWidget {
         title: title,
         image: image,
         progress: progress,
+        trailing: code,
         onFocus: onFocus,
         onTap: () => playChannel(
           context,

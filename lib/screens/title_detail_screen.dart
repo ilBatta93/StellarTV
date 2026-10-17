@@ -15,6 +15,7 @@ import '../services/catalog_builder.dart';
 import '../theme/app_theme.dart';
 import '../screens/person_detail_screen.dart';
 import '../widgets/poster_card.dart';
+import '../widgets/home_art.dart';
 import '../widgets/section_row.dart';
 import '../services/device_type_service.dart';
 import '../widgets/tv_focusable.dart';
@@ -22,6 +23,7 @@ import '../widgets/tv_detail_backdrop.dart';
 import '../widgets/download_button.dart';
 import '../widgets/reaction_buttons.dart';
 import '../services/download_service.dart';
+import '../services/title_display.dart';
 
 class TitleDetailScreen extends StatefulWidget {
   final TmdbItem? item;
@@ -168,7 +170,17 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: Theme.of(context).textTheme.headlineMedium),
+                // Official title logo when TMDB has one, clean text otherwise.
+                if (item != null)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: HomeTitleArt(item: item),
+                  )
+                else
+                  Text(
+                    displayTitle(title),
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
                 const SizedBox(height: 8),
                 _Meta(item: item, channel: widget.channel),
                 const SizedBox(height: 16),

@@ -102,6 +102,7 @@ class HomeLandscapeCard extends StatelessWidget {
     this.rank,
     this.rating,
     this.progress,
+    this.trailing,
   });
   final String title;
   final String? image;
@@ -110,6 +111,9 @@ class HomeLandscapeCard extends StatelessWidget {
   final int? rank;
   final double? rating;
   final double? progress;
+
+  /// Small label on the right of the title space (e.g. "S1 · E2").
+  final String? trailing;
   @override
   Widget build(BuildContext context) {
     final watched = progress?.clamp(0.0, 1.0);
@@ -194,16 +198,40 @@ class HomeLandscapeCard extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(9, 8, 9, 0),
-              child: Text(
-                displayTitle(title),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 13,
-                  height: 1.25,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      displayTitle(title),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        height: 1.25,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (trailing != null) ...[
+                    const SizedBox(width: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Text(
+                        trailing!,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          height: 1.25,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],
