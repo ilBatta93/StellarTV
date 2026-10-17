@@ -123,7 +123,6 @@ void main() {
     ]);
     expect(session.status, SessionStatus.playing);
     expect(_FakeEngine.maxAlive, 1);
-    expect(opened.where((o) => o.startsWith('fvp')), isEmpty);
     session.dispose();
     await session.released;
     expect(_FakeEngine.alive, 0);
@@ -218,12 +217,6 @@ void main() {
       await session.released;
     },
   );
-
-  test('MDK never becomes an automatic fallback', () {
-    for (final e in PlayerEngineType.values) {
-      expect(e.other, isNot(PlayerEngineType.fvp));
-    }
-  });
 
   test('formato flusso dirette sceglie il primo indirizzo provato', () {
     const url = 'http://srv.example:8080/live/u/p/42.ts';

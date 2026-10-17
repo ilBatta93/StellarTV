@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import '../models/player_settings.dart';
 import 'decoder_memory.dart';
 import 'exo_engine.dart';
-import 'fvp_engine.dart';
 import 'mediakit_engine.dart';
 import 'playback_engine.dart';
 
@@ -241,12 +240,6 @@ class PlaybackSession extends ChangeNotifier {
           isLive: isLive,
           previewMode: previewMode,
           softwareDecode: _softwareDecode,
-        ),
-        PlayerEngineType.fvp => FvpEngine(
-          url: address,
-          settings: settings,
-          isLive: isLive,
-          previewMode: previewMode,
         ),
       };
 

@@ -38,9 +38,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
       !_tvProfile || s.primaryEngine == PlayerEngineType.mediakit;
   bool _exo(PlayerSettings s) =>
       !_tvProfile || s.primaryEngine == PlayerEngineType.exo;
-  bool _fvp(PlayerSettings s) =>
-      !_tvProfile || s.primaryEngine == PlayerEngineType.fvp;
-  bool _mpvOrMdk(PlayerSettings s) => _mpv(s) || _fvp(s);
+  bool _mpvOrMdk(PlayerSettings s) => _mpv(s);
 
   bool get _live => _scope == PlayerSettingsScope.liveTv;
   bool get _tvProfile => DeviceTypeService.isTv && widget.scope != null;
@@ -327,13 +325,13 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
   List<Widget> _subtitleSection(PlayerSettings s) => [
     SettingsSection(
       title: 'Sottotitoli',
-      description: 'I sottotitoli incorporati nei flussi IPTV vengono mostrati con mpv e MDK.',
+      description: 'I sottotitoli incorporati nei flussi IPTV vengono mostrati con mpv.',
       children: [
         _SubtitlePreview(settings: s),
         if (_mpvOrMdk(s))
           SettingsSwitchTile(
             icon: Icons.subtitles_outlined,
-            badge: 'mpv · MDK',
+            badge: 'mpv',
             title: 'Attiva automaticamente',
             subtitle: 'Seleziona i sottotitoli nella lingua preferita quando disponibili',
             value: s.subtitlesEnabled,
@@ -412,7 +410,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           SettingsValueTile(
             icon: Icons.developer_board_rounded,
             title: 'Decodifica hardware',
-            badge: 'mpv · MDK',
+            badge: 'mpv',
             value: s.hardwareDecoding.label,
             onTap: () => _pick(
               'Decodifica hardware',
@@ -463,7 +461,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             SettingsSliderTile(
               icon: Icons.cloud_download_outlined,
               title: 'Buffer film e serie',
-              badge: 'mpv · MDK',
+              badge: 'mpv',
               value: s.networkCachingMs.toDouble(),
               min: 300,
               max: 10000,
@@ -477,7 +475,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             SettingsSliderTile(
               icon: Icons.live_tv_rounded,
               title: 'Buffer dirette',
-              badge: 'mpv · MDK',
+              badge: 'mpv',
               value: s.liveCachingMs.toDouble(),
               min: 300,
               max: 10000,
@@ -504,7 +502,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             icon: Icons.wifi_protected_setup_rounded,
             title: 'Riconnessione automatica',
             subtitle: 'Riprova da solo se il flusso si interrompe',
-            badge: 'mpv · MDK',
+            badge: 'mpv',
             value: s.httpReconnect,
             onChanged: (v) => _update((s) => s.httpReconnect = v),
           ),

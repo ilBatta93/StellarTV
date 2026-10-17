@@ -3,30 +3,22 @@ import 'package:flutter/material.dart';
 enum PlayerEngineType {
   exo(
     'ExoPlayer',
-    'Nativo Android, il più stabile e leggero: consigliato per le dirette. '
+    'Nativo Android, leggero: usato per MultiView e anteprime. '
         'Tracce audio e qualità; niente pausa della diretta',
   ),
   mediakit(
     'mpv (media-kit)',
-    'Massima compatibilità: sottotitoli, tracce audio, ritardi audio/sottotitoli '
+    'Consigliato per le dirette, decodifica ogni canale: sottotitoli, tracce audio, ritardi audio/sottotitoli '
         'e pausa/riavvolgimento della diretta',
-  ),
-  fvp(
-    'MDK (FFmpeg)',
-    'Tutti i codec FFmpeg con decodifica hardware: tracce audio e sottotitoli; '
-        'niente ritardi né pausa della diretta',
   );
 
   final String label;
   final String description;
   const PlayerEngineType(this.label, this.description);
 
-  /// Automatic fallback: ExoPlayer ⇄ mpv; MDK falls back to ExoPlayer.
-  /// MDK is never chosen automatically (only when selected by the user),
-  /// so a failing stream never chains three native players.
+  /// Automatic fallback: ExoPlayer ⇄ mpv.
   PlayerEngineType get other => switch (this) {
     PlayerEngineType.mediakit => PlayerEngineType.exo,
-    PlayerEngineType.fvp => PlayerEngineType.exo,
     PlayerEngineType.exo => PlayerEngineType.mediakit,
   };
 
@@ -279,7 +271,7 @@ class PlayerSettings {
   Map<String, dynamic> toJson() => {
     'primaryEngine': primaryEngine.name,
     'engineV': 2,
-    'liveEngineV': 3,
+    'liveEngineV': 4,
     'autoFallback': autoFallback,
     'startTimeoutSeconds': startTimeoutSeconds,
     'liveStreamFormat': liveStreamFormat.name,

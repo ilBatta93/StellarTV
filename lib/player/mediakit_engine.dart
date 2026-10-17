@@ -90,12 +90,18 @@ class MediaKitEngine extends PlaybackEngine {
       if (softwareDecode) 'deinterlace': 'yes',
       if (softwareDecode) 'vd-lavc-skiploopfilter': 'nonref',
       'audio-buffer': isLive ? '0.5' : '0.2',
-      'framedrop': _settings.dropLateFrames ? 'vo' : 'no',
-      // MPEG-2, VC-1 and MPEG-4 broadcast channels gave audio with a black
-      // picture through MediaCodec on Fire TV / Google TV / Chromecast:
-      // hardware decoding only for the codecs those chips really draw
-      // (the 4K/HEVC channels that always worked), FFmpeg for the rest.
-      if (!softwareDecode) 'hwdec-codecs': 'h264,hevc,vp9,av1',
+      // Never drop frames on live: a jittery IPTV clock made mpv discard
+      // every picture at start (audio with a black screen).
+      'framedrop': (!isLive && _settings.dropLateFrames) ? 'vo' : 'no',
+      // Broadcast H.264 1080i, MPEG-2 and VC-1 channels gave audio with a
+      // black picture through MediaCodec on Fire TV / Google TV /
+      // Chromecast (no hardware deinterlacing towards the texture). Live:
+      // hardware only for the progressive 4K codecs those chips really draw
+      // (HEVC/VP9/AV1, always worked); FFmpeg decodes and deinterlaces the
+      // rest. Film/series (progressive H.264) keep hardware H.264.
+      if (!softwareDecode)
+        'hwdec-codecs': isLive ? 'hevc,vp9,av1' : 'h264,hevc,vp9,av1',
+      if (isLive && !softwareDecode) 'deinterlace': 'auto',
       'cache-pause-initial': 'no',
       'vd-lavc-threads': '0',
     };
@@ -244,7 +250,9 @@ class MediaKitEngine extends PlaybackEngine {
           : 'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,'
                 'reconnect_delay_max=5',
       'demuxer-lavf-o': isLive
-          ? 'fflags=+discardcorrupt+genpts+nobuffer'
+          // Keep the broadcast PCR/PTS: genpts rewrote them (A/V drift) and
+          // nobuffer starved the decoder of keyframes.
+          ? 'fflags=+discardcorrupt'
           : 'fflags=+discardcorrupt+genpts',
       // Enough to find the video stream of an MPEG-TS channel without
       // making the first picture wait several seconds.
@@ -282,6 +290,7 @@ class MediaKitEngine extends PlaybackEngine {
   };
 
   Timer? _blackWatch;
+  int? _lastFrame;
 
   /// True only when decoded frames really flow through mpv's video chain.
   /// The old check used the track resolution, which mpv reads from the
@@ -294,7 +303,17 @@ class MediaKitEngine extends PlaybackEngine {
       final fps = double.tryParse(
         (await platform.getProperty('estimated-vf-fps')).trim(),
       );
-      if (fps != null) return fps > 0.5;
+      if (fps != null && fps > 0.5) return true;
+    } catch (_) {}
+    try {
+      final frame = int.tryParse(
+        (await platform.getProperty('estimated-frame-number')).trim(),
+      );
+      if (frame != null) {
+        final moved = _lastFrame != null && frame > _lastFrame!;
+        _lastFrame = frame;
+        return moved;
+      }
     } catch (_) {}
     return null;
   }
