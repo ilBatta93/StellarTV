@@ -8,7 +8,7 @@ import '../theme/app_theme.dart';
 const String kBrandWordmarkAsset = 'assets/branding/stellartv_wordmark.png';
 
 /// Aspect ratio (width / height) of the official wordmark asset.
-const double kBrandWordmarkAspect = 1920 / 640;
+const double kBrandWordmarkAspect = 1654 / 375;
 
 /// "Orbit Stellar" mark: a titanium four-point star with an orange core and a
 /// tilted orbit ring. Pure vector, so it stays crisp from the app bar to TV.
