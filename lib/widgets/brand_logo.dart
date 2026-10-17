@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Official STELLAR TV wordmark asset (silver star + spaced STELLAR + TV pill).
+/// Official STELLAR TV wordmark asset (star + bold STELLAR + TV pill, high-legibility version).
 const String kBrandWordmarkAsset = 'assets/branding/stellartv_wordmark.png';
 
 /// Aspect ratio (width / height) of the official wordmark asset.
-const double kBrandWordmarkAspect = 1232 / 365;
+const double kBrandWordmarkAspect = 1654 / 375;
 
 /// "Orbit Stellar" mark: a titanium four-point star with an orange core and a
 /// tilted orbit ring. Pure vector, so it stays crisp from the app bar to TV.
@@ -56,7 +56,7 @@ class BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final h = size * 1.2;
+    final h = size * 1.35;
     return Image.asset(
       kBrandWordmarkAsset,
       height: h,
