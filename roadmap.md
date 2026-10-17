@@ -90,5 +90,5 @@
 - [x] Decoder fallback Android, timeline DVR nativa e recupero provider con isolamento cronologia
 - [x] Protezione Kids applicata prima del catalogo e conservata offline
 - [x] 37 test selezionati passati nella copia di verifica con SDK locale adattato
-- [ ] Eseguire build APK 3.2.1 con dipendenze originali e verifiche native
+- [x] APK 3.2.1 pubblicato: build con dipendenze originali, test Flutter e test nativi DVR superati (run 26)
 - [ ] Provare flussi reali e prestazioni su Fire TV/Google TV/Chromecast/Android/iOS (richiede dispositivi e provider dell'utente)
