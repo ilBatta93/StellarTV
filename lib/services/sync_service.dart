@@ -116,9 +116,20 @@ class SyncService {
   Future<bool> waitForSession({
     Duration timeout = const Duration(seconds: 8),
   }) async {
-    if (currentUserId != null) return true;
+    final signedIn = currentUserId;
+    if (signedIn != null) {
+      await _storeCode(signedIn);
+      return true;
+    }
     final prefs = await SharedPreferences.getInstance();
-    if ((prefs.getString(codeKey) ?? '').isEmpty) return false;
+    // Accounts signed in by QR never stored the code, so their expired
+    // session was not refreshed on reopen: a persisted session counts too.
+    final hasStoredSession = prefs.getKeys().any(
+      (k) => k.endsWith('-auth-token') || k == 'supabase.auth.token',
+    );
+    if ((prefs.getString(codeKey) ?? '').isEmpty && !hasStoredSession) {
+      return false;
+    }
     final done = Completer<bool>();
     final sub = _client.auth.onAuthStateChange.listen((state) {
       if (state.session != null && !done.isCompleted) done.complete(true);
@@ -143,7 +154,13 @@ class SyncService {
       }();
     });
     try {
-      return await done.future.timeout(timeout, onTimeout: () => currentUserId != null);
+      final ok = await done.future.timeout(
+        timeout,
+        onTimeout: () => currentUserId != null,
+      );
+      final id = currentUserId;
+      if (ok && id != null) await _storeCode(id);
+      return ok;
     } finally {
       retry.cancel();
       await sub.cancel();

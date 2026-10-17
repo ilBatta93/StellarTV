@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_config.dart';
+import 'sync_service.dart';
 
 /// One-shot TV pairing: the TV shows a code/QR, the user approves it from the
 /// website (stellartv.lovable.app/collega) and this device receives a
@@ -53,7 +55,17 @@ class TvPairingService {
 
   /// Exchanges the approved token for a real session on this device.
   Future<void> completeWithToken(String tokenHash) async {
-    await _client.auth.verifyOTP(type: OtpType.magiclink, token: tokenHash);
+    // The website hands over a token *hash*: passed as `token` (which needs
+    // the e-mail too) the exchange failed and the TV stayed signed out.
+    final res = await _client.auth.verifyOTP(
+      type: OtpType.magiclink,
+      tokenHash: tokenHash,
+    );
+    final id = res.session?.user.id ?? _client.auth.currentUser?.id;
+    if (id == null) throw StateError('Accesso non riuscito.');
+    // Same marker as a password sign-in, so the session is restored on reopen.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(SyncService.codeKey, id);
   }
 }
 
