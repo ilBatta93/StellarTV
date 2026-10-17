@@ -34,10 +34,18 @@ class AppUpdateService {
   static bool _checking = false;
   static bool _startupDone = false;
 
-  /// Build number from a version or tag such as "v3.0.12" -> 12.
+  /// Comparable build key from a version or tag ("v3.1.4" -> 3001004).
+  /// Semantic order Major > Minor > Patch, so 3.1.0 > 3.0.12 and 4.0.0 > 3.9.50.
   static int buildOf(String v) {
-    final parts = v.replaceAll(RegExp(r'^[vV]'), '').split('.');
-    return int.tryParse(parts.length >= 3 ? parts[2] : '') ?? 0;
+    final clean = v.trim().replaceAll(RegExp(r'^[vV]'), '').split(RegExp(r'[-+ ]')).first;
+    final parts = clean.split('.');
+    int seg(int i) {
+      if (i >= parts.length) return 0;
+      final m = RegExp(r'^\d+').firstMatch(parts[i]);
+      final n = int.tryParse(m?.group(0) ?? '') ?? 0;
+      return n > 999 ? 999 : n;
+    }
+    return seg(0) * 1000000 + seg(1) * 1000 + seg(2);
   }
 
   static Future<AppRelease?> fetchLatest() async {
