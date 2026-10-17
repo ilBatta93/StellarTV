@@ -11,6 +11,7 @@ import '../widgets/brand_logo.dart';
 import '../widgets/tv_text_field.dart';
 import 'login_screen.dart';
 import 'profile_picker_screen.dart';
+import 'tv_pairing_screen.dart';
 
 /// First screen for a signed-out device: sign in or create a StellarTV
 /// account (email + password). The account carries playlist, profiles,
@@ -105,6 +106,11 @@ class _AccountScreenState extends State<AccountScreen> {
         const Duration(seconds: 10),
         onTimeout: () => false,
       );
+    } catch (_) {}
+    // Playlists saved from the website arrive too, but only when this
+    // device has no list configured yet (never overwrites).
+    try {
+      await sync.restorePlaylistFromCloud();
     } catch (_) {}
     if (!mounted) return;
     setState(() => _loading = false);
@@ -329,6 +335,20 @@ class _AccountScreenState extends State<AccountScreen> {
                         onPressed: _loading ? null : _continueAsGuest,
                         icon: const Icon(Icons.person_outline_rounded),
                         label: const Text('Continua come ospite'),
+                      ),
+                      const SizedBox(height: 12),
+                      // Optional: sign in this TV with a QR/code approved from
+                      // the website, instead of typing email and password.
+                      OutlinedButton.icon(
+                        onPressed: _loading
+                            ? null
+                            : () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const TvPairingScreen(),
+                                ),
+                              ),
+                        icon: const Icon(Icons.qr_code_rounded),
+                        label: const Text('Accedi con QR o codice'),
                       ),
                       const SizedBox(height: 6),
                       const Text(

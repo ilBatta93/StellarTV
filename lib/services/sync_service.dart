@@ -168,7 +168,10 @@ class SyncService {
 
   Future<String?> resetPassword(String email) async {
     try {
-      await _client.auth.resetPasswordForEmail(email.trim());
+      await _client.auth.resetPasswordForEmail(
+        email.trim(),
+        redirectTo: 'https://stellartv.lovable.app/reset-password',
+      );
       return null;
     } on AuthException catch (e) {
       return _authMessage(e);
@@ -352,6 +355,36 @@ class SyncService {
 
   bool hasCredentials(Map<String, dynamic> settings) =>
       settings['auth_method'] is String;
+
+  /// Copies the Xtream list saved on the website (`iptv_playlists`) into this
+  /// device when it has no playlist configured yet. Never overwrites an
+  /// existing local configuration.
+  Future<bool> restorePlaylistFromCloud() async {
+    if (currentUserId == null) return false;
+    final prefs = await SharedPreferences.getInstance();
+    if ((prefs.getString('xtream_server') ?? '').isNotEmpty) return false;
+    try {
+      final rows = await _client
+          .from('iptv_playlists')
+          .select('server_url, username, password, epg_url')
+          .eq('is_active', true)
+          .order('created_at')
+          .limit(1);
+      if (rows.isEmpty) return false;
+      final row = rows.first;
+      await prefs.setString('auth_method', 'xtream');
+      await prefs.setString('xtream_server', row['server_url'] as String);
+      await prefs.setString('xtream_username', row['username'] as String);
+      await prefs.setString('xtream_password', row['password'] as String);
+      final epg = row['epg_url'];
+      if (epg is String && epg.isNotEmpty) {
+        await prefs.setString('epg_url', epg);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   // ----- cloud push/pull -----
 

@@ -60,6 +60,9 @@ class SyncProvider extends ChangeNotifier {
   Future<String?> resendConfirmation(String email) =>
       _sync.resendConfirmation(email);
 
+  /// Restores the Xtream list saved on the website when this device has none.
+  Future<bool> restorePlaylistFromCloud() => _sync.restorePlaylistFromCloud();
+
   Future<String?> _auth(Future<String?> Function() action) async {
     _busy = true;
     _message = null;

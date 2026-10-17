@@ -744,15 +744,32 @@ class _HistoryCard extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     PosterImage(url: poster),
+                    // Thin rounded bar at the poster bottom, like the site
+                    // mockups: orange fill over a dark track.
                     Positioned(
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 3,
-                        backgroundColor: Colors.black45,
-                        valueColor: AlwaysStoppedAnimation(AppColors.primary),
+                      child: Container(
+                        height: 4,
+                        decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.vertical(
+                            bottom: Radius.circular(10),
+                          ),
+                        ),
+                        child: FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: progress,
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.vertical(
+                                bottom: Radius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -1407,31 +1424,70 @@ class _TvHeroInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final it = item;
     if (it == null) return const SizedBox.shrink();
+    final year = it.releaseDate.length >= 4
+        ? it.releaseDate.substring(0, 4)
+        : '';
+    final meta = <String>[
+      if (year.isNotEmpty) year,
+      if (it.voteAverage > 0) '★ ${it.voteAverage.toStringAsFixed(1)}',
+      it.mediaType == 'movie' ? 'Film' : 'Serie TV',
+    ].join('  ·  ');
+    final width = MediaQuery.sizeOf(context).width * 0.5;
     return Padding(
       padding: const EdgeInsets.fromLTRB(32, 70, 24, 8),
       child: FractionallySizedBox(
         alignment: Alignment.topLeft,
         widthFactor: 0.55,
-        child: Align(
-          alignment: Alignment.topLeft,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: MediaQuery.sizeOf(context).width * 0.5,
-              child: Text(
-                it.title,
-                key: const ValueKey('tv-home-banner-title'),
-                style: const TextStyle(
-                  fontFamily: 'Sora',
-                  color: AppColors.textPrimary,
-                  fontSize: 26,
-                  height: 1.15,
-                  fontWeight: FontWeight.w800,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Align(
+              alignment: Alignment.topLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: width,
+                  child: Text(
+                    it.title,
+                    key: const ValueKey('tv-home-banner-title'),
+                    style: const TextStyle(
+                      fontFamily: 'Sora',
+                      color: AppColors.textPrimary,
+                      fontSize: 26,
+                      height: 1.15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+            const SizedBox(height: 6),
+            Text(
+              meta,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (it.overview.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                it.overview,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
