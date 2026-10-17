@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart';
@@ -286,7 +287,9 @@ class MediaKitEngine extends PlaybackEngine {
   /// always reaches the screen.
   static String _hwdec(HardwareDecoding mode) => switch (mode) {
     HardwareDecoding.disabled => 'no',
-    _ => 'mediacodec-copy',
+    // "mediacodec" exists only on Android: on iPhone it decoded audio with
+    // a black picture. VideoToolbox is Apple's hardware decoder.
+    _ => Platform.isIOS ? 'videotoolbox-copy' : 'mediacodec-copy',
   };
 
   Timer? _blackWatch;
@@ -360,7 +363,9 @@ class MediaKitEngine extends PlaybackEngine {
   Future<void> open({double initialVolume = 1}) async {
     final configuredUa = _settings.userAgent.trim();
     await _tuneNetwork(configuredUa.isEmpty ? 'StellarTV/1.0' : configuredUa);
-    if (DeviceTypeService.isTv) await _tuneForTv();
+    // Live tuning (no frame drops, codec allowlist, deinterlacing) matters
+    // on phones too: iPhone showed the same audio-with-black-picture bug.
+    if (DeviceTypeService.isTv || isLive) await _tuneForTv();
     if (isLive && !previewMode) await _enableTimeshift();
     if (_disposed) throw const PlaybackException('Chiuso');
     await _player.setVolume(initialVolume.clamp(0.0, 1.0) * 100);
