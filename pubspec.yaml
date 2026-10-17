@@ -37,6 +37,7 @@ flutter:
   assets:
     - assets/fonts/Sora.ttf
     - assets/fonts/Manrope.ttf
+    - assets/branding/stellartv_wordmark.png
   fonts:
     - family: Sora
       fonts:

@@ -4,6 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
+/// Official STELLAR TV wordmark asset (silver star + spaced STELLAR + TV pill).
+const String kBrandWordmarkAsset = 'assets/branding/stellartv_wordmark.png';
+
+/// Aspect ratio (width / height) of the official wordmark asset.
+const double kBrandWordmarkAspect = 1232 / 365;
+
 /// "Orbit Stellar" mark: a titanium four-point star with an orange core and a
 /// tilted orbit ring. Pure vector, so it stays crisp from the app bar to TV.
 class BrandMark extends StatelessWidget {
@@ -22,7 +28,8 @@ class BrandMark extends StatelessWidget {
   }
 }
 
-/// STELLAR ✦ [TV] — spaced satin wordmark, star separator and a glass pill.
+/// The official STELLAR TV wordmark, rendered from the brand asset so the
+/// lettering matches the logo exactly everywhere it appears.
 class BrandWordmark extends StatelessWidget {
   final double fontSize;
 
@@ -30,66 +37,14 @@ class BrandWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final f = fontSize;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          'STELLAR',
-          maxLines: 1,
-          textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            color: const Color(0xFFF5F5F7),
-            fontFamily: 'Sora',
-            fontSize: f,
-            fontWeight: FontWeight.w300,
-            letterSpacing: f * 0.28,
-            height: 1,
-          ),
-        ),
-        SizedBox(
-          width: f * 0.7,
-          height: f * 0.7,
-          child: CustomPaint(
-            painter: _SparkPainter(color: AppColors.primary),
-          ),
-        ),
-        SizedBox(width: f * 0.18),
-        Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: f * 0.32,
-            vertical: f * 0.12,
-          ),
-          decoration: BoxDecoration(
-            color: const Color(0x1FFFFFFF),
-            borderRadius: BorderRadius.circular(f),
-            border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.85),
-              width: math.max(1.0, f * 0.05),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.28),
-                blurRadius: f * 0.5,
-              ),
-            ],
-          ),
-          child: Text(
-            'TV',
-            maxLines: 1,
-            textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              color: const Color(0xFFF5F5F7),
-              fontFamily: 'Sora',
-              fontSize: f * 0.62,
-              fontWeight: FontWeight.w600,
-              letterSpacing: f * 0.08,
-              height: 1,
-            ),
-          ),
-        ),
-      ],
+    final h = fontSize * 1.9;
+    return Image.asset(
+      kBrandWordmarkAsset,
+      height: h,
+      width: h * kBrandWordmarkAspect,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      semanticLabel: 'STELLAR TV',
     );
   }
 }
@@ -101,13 +56,14 @@ class BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        BrandMark(size: size),
-        SizedBox(width: size * 0.3),
-        BrandWordmark(fontSize: size * 0.5),
-      ],
+    final h = size * 1.2;
+    return Image.asset(
+      kBrandWordmarkAsset,
+      height: h,
+      width: h * kBrandWordmarkAspect,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      semanticLabel: 'STELLAR TV',
     );
   }
 }
