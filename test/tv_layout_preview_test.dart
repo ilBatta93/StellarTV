@@ -21,6 +21,11 @@ import 'package:stellar_tv/providers/profile_provider.dart';
 import 'package:stellar_tv/providers/reactions_provider.dart';
 import 'package:stellar_tv/providers/ui_settings.dart';
 import 'package:stellar_tv/screens/home_screen.dart';
+import 'package:stellar_tv/screens/title_detail_screen.dart';
+import 'package:stellar_tv/models/title_trailer.dart';
+import 'package:stellar_tv/models/streaming_platform.dart';
+import 'package:stellar_tv/widgets/tv_focusable.dart';
+import 'package:stellar_tv/widgets/episode_card.dart';
 import 'package:stellar_tv/screens/series_detail_screen.dart';
 import 'package:stellar_tv/services/profile_service.dart';
 import 'package:stellar_tv/services/sync_service.dart';
@@ -47,8 +52,19 @@ class ArtService extends TmdbService {
   ArtService(this.titles);
   final List<TmdbItem> titles;
   @override
-  Future<String?> titleLogo(TmdbItem item) async =>
-      item.id == 125988 ? logoUrl : null;
+  Future<String?> titleLogo(TmdbItem item) async => item.id == 125988
+      ? logoUrl
+      : item.id == 157336
+      ? 'https://preview.invalid/interstellar.png'
+      : null;
+  @override
+  Future<TitleTrailer?> trailer(TmdbItem item) async => TitleTrailer.select(
+    jsonDecode(
+          File('$mediaDir/videos-${item.id}-it-IT.json').readAsStringSync(),
+        )
+        as Map<String, dynamic>,
+    'it',
+  );
   @override
   Future<TmdbItem?> homeArtwork(String title, {required bool isMovie}) async =>
       titles.where((i) => i.title == title).firstOrNull ?? titles.first;
@@ -64,6 +80,11 @@ class ArtService extends TmdbService {
 class PreviewDiscover extends fixture.HomeDiscover {
   PreviewDiscover(super.tmdb, this.titles);
   final List<TmdbItem> titles;
+  @override
+  PlatformTops platformTop(StreamingPlatform platform) =>
+      platform.name == 'Netflix'
+      ? PlatformTops(movies: titles, series: titles.reversed.toList())
+      : const PlatformTops();
   @override
   List<TmdbItem> get topMovies => titles;
   @override
@@ -136,7 +157,7 @@ class SeriesApp extends fixture.HomeApp {
                 id: 'silo-ep-$i',
                 name: 'Silo',
                 url: 'https://example.invalid/silo-$i.mp4',
-                logo: '',
+                logo: loadTitles().first.backdropUrl ?? '',
                 group: 'Serie',
                 type: ContentType.series,
               ),
@@ -207,7 +228,14 @@ void main() {
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
-        for (final family in ['Sora', 'Manrope', 'Roboto', 'Roboto-Medium', 'Roboto-Regular', 'MaterialIcons']) {
+        for (final family in [
+          'Sora',
+          'Manrope',
+          'Roboto',
+          'Roboto-Medium',
+          'Roboto-Regular',
+          'MaterialIcons',
+        ]) {
           final loader = FontLoader(family)
             ..addFont(
               rootBundle.load(
@@ -219,7 +247,13 @@ void main() {
           await loader.load();
         }
         final titles = loadTitles();
-        for (final title in titles) {
+        final movie = TmdbItem.tryParse(
+          jsonDecode(File('$mediaDir/157336.json').readAsStringSync())
+              as Map<String, dynamic>,
+          fallbackType: 'movie',
+        );
+        if (movie == null) throw StateError('Missing movie fixture');
+        for (final title in [...titles, movie]) {
           for (final w in [256, size.width.toInt(), 1280]) {
             await cacheImage(
               tester,
@@ -239,6 +273,12 @@ void main() {
           }
         }
         await cacheImage(tester, logoUrl, '$mediaDir/logo.png', 640);
+        await cacheImage(
+          tester,
+          'https://preview.invalid/interstellar.png',
+          '$mediaDir/logo-157336.png',
+          640,
+        );
         final client = SupabaseClient('https://example.invalid', 'test');
         final sync = SyncService(client);
         final app = SeriesApp(),
@@ -299,6 +339,52 @@ void main() {
           skipOffstage: false,
         );
         expect(tester.getRect(previous).bottom, lessThan(heading.top - 200));
+        final selector = FocusManager.instance.primaryFocus;
+        expect(selector, isA<TvHomeSelectorNode>());
+        Future<void> press(LogicalKeyboardKey key) async {
+          await tester.sendKeyEvent(key);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 500));
+          await tester.pump();
+        }
+
+        await press(LogicalKeyboardKey.arrowRight);
+        expect(FocusManager.instance.primaryFocus, isA<TvHomeSelectorNode>());
+        await press(LogicalKeyboardKey.arrowLeft);
+        expect(FocusManager.instance.primaryFocus, same(selector));
+        await press(LogicalKeyboardKey.arrowDown);
+        final firstTop = FocusManager.instance.primaryFocus;
+        expect(firstTop, isNot(isA<TvHomeSelectorNode>()));
+        await press(LogicalKeyboardKey.arrowRight);
+        expect(FocusManager.instance.primaryFocus, isNot(same(firstTop)));
+        await press(LogicalKeyboardKey.arrowUp);
+        expect(FocusManager.instance.primaryFocus, same(selector));
+        await press(LogicalKeyboardKey.arrowDown);
+        expect(FocusManager.instance.primaryFocus, same(firstTop));
+        await press(LogicalKeyboardKey.arrowUp);
+        await press(LogicalKeyboardKey.arrowUp);
+        final historyFirst = FocusManager.instance.primaryFocus;
+        expect(historyFirst, isNot(isA<TvHomeSelectorNode>()));
+        await press(LogicalKeyboardKey.arrowDown);
+        expect(FocusManager.instance.primaryFocus, same(selector));
+        await press(LogicalKeyboardKey.arrowDown);
+        await press(LogicalKeyboardKey.arrowDown);
+        final nextSelector = FocusManager.instance.primaryFocus;
+        expect(nextSelector, isA<TvHomeSelectorNode>());
+        expect(nextSelector, isNot(same(selector)));
+        await press(LogicalKeyboardKey.arrowRight);
+        expect(FocusManager.instance.primaryFocus, isA<TvHomeSelectorNode>());
+        await press(LogicalKeyboardKey.arrowLeft);
+        await press(LogicalKeyboardKey.arrowRight);
+        await tester.pumpAndSettle();
+        await save(
+          tester,
+          boundaryKey,
+          'home-top-successivo-${size.width.toInt()}',
+        );
+        await press(LogicalKeyboardKey.arrowUp);
+        expect(FocusManager.instance.primaryFocus, same(firstTop));
+
         await tester.pumpWidget(const SizedBox());
         await tester.pump();
         final series = Channel(
@@ -318,8 +404,44 @@ void main() {
         expect(find.byType(HomeTitleArt), findsOneWidget);
         expect(tester.takeException(), isNull);
         await save(tester, boundaryKey, 'scheda-serie-${size.width.toInt()}');
+        final firstEpisode = find.byType(EpisodeCard).first;
+        final episodeStops = find.descendant(
+          of: firstEpisode,
+          matching: find.byType(TvFocusable),
+        );
+        final episodeFocus = tester
+            .widget<TvFocusable>(episodeStops.first)
+            .focusNode;
+        episodeFocus?.requestFocus();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(
+          FocusManager.instance.primaryFocus?.debugLabel,
+          'episode-play:silo-ep-2',
+        );
+        await tester.pumpAndSettle();
+        await save(tester, boundaryKey, 'episodi-serie-${size.width.toInt()}');
         await tester.pumpWidget(const SizedBox());
-        await tester.pump(const Duration(seconds: 2));
+        await tester.pump();
+        final movieChannel = Channel(
+          id: 'interstellar',
+          name: 'Interstellar',
+          url: 'https://example.invalid/interstellar.mp4',
+          logo: '',
+          group: 'Film',
+          type: ContentType.movie,
+        );
+        await tester.pumpWidget(
+          mount(TitleDetailScreen(item: movie, channel: movieChannel)),
+        );
+        await tester.pump(const Duration(seconds: 1));
+        expect(tester.takeException(), isNull);
+        await save(tester, boundaryKey, 'scheda-film-${size.width.toInt()}');
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump(const Duration(seconds: 12));
         history.dispose();
         discover.dispose();
         profile.dispose();

@@ -33,7 +33,9 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 2100),
       vsync: this,
     );
-    Future.delayed(const Duration(milliseconds: 2200), _tryNavigate);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _tryNavigate();
+    });
   }
 
   Future<void> _tryNavigate() async {
@@ -149,8 +151,7 @@ class _SplashScreenState extends State<SplashScreen>
     final motion =
         context.select<UiSettings, bool>((ui) => ui.animations) &&
         !MediaQuery.disableAnimationsOf(context);
-    // Only the presentation controller changes. The existing 2.2s startup
-    // timer, session restore and cloud/profile routing remain untouched.
+    // Animation never gates routing; account and profile checks remain required.
     if (motion && !_animController.isAnimating && _animController.value == 0) {
       _animController.forward();
     } else if (!motion && _animController.value != 1) {

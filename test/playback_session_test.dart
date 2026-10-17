@@ -17,6 +17,21 @@ class _FakeEngine extends PlaybackEngine {
   final String url;
   final bool succeed;
   bool disposed = false;
+  Duration? sought;
+  bool defaultLiveSought = false;
+  @override
+  bool get supportsTimeshift => _value.nativeLiveSeekable;
+  void liveWindow() {
+    _value = const PlaybackSnapshot(
+      isReady: true,
+      isPlaying: true,
+      nativeLiveSeekable: true,
+      nativeLiveOffset: Duration(seconds: 20),
+      duration: Duration(minutes: 2),
+      position: Duration(seconds: 100),
+    );
+  }
+
   PlaybackSnapshot _value = const PlaybackSnapshot();
 
   void emitError(String message) {
@@ -51,7 +66,15 @@ class _FakeEngine extends PlaybackEngine {
   @override
   Future<void> pause() async {}
   @override
-  Future<void> seekTo(Duration position) async {}
+  Future<void> seekTo(Duration position) async {
+    sought = position;
+  }
+
+  @override
+  Future<void> seekToLive() async {
+    defaultLiveSought = true;
+  }
+
   @override
   Future<void> setSpeed(double speed) async {}
   @override
@@ -87,6 +110,56 @@ class _FakeEngine extends PlaybackEngine {
 const _xtream = 'http://tv.example.com/live/user/pass/42.m3u8';
 
 void main() {
+  test(
+    'Native DVR clamps to actual window and LIVE uses native default',
+    () async {
+      final engine = _FakeEngine(PlayerEngineType.exo, _xtream, succeed: true);
+      final session = PlaybackSession(
+        url: _xtream,
+        isLive: true,
+        settings: PlayerSettings(primaryEngine: PlayerEngineType.exo),
+        engineFactory: (_) => engine,
+      );
+      await session.start();
+      engine.liveWindow();
+      expect(session.liveDelay, const Duration(seconds: 20));
+      await session.timeshiftBy(const Duration(minutes: -5));
+      expect(engine.sought, Duration.zero);
+      await session.timeshiftBy(const Duration(minutes: 5));
+      expect(engine.sought, const Duration(minutes: 2));
+      await session.goLive();
+      expect(engine.defaultLiveSought, isTrue);
+      session.dispose();
+      await session.released;
+    },
+  );
+
+  test('Black-video recovery respects disabled engine fallback', () async {
+    late PlaybackSession session;
+    final types = <PlayerEngineType>[];
+    _FakeEngine? current;
+    session = PlaybackSession(
+      url: _xtream,
+      isLive: true,
+      settings: PlayerSettings(
+        primaryEngine: PlayerEngineType.exo,
+        autoFallback: false,
+      ),
+      engineFactory: (type) {
+        types.add(type);
+        final engine = _FakeEngine(type, session.currentUrl, succeed: true);
+        current = engine;
+        return engine;
+      },
+    );
+    await session.start();
+    current?.emitError('schermo nero');
+    await Future<void>.delayed(const Duration(seconds: 3));
+    expect(types, isNot(contains(PlayerEngineType.mediakit)));
+    session.dispose();
+    await session.released;
+  });
+
   setUp(() {
     _FakeEngine.alive = 0;
     _FakeEngine.maxAlive = 0;
@@ -221,8 +294,11 @@ void main() {
   test('formato flusso dirette sceglie il primo indirizzo provato', () {
     const url = 'http://srv.example:8080/live/u/p/42.ts';
     expect(
-      PlaybackSession.liveCandidates(url, true,
-          format: LiveStreamFormat.m3u8).first,
+      PlaybackSession.liveCandidates(
+        url,
+        true,
+        format: LiveStreamFormat.m3u8,
+      ).first,
       'http://srv.example:8080/live/u/p/42.m3u8',
     );
     expect(

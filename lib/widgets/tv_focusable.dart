@@ -6,6 +6,16 @@ import '../theme/app_theme.dart';
 import '../providers/ui_settings.dart';
 import 'package:provider/provider.dart';
 
+/// Production focus roles: debug labels are stripped from release builds.
+class EpisodePlaybackFocusNode extends FocusNode {
+  EpisodePlaybackFocusNode(String id) : super(debugLabel: 'episode-play:$id');
+}
+
+class TvHomeSelectorNode extends FocusNode {
+  TvHomeSelectorNode(String label) : super(debugLabel: label);
+  bool selected = false;
+}
+
 /// Adds remote activation and a consistent TV-only focus ring to custom taps.
 ///
 /// Uses exactly one focus node per item (children are excluded from focus), so

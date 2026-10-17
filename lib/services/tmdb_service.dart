@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../config/supabase_config.dart';
 import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
+import '../models/title_trailer.dart';
 import '../models/tmdb_person.dart';
 
 class TmdbException implements Exception {
@@ -183,6 +184,34 @@ class TmdbService {
     final preferred = logos.where((e) => priority(e['iso_639_1']) < 3);
     if (preferred.isEmpty) return null;
     return 'https://image.tmdb.org/t/p/w500${preferred.first['file_path']}';
+  }
+
+  final Map<String, Future<TitleTrailer?>> _trailers = {};
+  Future<TitleTrailer?> trailer(TmdbItem item) {
+    if (item.id <= 0) return Future.value(null);
+    if (_trailers.length >= 160 && !_trailers.containsKey(item.key)) {
+      _trailers.remove(_trailers.keys.first);
+    }
+    return _trailers.putIfAbsent(item.key, () async {
+      try {
+        final italian = TitleTrailer.select(
+          await _get('${item.mediaType}/${item.id}/videos', {
+            'language': 'it-IT',
+          }),
+          'it',
+        );
+        if (italian != null) return italian;
+        return TitleTrailer.select(
+          await _get('${item.mediaType}/${item.id}/videos', {
+            'language': 'en-US',
+          }),
+          'en',
+        );
+      } catch (_) {
+        _trailers.remove(item.key);
+        return null;
+      }
+    });
   }
 
   Future<List<TmdbItem>> recommendations(TmdbItem item) async {

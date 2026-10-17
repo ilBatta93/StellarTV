@@ -191,7 +191,10 @@ class PlaybackSession extends ChangeNotifier {
         await DecoderMemory.ensureLoaded();
       } catch (_) {}
       if (_disposed) return;
-      if (DecoderMemory.needsSoftware(url)) _softwareDecode = true;
+      if ((!previewMode || previewFallback) &&
+          settings.autoFallback &&
+          DecoderMemory.needsSoftware(url))
+        _softwareDecode = true;
     }
     _plan = _buildPlan(_firstEngine);
     _attempt = 0;
@@ -470,9 +473,11 @@ class PlaybackSession extends ChangeNotifier {
     // video (MPEG-2, interlaced 1080i...). Another address would give the
     // same codec, so go straight to mpv with FFmpeg software decoding, which
     // decodes every broadcast codec. Done once per session.
-    if (reason.contains('schermo nero') && !_softwareDecode) {
+    if (reason.contains('schermo nero') &&
+        !_softwareDecode &&
+        settings.autoFallback &&
+        (!previewMode || previewFallback)) {
       _softwareDecode = true;
-      if (isLive) unawaited(DecoderMemory.remember(url));
       final address = _currentUrl.isEmpty ? _candidates.first : _currentUrl;
       _plan = [
         _Attempt(PlayerEngineType.mediakit, address),
@@ -557,6 +562,8 @@ class PlaybackSession extends ChangeNotifier {
 
   /// How far behind the live point the picture is.
   Duration get liveDelay {
+    if (_engine?.value.nativeLiveSeekable == true)
+      return _engine?.value.nativeLiveOffset ?? Duration.zero;
     var d = _shift;
     if (_pausedAt != null) d += DateTime.now().difference(_pausedAt!);
     final cap = _maxRewind;
@@ -583,6 +590,14 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> timeshiftBy(Duration offset) async {
     final engine = _engine;
     if (engine == null || !canTimeshift) return;
+    if (engine.value.nativeLiveSeekable) {
+      var position = engine.value.position + offset;
+      if (position.isNegative) position = Duration.zero;
+      if (position > engine.value.duration) position = engine.value.duration;
+      await engine.seekTo(position);
+      _notify();
+      return;
+    }
     _liveStartedAt ??= DateTime.now();
     _foldPause();
     var target = _shift - offset;
@@ -601,6 +616,12 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> goLive() async {
     final engine = _engine;
     if (engine == null) return;
+    if (engine.value.nativeLiveSeekable) {
+      await engine.seekToLive();
+      if (!engine.value.isPlaying) await engine.play();
+      _notify();
+      return;
+    }
     _foldPause();
     final move = _shift;
     _shift = Duration.zero;

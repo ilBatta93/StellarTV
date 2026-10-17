@@ -30,6 +30,8 @@ class PlaybackSnapshot {
   final double speed;
   final String? error;
   final String caption;
+  final bool nativeLiveSeekable;
+  final Duration? nativeLiveOffset;
 
   const PlaybackSnapshot({
     this.isReady = false,
@@ -43,6 +45,8 @@ class PlaybackSnapshot {
     this.speed = 1.0,
     this.error,
     this.caption = '',
+    this.nativeLiveSeekable = false,
+    this.nativeLiveOffset,
   });
 
   bool get hasError => error != null;
@@ -79,6 +83,7 @@ abstract class PlaybackEngine extends ChangeNotifier {
   Future<void> play();
   Future<void> pause();
   Future<void> seekTo(Duration position);
+  Future<void> seekToLive() => seekTo(value.bufferedUntil);
   Future<void> setSpeed(double speed);
   Future<void> setVolume(double volume);
   Future<void> applyFitMode(VideoFitMode mode, double boxRatio);

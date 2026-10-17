@@ -65,8 +65,15 @@ class _HomeTitleArtState extends State<HomeTitleArt> {
         future: _logo,
         builder: (context, snapshot) {
           final url = snapshot.data;
-          if (!context.watch<UiSettings>().showPosters || url == null)
+          if (!context.select<UiSettings, bool>((ui) => ui.showPosters)) {
             return fallback;
+          }
+          // A pending lookup is not evidence that the title has no logo.
+          // Never flash text (or the previous title's logo) during a swap.
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const SizedBox.expand();
+          }
+          if (url == null) return fallback;
           return Semantics(
             label: title,
             image: true,
@@ -77,7 +84,7 @@ class _HomeTitleArtState extends State<HomeTitleArt> {
               alignment: Alignment.centerLeft,
               memCacheWidth: 640,
               fadeInDuration: Duration.zero,
-              placeholder: (_, _) => fallback,
+              placeholder: (_, _) => const SizedBox.expand(),
               errorWidget: (_, _, _) => fallback,
             ),
           );

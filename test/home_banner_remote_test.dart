@@ -155,6 +155,7 @@ void main() {
           ),
         );
         await tester.pump(const Duration(milliseconds: 500));
+        await tester.pump();
         expect(tester.takeException(), isNull);
         expect(find.text('Titolo ultima visione'), findsOneWidget);
 

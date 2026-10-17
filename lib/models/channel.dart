@@ -18,8 +18,10 @@ class Channel {
   final String? plot;
   final bool isSeriesFolder;
   final int episodeCount;
+
   /// Unix seconds when the provider added the item (0 when unknown).
   final int addedAt;
+  final int archiveDays;
 
   Channel({
     required this.id,
@@ -40,14 +42,15 @@ class Channel {
     this.isSeriesFolder = false,
     this.episodeCount = 0,
     this.addedAt = 0,
+    this.archiveDays = 0,
   });
 
   bool get isPlayable => url.isNotEmpty && !isSeriesFolder;
 
   String get displaySeriesName =>
       (seriesName != null && seriesName!.trim().isNotEmpty)
-          ? seriesName!
-          : name;
+      ? seriesName!
+      : name;
 
   factory Channel.fromMap(Map<String, dynamic> map) {
     return Channel(
@@ -72,6 +75,7 @@ class Channel {
       isSeriesFolder: map['is_series_folder'] == true,
       episodeCount: (map['episode_count'] as num?)?.toInt() ?? 0,
       addedAt: (map['added_at'] as num?)?.toInt() ?? 0,
+      archiveDays: (map['archive_days'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -95,6 +99,7 @@ class Channel {
       'is_series_folder': isSeriesFolder,
       'episode_count': episodeCount,
       'added_at': addedAt,
+      'archive_days': archiveDays,
     };
   }
 
@@ -117,6 +122,7 @@ class Channel {
     bool? isSeriesFolder,
     int? episodeCount,
     int? addedAt,
+    int? archiveDays,
   }) {
     return Channel(
       id: id ?? this.id,
@@ -137,6 +143,7 @@ class Channel {
       isSeriesFolder: isSeriesFolder ?? this.isSeriesFolder,
       episodeCount: episodeCount ?? this.episodeCount,
       addedAt: addedAt ?? this.addedAt,
+      archiveDays: archiveDays ?? this.archiveDays,
     );
   }
 

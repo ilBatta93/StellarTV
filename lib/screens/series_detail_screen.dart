@@ -19,6 +19,7 @@ import '../widgets/tv_detail_backdrop.dart';
 import '../widgets/reaction_buttons.dart';
 import '../widgets/episode_card.dart';
 import '../widgets/home_art.dart';
+import '../widgets/trailer_button.dart';
 import '../services/title_display.dart';
 
 class SeriesDetailScreen extends StatefulWidget {
@@ -206,6 +207,8 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                   _buildTvActions(context, isFav),
                   const SizedBox(height: 16),
                 ],
+                if (!DeviceTypeService.isTv && item != null)
+                  TrailerButton(item: item),
                 if (_item case final reactionItem?)
                   ReactionButtons(item: reactionItem),
                 if (plot.trim().isNotEmpty) ...[
@@ -280,6 +283,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                       selected: selected,
                       onSelected: (_) => setState(() => _selectedSeason = i),
                       labelStyle: TextStyle(
+                        fontFamily: DeviceTypeService.isTv ? 'Manrope' : null,
                         color: selected
                             ? Colors.white
                             : AppColors.textSecondary,
@@ -302,7 +306,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
           SliverToBoxAdapter(
             child: HorizontalRow(
               key: ValueKey(currentSeason.number),
-              horizontalFocusLabelPrefix: 'episode-play:',
+              horizontalFocusFilter: (node) => node is EpisodePlaybackFocusNode,
               height: 300,
               itemCount: currentSeason.episodes.length,
               itemBuilder: (context, i) {
@@ -384,7 +388,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       );
     }
 
-    return Row(
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
       children: [
         TvFocusable(
           autofocus: true,
@@ -399,7 +405,6 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
             onPressed: play,
           ),
         ),
-        const SizedBox(width: 12),
         TvFocusable(
           onPressed: () => app.toggleFavorite(widget.series),
           child: OutlinedButton.icon(
@@ -415,6 +420,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
             onPressed: () => app.toggleFavorite(widget.series),
           ),
         ),
+        if (_item case final item?) TrailerButton(item: item),
       ],
     );
   }

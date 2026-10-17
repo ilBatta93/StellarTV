@@ -49,6 +49,14 @@ class DiscoverProvider extends ChangeNotifier {
   static const _cacheKey = 'discover_cache_v1';
   static const _cacheTtl = Duration(hours: 6);
   bool _cacheRead = false;
+  Future<void>? _inFlight;
+  DateTime? _freshAt;
+  bool get _isFresh {
+    final at = _freshAt;
+    if (at == null) return false;
+    final age = DateTime.now().difference(at);
+    return !age.isNegative && age < _cacheTtl;
+  }
 
   static List<Map<String, dynamic>> _enc(List<TmdbItem> l) =>
       l.map((e) => e.toJson()).toList();
@@ -63,7 +71,7 @@ class DiscoverProvider extends ChangeNotifier {
   /// Shows the last saved Top lists instantly (no network wait at startup),
   /// then refreshes them in background when older than [_cacheTtl].
   Future<bool> _readCache() async {
-    if (_cacheRead) return false;
+    if (_cacheRead) return _isFresh;
     _cacheRead = true;
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -82,7 +90,8 @@ class DiscoverProvider extends ChangeNotifier {
       }
       notifyListeners();
       final at = DateTime.tryParse(m['at']?.toString() ?? '');
-      return at != null && DateTime.now().difference(at) < _cacheTtl;
+      _freshAt = at;
+      return _isFresh;
     } catch (_) {
       return false;
     }
@@ -94,7 +103,7 @@ class DiscoverProvider extends ChangeNotifier {
       await prefs.setString(
         _cacheKey,
         jsonEncode({
-          'at': DateTime.now().toIso8601String(),
+          'at': _freshAt?.toIso8601String(),
           'movies': _enc(_topMovies),
           'series': _enc(_topSeries),
           'platforms': {
@@ -106,15 +115,22 @@ class DiscoverProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> load({bool force = false}) async {
-    if (_isLoading) return;
-    final fresh = await _readCache();
-    if (fresh && !force) return;
+  Future<void> load({bool force = false}) {
+    return _inFlight ??= Future<void>.microtask(() async {
+      try {
+        await _refresh(force: force);
+      } finally {
+        _inFlight = null;
+      }
+    });
+  }
+
+  Future<void> _refresh({required bool force}) async {
+    if (await _readCache() && !force) return;
     _isLoading = !hasData;
     _error = null;
     notifyListeners();
     try {
-      // Everything in parallel: trending and every platform at once.
       final trending =
           Future.wait([tmdb.trending('movie'), tmdb.trending('tv')]).then((r) {
             _topMovies = r[0];
@@ -122,18 +138,25 @@ class DiscoverProvider extends ChangeNotifier {
             _isLoading = false;
             notifyListeners();
           });
-      final platforms = Future.wait(
-        StreamingPlatform.all.map((p) async {
-          try {
-            final tops = await tmdb.platformTop(p);
-            _platformTops[p.name] = tops;
-            notifyListeners();
-          } catch (_) {
-            _platformTops.putIfAbsent(p.name, () => const PlatformTops());
-          }
-        }),
-      );
+      var complete = true;
+      final platforms = () async {
+        final all = StreamingPlatform.all;
+        for (var start = 0; start < all.length; start += 2) {
+          await Future.wait(
+            all.skip(start).take(2).map((p) async {
+              try {
+                _platformTops[p.name] = await tmdb.platformTop(p);
+                notifyListeners();
+              } catch (_) {
+                complete = false;
+                _platformTops.putIfAbsent(p.name, () => const PlatformTops());
+              }
+            }),
+          );
+        }
+      }();
       await Future.wait([trending, platforms]);
+      _freshAt = complete ? DateTime.now() : null;
       await _writeCache();
     } catch (e) {
       if (!hasData) _error = e.toString();

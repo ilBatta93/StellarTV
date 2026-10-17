@@ -83,3 +83,12 @@
 - [x] Risalita da primo canale, EPG e anteprima a strumenti e menu principale
 - [x] Test con menu HomeScreen reale, ritorno alla guida e controlli a 960×540/1280×720
 - [ ] Verifica finale dell’APK con provider e telecomando su televisore reale
+
+## Ottobre 17 — integrazione e APK 3.2.1
+- [x] Integrare schede film/serie, trailer ITA/ENG ed episodi/Top con navigazione telecomando approvati
+- [x] Placeholder logo senza titolo transitorio, rimuovere attesa splash fissa e condividere refresh Discovery
+- [x] Decoder fallback Android, timeline DVR nativa e recupero provider con isolamento cronologia
+- [x] Protezione Kids applicata prima del catalogo e conservata offline
+- [x] 37 test selezionati passati nella copia di verifica con SDK locale adattato
+- [ ] Eseguire build APK 3.2.1 con dipendenze originali e verifiche native
+- [ ] Provare flussi reali e prestazioni su Fire TV/Google TV/Chromecast/Android/iOS (richiede dispositivi e provider dell'utente)

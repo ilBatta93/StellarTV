@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/player_settings.dart';
@@ -44,6 +46,49 @@ class ExoEngine extends PlaybackEngine {
   PlaybackSnapshot _value = const PlaybackSnapshot();
   bool _disposed = false;
   Timer? _blackWatch;
+  Timer? _livePoll;
+  Map<Object?, Object?> _window = const {};
+  bool _polling = false;
+  MethodChannel get _liveChannel {
+    // The controller exposes the native player identity, distinct from texture.
+    // ignore: invalid_use_of_visible_for_testing_member
+    return MethodChannel(
+      'stellartv/video_player_android/live/${_controller.playerId}',
+    );
+  }
+
+  @override
+  bool get supportsTimeshift =>
+      _window['isLive'] == true &&
+      _window['isSeekable'] == true &&
+      (_window['durationMs'] as num? ?? 0) > 0;
+  Future<void> _pollWindow() async {
+    if (_disposed ||
+        _polling ||
+        defaultTargetPlatform != TargetPlatform.android)
+      return;
+    _polling = true;
+    try {
+      final window = await _liveChannel.invokeMapMethod<Object?, Object?>(
+        'getLiveWindow',
+      );
+      if (_disposed) return;
+      _window = window ?? const {};
+      _sync();
+    } catch (_) {
+      /* Non-Android implementations retain their existing behavior. */
+    } finally {
+      _polling = false;
+    }
+  }
+
+  @override
+  Future<void> seekToLive() async {
+    if (!supportsTimeshift) return;
+    await _liveChannel.invokeMethod<bool>('seekToDefaultLivePosition');
+    await _pollWindow();
+  }
+
   String? _blackError;
 
   static VideoFormat? _formatHint(String url) {
@@ -84,8 +129,20 @@ class ExoEngine extends PlaybackEngine {
       isPlaying: v.isPlaying,
       isBuffering: v.isBuffering,
       isEnded: v.isCompleted,
-      position: v.position,
-      duration: v.duration,
+      position: supportsTimeshift
+          ? Duration(
+              milliseconds:
+                  (_window['positionMs'] as num? ?? v.position.inMilliseconds)
+                      .toInt(),
+            )
+          : v.position,
+      duration: supportsTimeshift
+          ? Duration(milliseconds: (_window['durationMs'] as num).toInt())
+          : v.duration,
+      nativeLiveSeekable: supportsTimeshift,
+      nativeLiveOffset: (_window['liveOffsetMs'] as num?) == null
+          ? null
+          : Duration(milliseconds: (_window['liveOffsetMs'] as num).toInt()),
       bufferedUntil: buffered,
       size: v.size,
       speed: v.playbackSpeed,
@@ -100,6 +157,7 @@ class ExoEngine extends PlaybackEngine {
     _controller.addListener(_sync);
     try {
       await _controller.initialize();
+      if (_disposed) return;
     } catch (e) {
       throw PlaybackException(_describeInitError(e));
     }
@@ -110,11 +168,19 @@ class ExoEngine extends PlaybackEngine {
     }
     try {
       await _controller.setVolume(initialVolume.clamp(0.0, 1.0));
+      if (_disposed) return;
       await _controller.play();
     } catch (e) {
       throw PlaybackException(_describeInitError(e));
     }
+    if (_disposed) return;
     _sync();
+    await _pollWindow();
+    if (_disposed) return;
+    _livePoll = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _pollWindow(),
+    );
     _watchBlackScreen();
   }
 
@@ -137,6 +203,8 @@ class ExoEngine extends PlaybackEngine {
         _blackWatch?.cancel();
         return;
       }
+      if (_window['tracksKnown'] == true && _window['hasVideoTrack'] == false)
+        return;
       if (!v.isPlaying || v.isBuffering) return;
       strikes++;
       if (strikes >= _blackStrikes) {
@@ -169,7 +237,16 @@ class ExoEngine extends PlaybackEngine {
   Future<void> pause() => _controller.pause();
 
   @override
-  Future<void> seekTo(Duration position) => _controller.seekTo(position);
+  Future<void> seekTo(Duration position) async {
+    if (!supportsTimeshift) {
+      await _controller.seekTo(position);
+      return;
+    }
+    await _liveChannel.invokeMethod<bool>('seekWithinLiveWindow', {
+      'positionMs': position.inMilliseconds,
+    });
+    await _pollWindow();
+  }
 
   @override
   Future<void> setSpeed(double speed) => _controller.setPlaybackSpeed(speed);
@@ -256,6 +333,7 @@ class ExoEngine extends PlaybackEngine {
     if (_disposed) return;
     _disposed = true;
     _blackWatch?.cancel();
+    _livePoll?.cancel();
     _controller.removeListener(_sync);
     try {
       await _controller.pause();

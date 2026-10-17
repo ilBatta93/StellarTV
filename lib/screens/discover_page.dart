@@ -1141,8 +1141,9 @@ class _TvTopRow extends StatefulWidget {
 class _TvTopRowState extends State<_TvTopRow> {
   bool _showSeries = false;
   final _headingKey = GlobalKey();
-  final _movieFocus = FocusNode(debugLabel: 'top movies');
-  final _seriesFocus = FocusNode(debugLabel: 'top series');
+  final _movieFocus = TvHomeSelectorNode('top movies');
+  final _seriesFocus = TvHomeSelectorNode('top series');
+  final _postersKey = GlobalKey();
   @override
   void dispose() {
     _movieFocus.dispose();
@@ -1158,94 +1159,140 @@ class _TvTopRowState extends State<_TvTopRow> {
     if (!hasMovies && !hasSeries) return const SizedBox.shrink();
     final showSeries = hasSeries && (_showSeries || !hasMovies);
     final items = showSeries ? series : movies;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          key: _headingKey,
-          padding: const EdgeInsets.fromLTRB(32, 16, 32, 8),
-          child: Row(
-            children: [
-              Container(
-                width: 5,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(3),
+    _movieFocus.selected = !showSeries;
+    _seriesFocus.selected = showSeries;
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (_, event) {
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent)
+          return KeyEventResult.ignored;
+        final focus = FocusManager.instance.primaryFocus;
+        if (focus != _movieFocus && focus != _seriesFocus)
+          return KeyEventResult.ignored;
+        final key = event.logicalKey;
+        if (key == LogicalKeyboardKey.arrowLeft ||
+            key == LogicalKeyboardKey.arrowRight) {
+          final toSeries = key == LogicalKeyboardKey.arrowRight;
+          if (hasMovies && hasSeries) {
+            setState(() => _showSeries = toSeries);
+            (toSeries ? _seriesFocus : _movieFocus).requestFocus();
+            widget.onFocusItem((toSeries ? series : movies).first);
+          }
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.arrowDown) {
+          final posterContext = _postersKey.currentContext;
+          if (posterContext != null) {
+            final row = Focus.of(posterContext);
+            row.traversalDescendants
+                .where((n) => n.canRequestFocus)
+                .firstOrNull
+                ?.requestFocus();
+          }
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            key: _headingKey,
+            padding: const EdgeInsets.fromLTRB(32, 16, 32, 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 5,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontFamily: 'Sora',
-                        color: AppColors.textPrimary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (subtitle != null)
+                const SizedBox(width: 14),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        subtitle,
+                        title,
                         style: const TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 12,
+                          fontFamily: 'Sora',
+                          color: AppColors.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                  ],
+                      if (subtitle != null)
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              if (hasMovies && hasSeries) ...[
-                const SizedBox(width: 24),
-                _chip('Film', _movieFocus, !showSeries, () {
-                  setState(() => _showSeries = false);
-                }),
-                const SizedBox(width: 12),
-                _chip('Serie TV', _seriesFocus, showSeries, () {
-                  setState(() => _showSeries = true);
-                }),
+                if (hasMovies || hasSeries) ...[
+                  const SizedBox(width: 24),
+                  if (hasMovies)
+                    _chip('Film', _movieFocus, !showSeries, () {
+                      setState(() => _showSeries = false);
+                    }),
+                  const SizedBox(width: 12),
+                  if (hasSeries)
+                    _chip('Serie TV', _seriesFocus, showSeries, () {
+                      setState(() => _showSeries = true);
+                    }),
+                ],
               ],
-            ],
-          ),
-        ),
-        HorizontalRow(
-          key: ValueKey('${title}_$showSeries'),
-          height: homeRowHeight(context),
-          spacing: 16,
-          itemCount: items.length,
-          itemBuilder: (context, i) => Focus(
-            canRequestFocus: false,
-            onKeyEvent: (_, event) {
-              if (hasMovies &&
-                  hasSeries &&
-                  event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                if (event is KeyDownEvent)
-                  (showSeries ? _seriesFocus : _movieFocus).requestFocus();
-                return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
-            child: HomeLandscapeCard(
-              title: items[i].title,
-              image: items[i].backdropUrl,
-              rank: i + 1,
-              onTap: () => openTmdbItem(context, items[i]),
-              onFocus: () {
-                widget.onFocusItem(items[i]);
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  final heading = _headingKey.currentContext;
-                  if (mounted && heading != null) _revealTvHeading(heading);
-                });
-              },
             ),
           ),
-        ),
-      ],
+          Focus(
+            key: ValueKey('${title}_$showSeries'),
+            canRequestFocus: false,
+            skipTraversal: true,
+            child: Builder(
+              builder: (_) => HorizontalRow(
+                key: _postersKey,
+                height: homeRowHeight(context),
+                spacing: 16,
+                itemCount: items.length,
+                itemBuilder: (context, i) => Focus(
+                  canRequestFocus: false,
+                  onKeyEvent: (_, event) {
+                    if ((hasMovies || hasSeries) &&
+                        event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                      if (event is KeyDownEvent || event is KeyRepeatEvent)
+                        (showSeries ? _seriesFocus : _movieFocus)
+                            .requestFocus();
+                      return KeyEventResult.handled;
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: HomeLandscapeCard(
+                    title: items[i].title,
+                    image: items[i].backdropUrl,
+                    rank: i + 1,
+                    onTap: () => openTmdbItem(context, items[i]),
+                    onFocus: () {
+                      widget.onFocusItem(items[i]);
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        final heading = _headingKey.currentContext;
+                        if (mounted && heading != null)
+                          _revealTvHeading(heading);
+                      });
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1258,7 +1305,16 @@ class _TvTopRowState extends State<_TvTopRow> {
     return TvFocusable(
       focusNode: focus,
       revealOnFocus: false,
-      onPressed: onTap,
+      onFocusChange: (focused) {
+        if (!focused) return;
+        final choices = focus == _seriesFocus ? widget.spec.$5 : widget.spec.$4;
+        if (choices.isNotEmpty) widget.onFocusItem(choices.first);
+      },
+      onPressed: () {
+        onTap();
+        final choices = focus == _seriesFocus ? widget.spec.$5 : widget.spec.$4;
+        if (choices.isNotEmpty) widget.onFocusItem(choices.first);
+      },
       borderRadius: BorderRadius.circular(22),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -1391,7 +1447,8 @@ class _TvHeroInfo extends StatelessWidget {
         const vPad = 14.0;
         final showOverview = it.overview.isNotEmpty && bounds.maxHeight >= 150;
         final overviewLines = bounds.maxHeight < 220 ? 2 : 3;
-        final textBlock = 8 + 20 + (showOverview ? 10 + overviewLines * 21.0 : 0);
+        final textBlock =
+            8 + 20 + (showOverview ? 10 + overviewLines * 21.0 : 0);
         final logoH = (bounds.maxHeight - vPad * 2 - textBlock)
             .clamp(56.0, 200.0)
             .toDouble();

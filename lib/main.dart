@@ -47,7 +47,10 @@ Future<void> main() async {
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.anonKey,
   );
-  runApp(const StellarTvApp());
+  final savedKids = await ProfileProvider.savedSelectionIsKids(
+    ProfileService(Supabase.instance.client),
+  );
+  runApp(StellarTvApp(initialKids: savedKids));
 }
 
 /// Shown in place of a widget that fails to build, so a crash never presents
@@ -92,7 +95,8 @@ class _StartupErrorView extends StatelessWidget {
 }
 
 class StellarTvApp extends StatefulWidget {
-  const StellarTvApp({super.key});
+  final bool initialKids;
+  const StellarTvApp({super.key, this.initialKids = false});
 
   @override
   State<StellarTvApp> createState() => _StellarTvAppState();
@@ -112,7 +116,9 @@ class _StellarTvAppState extends State<StellarTvApp> {
     AppUpdateService.scheduleStartupCheck();
     final syncService = SyncService(Supabase.instance.client);
     final profileService = ProfileService(Supabase.instance.client);
-    _appProvider = AppProvider()..init();
+    _appProvider = AppProvider()
+      ..setKidsMode(widget.initialKids)
+      ..init();
     _syncProvider = SyncProvider(syncService);
     _historyProvider = HistoryProvider(
       syncService,
@@ -132,9 +138,6 @@ class _StellarTvAppState extends State<StellarTvApp> {
       _historyProvider.switchProfile(profile?.id);
       _appProvider.setKidsMode(profile?.isKids ?? false);
     };
-    ProfileProvider.savedSelectionIsKids(profileService).then((kids) {
-      if (kids) _appProvider.setKidsMode(true);
-    });
     _profileProvider.load();
     // The sync needs favorites from the app state and must reload the app
     // when credentials arrive from another device.
@@ -253,7 +256,8 @@ class _StellarTvAppState extends State<StellarTvApp> {
             // "Dimensione testo" in Personalizzazione scales every label.
             builder: (context, child) {
               final factor = ui.textScaleFactor;
-              if (factor == 1.0 || child == null) return child ?? const SizedBox();
+              if (factor == 1.0 || child == null)
+                return child ?? const SizedBox();
               final mq = MediaQuery.of(context);
               return MediaQuery(
                 data: mq.copyWith(
@@ -270,4 +274,3 @@ class _StellarTvAppState extends State<StellarTvApp> {
     );
   }
 }
-

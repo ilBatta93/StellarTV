@@ -36,6 +36,7 @@ import '../widgets/tv_focusable.dart';
 class PlayerScreen extends StatefulWidget {
   final Channel channel;
   final Duration? startAt;
+  final bool archivePlayback;
 
   /// Ordered episodes of the series being watched (null for films/live).
   final List<Channel>? queue;
@@ -44,6 +45,7 @@ class PlayerScreen extends StatefulWidget {
     super.key,
     required this.channel,
     this.startAt,
+    this.archivePlayback = false,
     this.queue,
   });
 
@@ -113,7 +115,8 @@ class _PlayerScreenState extends State<PlayerScreen>
   int _outroCountdown = 5;
   Timer? _outroTimer;
 
-  bool get _isLive => widget.channel.type == ContentType.live;
+  bool get _isLive =>
+      widget.channel.type == ContentType.live && !widget.archivePlayback;
 
   /// Players currently on screen. When a player replaces another (next
   /// channel / next episode) the old one is disposed AFTER the new one is
@@ -1068,7 +1071,10 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
     final pipSupported = await _bridge.isPipSupported();
     Duration? startAt = _isLive ? null : widget.startAt;
-    if (startAt == null && !_isLive && settings.resumePlayback) {
+    if (startAt == null &&
+        !_isLive &&
+        !widget.archivePlayback &&
+        settings.resumePlayback) {
       startAt =
           _history.entryFor(widget.channel.id)?.resumePosition ??
           await _settingsService.getResumePosition(widget.channel.url);
@@ -1255,7 +1261,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   Future<void> _saveResume() async {
     final session = _session;
-    if (session == null || _isLive) return;
+    if (session == null || _isLive || widget.archivePlayback) return;
     final v = session.value;
     if (v.duration <= Duration.zero) return;
     final pending = _pendingResume;

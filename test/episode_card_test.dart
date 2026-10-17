@@ -10,6 +10,7 @@ import 'package:stellar_tv/providers/ui_settings.dart';
 import 'package:stellar_tv/services/device_type_service.dart';
 import 'package:stellar_tv/widgets/episode_card.dart';
 import 'package:stellar_tv/widgets/section_row.dart';
+import 'package:stellar_tv/widgets/tv_focusable.dart';
 
 void main() {
   for (final downloadable in [true, false]) {
@@ -33,7 +34,8 @@ void main() {
                 body: SizedBox(
                   height: 320,
                   child: HorizontalRow(
-                    horizontalFocusLabelPrefix: 'episode-play:',
+                    horizontalFocusFilter: (node) =>
+                        node is EpisodePlaybackFocusNode,
                     height: 300,
                     spacing: 20,
                     itemCount: 4,
@@ -63,6 +65,9 @@ void main() {
           ),
         );
         await tester.pump();
+        for (final node in FocusManager.instance.rootScope.descendants) {
+          if (node is EpisodePlaybackFocusNode) node.debugLabel = null;
+        }
         FocusManager.instance.primaryFocus?.nextFocus();
         await tester.pump();
         await tester.sendKeyEvent(
@@ -80,8 +85,8 @@ void main() {
         await tester.pump();
         expect(played, 1);
         expect(
-          FocusManager.instance.primaryFocus?.debugLabel,
-          'episode-play:1',
+          FocusManager.instance.primaryFocus,
+          isA<EpisodePlaybackFocusNode>(),
         );
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
         await tester.pump();
@@ -104,17 +109,19 @@ void main() {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
         await tester.pump();
         expect(
-          FocusManager.instance.primaryFocus?.debugLabel,
-          'episode-play:1',
+          FocusManager.instance.primaryFocus,
+          isA<EpisodePlaybackFocusNode>(),
         );
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
         await tester.pump();
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
         await tester.pump();
-        expect(
-          FocusManager.instance.primaryFocus?.debugLabel,
-          'episode-play:0',
+        await tester.sendKeyEvent(
+          LogicalKeyboardKey.select,
+          platform: 'android',
         );
+        await tester.pump();
+        expect(played, 0);
         expect(tester.takeException(), isNull);
       },
     );

@@ -29,6 +29,8 @@ class ProfileProvider extends ChangeNotifier {
   String? _announcedId = '__none__';
 
   void _announce() {
+    // A failed cloud read is not a deliberate profile deselection.
+    if (_selectedId != null && selected == null) return;
     if (_announcedId == _selectedId) return;
     _announcedId = _selectedId;
     onSelectionChanged?.call(selected);
@@ -83,8 +85,10 @@ class ProfileProvider extends ChangeNotifier {
   /// immediately at next launch even before the cloud answers.
   Future<void> _cacheKids() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-        'kids_profile_ids', [for (final p in _items) if (p.isKids) p.id]);
+    await prefs.setStringList('kids_profile_ids', [
+      for (final p in _items)
+        if (p.isKids) p.id,
+    ]);
   }
 
   /// True when the profile saved on this device is a kids profile.
@@ -144,10 +148,11 @@ class ProfileProvider extends ChangeNotifier {
       for (final p in _items)
         if (p.id == profile.id)
           p.copyWith(
-              name: name,
-              avatarKey: avatarKey,
-              avatarColor: avatarColor,
-              isKids: isKids)
+            name: name,
+            avatarKey: avatarKey,
+            avatarColor: avatarColor,
+            isKids: isKids,
+          )
         else
           p,
     ];

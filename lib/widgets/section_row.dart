@@ -63,7 +63,7 @@ class HorizontalRow extends StatelessWidget {
   final int itemCount;
   final IndexedWidgetBuilder itemBuilder;
   final double spacing;
-  final String? horizontalFocusLabelPrefix;
+  final bool Function(FocusNode)? horizontalFocusFilter;
 
   const HorizontalRow({
     super.key,
@@ -71,7 +71,7 @@ class HorizontalRow extends StatelessWidget {
     required this.itemCount,
     required this.itemBuilder,
     this.spacing = 12,
-    this.horizontalFocusLabelPrefix,
+    this.horizontalFocusFilter,
   });
 
   @override
@@ -155,8 +155,8 @@ class HorizontalRow extends StatelessWidget {
       if (node == current || !node.canRequestFocus || node.context == null) {
         continue;
       }
-      if (horizontalFocusLabelPrefix case final prefix?) {
-        if (!(node.debugLabel?.startsWith(prefix) ?? false)) continue;
+      if (horizontalFocusFilter case final accepts?) {
+        if (!accepts(node)) continue;
       }
       final dx = direction == TraversalDirection.right
           ? node.rect.center.dx - here.center.dx

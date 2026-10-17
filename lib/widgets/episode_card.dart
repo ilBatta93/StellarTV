@@ -28,8 +28,8 @@ class EpisodeCard extends StatefulWidget {
 }
 
 class _EpisodeCardState extends State<EpisodeCard> {
-  late final FocusNode _play = FocusNode(
-    debugLabel: 'episode-play:${widget.episode.channel.id}',
+  late final FocusNode _play = EpisodePlaybackFocusNode(
+    widget.episode.channel.id,
   );
   late final FocusNode _download = FocusNode(
     debugLabel: 'episode-download:${widget.episode.channel.id}',

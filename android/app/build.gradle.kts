@@ -25,7 +25,7 @@ android {
 
     defaultConfig {
         applicationId = "tv.stellar.app"
-        minSdk = flutter.minSdkVersion
+        minSdk = maxOf(24, flutter.minSdkVersion)
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName

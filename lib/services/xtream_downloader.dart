@@ -74,7 +74,9 @@ Future<List<Channel>> downloadXtreamSection({
 
   port.listen((message) {
     if (message is _Progress) {
-      onProgress?.call(CatalogProgress(bytes: message.bytes, items: message.items));
+      onProgress?.call(
+        CatalogProgress(bytes: message.bytes, items: message.items),
+      );
     } else if (message is _Done) {
       finish(value: message.channels);
     } else if (message is _Failure) {
@@ -82,13 +84,23 @@ Future<List<Channel>> downloadXtreamSection({
     }
   });
   errorPort.listen((message) {
-    final text = message is List && message.isNotEmpty ? message.first : message;
-    finish(error: XtreamDownloadException('Errore interno durante il caricamento ($text)'));
+    final text = message is List && message.isNotEmpty
+        ? message.first
+        : message;
+    finish(
+      error: XtreamDownloadException(
+        'Errore interno durante il caricamento ($text)',
+      ),
+    );
   });
   exitPort.listen((_) {
     // Give the final message a moment to arrive before declaring failure.
     Future<void>.delayed(const Duration(milliseconds: 200), () {
-      finish(error: const XtreamDownloadException('Caricamento interrotto. Riprova.'));
+      finish(
+        error: const XtreamDownloadException(
+          'Caricamento interrotto. Riprova.',
+        ),
+      );
     });
   });
 
@@ -250,9 +262,9 @@ Future<bool> _streamList({
     ..idleTimeout = const Duration(seconds: 15)
     ..userAgent = _userAgents[attempt % _userAgents.length];
   try {
-    final request = await client.getUrl(Uri.parse(url)).timeout(
-      const Duration(seconds: 30),
-    );
+    final request = await client
+        .getUrl(Uri.parse(url))
+        .timeout(const Duration(seconds: 30));
     request.headers.set(HttpHeaders.acceptHeader, 'application/json, */*');
     if (attempt > 0) {
       // Some proxies cut compressed streams: ask for plain bytes on retries.
@@ -447,9 +459,7 @@ class _JsonArrayStreamer {
       if (value is Map) {
         final info = value['user_info'];
         if (info is Map && '${info['auth']}' == '0') {
-          throw const _Fatal(
-            'Credenziali non valide o abbonamento scaduto.',
-          );
+          throw const _Fatal('Credenziali non valide o abbonamento scaduto.');
         }
         for (final v in value.values) {
           if (v is Map) count = onElement(v.cast<String, dynamic>());
@@ -497,6 +507,11 @@ class _ChannelMapper {
           group: _group(item),
           type: ContentType.live,
           tvgId: item['epg_channel_id']?.toString(),
+          archiveDays: item['tv_archive']?.toString() == '1'
+              ? (int.tryParse(item['tv_archive_duration']?.toString() ?? '') ??
+                        0)
+                    .clamp(0, 365)
+              : 0,
         );
       case ContentType.movie:
         final id = item['stream_id'];
@@ -504,7 +519,8 @@ class _ChannelMapper {
         return Channel(
           id: 'movie_$id',
           name: item['name']?.toString() ?? 'Sconosciuto',
-          url: '$base/movie/$_user/$_pass/$id.${item['container_extension'] ?? 'mp4'}',
+          url:
+              '$base/movie/$_user/$_pass/$id.${item['container_extension'] ?? 'mp4'}',
           logo: item['stream_icon']?.toString() ?? '',
           group: _group(item),
           type: ContentType.movie,
@@ -524,7 +540,8 @@ class _ChannelMapper {
           seriesName: item['name']?.toString(),
           plot: item['plot']?.toString(),
           isSeriesFolder: true,
-          addedAt: int.tryParse(
+          addedAt:
+              int.tryParse(
                 (item['last_modified'] ?? item['added'])?.toString() ?? '',
               ) ??
               0,

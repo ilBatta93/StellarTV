@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'tv_focusable.dart';
 
 /// Full-height TV sections own vertical focus and keep each horizontal selection.
 class TvHomeRows extends StatefulWidget {
@@ -96,15 +97,31 @@ class _TvHomeRowsState extends State<TvHomeRows> {
               if (next >= widget.sections.length) return KeyEventResult.handled;
               final primary = FocusManager.instance.primaryFocus;
               if (primary != null) _selected[index] = primary;
+              final stops = _rows[next].traversalDescendants
+                  .where((n) => n.canRequestFocus && n.context != null)
+                  .toList();
+              final selectors = stops.whereType<TvHomeSelectorNode>().toList();
               final saved = _selected[next];
-              final target =
-                  saved != null &&
-                      saved.context != null &&
-                      saved.canRequestFocus
-                  ? saved
-                  : _rows[next].traversalDescendants
-                        .where((n) => n.canRequestFocus)
-                        .firstOrNull;
+              final fromSelectorUp =
+                  key == LogicalKeyboardKey.arrowUp &&
+                  primary is TvHomeSelectorNode;
+              final FocusNode? target;
+              if (fromSelectorUp) {
+                target = stops
+                    .where((n) => n is! TvHomeSelectorNode)
+                    .firstOrNull;
+              } else if (selectors.isNotEmpty) {
+                target =
+                    selectors.where((n) => n.selected).firstOrNull ??
+                    selectors.first;
+              } else {
+                target =
+                    saved != null &&
+                        saved.context != null &&
+                        saved.canRequestFocus
+                    ? saved
+                    : stops.firstOrNull;
+              }
               if (target != null) {
                 _show(next);
                 target.requestFocus();

@@ -22,6 +22,7 @@ import '../widgets/tv_focusable.dart';
 import '../widgets/tv_detail_backdrop.dart';
 import '../widgets/download_button.dart';
 import '../widgets/reaction_buttons.dart';
+import '../widgets/trailer_button.dart';
 import '../services/download_service.dart';
 import '../services/title_display.dart';
 
@@ -163,12 +164,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
           ),
         SliverToBoxAdapter(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              DeviceTypeService.isTv ? 32 : 16,
-              0,
-              DeviceTypeService.isTv ? 32 : 16,
-              0,
-            ),
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -186,24 +182,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                 const SizedBox(height: 8),
                 _Meta(item: item, channel: widget.channel),
                 const SizedBox(height: 16),
-                if (!DeviceTypeService.isTv)
-                  _Actions(item: item, playable: playable, variants: variants)
-                else
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: DeviceTypeService.isTv
-                            ? 380
-                            : double.infinity,
-                      ),
-                      child: _Actions(
-                        item: item,
-                        playable: playable,
-                        variants: variants,
-                      ),
-                    ),
-                  ),
+                _Actions(item: item, playable: playable, variants: variants),
                 if (item != null && item.overview.isNotEmpty) ...[
                   const SizedBox(height: 24),
                   Text('Trama', style: Theme.of(context).textTheme.titleMedium),
@@ -437,6 +416,7 @@ class _Actions extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final inList = item != null && app.isTmdbFavorite(item!);
+    if (DeviceTypeService.isTv) return _tvActions(context, app);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -482,6 +462,7 @@ class _Actions extends StatelessWidget {
               ],
             ),
           ),
+        if (item case final trailerItem?) TrailerButton(item: trailerItem),
         if (variants.length > 1) ...[
           const SizedBox(height: 8),
           const Text(
@@ -587,6 +568,60 @@ class _Actions extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ],
+    );
+  }
+
+  Widget _tvActions(BuildContext context, AppProvider app) {
+    final channel = playable;
+    final titleItem = item;
+    final inList = titleItem != null && app.isTmdbFavorite(titleItem);
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (channel != null) ...[
+          TvFocusable(
+            autofocus: true,
+            onPressed: () => _play(context),
+            child: ElevatedButton.icon(
+              onPressed: () => _play(context),
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('Guarda ora'),
+            ),
+          ),
+          TvFocusable(
+            onPressed: () => app.toggleFavorite(channel),
+            child: OutlinedButton.icon(
+              onPressed: () => app.toggleFavorite(channel),
+              icon: Icon(
+                app.favoriteIds.contains(channel.id)
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+              ),
+              label: Text(
+                app.favoriteIds.contains(channel.id)
+                    ? 'Nei preferiti'
+                    : 'Preferiti',
+              ),
+            ),
+          ),
+          if (DownloadService.canDownload(channel))
+            DownloadButton(channel: channel, expanded: true),
+        ],
+        if (titleItem != null) ...[
+          TvFocusable(
+            autofocus: channel == null,
+            onPressed: () => app.toggleTmdbFavorite(titleItem),
+            child: OutlinedButton.icon(
+              onPressed: () => app.toggleTmdbFavorite(titleItem),
+              icon: Icon(inList ? Icons.check_rounded : Icons.add_rounded),
+              label: Text(inList ? 'Nella mia lista' : 'La mia lista'),
+            ),
+          ),
+          TrailerButton(item: titleItem),
         ],
       ],
     );

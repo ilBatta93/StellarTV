@@ -18,6 +18,7 @@ void playChannel(
   Duration? startAt,
   List<Channel>? queue,
   bool replace = false,
+  bool archivePlayback = false,
 }) {
   final app = context.read<AppProvider>();
   if (app.kidsMode && !app.isKidsContent(channel)) return;
@@ -28,14 +29,18 @@ void playChannel(
     openChannel(context, channel);
     return;
   }
-  context.read<HistoryProvider>().recordStart(channel);
+  if (!archivePlayback) context.read<HistoryProvider>().recordStart(channel);
   // Offline copies play from the device; history keeps the same ids.
   final offline = DownloadService.instance;
-  channel = offline.playable(channel);
+  if (!archivePlayback) channel = offline.playable(channel);
   queue = queue?.map(offline.playable).toList();
   final route = MaterialPageRoute(
-    builder: (_) =>
-        PlayerScreen(channel: channel, startAt: startAt, queue: queue),
+    builder: (_) => PlayerScreen(
+      channel: channel,
+      startAt: startAt,
+      queue: queue,
+      archivePlayback: archivePlayback,
+    ),
   );
   if (replace) {
     Navigator.pushReplacement(context, route);

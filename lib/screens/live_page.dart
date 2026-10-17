@@ -8,6 +8,8 @@ import '../models/content_type.dart';
 import '../models/epg_program.dart';
 import '../player/playback_session.dart';
 import '../services/player_settings_service.dart';
+import '../services/xtream_service.dart';
+import '../services/xtream_catchup.dart';
 import '../widgets/player/video_surface.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
@@ -1051,7 +1053,11 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
       final now = DateTime.now();
       final list = epg
           .programmesFor(channel)
-          .where((p) => p.endTime.isAfter(now))
+          .where(
+            (p) =>
+                p.endTime.isAfter(now) ||
+                XtreamCatchup.available(channel, p, now),
+          )
           .toList();
       return DraggableScrollableSheet(
         expand: false,
@@ -1115,7 +1121,63 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                                 playChannel(context, channel);
                                 return;
                               }
-                              // Future programmes are only listed.
+                              if (!XtreamCatchup.available(
+                                channel,
+                                p,
+                                DateTime.now(),
+                              ))
+                                return;
+                              final credentials = context
+                                  .read<AppProvider>()
+                                  .xtreamCredentials;
+                              final server = credentials?['server'];
+                              final user = credentials?['username'];
+                              final password = credentials?['password'];
+                              if (server == null ||
+                                  user == null ||
+                                  password == null)
+                                return;
+                              try {
+                                final info = await XtreamService().accountInfo(
+                                  server: server,
+                                  username: user,
+                                  password: password,
+                                );
+                                final zone =
+                                    (info['server_info'] as Map?)?['timezone']
+                                        ?.toString();
+                                final archive = zone == null
+                                    ? null
+                                    : XtreamCatchup.url(
+                                        channel.copyWith(
+                                          url:
+                                              '${server.replaceAll(RegExp(r'/+$'), '')}/live/${Uri.encodeComponent(user)}/${Uri.encodeComponent(password)}/${Uri.parse(channel.url).pathSegments.last}',
+                                        ),
+                                        p,
+                                        now: DateTime.now(),
+                                        timezone: zone,
+                                      );
+                                if (!ctx.mounted || !context.mounted) return;
+                                if (archive == null)
+                                  throw StateError('Archive unavailable');
+                                Navigator.pop(ctx);
+                                playChannel(
+                                  context,
+                                  channel.copyWith(url: archive),
+                                  startAt: Duration.zero,
+                                  queue: const [],
+                                  archivePlayback: true,
+                                );
+                              } catch (_) {
+                                if (ctx.mounted)
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Recupero non disponibile: controlla il supporto archivio del provider.',
+                                      ),
+                                    ),
+                                  );
+                              }
                             },
                             child: Container(
                               padding: const EdgeInsets.all(12),
@@ -1154,6 +1216,27 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                                             fontSize: 10,
                                             fontWeight: FontWeight.w800,
                                             letterSpacing: 0.8,
+                                          ),
+                                        ),
+                                      ],
+                                      if (!live &&
+                                          XtreamCatchup.available(
+                                            channel,
+                                            p,
+                                            now,
+                                          )) ...[
+                                        const SizedBox(width: 8),
+                                        Icon(
+                                          Icons.replay_rounded,
+                                          size: 16,
+                                          color: AppColors.primary,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Rivedi',
+                                          style: TextStyle(
+                                            color: AppColors.primary,
+                                            fontSize: 12,
                                           ),
                                         ),
                                       ],
