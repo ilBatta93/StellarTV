@@ -91,6 +91,11 @@ class MediaKitEngine extends PlaybackEngine {
       if (softwareDecode) 'vd-lavc-skiploopfilter': 'nonref',
       'audio-buffer': isLive ? '0.5' : '0.2',
       'framedrop': _settings.dropLateFrames ? 'vo' : 'no',
+      // MPEG-2, VC-1 and MPEG-4 broadcast channels gave audio with a black
+      // picture through MediaCodec on Fire TV / Google TV / Chromecast:
+      // hardware decoding only for the codecs those chips really draw
+      // (the 4K/HEVC channels that always worked), FFmpeg for the rest.
+      if (!softwareDecode) 'hwdec-codecs': 'h264,hevc,vp9,av1',
       'cache-pause-initial': 'no',
       'vd-lavc-threads': '0',
     };
@@ -243,8 +248,18 @@ class MediaKitEngine extends PlaybackEngine {
           : 'fflags=+discardcorrupt+genpts',
       // Enough to find the video stream of an MPEG-TS channel without
       // making the first picture wait several seconds.
-      'demuxer-lavf-probesize': isLive ? '2000000' : '10000000',
-      'demuxer-lavf-analyzeduration': isLive ? '2' : '5',
+      // Broadcast MPEG-TS repeats SPS/PPS only on keyframes (every 2-5 s):
+      // a 2 MB / 2 s probe often started the decoder without them.
+      'demuxer-lavf-probesize': previewMode
+          ? '3000000'
+          : isLive
+          ? '5000000'
+          : '10000000',
+      'demuxer-lavf-analyzeduration': previewMode
+          ? '2'
+          : isLive
+          ? '4'
+          : '5',
       'demuxer-lavf-probe-info': 'auto',
       'hls-bitrate': 'max',
       if (isLive)
@@ -268,28 +283,54 @@ class MediaKitEngine extends PlaybackEngine {
 
   Timer? _blackWatch;
 
-  /// Audio playing but no video frame after a few seconds = black screen.
-  /// Changing the decoder of a running mpv on Android was unreliable, so the
-  /// session is told the stream failed and moves on to the next attempt
-  /// (other address or ExoPlayer) after releasing this player.
+  /// True only when decoded frames really flow through mpv's video chain.
+  /// The old check used the track resolution, which mpv reads from the
+  /// stream headers before the decoder outputs anything: a channel with
+  /// audio and a black picture looked "fine" and the fallback never ran.
+  Future<bool?> _framesFlowing() async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return null;
+    try {
+      final fps = double.tryParse(
+        (await platform.getProperty('estimated-vf-fps')).trim(),
+      );
+      if (fps != null) return fps > 0.5;
+    } catch (_) {}
+    return null;
+  }
+
+  /// Audio playing but no decoded video frame = black screen. Checked every
+  /// second for the whole playback (a decoder can also stall mid-stream);
+  /// after ~5 s without frames the session reopens the channel in FFmpeg
+  /// software decoding and remembers it for the next time.
   void _watchBlackScreen() {
     _blackWatch?.cancel();
     var strikes = 0;
-    _blackWatch = Timer.periodic(const Duration(seconds: 3), (_) {
+    var checking = false;
+    final limit = softwareDecode ? 12 : (previewMode ? 4 : 5);
+    _blackWatch = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (_disposed) return _blackWatch?.cancel();
+      if (checking) return;
       final st = _player.state;
-      final hasFrame = (st.width ?? 0) > 0 && (st.height ?? 0) > 0;
       final hasVideoTrack = st.tracks.video.any(
         (t) => t.id != 'auto' && t.id != 'no',
       );
-      if (hasFrame || (!hasVideoTrack && strikes > 3)) {
-        _blackWatch?.cancel();
+      // Radio / audio-only channels and paused or buffering players.
+      if (!hasVideoTrack || !st.playing || st.buffering) {
+        strikes = 0;
         return;
       }
-      // Still loading or long-GOP channel: not a black screen yet.
-      if (!st.playing || st.buffering) return;
+      checking = true;
+      final flowing = await _framesFlowing();
+      checking = false;
+      if (_disposed) return;
+      final ok = flowing ?? ((st.width ?? 0) > 0 && (st.height ?? 0) > 0);
+      if (ok) {
+        strikes = 0;
+        return;
+      }
       strikes++;
-      if (strikes >= 4) {
+      if (strikes >= limit) {
         _blackWatch?.cancel();
         _onError('Nessuna immagine dal flusso (schermo nero)');
       }

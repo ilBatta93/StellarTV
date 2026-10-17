@@ -17,26 +17,26 @@ class ExoEngine extends PlaybackEngine {
     bool shared = false,
   }) : _blackStrikes = shared ? 2 : 3,
        _controller = VideoPlayerController.networkUrl(
-        Uri.parse(url),
-        formatHint: _formatHint(url),
-        httpHeaders: {
-          'User-Agent': settings.userAgent.trim().isEmpty
-              ? 'StellarTV/1.0'
-              : settings.userAgent.trim(),
-        },
-        videoPlayerOptions: VideoPlayerOptions(
-          // Without this every new player steals the audio focus and
-          // Android pauses the others: the MultiView tiles froze.
-          mixWithOthers: shared,
-          allowBackgroundPlayback: settings.backgroundAudio,
-          preventsDisplaySleepDuringVideoPlayback: settings.keepScreenOn,
-          backBufferDurationMs: settings.backBufferSeconds * 1000,
-        ),
-        // Texture on every device. The native-surface (platform view) mode
-        // showed a black picture and crashed when released/clipped on Fire
-        // TV, Google TV and Chromecast, especially with live channels.
-        viewType: VideoViewType.textureView,
-      );
+         Uri.parse(url),
+         formatHint: _formatHint(url),
+         httpHeaders: {
+           'User-Agent': settings.userAgent.trim().isEmpty
+               ? 'StellarTV/1.0'
+               : settings.userAgent.trim(),
+         },
+         videoPlayerOptions: VideoPlayerOptions(
+           // Without this every new player steals the audio focus and
+           // Android pauses the others: the MultiView tiles froze.
+           mixWithOthers: shared,
+           allowBackgroundPlayback: settings.backgroundAudio,
+           preventsDisplaySleepDuringVideoPlayback: settings.keepScreenOn,
+           backBufferDurationMs: settings.backBufferSeconds * 1000,
+         ),
+         // Texture on every device. The native-surface (platform view) mode
+         // showed a black picture and crashed when released/clipped on Fire
+         // TV, Google TV and Chromecast, especially with live channels.
+         viewType: VideoViewType.textureView,
+       );
 
   final VideoPlayerController _controller;
   final int _blackStrikes;
@@ -115,7 +115,34 @@ class ExoEngine extends PlaybackEngine {
       throw PlaybackException(_describeInitError(e));
     }
     _sync();
+    if (await _hasUndrawableVideo()) {
+      _blackError = 'Nessuna immagine dal flusso (schermo nero)';
+      _sync();
+      return;
+    }
     _watchBlackScreen();
+  }
+
+  /// ExoPlayer reports the resolution from the stream headers even when the
+  /// TV has no decoder for the video (MPEG-2 / VC-1 broadcast channels on
+  /// Fire TV, Google TV and Chromecast): audio plays, picture stays black.
+  /// Those codecs go straight to mpv with FFmpeg software decoding.
+  Future<bool> _hasUndrawableVideo() async {
+    try {
+      if (!_controller.isVideoTrackSupportAvailable()) return false;
+      final tracks = await _controller.getVideoTracks();
+      return tracks.any((t) {
+        final codec = (t.codec ?? '').toLowerCase();
+        return codec.contains('mpeg2') ||
+            codec.contains('mpeg-2') ||
+            codec.contains('mp2v') ||
+            codec.contains('vc1') ||
+            codec.contains('vc-1') ||
+            codec.contains('wvc1');
+      });
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Some live streams decode audio but never produce a video frame on the

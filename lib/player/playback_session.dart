@@ -4,6 +4,7 @@ import 'dart:ui' show Size;
 import 'package:flutter/foundation.dart';
 
 import '../models/player_settings.dart';
+import 'decoder_memory.dart';
 import 'exo_engine.dart';
 import 'fvp_engine.dart';
 import 'mediakit_engine.dart';
@@ -149,8 +150,13 @@ class PlaybackSession extends ChangeNotifier {
   String? get error => _error;
   PlaybackSnapshot get value => _engine?.value ?? const PlaybackSnapshot();
 
-  PlayerEngineType get _firstEngine =>
-      previewMode ? previewEngine(settings) : settings.primaryEngine;
+  /// Channels already known to give a black picture with the hardware
+  /// decoder open directly in mpv with FFmpeg software decoding.
+  PlayerEngineType get _firstEngine => _softwareDecode
+      ? PlayerEngineType.mediakit
+      : previewMode
+      ? previewEngine(settings)
+      : settings.primaryEngine;
 
   /// Every address with [primary] first; then, when allowed, every address
   /// with the fallback engine. Previews never change engine.
@@ -158,7 +164,10 @@ class PlaybackSession extends ChangeNotifier {
     // MultiView: when the TV runs out of hardware decoders a second address
     // would fail the same way, so each address is tried with ExoPlayer and
     // then at once with mpv before moving on.
-    if (fallback && previewMode && previewFallback && primary.other != primary) {
+    if (fallback &&
+        previewMode &&
+        previewFallback &&
+        primary.other != primary) {
       return [
         for (final u in _candidates) ...[
           _Attempt(primary, u),
@@ -177,7 +186,14 @@ class PlaybackSession extends ChangeNotifier {
     return plan;
   }
 
-  Future<void> start() {
+  Future<void> start() async {
+    if (isLive) {
+      try {
+        await DecoderMemory.ensureLoaded();
+      } catch (_) {}
+      if (_disposed) return;
+      if (DecoderMemory.needsSoftware(url)) _softwareDecode = true;
+    }
     _plan = _buildPlan(_firstEngine);
     _attempt = 0;
     return _openAttempt(resumeAt: startAt);
@@ -449,8 +465,7 @@ class PlaybackSession extends ChangeNotifier {
       await _releaseCurrent();
       if (gen != _generation) return;
       _status = SessionStatus.failed;
-      _error =
-          previewMode
+      _error = previewMode
           ? 'Il provider IPTV non consente più connessioni simultanee.'
           : 'Il server TV ha rifiutato la connessione. Verifica che non ci '
                 'siano altri dispositivi collegati con lo stesso abbonamento e riprova.';
@@ -464,6 +479,7 @@ class PlaybackSession extends ChangeNotifier {
     // decodes every broadcast codec. Done once per session.
     if (reason.contains('schermo nero') && !_softwareDecode) {
       _softwareDecode = true;
+      if (isLive) unawaited(DecoderMemory.remember(url));
       final address = _currentUrl.isEmpty ? _candidates.first : _currentUrl;
       _plan = [
         _Attempt(PlayerEngineType.mediakit, address),
@@ -473,7 +489,8 @@ class PlaybackSession extends ChangeNotifier {
       _attempt = 0;
       _reconnects = 0;
       _status = SessionStatus.switching;
-      _notice = 'Video non supportato dal decoder della TV. '
+      _notice =
+          'Video non supportato dal decoder della TV. '
           'Passo alla decodifica software...';
       _notify();
       await _openAttempt(resumeAt: resumeAt);
