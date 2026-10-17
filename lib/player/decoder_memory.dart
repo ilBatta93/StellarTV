@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class DecoderMemory {
   DecoderMemory._();
 
-  static const _prefsKey = 'stellar_software_decode_channels';
+  static const _prefsKey = 'stellar_software_decode_channels_v2';
   static const _maxEntries = 400;
 
   static final List<String> _keys = [];

@@ -115,34 +115,7 @@ class ExoEngine extends PlaybackEngine {
       throw PlaybackException(_describeInitError(e));
     }
     _sync();
-    if (await _hasUndrawableVideo()) {
-      _blackError = 'Nessuna immagine dal flusso (schermo nero)';
-      _sync();
-      return;
-    }
     _watchBlackScreen();
-  }
-
-  /// ExoPlayer reports the resolution from the stream headers even when the
-  /// TV has no decoder for the video (MPEG-2 / VC-1 broadcast channels on
-  /// Fire TV, Google TV and Chromecast): audio plays, picture stays black.
-  /// Those codecs go straight to mpv with FFmpeg software decoding.
-  Future<bool> _hasUndrawableVideo() async {
-    try {
-      if (!_controller.isVideoTrackSupportAvailable()) return false;
-      final tracks = await _controller.getVideoTracks();
-      return tracks.any((t) {
-        final codec = (t.codec ?? '').toLowerCase();
-        return codec.contains('mpeg2') ||
-            codec.contains('mpeg-2') ||
-            codec.contains('mp2v') ||
-            codec.contains('vc1') ||
-            codec.contains('vc-1') ||
-            codec.contains('wvc1');
-      });
-    } catch (_) {
-      return false;
-    }
   }
 
   /// Some live streams decode audio but never produce a video frame on the

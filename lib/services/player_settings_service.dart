@@ -38,7 +38,7 @@ class PlayerSettingsService {
         // One-time switch of TV live channels to ExoPlayer (see
         // _liveDefaults); later choices of the user are kept.
         if (scope == PlayerSettingsScope.liveTv &&
-            decoded['liveEngineV'] != 4) {
+            decoded['liveEngineV'] != 5) {
           _liveDefaults(settings);
           await save(settings, scope: scope);
         }
@@ -50,13 +50,12 @@ class PlayerSettingsService {
     return PlayerSettings();
   }
 
-  /// TV live channels start with mpv: FFmpeg decodes and deinterlaces the
-  /// 1080i/MPEG-2 broadcast channels that gave audio with a black picture
-  /// through the TV's hardware decoder (ExoPlayer); ExoPlayer remains the
-  /// automatic fallback, MultiView and preview engine.
+  /// TV live channels start with ExoPlayer, the device's native decoder:
+  /// on Fire TV mpv kept a black picture while ExoPlayer drew the channel.
+  /// mpv remains the automatic fallback for streams ExoPlayer rejects.
   static void _liveDefaults(PlayerSettings s) {
     if (!DeviceTypeService.isTv) return;
-    s.primaryEngine = PlayerEngineType.mediakit;
+    s.primaryEngine = PlayerEngineType.exo;
     s.autoFallback = true;
   }
 

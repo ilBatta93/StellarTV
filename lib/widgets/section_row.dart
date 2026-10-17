@@ -112,11 +112,26 @@ class HorizontalRow extends StatelessWidget {
     if (direction == null || current == null || current == row) {
       return KeyEventResult.ignored;
     }
-    current.focusInDirection(direction);
-    final now = FocusManager.instance.primaryFocus;
-    if (now != null && now != current && !now.ancestors.contains(row)) {
-      current.requestFocus();
+    // requestFocus() applies on the next microtask, so checking the focus
+    // after focusInDirection() never saw the jump to the row below. Pick
+    // the neighbour among this row's own cards instead; none means the
+    // edge was reached and the focus simply stays put.
+    final here = current.rect;
+    FocusNode? best;
+    var bestDx = double.infinity;
+    for (final node in row.traversalDescendants) {
+      if (node == current || !node.canRequestFocus || node.context == null) {
+        continue;
+      }
+      final dx = direction == TraversalDirection.right
+          ? node.rect.center.dx - here.center.dx
+          : here.center.dx - node.rect.center.dx;
+      if (dx > 1 && dx < bestDx) {
+        bestDx = dx;
+        best = node;
+      }
     }
+    best?.requestFocus();
     return KeyEventResult.handled;
   }
 }

@@ -271,7 +271,7 @@ class PlayerSettings {
   Map<String, dynamic> toJson() => {
     'primaryEngine': primaryEngine.name,
     'engineV': 2,
-    'liveEngineV': 4,
+    'liveEngineV': 5,
     'autoFallback': autoFallback,
     'startTimeoutSeconds': startTimeoutSeconds,
     'liveStreamFormat': liveStreamFormat.name,
