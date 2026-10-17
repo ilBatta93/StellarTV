@@ -34,7 +34,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - PlaybackSession owns at most one native player: every swap unmounts the view, awaits full engine release and a provider-connection pause before creating the next, and exposes `released` so screens wait before opening another stream; repeated or stale engine errors trigger one recovery only.
 - MultiView owns an isolated session per tile, serial mute-before-unmute audio ownership, bounded preview buffers and shared persisted layout preferences; its picker rechecks catalog and Kids permissions before opening streams.
 - PlaybackSession supports an optional engine factory for deterministic remote/audio lifecycle tests without replacing production native engines.
-- TV Home seeds its banner from the latest eligible history item until user focus takes over, and rows coordinate vertical reveal instead of competing with poster auto-scroll.
+- TV Home seeds its banner from the latest eligible history item until user focus takes over; HorizontalRow owns horizontal-only focused-card reveal independently from vertical heading reveal, so banner callbacks cannot leave selection offscreen or exhaust lazy neighbours.
 
 - Secondary pages share ApplePageScaffold with bounded readable widths and their original scroll/focus bodies; shared theme and controls own Apple styling so no playback or sync logic is duplicated.
 - TV focus respects the animation setting and system reduced motion, uses one high-contrast stop per action, and avoids blur filters on video or catalog surfaces to preserve low-powered TV performance.
