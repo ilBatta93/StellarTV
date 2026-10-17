@@ -109,6 +109,47 @@ class SyncService {
     return id;
   }
 
+  /// iOS restarts the app from scratch after a while in background: the saved
+  /// session is restored and refreshed asynchronously, often while the network
+  /// is still waking up. When this device was signed in before (a sync code is
+  /// stored), wait a bounded time for the session instead of showing the login.
+  Future<bool> waitForSession({
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    if (currentUserId != null) return true;
+    final prefs = await SharedPreferences.getInstance();
+    if ((prefs.getString(codeKey) ?? '').isEmpty) return false;
+    final done = Completer<bool>();
+    final sub = _client.auth.onAuthStateChange.listen((state) {
+      if (state.session != null && !done.isCompleted) done.complete(true);
+      if (state.event == AuthChangeEvent.signedOut && !done.isCompleted) {
+        done.complete(false);
+      }
+    }, onError: (_) {});
+    // A refresh with the stored token may succeed once the network is back.
+    final retry = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      if (done.isCompleted) return;
+      if (currentUserId != null) {
+        done.complete(true);
+        return;
+      }
+      () async {
+        try {
+          final r = await _client.auth.refreshSession();
+          if (r.session != null && !done.isCompleted) done.complete(true);
+        } catch (_) {
+          // Network still asleep: try again on the next tick.
+        }
+      }();
+    });
+    try {
+      return await done.future.timeout(timeout, onTimeout: () => currentUserId != null);
+    } finally {
+      retry.cancel();
+      await sub.cancel();
+    }
+  }
+
   Future<String?> getStoredCode() async {
     final id = currentUserId;
     if (id != null) await _storeCode(id);

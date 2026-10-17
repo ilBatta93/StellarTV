@@ -41,6 +41,13 @@ class SyncProvider extends ChangeNotifier {
   String? get email => _sync.currentEmail;
   bool get isSignedIn => _sync.currentUserId != null;
 
+  /// Bounded wait for the saved session on cold start (see SyncService).
+  Future<bool> waitForSession() async {
+    final ok = await _sync.waitForSession();
+    if (ok) await load();
+    return ok;
+  }
+
   Future<void> load() async {
     _code = await _sync.getStoredCode();
     _lastPush = await _sync.lastPush();
