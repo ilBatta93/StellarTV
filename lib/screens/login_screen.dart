@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../theme/app_theme.dart';
-import '../widgets/brand_logo.dart';
+import '../widgets/auth_scaffold.dart';
+import '../services/device_type_service.dart';
 import '../widgets/tv_text_field.dart';
 import 'profile_picker_screen.dart';
 
@@ -34,60 +35,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          SafeArea(
-            child: SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight:
-                      MediaQuery.of(context).size.height -
-                      MediaQuery.of(context).padding.top -
-                      MediaQuery.of(context).padding.bottom,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 40),
-                    _buildLogo(),
-                    const SizedBox(height: 36),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 460),
-                        child: _buildCard(),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLogo() {
-    return Column(
-      children: [
-        const BrandLogo(size: 52),
-        const SizedBox(height: 8),
-        const Text(
-          'Account Xtream',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCard() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: _buildXtreamForm(),
+    return AuthScaffold(
+      title: 'Collega la tua lista',
+      subtitle: 'Account Xtream',
+      form: _buildXtreamForm(),
     );
   }
 
@@ -98,8 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _buildFieldLabel('Server URL'),
         const SizedBox(height: 6),
         TvTextField(
-          autofocus: true,
-          openOnFocus: true,
+          autofocus: DeviceTypeService.isTv,
           controller: _xtreamServerController,
           nextFocus: _xtreamUserFocus,
           textInputAction: TextInputAction.next,
@@ -113,7 +63,6 @@ class _LoginScreenState extends State<LoginScreen> {
         _buildFieldLabel('Nome utente'),
         const SizedBox(height: 6),
         TvTextField(
-          openOnFocus: true,
           controller: _xtreamUserController,
           focusNode: _xtreamUserFocus,
           nextFocus: _xtreamPassFocus,
@@ -127,7 +76,6 @@ class _LoginScreenState extends State<LoginScreen> {
         _buildFieldLabel('Password'),
         const SizedBox(height: 6),
         TvTextField(
-          openOnFocus: true,
           controller: _xtreamPassController,
           focusNode: _xtreamPassFocus,
           textInputAction: TextInputAction.done,
@@ -135,33 +83,40 @@ class _LoginScreenState extends State<LoginScreen> {
           decoration: InputDecoration(
             hintText: 'Inserisci la password',
             prefixIcon: const Icon(Icons.lock, size: 20),
-            suffixIcon: IconButton(
-              icon: Icon(
-                _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                size: 20,
-                color: AppColors.textSecondary,
-              ),
+            suffixIcon: AuthAction(
               onPressed: () =>
                   setState(() => _obscurePassword = !_obscurePassword),
+              child: IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                  size: 20,
+                  color: AppColors.textSecondary,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
             ),
           ),
         ),
         const SizedBox(height: 24),
         SizedBox(
           width: double.infinity,
-          child: ElevatedButton.icon(
-            icon: _isLoading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.textPrimary,
-                    ),
-                  )
-                : const Icon(Icons.login),
-            label: Text(_isLoading ? 'Connessione...' : 'Connetti'),
+          child: AuthAction(
             onPressed: _isLoading ? null : _handleXtreamLogin,
+            child: ElevatedButton.icon(
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.textPrimary,
+                      ),
+                    )
+                  : const Icon(Icons.login),
+              label: Text(_isLoading ? 'Connessione...' : 'Connetti'),
+              onPressed: _isLoading ? null : _handleXtreamLogin,
+            ),
           ),
         ),
       ],

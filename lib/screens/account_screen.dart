@@ -7,7 +7,8 @@ import '../providers/history_provider.dart';
 import '../providers/sync_provider.dart';
 import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/brand_logo.dart';
+import '../widgets/auth_scaffold.dart';
+import '../services/device_type_service.dart';
 import '../widgets/tv_text_field.dart';
 import 'login_screen.dart';
 import 'profile_picker_screen.dart';
@@ -91,7 +92,10 @@ class _AccountScreenState extends State<AccountScreen> {
         _loading = false;
         _register = false;
       });
-      await _showConfirmDialog(email, justCreated: error == SyncService.confirmPending);
+      await _showConfirmDialog(
+        email,
+        justCreated: error == SyncService.confirmPending,
+      );
       return;
     }
     if (error != null) {
@@ -126,7 +130,10 @@ class _AccountScreenState extends State<AccountScreen> {
 
   /// TV-friendly dialog: the user confirms the email from a phone or PC,
   /// then comes back and presses Accedi. OK button focused for the remote.
-  Future<void> _showConfirmDialog(String email, {required bool justCreated}) async {
+  Future<void> _showConfirmDialog(
+    String email, {
+    required bool justCreated,
+  }) async {
     final sync = context.read<SyncProvider>();
     await showDialog<void>(
       context: context,
@@ -144,7 +151,10 @@ class _AccountScreenState extends State<AccountScreen> {
               final err = await sync.resendConfirmation(email);
               if (!ctx.mounted) return;
               Navigator.of(ctx).pop();
-              _show(err ?? 'Email di conferma inviata di nuovo.', ok: err == null);
+              _show(
+                err ?? 'Email di conferma inviata di nuovo.',
+                ok: err == null,
+              );
             },
             child: const Text('Invia di nuovo'),
           ),
@@ -197,177 +207,169 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
+  void _openPairing() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const TvPairingScreen()));
+  }
+
+  Widget _action(VoidCallback? callback, Widget child) =>
+      AuthAction(onPressed: callback, child: child);
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SizedBox(
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: AutofillGroup(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Center(child: BrandLogo(size: 52)),
-                      const SizedBox(height: 28),
-                      Text(
-                        _register ? 'Crea il tuo account' : 'Accedi',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _register
-                            ? 'Con un solo account ritrovi playlist, profili, '
-                                  'cronologia e preferiti su tutti i dispositivi.'
-                            : 'Usa la stessa email e password su ogni dispositivo.',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      TvTextField(
-                        autofocus: true,
-                        openOnFocus: true,
-                        controller: _email,
-                        nextFocus: _passwordFocus,
-                        keyboardType: TextInputType.emailAddress,
-                        autofillHints: const [AutofillHints.email],
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(Icons.mail_outline_rounded),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TvTextField(
-                        openOnFocus: true,
-                        controller: _password,
-                        focusNode: _passwordFocus,
-                        nextFocus: _register ? _confirmFocus : null,
-                        obscureText: _obscure,
-                        autofillHints: [
-                          _register
-                              ? AutofillHints.newPassword
-                              : AutofillHints.password,
-                        ],
-                        textInputAction: _register
-                            ? TextInputAction.next
-                            : TextInputAction.done,
-                        onSubmitted: (_) {
-                          if (!_register) _submit();
-                        },
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          prefixIcon: const Icon(Icons.lock_outline_rounded),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscure
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                            ),
-                            onPressed: () =>
-                                setState(() => _obscure = !_obscure),
-                          ),
-                        ),
-                      ),
-                      if (_register) ...[
-                        const SizedBox(height: 12),
-                        TvTextField(
-                          openOnFocus: true,
-                          controller: _confirm,
-                          focusNode: _confirmFocus,
-                          obscureText: _obscure,
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => _submit(),
-                          decoration: const InputDecoration(
-                            labelText: 'Ripeti password',
-                            prefixIcon: Icon(Icons.lock_outline_rounded),
-                          ),
-                        ),
-                      ],
-                      if (!_register)
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: _loading ? null : _forgot,
-                            child: const Text('Password dimenticata?'),
-                          ),
-                        )
-                      else
-                        const SizedBox(height: 16),
-                      SizedBox(
-                        height: 50,
-                        child: FilledButton(
-                          onPressed: _loading ? null : _submit,
-                          child: _loading
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.4,
-                                  ),
-                                )
-                              : Text(_register ? 'Crea account' : 'Accedi'),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextButton(
-                        onPressed: _loading
-                            ? null
-                            : () => setState(() => _register = !_register),
-                        child: Text(
-                          _register
-                              ? 'Hai già un account? Accedi'
-                              : 'Non hai un account? Creane uno',
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      OutlinedButton.icon(
-                        onPressed: _loading ? null : _continueAsGuest,
-                        icon: const Icon(Icons.person_outline_rounded),
-                        label: const Text('Continua come ospite'),
-                      ),
-                      const SizedBox(height: 12),
-                      // Optional: sign in this TV with a QR/code approved from
-                      // the website, instead of typing email and password.
-                      OutlinedButton.icon(
-                        onPressed: _loading
-                            ? null
-                            : () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const TvPairingScreen(),
-                                ),
-                              ),
-                        icon: const Icon(Icons.qr_code_rounded),
-                        label: const Text('Accedi con QR o codice'),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Senza account i dati restano solo su questo dispositivo.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+    final submit = _loading ? null : _submit;
+    final guest = _loading ? null : _continueAsGuest;
+    final pair = _loading ? null : _openPairing;
+    final toggle = _loading
+        ? null
+        : () => setState(() => _register = !_register);
+    return AuthScaffold(
+      title: _register ? 'Crea il tuo account' : 'Bentornato',
+      subtitle: _register
+          ? 'Playlist, profili e preferiti. Il tuo account, su ogni schermo.'
+          : 'Accedi a StellarTV',
+      alternatives: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _action(
+            pair,
+            OutlinedButton.icon(
+              onPressed: pair,
+              icon: const Icon(Icons.qr_code_rounded),
+              label: const Text('Accedi con QR o codice'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _action(
+            guest,
+            TextButton.icon(
+              onPressed: guest,
+              icon: const Icon(Icons.person_outline_rounded),
+              label: const Text('Continua come ospite'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Senza account i dati restano solo su questo dispositivo.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+      form: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TvTextField(
+            autofocus: DeviceTypeService.isTv,
+            controller: _email,
+            nextFocus: _passwordFocus,
+            keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.email],
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'Email',
+              prefixIcon: Icon(Icons.mail_outline_rounded),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TvTextField(
+            controller: _password,
+            focusNode: _passwordFocus,
+            nextFocus: _register ? _confirmFocus : null,
+            obscureText: _obscure,
+            autofillHints: [
+              _register ? AutofillHints.newPassword : AutofillHints.password,
+            ],
+            textInputAction: _register
+                ? TextInputAction.next
+                : TextInputAction.done,
+            onSubmitted: (_) {
+              if (!_register && !_loading) _submit();
+            },
+            decoration: InputDecoration(
+              labelText: 'Password',
+              prefixIcon: const Icon(Icons.lock_outline_rounded),
+              suffixIcon: _action(
+                () => setState(() => _obscure = !_obscure),
+                IconButton(
+                  tooltip: _obscure ? 'Mostra password' : 'Nascondi password',
+                  icon: Icon(
+                    _obscure
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
                   ),
+                  onPressed: () => setState(() => _obscure = !_obscure),
                 ),
               ),
             ),
           ),
-        ),
+          if (_register) ...[
+            const SizedBox(height: 16),
+            TvTextField(
+              controller: _confirm,
+              focusNode: _confirmFocus,
+              obscureText: _obscure,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) {
+                if (!_loading) _submit();
+              },
+              decoration: const InputDecoration(
+                labelText: 'Ripeti password',
+                prefixIcon: Icon(Icons.lock_outline_rounded),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          if (!_register)
+            Align(
+              alignment: Alignment.centerRight,
+              child: _action(
+                _loading ? null : _forgot,
+                TextButton(
+                  onPressed: _loading ? null : _forgot,
+                  child: const Text('Password dimenticata?'),
+                ),
+              ),
+            ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 50,
+            child: _action(
+              submit,
+              FilledButton.icon(
+                onPressed: submit,
+                icon: _loading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.arrow_forward_rounded),
+                label: Text(
+                  _loading
+                      ? 'Connessione...'
+                      : (_register ? 'Crea account' : 'Accedi'),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _action(
+            toggle,
+            TextButton(
+              onPressed: toggle,
+              child: Text(
+                _register ? 'Hai già un account? Accedi' : 'Crea un account',
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
-

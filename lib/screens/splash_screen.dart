@@ -6,7 +6,7 @@ import '../providers/profile_provider.dart';
 import '../providers/sync_provider.dart';
 import '../providers/ui_settings.dart';
 import '../theme/app_theme.dart';
-import '../widgets/brand_logo.dart';
+import '../widgets/brand_intro.dart';
 import 'account_screen.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
@@ -22,8 +22,6 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
   bool _navigated = false;
   bool _cloudChecked = false;
   int _initAttempts = 0;
@@ -32,18 +30,9 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
     _animController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 2100),
       vsync: this,
     );
-    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeIn),
-    );
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutBack),
-    );
-
-    _animController.forward();
-
     Future.delayed(const Duration(milliseconds: 2200), _tryNavigate);
   }
 
@@ -116,10 +105,12 @@ class _SplashScreenState extends State<SplashScreen>
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (_, _, _) => target,
-        transitionDuration:
-            animate ? const Duration(milliseconds: 300) : Duration.zero,
-        reverseTransitionDuration:
-            animate ? const Duration(milliseconds: 300) : Duration.zero,
+        transitionDuration: animate
+            ? const Duration(milliseconds: 300)
+            : Duration.zero,
+        reverseTransitionDuration: animate
+            ? const Duration(milliseconds: 300)
+            : Duration.zero,
         transitionsBuilder: (_, anim, _, child) {
           if (!animate) return child;
           return FadeTransition(opacity: anim, child: child);
@@ -129,14 +120,17 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _restoreFromCloud(
-      HistoryProvider history, AppProvider app) async {
+    HistoryProvider history,
+    AppProvider app,
+  ) async {
     // Cloud restore must never block launch: if the device is offline, the
     // code is unknown or the server is unreachable, fall through to the normal
     // flow after a short wait instead of staying on the splash forever.
     try {
-      await history
-          .pullFromCloud()
-          .timeout(const Duration(seconds: 8), onTimeout: () => false);
+      await history.pullFromCloud().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => false,
+      );
     } catch (_) {
       // Ignore: the app continues with the data already on the device.
     }
@@ -152,40 +146,27 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final motion =
+        context.select<UiSettings, bool>((ui) => ui.animations) &&
+        !MediaQuery.disableAnimationsOf(context);
+    // Only the presentation controller changes. The existing 2.2s startup
+    // timer, session restore and cloud/profile routing remain untouched.
+    if (motion && !_animController.isAnimating && _animController.value == 0) {
+      _animController.forward();
+    } else if (!motion && _animController.value != 1) {
+      _animController.stop();
+      _animController.value = 1;
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            colors: [
-              AppColors.primary.withValues(alpha: 0.18),
-              AppColors.background,
-            ],
-            radius: 0.9,
-          ),
-        ),
-        child: Center(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: ScaleTransition(
-              scale: _scaleAnimation,
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  BrandMark(size: 104),
-                  SizedBox(height: 24),
-                  BrandWordmark(fontSize: 34),
-                  SizedBox(height: 8),
-                  Text(
-                    'TV in diretta, film e serie in un unico posto',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 14,
-                      height: 1.5,
-                    ),
-                  ),
-                ],
-              ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _animController,
+              builder: (context, _) =>
+                  BrandIntro(progress: _animController.value),
             ),
           ),
         ),

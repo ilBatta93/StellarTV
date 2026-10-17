@@ -43,3 +43,8 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Preview and MultiView tiles use ExoPlayer on Android with no engine fallback, and the Diretta queue awaits the session's full release before the next preview or the full player, because rapid native mpv/MDK create/release crashed TV devices.
 - Three engines (mpv, MDK via fvp used directly, ExoPlayer on texture view) share PlaybackEngine; a session tries every address of the channel with the chosen engine, then with PlayerEngineType.other (ExoPlayer and mpv only, MDK never automatic); mpv reports audio-without-frames as an error instead of changing decoder at runtime, and never uses force-seekable because media_kit seeks to 0 on surface attach.
 - Player settings show each option only for engines that honour it, driven by PlayerEngineType capability getters, so adding an engine means declaring its capabilities there.
+
+- Account and Xtream login share a presentation-only AuthScaffold; fields use the existing TV shell with explicit OK/tap activation, while session and playlist handlers remain in their original screens.
+- BrandIntro crops the approved raster asset without regeneration or new lettering; its controller is presentation-only and never gates startup/session routing, and independent orbit motion requires original separated layers.
+
+- Xtream edits authenticate and recheck refresh activity before persistence, push the complete existing settings snapshot immediately, and refresh through AppProvider.loadFromXtream with explicit partial-download feedback; settings logout uses SyncProvider.signOut before routing to the initial AccountScreen so a saved session cannot bypass login.

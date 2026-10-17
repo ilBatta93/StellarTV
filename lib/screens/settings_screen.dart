@@ -9,7 +9,10 @@ import '../services/playlist_refresh_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_tiles.dart';
 import '../widgets/tv_focusable.dart';
-import 'login_screen.dart';
+import 'account_screen.dart';
+import 'xtream_edit_screen.dart';
+import '../providers/sync_provider.dart';
+import '../services/settings_logout.dart';
 import 'history_settings_screen.dart';
 import 'hidden_categories_screen.dart';
 import 'epg_settings_screen.dart';
@@ -94,7 +97,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         SettingsSection(
           title: 'Aspetto',
-          description: 'Colori, testo ed effetti. Tutto viene salvato nel cloud.',
+          description:
+              'Colori, testo ed effetti. Tutto viene salvato nel cloud.',
           children: [
             _AccentPalette(
               current: ui.accentName,
@@ -117,7 +121,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SettingsSwitchTile(
               icon: Icons.auto_awesome_outlined,
               title: 'Bagliore di selezione',
-              subtitle: 'Alone colorato attorno all\'elemento selezionato col telecomando',
+              subtitle:
+                  'Alone colorato attorno all\'elemento selezionato col telecomando',
               value: ui.focusGlow,
               onChanged: ui.setFocusGlow,
             ),
@@ -461,6 +466,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               if (provider.authMethod.name == 'xtream')
                 SettingsValueTile(
+                  icon: Icons.edit_outlined,
+                  title: 'Modifica lista Xtream',
+                  subtitle: 'Server URL, nome utente e password',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const XtreamEditScreen()),
+                  ),
+                ),
+              if (provider.authMethod.name == 'xtream')
+                SettingsValueTile(
                   icon: Icons.badge_outlined,
                   title: 'Account playlist',
                   subtitle: 'Scadenza, stato, connessioni e dati del provider',
@@ -547,10 +561,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    await provider.logout();
+    final sync = context.read<SyncProvider>();
+    try {
+      await logoutFromSettings(
+        signOut: sync.signOut,
+        resetGuest: () => AccountScreen.setGuest(false),
+        clearPlaylist: provider.logout,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Disconnessione non completata. Riprova.'),
+        ),
+      );
+      return;
+    }
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        MaterialPageRoute(builder: (_) => const AccountScreen()),
         (_) => false,
       );
     }
