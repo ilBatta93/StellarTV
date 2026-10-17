@@ -762,9 +762,9 @@ class _HistoryCard extends StatelessWidget {
                           alignment: Alignment.centerLeft,
                           widthFactor: progress,
                           child: Container(
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               color: AppColors.primary,
-                              borderRadius: BorderRadius.vertical(
+                              borderRadius: const BorderRadius.vertical(
                                 bottom: Radius.circular(10),
                               ),
                             ),
