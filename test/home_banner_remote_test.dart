@@ -166,10 +166,12 @@ void main() {
             final bytes = await image.toByteData(
               format: image_ui.ImageByteFormat.png,
             );
-            if (bytes != null)
+            if (bytes != null) {
+              await Directory('/tmp/stv').create(recursive: true);
               await File(
                 '/tmp/stv/home-${size.width.toInt()}.png',
               ).writeAsBytes(bytes.buffer.asUint8List());
+            }
             image.dispose();
           });
         }
