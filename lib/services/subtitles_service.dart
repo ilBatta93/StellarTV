@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../config/supabase_config.dart';
 
 class SubtitleCue {
@@ -73,7 +75,10 @@ class SubtitlesService {
         'language': language,
       },
     );
-    final res = await http.get(uri).timeout(const Duration(seconds: 30));
+    final res = await http.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 30));
+    if (res.statusCode == 401) {
+      throw Exception('accedi al tuo account per i sottotitoli');
+    }
     if (res.statusCode == 404) {
       throw Exception('nessun sottotitolo italiano disponibile');
     }
@@ -87,6 +92,12 @@ class SubtitlesService {
       await (await _offlineFile(key)).writeAsString(body, flush: true);
     } catch (_) {}
     return _memByKey[key] = cues;
+  }
+
+  /// The subtitle service is reserved to signed-in accounts.
+  static Map<String, String> _authHeaders() {
+    final token = Supabase.instance.client.auth.currentSession?.accessToken;
+    return token == null ? const {} : {'Authorization': 'Bearer $token'};
   }
 
   static Future<List<OnlineSubtitle>> search({
@@ -104,7 +115,7 @@ class SubtitlesService {
         if (isEpisode) 'episode': '$episode',
       },
     );
-    final res = await http.get(uri).timeout(const Duration(seconds: 12));
+    final res = await http.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 12));
     if (res.statusCode != 200) {
       throw Exception('ricerca non riuscita (HTTP ${res.statusCode})');
     }
@@ -131,7 +142,7 @@ class SubtitlesService {
     final uri = Uri.parse(
       '${SupabaseConfig.apiBase}/opensubtitles',
     ).replace(queryParameters: {'action': 'download', 'file_id': '$fileId'});
-    final res = await http.get(uri).timeout(const Duration(seconds: 15));
+    final res = await http.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 15));
     if (res.statusCode != 200) {
       throw Exception('download non riuscito (HTTP ${res.statusCode})');
     }
