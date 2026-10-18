@@ -64,6 +64,10 @@ class PlaybackException implements Exception {
 abstract class PlaybackEngine extends ChangeNotifier {
   /// Renderer confirmation, null when the platform does not expose it.
   bool? get videoFrameRendered => null;
+
+  /// True only when the stream's tracks are known and none is video
+  /// (radio channels): such streams never draw a picture by design.
+  bool get audioOnly => false;
   PlayerEngineType get type;
   PlaybackSnapshot get value;
 

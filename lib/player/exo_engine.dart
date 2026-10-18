@@ -107,6 +107,10 @@ class ExoEngine extends PlaybackEngine {
   bool? get videoFrameRendered => _window['firstFrameRendered'] as bool?;
 
   @override
+  bool get audioOnly =>
+      _window['tracksKnown'] == true && _window['hasVideoTrack'] == false;
+
+  @override
   PlaybackSnapshot get value => _value;
 
   @override
@@ -217,8 +221,8 @@ class ExoEngine extends PlaybackEngine {
       if (health.check(
         playing: v.isPlaying,
         buffering: v.isBuffering,
-        audioOnly: _window['tracksKnown'] == true &&
-            _window['hasVideoTrack'] == false,
+        audioOnly:
+            _window['tracksKnown'] == true && _window['hasVideoTrack'] == false,
         frameAvailable: hasFrame,
       )) {
         _blackWatch?.cancel();

@@ -82,3 +82,8 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Android excludes all app data from OS cloud backup and device transfer, while iOS recovery keys use this-device-only keychain accessibility, so recovery requires explicit user transfer.
 - Complete favorite membership mutations, imports, event timestamps and decrypted merges share a serialized local queue; account exit drains that queue before clearing device preferences, preventing lost updates or late writes restoring another account’s data.
 - Each installation imports paginated legacy rows until an encrypted write is read back and verified; a local account-scoped verification marker retires repeated imports, never deleting legacy rows.
+
+- Live playback tries native MPEG-TS before HLS in automatic format, because Xtream HLS sessions stay counted after close and restreamed HLS often never delivers media; Exo HLS prepares from real segments, not playlist CODECS.
+- Live sessions end a player that is ready but draws no first picture within an engine-specific deadline, choosing decoder fallback only when media time advances, so silent buffering never leaves a permanent black screen.
+- Diretta "Visti di recente" uses a device-local id list separate from watch history, because live channels are intentionally excluded from history, Home rows and cloud sync.
+- The in-player live channel list is a transparent dialog route over the running session, so the early player key handler yields to it and playback never stops while browsing.

@@ -8,12 +8,13 @@ import '../models/content_type.dart';
 import '../models/epg_program.dart';
 import '../player/playback_session.dart';
 import '../services/player_settings_service.dart';
+import '../services/catalog_builder.dart';
+import '../services/recent_live_channels.dart';
 import '../services/xtream_service.dart';
 import '../services/xtream_catchup.dart';
 import '../widgets/player/video_surface.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
-import '../providers/history_provider.dart';
 import '../providers/epg_provider.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
@@ -319,7 +320,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                             _stopPreview();
                                             setState(() {});
                                             await _releaseQueue;
-                                            if (!context.mounted || !widget.active) return;
+                                            if (!context.mounted ||
+                                                !widget.active)
+                                              return;
                                             showChannelGuide(context, c);
                                           },
                                           child: Container(
@@ -536,10 +539,17 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     ),
   );
 
+  final _recentLive = RecentLiveChannels.instance;
+  void _recentChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
     _app = context.read<AppProvider>();
+    _recentLive.addListener(_recentChanged);
+    unawaited(_recentLive.load());
     WidgetsBinding.instance.addObserver(this);
     OpenRoutesObserver.instance.changes.addListener(_routeChanged);
     // Keep "now on" and progress bars current.
@@ -551,6 +561,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     _searchController.dispose();
+    _recentLive.removeListener(_recentChanged);
     _tick?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     OpenRoutesObserver.instance.changes.removeListener(_routeChanged);
@@ -588,10 +599,12 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
           )
           .firstOrNull;
     }
-    final watched = app.recentlyWatchedEntries(
-      ContentType.live,
-      context.watch<HistoryProvider>().entries,
-    );
+    final watched = [
+      for (final id in _recentLive.ids)
+        if (app.channelById(id) case final c?)
+          if (c.type == ContentType.live)
+            CatalogEntry(primary: c, variants: [c]),
+    ];
     final showWatched = _category == _watchedLabel;
     final selected = groups.where((g) => g.label == _category).firstOrNull;
     var channels = showWatched

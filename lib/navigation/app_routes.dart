@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/tmdb_item.dart';
@@ -9,6 +10,7 @@ import '../screens/player_screen.dart';
 import '../screens/series_detail_screen.dart';
 import '../screens/title_detail_screen.dart';
 import '../services/download_service.dart';
+import '../services/recent_live_channels.dart';
 
 /// Plays a channel. For series episodes [queue] is the ordered episode list
 /// used by "Episodio successivo"; when omitted the player loads it itself.
@@ -30,6 +32,11 @@ void playChannel(
     return;
   }
   if (!archivePlayback) context.read<HistoryProvider>().recordStart(channel);
+  // Live channels stay out of the watch history: Diretta keeps its own
+  // device-local "Visti di recente" list.
+  if (channel.type == ContentType.live && !archivePlayback) {
+    RecentLiveChannels.instance.record(channel.id);
+  }
   // Offline copies play from the device; history keeps the same ids.
   final offline = DownloadService.instance;
   if (!archivePlayback) channel = offline.playable(channel);

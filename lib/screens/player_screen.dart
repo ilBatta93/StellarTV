@@ -1,4 +1,5 @@
 import '../services/playback_progress_writer.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -22,6 +23,8 @@ import '../services/player_settings_service.dart';
 import '../services/subtitles_service.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/player/live_channel_picker.dart';
+import '../services/recent_live_channels.dart';
 import '../widgets/player/player_controls.dart';
 import '../widgets/player/player_format.dart';
 import '../widgets/player/player_gestures.dart';
@@ -315,6 +318,12 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
       if (_isLive && (up || down)) {
         _playLiveChannel(_adjacentLiveChannel(up ? -1 : 1));
+        return;
+      }
+      // Left on a live channel opens the channel list over the picture
+      // (timeshift stays in the controls and on Right).
+      if (_isLive && left) {
+        _openChannelList();
         return;
       }
       if ((left || right) && _isLive && session.canTimeshift) {
@@ -1033,6 +1042,58 @@ class _PlayerScreenState extends State<PlayerScreen>
     return channels[target];
   }
 
+  /// Transparent channel list over the playing live picture: playback
+  /// continues underneath, OK switches channel, one Back closes it.
+  Future<void> _openChannelList() async {
+    if (!_isLive || _advancing) return;
+    _hideTimer?.cancel();
+    final app = _app;
+    final epg = context.read<EpgProvider>();
+    final all = [
+      for (final g in app.groupedCatalog(ContentType.live))
+        for (final e in g.entries) e.primary,
+    ];
+    final recent = [
+      for (final id in RecentLiveChannels.instance.ids)
+        if (app.channelById(id) case final c?)
+          if (c.type == ContentType.live) c,
+    ];
+    final favorites = [
+      for (final c in app.favorites)
+        if (c.type == ContentType.live) c,
+    ];
+    final groups = [
+      LiveChannelGroup('Tutti', all),
+      if (favorites.isNotEmpty) LiveChannelGroup('Preferiti', favorites),
+      if (recent.isNotEmpty) LiveChannelGroup('Visti di recente', recent),
+      for (final g in app.groupedCatalog(ContentType.live))
+        LiveChannelGroup(g.label, [for (final e in g.entries) e.primary]),
+    ];
+    final selected = await showGeneralDialog<Channel>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Chiudi elenco canali',
+      barrierColor: AppColors.clear,
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (_, _, _) => LiveChannelPicker(
+        current: widget.channel,
+        groups: groups,
+        nowOnAir: (c) => epg.nowFor(c)?.title,
+      ),
+      transitionBuilder: (_, animation, _, child) => SlideTransition(
+        position: Tween(
+          begin: const Offset(-0.08, 0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+        child: FadeTransition(opacity: animation, child: child),
+      ),
+    );
+    if (!mounted) return;
+    _remoteFocus.requestFocus();
+    if (selected == null || selected.id == widget.channel.id) return;
+    await _playLiveChannel(selected);
+  }
+
   Future<void> _playLiveChannel(Channel? channel) async {
     if (channel == null || _advancing) return;
     _advancing = true;
@@ -1371,12 +1432,11 @@ class _PlayerScreenState extends State<PlayerScreen>
           if (_activePlayers == 0) _bridge.setOrientation('landscape');
         });
       } else {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-        ]).then((_) {
-          // Re-check: a new player may have opened meanwhile.
-          if (_activePlayers == 0) _bridge.setOrientation('portrait');
-        });
+        SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp])
+            .then((_) {
+              // Re-check: a new player may have opened meanwhile.
+              if (_activePlayers == 0) _bridge.setOrientation('portrait');
+            });
       }
     }
     super.dispose();

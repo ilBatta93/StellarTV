@@ -88,20 +88,18 @@ class PlaybackSession extends ChangeNotifier {
       return [url];
     }
     final base = '${m[1]}/live/${m[2]}/${m[3]}/${m[4]}';
-    // The provider's own address first (most Xtream servers deliver live
-    // channels as native MPEG-TS; forcing HLS caused transcoding, audio with
-    // a black picture and a second connection refused by the server). Only
-    // addresses missing the `/live/` segment (HTTP 404) are rewritten.
+    // Native MPEG-TS first, like the reference IPTV players. Xtream HLS is
+    // produced on demand by the server: restreamed channels answered the
+    // playlist at once but never delivered a picture, and every HLS session
+    // stays counted by the provider after the player closes, so zapping and
+    // the Diretta preview used up single-connection lines (HTTP 503). A TS
+    // connection is freed as soon as its socket closes. HLS stays as the
+    // fallback; the stored address (built as .m3u8) is never tried first.
     final original = url.trim();
     return switch (format) {
-      LiveStreamFormat.ts => {'$base.ts', '$base.m3u8', original}.toList(),
+      LiveStreamFormat.ts ||
+      LiveStreamFormat.auto => {'$base.ts', '$base.m3u8', original}.toList(),
       LiveStreamFormat.m3u8 => {'$base.m3u8', '$base.ts', original}.toList(),
-      LiveStreamFormat.auto => {
-        if (original.contains('/live/')) original,
-        '$base.ts',
-        '$base.m3u8',
-        original,
-      }.toList(),
     };
   }
 
@@ -210,13 +208,21 @@ class PlaybackSession extends ChangeNotifier {
     if (enabled == _diagnosticEnabled) return;
     _diagnosticEnabled = enabled;
     if (!enabled) {
-      _diagnosticTimer?.cancel(); _diagnosticTimer = null; _diagnostics = null;
+      _diagnosticTimer?.cancel();
+      _diagnosticTimer = null;
+      _diagnostics = null;
       return;
     }
     _diagnostics ??= LiveDiagnosticsTracker();
     final current = _engine;
     if (current != null) {
-      _diagnostics?.begin(currentUrl, current.type.name, previewMode, _softwareDecode, observed: true);
+      _diagnostics?.begin(
+        currentUrl,
+        current.type.name,
+        previewMode,
+        _softwareDecode,
+        observed: true,
+      );
     }
     _diagnosticTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
       final engine = _engine;
@@ -238,8 +244,7 @@ class PlaybackSession extends ChangeNotifier {
       if (_disposed) return;
       // Software decoding is a decoder choice, not an engine switch: it
       // stays available even when automatic engine fallback is off.
-      if ((!previewMode || previewFallback) &&
-          DecoderMemory.needsSoftware(url))
+      if ((!previewMode || previewFallback) && DecoderMemory.needsSoftware(url))
         _softwareDecode = true;
     }
     _plan = _buildPlan(_firstEngine);
@@ -297,6 +302,7 @@ class PlaybackSession extends ChangeNotifier {
   /// returned future completes. Releases are serialized.
   Future<void> _releaseCurrent() {
     final old = _engine;
+    _firstPictureTimer?.cancel();
     if (old == null) return _releasing;
     _diagnostics?.end();
     _engine = null;
@@ -329,7 +335,13 @@ class PlaybackSession extends ChangeNotifier {
     await _releaseCurrent();
     if (gen != _generation || _disposed || _plan.isEmpty) return;
     final attempt = _plan[_attempt.clamp(0, _plan.length - 1)];
-    _diagnostics?.begin(attempt.url, attempt.engine.name, previewMode, _softwareDecode, userAgent: _uaLabel);
+    _diagnostics?.begin(
+      attempt.url,
+      attempt.engine.name,
+      previewMode,
+      _softwareDecode,
+      userAgent: _uaLabel,
+    );
     _currentUrl = attempt.url;
     final engine = _create(attempt.engine, attempt.url);
     _engine = engine;
@@ -355,8 +367,12 @@ class PlaybackSession extends ChangeNotifier {
     if (gen != _generation || _disposed || _engine != engine) return;
     engine.addListener(_onEngineChanged);
     if (engine.value.hasError) {
-      await _handleFailure(gen, engine.value.error ?? 'Errore video', resumeAt,
-          midPlay: false);
+      await _handleFailure(
+        gen,
+        engine.value.error ?? 'Errore video',
+        resumeAt,
+        midPlay: false,
+      );
       return;
     }
     _diagnostics?.event('open_ready');
@@ -367,6 +383,7 @@ class PlaybackSession extends ChangeNotifier {
     _pausedAt = null;
     _liveStartedAt = isLive ? DateTime.now() : null;
     _playingSince = DateTime.now();
+    _watchFirstPicture(engine, gen);
     if (isLive && _softwareDecode) {
       // Persist only after the fallback actually opens, not on the original
       // failure: broken provider connections must not poison decoder memory.
@@ -473,6 +490,55 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
+  /// How long a live player may stay "ready" without drawing its first
+  /// picture. ExoPlayer is ready only with media buffered, so a picture
+  /// follows within ~1-3 s on every working channel (TCL logs); mpv reports
+  /// ready earlier and gets more time. The removed 3.5 s HLS check also
+  /// fired while buffering; this one only ends players that never drew.
+  @visibleForTesting
+  static Duration firstPictureDeadline(PlayerEngineType engine) =>
+      engine == PlayerEngineType.exo
+      ? const Duration(seconds: 8)
+      : const Duration(seconds: 14);
+
+  /// Picks the failure for a live player that never drew a picture: media
+  /// advancing (sound) means the decoder cannot draw this video; a stalled
+  /// clock means the server answered but never sent the stream.
+  @visibleForTesting
+  static String noPictureReason({required bool mediaAdvancing}) =>
+      mediaAdvancing
+      ? 'Nessuna immagine dal flusso (schermo nero)'
+      : 'Nessun video dal server per questo canale';
+
+  Timer? _firstPictureTimer;
+
+  /// Black screens of the TCL logs: the player opened in ~0.4 s, then
+  /// buffered forever without a frame. The decoder black-screen checks
+  /// ignore buffering, so nothing ever moved to the other format.
+  void _watchFirstPicture(PlaybackEngine engine, int gen) {
+    _firstPictureTimer?.cancel();
+    if (!isLive) return;
+    final startPosition = engine.value.position;
+    _firstPictureTimer = Timer(firstPictureDeadline(engine.type), () {
+      if (_disposed || gen != _generation || _engine != engine) return;
+      // Confirmed picture, or a platform without renderer telemetry.
+      if (engine.videoFrameRendered != false || engine.audioOnly) return;
+      final v = engine.value;
+      final advancing =
+          v.isPlaying &&
+          !v.isBuffering &&
+          v.position > startPosition + const Duration(seconds: 2);
+      unawaited(
+        _handleFailure(
+          gen,
+          noPictureReason(mediaAdvancing: advancing),
+          null,
+          midPlay: false,
+        ),
+      );
+    });
+  }
+
   /// Pause before reopening a live channel that dropped mid-play.
   @visibleForTesting
   static Duration liveReconnectDelay(int reconnect) =>
@@ -489,6 +555,8 @@ class PlaybackSession extends ChangeNotifier {
         lower.contains('http 403') ||
         lower.contains('forbidden') ||
         lower.contains('429') ||
+        lower.contains('503') ||
+        lower.contains('service unavailable') ||
         lower.contains('max connections');
   }
 
@@ -503,11 +571,14 @@ class PlaybackSession extends ChangeNotifier {
     if (_disposed || gen != _generation || _failedGeneration == gen) return;
     _failedGeneration = gen;
     final status = StreamProbe.statusIn(reason);
-    _diagnostics?.event('error', data: {
-      'category': LiveDiagnosticsLog.errorKind(reason),
-      'midPlay': midPlay,
-      if (status != null) 'httpStatus': status,
-    });
+    _diagnostics?.event(
+      'error',
+      data: {
+        'category': LiveDiagnosticsLog.errorKind(reason),
+        'midPlay': midPlay,
+        if (status != null) 'httpStatus': status,
+      },
+    );
     final since = _playingSince;
     if (midPlay &&
         since != null &&
@@ -530,6 +601,23 @@ class PlaybackSession extends ChangeNotifier {
         await Future<void>.delayed(
           Duration(seconds: _serverRefusalRetries == 1 ? 2 : 5),
         );
+        if (_disposed || gen != _generation) return;
+        await _openAttempt(resumeAt: resumeAt);
+        return;
+      }
+      // HTTP 503 from a load-balanced sub-server can be a single format
+      // being unavailable: try the remaining addresses before giving up.
+      final unavailable =
+          reason.contains('503') ||
+          reason.toLowerCase().contains('service unavailable');
+      if (unavailable && _attempt < _plan.length - 1) {
+        _serverRefusalRetries = 0;
+        _attempt++;
+        _status = SessionStatus.switching;
+        _notice = 'Provo un formato alternativo del canale...';
+        _notify();
+        await _releaseCurrent();
+        await Future<void>.delayed(liveFormatSwitchDelay);
         if (_disposed || gen != _generation) return;
         await _openAttempt(resumeAt: resumeAt);
         return;
@@ -616,8 +704,12 @@ class PlaybackSession extends ChangeNotifier {
     // refused or starved the retry).
     final tracker = _diagnostics;
     final fmt = Uri.tryParse(_currentUrl)?.path.split('.').last ?? '';
-    if (tracker != null && isLive && !previewMode && !tracker.firstFrame &&
-        _currentUrl.isNotEmpty && _probedFormats.add(fmt)) {
+    if (tracker != null &&
+        isLive &&
+        !previewMode &&
+        !tracker.firstFrame &&
+        _currentUrl.isNotEmpty &&
+        _probedFormats.add(fmt)) {
       try {
         final r = await StreamProbe.run(
           _currentUrl,
@@ -850,9 +942,11 @@ class PlaybackSession extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _firstPictureTimer?.cancel();
     _diagnosticTimer?.cancel();
     _diagnostics?.end();
-    if (_diagnosticListening) LiveDiagnosticsService.instance.removeListener(_diagnosticPreference);
+    if (_diagnosticListening)
+      LiveDiagnosticsService.instance.removeListener(_diagnosticPreference);
     _delayTick?.cancel();
     _generation++;
     unawaited(_releaseCurrent());

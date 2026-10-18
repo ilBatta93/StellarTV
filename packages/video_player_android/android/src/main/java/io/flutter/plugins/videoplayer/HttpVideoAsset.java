@@ -110,7 +110,12 @@ final class HttpVideoAsset extends VideoAsset {
                 DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES
                     | DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS,
                 true))
-        .setAllowChunklessPreparation(true);
+        // Prepare from the first real segment, not from the playlist CODECS
+        // attribute: restreamed Xtream channels declared codecs that did not
+        // match the segments, so the player was "ready" in ~0.4 s and then
+        // stayed black. Real-media preparation also proves the server is
+        // actually sending the channel before the picture is promised.
+        .setAllowChunklessPreparation(false);
   }
 
   /**

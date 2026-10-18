@@ -115,3 +115,9 @@
 - [x] Testi visibili dell’app e nuove note di release neutri; identificatori tecnici invariati per compatibilità
 - [ ] Aggiornamenti storici GitHub (intervento separato sulle vecchie release; non riscrivere la cronologia Git)
 - [ ] Migrare e verificare dati reali con chiave privata dell’utente (nessuna scrittura reale né pulizia eseguita)
+
+## Dirette ottobre 18 (sera)
+- [x] Analisi log 3.3.0 e correzione schermi neri: MPEG-TS prima di HLS, controllo prima immagine, 503 gestito, HLS preparato dai segmenti reali
+- [x] "Visti di recente" della Diretta popolato (lista locale dei canali aperti)
+- [x] Player diretta: freccia sinistra senza comandi apre elenco canali trasparente (categorie + canali), telecomando, Indietro chiude, riproduzione continua
+- [ ] Verifica su TCL dei canali [VS] e dell'elenco canali (richiede nuova build approvata dall'utente)

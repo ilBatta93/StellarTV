@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -114,32 +115,35 @@ class _FakeEngine extends PlaybackEngine {
 const _xtream = 'http://tv.example.com/live/user/pass/42.m3u8';
 
 void main() {
-  test('a disposal longer than four seconds never opens another decoder', () async {
-    final gate = Completer<void>();
-    final engines = <_FakeEngine>[];
-    final session = PlaybackSession(
-      url: _xtream,
-      isLive: true,
-      settings: PlayerSettings(primaryEngine: PlayerEngineType.exo),
-      engineFactory: (type) {
-        final engine = _FakeEngine(type, _xtream, succeed: true);
-        if (engines.isEmpty) engine.releaseGate = gate;
-        engines.add(engine);
-        return engine;
-      },
-    );
-    await session.start();
-    final replacing = session.switchEngine(PlayerEngineType.mediakit);
-    await Future<void>.delayed(const Duration(seconds: 5));
-    expect(engines.length, 1);
-    expect(_FakeEngine.alive, 1);
-    gate.complete();
-    await replacing;
-    expect(engines.length, 2);
-    expect(_FakeEngine.maxAlive, 1);
-    session.dispose();
-    await session.released;
-  });
+  test(
+    'a disposal longer than four seconds never opens another decoder',
+    () async {
+      final gate = Completer<void>();
+      final engines = <_FakeEngine>[];
+      final session = PlaybackSession(
+        url: _xtream,
+        isLive: true,
+        settings: PlayerSettings(primaryEngine: PlayerEngineType.exo),
+        engineFactory: (type) {
+          final engine = _FakeEngine(type, _xtream, succeed: true);
+          if (engines.isEmpty) engine.releaseGate = gate;
+          engines.add(engine);
+          return engine;
+        },
+      );
+      await session.start();
+      final replacing = session.switchEngine(PlayerEngineType.mediakit);
+      await Future<void>.delayed(const Duration(seconds: 5));
+      expect(engines.length, 1);
+      expect(_FakeEngine.alive, 1);
+      gate.complete();
+      await replacing;
+      expect(engines.length, 2);
+      expect(_FakeEngine.maxAlive, 1);
+      session.dispose();
+      await session.released;
+    },
+  );
 
   test('preview recovery remains disabled when autoFallback is off', () async {
     final types = <PlayerEngineType>[];
@@ -184,31 +188,34 @@ void main() {
     },
   );
 
-  test('Black-video software decoding works even with engine fallback off', () async {
-    late PlaybackSession session;
-    final types = <PlayerEngineType>[];
-    _FakeEngine? current;
-    session = PlaybackSession(
-      url: _xtream,
-      isLive: true,
-      settings: PlayerSettings(
-        primaryEngine: PlayerEngineType.exo,
-        autoFallback: false,
-      ),
-      engineFactory: (type) {
-        types.add(type);
-        final engine = _FakeEngine(type, session.currentUrl, succeed: true);
-        current = engine;
-        return engine;
-      },
-    );
-    await session.start();
-    current?.emitError('schermo nero');
-    await Future<void>.delayed(const Duration(seconds: 3));
-    expect(types, [PlayerEngineType.exo, PlayerEngineType.mediakit]);
-    session.dispose();
-    await session.released;
-  });
+  test(
+    'Black-video software decoding works even with engine fallback off',
+    () async {
+      late PlaybackSession session;
+      final types = <PlayerEngineType>[];
+      _FakeEngine? current;
+      session = PlaybackSession(
+        url: _xtream,
+        isLive: true,
+        settings: PlayerSettings(
+          primaryEngine: PlayerEngineType.exo,
+          autoFallback: false,
+        ),
+        engineFactory: (type) {
+          types.add(type);
+          final engine = _FakeEngine(type, session.currentUrl, succeed: true);
+          current = engine;
+          return engine;
+        },
+      );
+      await session.start();
+      current?.emitError('schermo nero');
+      await Future<void>.delayed(const Duration(seconds: 3));
+      expect(types, [PlayerEngineType.exo, PlayerEngineType.mediakit]);
+      session.dispose();
+      await session.released;
+    },
+  );
 
   setUp(() async {
     await DecoderMemory.clear();
@@ -240,9 +247,8 @@ void main() {
       await Future<void>.delayed(const Duration(seconds: 8));
     })();
     expect(opened, [
-      'exo http://tv.example.com/live/user/pass/42.m3u8',
       'exo http://tv.example.com/live/user/pass/42.ts',
-      'mediakit http://tv.example.com/live/user/pass/42.m3u8',
+      'exo http://tv.example.com/live/user/pass/42.m3u8',
       'mediakit http://tv.example.com/live/user/pass/42.ts',
     ]);
     expect(session.status, SessionStatus.playing);
@@ -301,8 +307,8 @@ void main() {
       await Future<void>.delayed(const Duration(seconds: 4));
     })();
     expect(opened.take(2).toList(), [
-      'exo http://tv.example.com/live/user/pass/42.m3u8',
-      'mediakit http://tv.example.com/live/user/pass/42.m3u8',
+      'exo http://tv.example.com/live/user/pass/42.ts',
+      'mediakit http://tv.example.com/live/user/pass/42.ts',
     ]);
     expect(session.status, SessionStatus.playing);
     expect(_FakeEngine.maxAlive, 1);
@@ -370,4 +376,73 @@ void main() {
       LiveStreamFormat.m3u8,
     );
   });
+
+  test('dirette automatiche partono in MPEG-TS anche se salvate in HLS', () {
+    expect(PlaybackSession.liveCandidates(_xtream, true), [
+      'http://tv.example.com/live/user/pass/42.ts',
+      'http://tv.example.com/live/user/pass/42.m3u8',
+    ]);
+  });
+
+  test('canale pronto ma senza immagine passa al formato successivo', () async {
+    final opened = <String>[];
+    late PlaybackSession session;
+    session = PlaybackSession(
+      url: _xtream,
+      isLive: true,
+      settings: PlayerSettings(
+        primaryEngine: PlayerEngineType.exo,
+        autoFallback: false,
+      ),
+      engineFactory: (type) {
+        final url = session.currentUrl;
+        opened.add(url);
+        return url.endsWith('.ts')
+            ? _NoPictureEngine(type, url)
+            : _FakeEngine(type, url, succeed: true);
+      },
+    );
+    session.start();
+    await Future<void>.delayed(const Duration(seconds: 12));
+    expect(opened, [
+      'http://tv.example.com/live/user/pass/42.ts',
+      'http://tv.example.com/live/user/pass/42.m3u8',
+    ]);
+    expect(session.status, SessionStatus.playing);
+    expect(_FakeEngine.maxAlive, 1);
+    session.dispose();
+    await session.released;
+  });
+
+  test('immagine assente: suono che avanza = decoder, fermo = server', () {
+    expect(
+      PlaybackSession.noPictureReason(mediaAdvancing: true),
+      contains('schermo nero'),
+    );
+    expect(
+      PlaybackSession.noPictureReason(mediaAdvancing: false),
+      isNot(contains('schermo nero')),
+    );
+    expect(
+      PlaybackSession.firstPictureDeadline(PlayerEngineType.exo),
+      const Duration(seconds: 8),
+    );
+    expect(
+      PlaybackSession.firstPictureDeadline(PlayerEngineType.mediakit),
+      const Duration(seconds: 14),
+    );
+  });
+}
+
+/// Opens fine but stays buffering without ever drawing a picture.
+class _NoPictureEngine extends _FakeEngine {
+  _NoPictureEngine(PlayerEngineType type, String url)
+    : super(type, url, succeed: true);
+
+  @override
+  bool? get videoFrameRendered => false;
+
+  @override
+  PlaybackSnapshot get value =>
+      const PlaybackSnapshot(isReady: true, isPlaying: true, isBuffering: true);
 }

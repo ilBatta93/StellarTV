@@ -31,7 +31,7 @@ enum PlayerEngineType {
 enum LiveStreamFormat {
   auto(
     'Automatico',
-    'Indirizzo originale del provider, poi MPEG-TS e HLS se non risponde',
+    'Flusso diretto MPEG-TS, poi HLS solo se il canale non risponde',
   ),
   ts(
     'MPEG-TS (.ts)',

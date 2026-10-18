@@ -136,6 +136,14 @@ class MediaKitEngine extends PlaybackEngine {
   bool? get videoFrameRendered => _firstFrameRendered;
 
   @override
+  bool get audioOnly {
+    final tracks = _player.state.tracks;
+    bool real(String id) => id != 'auto' && id != 'no';
+    return tracks.audio.any((t) => real(t.id)) &&
+        !tracks.video.any((t) => real(t.id));
+  }
+
+  @override
   PlaybackSnapshot get value => _value;
 
   @override
@@ -206,7 +214,8 @@ class MediaKitEngine extends PlaybackEngine {
     _errorConfirm = Timer(confirmWindow, () {
       if (_disposed) return;
       final now = _player.state;
-      final progressed = now.position > before ||
+      final progressed =
+          now.position > before ||
           (now.playing && !now.buffering && _firstFrameRendered);
       if (progressed) return;
       _onError(message);
@@ -347,9 +356,12 @@ class MediaKitEngine extends PlaybackEngine {
     HardwareDecoding.disabled => 'no',
     // "mediacodec" exists only on Android: on iPhone it decoded audio with
     // a black picture. VideoToolbox is Apple's hardware decoder.
-    _ => Platform.isIOS || Platform.isMacOS
-        ? 'videotoolbox-copy'
-        : Platform.isAndroid ? 'mediacodec-copy' : 'auto-safe',
+    _ =>
+      Platform.isIOS || Platform.isMacOS
+          ? 'videotoolbox-copy'
+          : Platform.isAndroid
+          ? 'mediacodec-copy'
+          : 'auto-safe',
   };
 
   Timer? _blackWatch;
@@ -385,16 +397,24 @@ class MediaKitEngine extends PlaybackEngine {
       );
       // Radio / audio-only channels and paused or buffering players.
       if (!hasVideoTrack || !st.playing || st.buffering) {
-        health.check(playing: st.playing, buffering: st.buffering,
-            audioOnly: !hasVideoTrack, frameAvailable: null);
+        health.check(
+          playing: st.playing,
+          buffering: st.buffering,
+          audioOnly: !hasVideoTrack,
+          frameAvailable: null,
+        );
         return;
       }
       checking = true;
       final flowing = await _framesFlowing();
       checking = false;
       if (_disposed) return;
-      if (health.check(playing: st.playing, buffering: st.buffering,
-          audioOnly: !hasVideoTrack, frameAvailable: flowing)) {
+      if (health.check(
+        playing: st.playing,
+        buffering: st.buffering,
+        audioOnly: !hasVideoTrack,
+        frameAvailable: flowing,
+      )) {
         _blackWatch?.cancel();
         _onError('Nessuna immagine dal flusso (schermo nero)');
       }

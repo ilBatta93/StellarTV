@@ -11,6 +11,7 @@ import 'app_provider.dart';
 import 'sync_provider.dart';
 import '../services/sync_service.dart';
 import '../services/personal_vault.dart';
+import '../services/recent_live_channels.dart';
 
 /// Local-first watch history: entries are always saved on the device
 /// immediately, and mirrored to the cloud sync profile when a pairing code
@@ -527,6 +528,8 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<bool> clear() async {
+    // "Cancella cronologia" also empties the Diretta recent channels.
+    unawaited(RecentLiveChannels.instance.clear());
     final before = _entries;
     final now = DateTime.now();
     for (final e in _entries) {
