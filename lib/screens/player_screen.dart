@@ -21,6 +21,7 @@ import '../services/imdb_resolver.dart';
 import '../services/introdb_service.dart';
 import '../services/native_player_bridge.dart';
 import '../services/player_settings_service.dart';
+import '../services/movie_hash.dart';
 import '../services/subtitles_service.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
@@ -921,6 +922,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     setState(() => _onlineSubsLoading = true);
     try {
       final c = widget.channel;
+      // Livello 1: una traccia italiana incorporata è già perfettamente
+      // sincronizzata, quindi ha la precedenza sui file scaricati.
+      if (_onlineCues == null && await _selectEmbeddedItalian()) return;
       if (_isEpisode && (c.season == null || c.episode == null)) {
         throw 'stagione o episodio non identificati: usa la traccia incorporata';
       }
@@ -933,11 +937,15 @@ class _PlayerScreenState extends State<PlayerScreen>
       );
       if (imdbId == null) throw 'titolo non trovato su TMDB';
       final variant = _onlineCues == null ? 0 : (_onlineVariant + 1) % 5;
+      // Livello 2: impronta esatta del file (solo alla prima richiesta).
+      final hash = variant == 0 ? await MovieHash.fromUrl(c.url) : null;
       final cues = await SubtitlesService.fetch(
         imdbId: imdbId,
         season: _isEpisode ? c.season : null,
         episode: _isEpisode ? c.episode : null,
         variant: variant,
+        movieHash: hash?.hash,
+        byteSize: hash?.size,
       );
       if (!mounted) return;
       // Evita la doppia scritta spegnendo la traccia incorporata.
@@ -958,6 +966,30 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
     } finally {
       if (mounted) setState(() => _onlineSubsLoading = false);
+    }
+  }
+
+  Future<bool> _selectEmbeddedItalian() async {
+    final session = _session;
+    if (session == null) return false;
+    try {
+      final track = (await session.subtitleTracks())
+          .where((t) => trackMatchesLanguage(t, 'it'))
+          .firstOrNull;
+      if (track == null) return false;
+      await session.selectSubtitleTrack(track);
+      if (mounted) {
+        setState(() => _onlineCues = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sottotitoli italiani interni attivati'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 

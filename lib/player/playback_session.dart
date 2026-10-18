@@ -942,6 +942,12 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
+  Future<List<MediaTrack>> subtitleTracks() async {
+    final engine = _engine;
+    if (engine == null || !engine.supportsSubtitleTracks) return const [];
+    return engine.getSubtitleTracks();
+  }
+
   Future<void> selectSubtitleTrack(MediaTrack? track) async {
     externalSubtitlesActive = false;
     _subtitleSelectionExplicit = true;

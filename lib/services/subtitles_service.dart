@@ -58,12 +58,15 @@ class SubtitlesService {
     String language = 'it',
     bool refresh = false,
     int variant = 0,
+    String? movieHash,
+    int? byteSize,
   }) async {
     if ((season == null) != (episode == null)) {
       throw Exception('stagione ed episodio mancanti');
     }
     final key =
-        'v2_${imdbId}_${season ?? ''}_${episode ?? ''}_${language}_$variant';
+        'v2_${imdbId}_${season ?? ''}_${episode ?? ''}_${language}_$variant'
+        '${movieHash == null ? '' : '_h$movieHash'}';
     final mem = _memByKey[key];
     if (!refresh && mem != null) return mem;
     try {
@@ -80,6 +83,8 @@ class SubtitlesService {
         if (season != null && episode != null) 'episode': '$episode',
         'language': language,
         'variant': '$variant',
+        if (movieHash != null && byteSize != null) 'moviehash': movieHash,
+        if (movieHash != null && byteSize != null) 'bytesize': '$byteSize',
       },
     );
     final res = await http
