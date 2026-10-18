@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/key_handoff.dart';
 import '../providers/sync_provider.dart';
 import '../providers/history_provider.dart';
 import '../services/personal_vault.dart';
@@ -19,8 +22,12 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
   bool _busy = false, _saved = false, _reveal = false;
   String? _generated;
   String _status = '';
+  KeyHandoff? _handoff;
+  Timer? _poll;
+  int _left = 0;
   @override
   void dispose() {
+    _stopPhone();
     _input.dispose();
     super.dispose();
   }
@@ -89,6 +96,78 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
             : '';
       });
   });
+  void _stopPhone() {
+    _poll?.cancel();
+    _poll = null;
+    _handoff?.cancel();
+    _handoff?.forget();
+    _handoff = null;
+  }
+
+  Future<void> _fromPhone() async {
+    _stopPhone();
+    final handoff = KeyHandoff(Supabase.instance.client);
+    try {
+      await handoff.start();
+    } catch (_) {
+      if (mounted) setState(() => _status = 'Codice non creato. Verifica la connessione e riprova.');
+      return;
+    }
+    if (!mounted) return handoff.cancel();
+    setState(() {
+      _handoff = handoff;
+      _left = 120;
+      _status = '';
+    });
+    _poll = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (!mounted || _handoff != handoff) return;
+      setState(() => _left -= 2);
+      try {
+        final key = await handoff.poll();
+        if (key == null) {
+          if (_left <= 0) throw TimeoutException('scaduto');
+          return;
+        }
+        _stopPhone();
+        if (!mounted) return;
+        setState(() {
+          _input.text = key;
+          _reveal = false;
+          _generated = null;
+        });
+        _authorize();
+      } catch (_) {
+        _stopPhone();
+        if (mounted) setState(() => _status = 'Codice scaduto o non valido. Generane uno nuovo.');
+      }
+    });
+  }
+
+  Widget _phonePanel(KeyHandoff h) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    child: Column(
+      children: [
+        const Text('Inquadra il QR col telefono, oppure apri stellartv.lovable.app/chiave e inserisci il codice.', textAlign: TextAlign.center),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: 220,
+          height: 220,
+          child: QrImageView(
+            data: h.link,
+            size: 220,
+            backgroundColor: Theme.of(context).colorScheme.onSurface,
+            eyeStyle: QrEyeStyle(color: Theme.of(context).colorScheme.surface),
+            dataModuleStyle: QrDataModuleStyle(color: Theme.of(context).colorScheme.surface),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(h.code, style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w700, letterSpacing: 8)),
+        Text('In attesa del telefono… ${_left.clamp(0, 120)} s'),
+        _action('Annulla', Icons.close, () => setState(_stopPhone)),
+      ],
+    ),
+  );
+
   Widget _action(String label, IconData icon, VoidCallback action) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 4),
     child: TvFocusable(
@@ -125,6 +204,8 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
             border: OutlineInputBorder(),
           ),
         ),
+        _action('Invia la chiave dal telefono', Icons.smartphone, _fromPhone),
+        if (_handoff != null) _phonePanel(_handoff!),
         _action('Importa e sincronizza', Icons.lock_outline, () {
           if (_generated != null && !_saved) {
             setState(
