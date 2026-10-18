@@ -15,7 +15,10 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.exoplayer.hls.DefaultHlsExtractorFactory;
+import androidx.media3.exoplayer.hls.HlsMediaSource;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.extractor.DefaultExtractorsFactory;
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory;
@@ -76,12 +79,38 @@ final class HttpVideoAsset extends VideoAsset {
    * @return configured factory, or {@code null} if not needed for this asset type.
    */
   @VisibleForTesting
+  @OptIn(markerClass = UnstableApi.class)
   MediaSource.Factory getMediaSourceFactory(
       Context context, DefaultHttpDataSource.Factory initialFactory) {
     unstableUpdateDataSourceFactory(initialFactory, httpHeaders, userAgent);
     DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, initialFactory);
+    // Transient IPTV hiccups (a slow segment, a dropped socket) are retried in place instead of
+    // surfacing as a fatal error that makes the app tear the player down and reconnect.
+    DefaultLoadErrorHandlingPolicy retries = new DefaultLoadErrorHandlingPolicy(LOAD_RETRIES);
+    if (streamingFormat == StreamingFormat.HTTP_LIVE) {
+      return broadcastTolerantHls(dataSourceFactory).setLoadErrorHandlingPolicy(retries);
+    }
     return new DefaultMediaSourceFactory(context, broadcastTolerantExtractors())
-        .setDataSourceFactory(dataSourceFactory);
+        .setDataSourceFactory(dataSourceFactory)
+        .setLoadErrorHandlingPolicy(retries);
+  }
+
+  private static final int LOAD_RETRIES = 6;
+
+  /**
+   * HLS segments are parsed by the HLS extractor, not the progressive one: without these flags a
+   * broadcast H.264 stream whose segments do not start with an IDR frame was "ready" but never
+   * drew a picture (Xtream live HLS with 10-11 s segments).
+   */
+  @OptIn(markerClass = UnstableApi.class)
+  private static HlsMediaSource.Factory broadcastTolerantHls(DataSource.Factory dataSourceFactory) {
+    return new HlsMediaSource.Factory(dataSourceFactory)
+        .setExtractorFactory(
+            new DefaultHlsExtractorFactory(
+                DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES
+                    | DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS,
+                true))
+        .setAllowChunklessPreparation(true);
   }
 
   /**
@@ -106,6 +135,9 @@ final class HttpVideoAsset extends VideoAsset {
       @NonNull Map<String, String> httpHeaders,
       @Nullable String userAgent) {
     factory.setUserAgent(userAgent).setAllowCrossProtocolRedirects(true);
+    // IPTV servers often answer slowly under load: the 8 s default gave up on valid channels.
+    factory.setConnectTimeoutMs(12_000);
+    factory.setReadTimeoutMs(15_000);
     if (!httpHeaders.isEmpty()) {
       factory.setDefaultRequestProperties(httpHeaders);
     }

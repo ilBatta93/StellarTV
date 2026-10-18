@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -42,7 +43,7 @@ class MediaKitEngine extends PlaybackEngine {
         vo: null,
       ),
     );
-    _player.stream.error.listen(_onError);
+    _player.stream.error.listen(_onMpvError);
     _player.stream.completed.listen(_onCompleted);
     _player.stream.playing.listen((_) => _sync());
     _player.stream.buffering.listen((_) => _sync());
@@ -185,8 +186,61 @@ class MediaKitEngine extends PlaybackEngine {
     }
   }
 
+  Timer? _errorConfirm;
+
+  /// media_kit forwards every error-level mpv log line (decoder "vd"/"ad",
+  /// "cplayer", "stream") as an error. On IPTV streams most of them are
+  /// recoverable noise (a corrupt packet, a missing PPS before the first
+  /// keyframe, a hardware decoder falling back to FFmpeg) and mpv keeps
+  /// playing. Treating them as fatal tore down working channels within a
+  /// second. Only connection/open failures are fatal at once; anything else
+  /// counts only if playback did not progress in the following seconds.
+  void _onMpvError(String message) {
+    if (_disposed || message.isEmpty) return;
+    if (isFatalMpvError(message)) {
+      _onError(message);
+      return;
+    }
+    if (_errorConfirm?.isActive == true) return;
+    final before = _player.state.position;
+    _errorConfirm = Timer(confirmWindow, () {
+      if (_disposed) return;
+      final now = _player.state;
+      final progressed = now.position > before ||
+          (now.playing && !now.buffering && _firstFrameRendered);
+      if (progressed) return;
+      _onError(message);
+    });
+  }
+
+  @visibleForTesting
+  static const confirmWindow = Duration(seconds: 6);
+
+  /// mpv messages that mean the stream cannot be opened at all.
+  @visibleForTesting
+  static bool isFatalMpvError(String message) {
+    final m = message.toLowerCase();
+    const fatal = [
+      'failed to open',
+      'failed to recognize file format',
+      'loading failed',
+      'http error',
+      'server returned',
+      'connection refused',
+      'no such file',
+      'tcp:',
+      'end of file before',
+    ];
+    return fatal.any(m.contains);
+  }
+
   void _onError(String message) {
     if (_disposed || message.isEmpty) return;
+    final starting = _playing;
+    if (starting != null && !starting.isCompleted) {
+      starting.future.catchError((_) {});
+      starting.completeError(PlaybackException(message));
+    }
     _value = PlaybackSnapshot(
       isReady: _value.isReady,
       isPlaying: _value.isPlaying,
@@ -512,6 +566,7 @@ class MediaKitEngine extends PlaybackEngine {
     if (_disposed) return;
     _disposed = true;
     _blackWatch?.cancel();
+    _errorConfirm?.cancel();
     if (_playing != null && !_playing!.isCompleted) {
       _playing!.completeError(const PlaybackException('Chiuso'));
       _playing!.future.catchError((_) {});

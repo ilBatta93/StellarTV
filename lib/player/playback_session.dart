@@ -326,7 +326,6 @@ class PlaybackSession extends ChangeNotifier {
 
   Future<void> _openAttempt({Duration? resumeAt}) async {
     final gen = ++_generation;
-    _hlsWatch?.cancel();
     await _releaseCurrent();
     if (gen != _generation || _disposed || _plan.isEmpty) return;
     final attempt = _plan[_attempt.clamp(0, _plan.length - 1)];
@@ -361,7 +360,6 @@ class PlaybackSession extends ChangeNotifier {
       return;
     }
     _diagnostics?.event('open_ready');
-    _watchHlsFrames(engine, gen, resumeAt);
     _status = SessionStatus.playing;
     _notice = null;
     // Fresh stream (new channel or reconnect): timeshift starts from here.
@@ -460,26 +458,6 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
-  Timer? _hlsWatch;
-
-  /// Xtream .m3u8 addresses are often fake playlists that never deliver a
-  /// segment: the player is "ready" but no picture ever arrives. When the
-  /// first frame is missing shortly after opening, move to the next address
-  /// (normally raw MPEG-TS) instead of waiting for the long start timeout.
-  void _watchHlsFrames(PlaybackEngine engine, int gen, Duration? resumeAt) {
-    _hlsWatch?.cancel();
-    if (!isLive || Uri.tryParse(_currentUrl)?.path.endsWith('.m3u8') != true) return;
-    if (_attempt >= _plan.length - 1) return;
-    _hlsWatch = Timer(const Duration(milliseconds: 3500), () {
-      if (_disposed || gen != _generation || _engine != engine) return;
-      // Only engines that report renderer telemetry can prove no picture.
-      if (engine.videoFrameRendered != false) return;
-      if (engine.value.hasError) return;
-      _handleFailure(gen, 'Playlist HLS senza video dopo 3 secondi (timeout)',
-          resumeAt, midPlay: false);
-    });
-  }
-
   void _onEngineChanged() {
     final engine = _engine;
     if (engine == null) return;
@@ -494,6 +472,15 @@ class PlaybackSession extends ChangeNotifier {
     }
     _notify();
   }
+
+  /// Pause before reopening a live channel that dropped mid-play.
+  @visibleForTesting
+  static Duration liveReconnectDelay(int reconnect) =>
+      Duration(milliseconds: 1200 * reconnect.clamp(1, 3));
+
+  /// Pause before trying another address of the same live channel.
+  @visibleForTesting
+  static const liveFormatSwitchDelay = Duration(milliseconds: 1200);
 
   static bool _isServerRefusal(String reason) {
     final lower = reason.toLowerCase();
@@ -521,23 +508,6 @@ class PlaybackSession extends ChangeNotifier {
       'midPlay': midPlay,
       if (status != null) 'httpStatus': status,
     });
-    // Opt-in diagnostics: once per address format, with the player already
-    // released (one connection at a time), read what the server really sent.
-    final tracker = _diagnostics;
-    final fmt = Uri.tryParse(_currentUrl)?.path.split('.').last ?? '';
-    if (tracker != null && isLive && !previewMode && !tracker.firstFrame &&
-        _currentUrl.isNotEmpty && _probedFormats.add(fmt)) {
-      await _releaseCurrent();
-      if (_disposed || gen != _generation) return;
-      try {
-        final r = await StreamProbe.run(
-          _currentUrl,
-          effectiveStreamUserAgent(settings.userAgent),
-        ).timeout(const Duration(seconds: 9));
-        tracker.event('stream_probe', data: r);
-      } catch (_) {}
-      if (_disposed || gen != _generation) return;
-    }
     final since = _playingSince;
     if (midPlay &&
         since != null &&
@@ -607,6 +577,13 @@ class PlaybackSession extends ChangeNotifier {
       _status = SessionStatus.switching;
       _notice = 'Segnale interrotto, riconnessione...';
       _notify();
+      // Back off before reconnecting: an immediate reopen hit the provider
+      // while it still counted the dropped connection.
+      if (isLive) {
+        await _releaseCurrent();
+        await Future<void>.delayed(liveReconnectDelay(_reconnects));
+        if (_disposed || gen != _generation) return;
+      }
       await _openAttempt(resumeAt: resumeAt);
       return;
     }
@@ -620,11 +597,35 @@ class PlaybackSession extends ChangeNotifier {
           : '${failed.label} non riesce a riprodurre questo flusso. '
                 'Passo a ${next.engine.label}...';
       _notify();
+      // A different address of the same channel (HLS -> MPEG-TS) is a new
+      // provider session: let the server drop the previous one first.
+      if (isLive && next.url != _currentUrl) {
+        await _releaseCurrent();
+        await Future<void>.delayed(liveFormatSwitchDelay);
+        if (_disposed || gen != _generation) return;
+      }
       await _openAttempt(resumeAt: resumeAt);
       return;
     }
 
     await _releaseCurrent();
+    if (gen != _generation || _disposed) return;
+    // Opt-in diagnostics: only once every attempt has failed and the
+    // player is released. Probing between attempts opened an extra provider
+    // connection right before the next player (single-connection lines then
+    // refused or starved the retry).
+    final tracker = _diagnostics;
+    final fmt = Uri.tryParse(_currentUrl)?.path.split('.').last ?? '';
+    if (tracker != null && isLive && !previewMode && !tracker.firstFrame &&
+        _currentUrl.isNotEmpty && _probedFormats.add(fmt)) {
+      try {
+        final r = await StreamProbe.run(
+          _currentUrl,
+          effectiveStreamUserAgent(settings.userAgent),
+        ).timeout(const Duration(seconds: 9));
+        tracker.event('stream_probe', data: r);
+      } catch (_) {}
+    }
     if (gen != _generation || _disposed) return;
     _status = SessionStatus.failed;
     _error = reason;
@@ -848,7 +849,6 @@ class PlaybackSession extends ChangeNotifier {
 
   @override
   void dispose() {
-    _hlsWatch?.cancel();
     _disposed = true;
     _diagnosticTimer?.cancel();
     _diagnostics?.end();
