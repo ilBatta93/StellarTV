@@ -14,6 +14,33 @@ import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
 import '../widgets/tv_text_field.dart';
 
+/// Which kind of result the user wants to see.
+enum SearchFilter { all, live, movie, series }
+
+extension SearchFilterLabel on SearchFilter {
+  String get label => switch (this) {
+    SearchFilter.all => 'Tutto',
+    SearchFilter.live => 'Diretta',
+    SearchFilter.movie => 'Film',
+    SearchFilter.series => 'Serie TV',
+  };
+
+  bool showsLocal(ContentType type) => switch (this) {
+    SearchFilter.all => true,
+    SearchFilter.live => type == ContentType.live,
+    SearchFilter.movie => type == ContentType.movie,
+    SearchFilter.series =>
+      type == ContentType.series || type == ContentType.anime,
+  };
+
+  bool get showsCatalogMovies =>
+      this == SearchFilter.all || this == SearchFilter.movie;
+  bool get showsCatalogSeries =>
+      this == SearchFilter.all || this == SearchFilter.series;
+}
+
+/// Search page in the same style as the Home: large title, rounded search
+/// field, quick filters and horizontal rows navigable with the remote.
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
@@ -33,6 +60,8 @@ class _SearchScreenState extends State<SearchScreen> {
   String _localQuery = '';
   Map<ContentType, List<Channel>> _local = const {};
   Object? _localSource;
+  String? _computedFor;
+  SearchFilter _filter = SearchFilter.all;
 
   @override
   void dispose() {
@@ -72,61 +101,15 @@ class _SearchScreenState extends State<SearchScreen> {
         _tmdbError = null;
         _searchingTmdb = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted || id != _requestId) return;
       setState(() {
         _tmdbResults = [];
-        _tmdbError = e.toString();
+        _tmdbError = 'Catalogo non raggiungibile. Riprova tra poco.';
         _searchingTmdb = false;
       });
     }
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppProvider>();
-    if (_localSource != app.allChannels || _computedFor != _localQuery) {
-      _computeLocal(app);
-    }
-    return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 0,
-        title: Padding(
-          padding: const EdgeInsets.only(right: 16),
-          child: TvTextField(
-            controller: _controller,
-            clearable: DeviceTypeService.isTv,
-            autofocus: !DeviceTypeService.isTv,
-            textInputAction: TextInputAction.search,
-            onChanged: _onChanged,
-            decoration: InputDecoration(
-              hintText: 'Cerca contenuti',
-              prefixIcon: const Icon(Icons.search_rounded, size: 20),
-              suffixIcon: _query.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                      onPressed: () {
-                        _controller.clear();
-                        _onChanged('');
-                      },
-                    ),
-            ),
-          ),
-        ),
-      ),
-      body: _query.isEmpty
-          ? const EmptyState(
-              icon: Icons.manage_search_rounded,
-              title: 'Cerca ovunque',
-              message:
-                  'Trova contenuti disponibili sul dispositivo.',
-            )
-          : _buildResults(app),
-    );
-  }
-
-  String? _computedFor;
 
   /// Playlist results are computed once per (debounced) query, not on
   /// every keystroke / rebuild.
@@ -140,82 +123,273 @@ class _SearchScreenState extends State<SearchScreen> {
         ContentType.series,
         ContentType.anime,
       ])
-        type: _localQuery.length < 2 && _localQuery.isNotEmpty
+        type: _localQuery.length < 2
             ? const <Channel>[]
             : app.searchChannels(_localQuery, type: type),
     };
   }
 
-  Widget _buildResults(AppProvider app) {
-    final tmdbResults = _tmdbResults.where(app.isTmdbAllowed).toList();
-    final sections = [
-      (ContentType.live, 'TV in Diretta'),
-      (ContentType.movie, 'Film disponibili'),
-      (ContentType.series, 'Serie TV disponibili'),
-      (ContentType.anime, 'Animazione disponibile'),
-    ];
-    final local = _local;
+  void _clear() {
+    _controller.clear();
+    _onChanged('');
+  }
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 32),
-      children: [
-        for (final (type, label) in sections)
-          if ((local[type] ?? const []).isNotEmpty) ...[
-            SectionHeader(
-              title: label,
-              subtitle: '${local[type]!.length} risultati',
-            ),
-            _ChannelRow(channels: local[type]!.take(30).toList(), type: type),
-          ],
-        const SectionHeader(
-          title: 'Dal catalogo',
-          subtitle: 'Contenuti da TMDB',
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppProvider>();
+    if (_localSource != app.allChannels || _computedFor != _localQuery) {
+      _computeLocal(app);
+    }
+    final tv = DeviceTypeService.isTv;
+    final side = tv ? 32.0 : 16.0;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Cerca'),
+        toolbarHeight: tv ? 64 : 60,
+        titleSpacing: tv ? 16 : 8,
+      ),
+      body: SafeArea(
+        top: false,
+        child: FocusTraversalGroup(
+          policy: ReadingOrderTraversalPolicy(),
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(side, 4, side, 0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: tv ? 760 : 720),
+                      child: _SearchField(
+                        controller: _controller,
+                        query: _query,
+                        onChanged: _onChanged,
+                        onClear: _clear,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: _FilterBar(
+                  value: _filter,
+                  padding: side,
+                  onChanged: (f) => setState(() => _filter = f),
+                ),
+              ),
+              if (_query.length < 2)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: EmptyState(
+                    icon: Icons.search_rounded,
+                    title: 'Cerca film, serie TV e canali',
+                    message:
+                        'Scrivi almeno due lettere: cerco nella tua lista e nel catalogo.',
+                  ),
+                )
+              else
+                ..._results(app),
+              const SliverToBoxAdapter(child: SizedBox(height: 40)),
+            ],
+          ),
         ),
-        if (_searchingTmdb)
-          Padding(
-            padding: EdgeInsets.all(24),
+      ),
+    );
+  }
+
+  List<Widget> _results(AppProvider app) {
+    final allowed = _tmdbResults.where(app.isTmdbAllowed).toList();
+    final movies = allowed.where((t) => t.isMovie).toList();
+    final series = allowed.where((t) => !t.isMovie).toList();
+    final sections = [
+      (ContentType.live, 'Canali in diretta'),
+      (ContentType.movie, 'Film nella tua lista'),
+      (ContentType.series, 'Serie TV nella tua lista'),
+      (ContentType.anime, 'Animazione nella tua lista'),
+    ];
+    final rows = <Widget>[];
+    for (final (type, label) in sections) {
+      final found = _local[type] ?? const <Channel>[];
+      if (found.isEmpty || !_filter.showsLocal(type)) continue;
+      rows.add(
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SectionHeader(
+                title: label,
+                subtitle: found.length == 1
+                    ? '1 risultato'
+                    : '${found.length} risultati',
+              ),
+              _ChannelRow(channels: found.take(30).toList(), type: type),
+            ],
+          ),
+        ),
+      );
+    }
+    void catalog(String title, List<TmdbItem> items) {
+      if (items.isEmpty) return;
+      rows.add(
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SectionHeader(title: title, subtitle: 'Dal catalogo'),
+              HorizontalRow(
+                height: tmdbPosterRowHeight(context),
+                spacing: DeviceTypeService.isTv ? 20 : 12,
+                itemCount: items.length,
+                itemBuilder: (context, i) => TmdbPosterCard(
+                  item: items[i],
+                  onTap: () => openTmdbItem(context, items[i]),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_filter.showsCatalogMovies) catalog('Film', movies);
+    if (_filter.showsCatalogSeries) catalog('Serie TV', series);
+
+    final wantsCatalog =
+        _filter.showsCatalogMovies || _filter.showsCatalogSeries;
+    if (_searchingTmdb && wantsCatalog) {
+      rows.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
             child: Center(
               child: CircularProgressIndicator(
                 strokeWidth: 2,
                 color: AppColors.primary,
               ),
             ),
-          )
-        else if (_tmdbError != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              _tmdbError!,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          )
-        else if (tmdbResults.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              'Nessun titolo trovato nel catalogo.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          )
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 140,
-              childAspectRatio: 0.58,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 16,
-            ),
-            itemCount: tmdbResults.length,
-            itemBuilder: (context, i) => TmdbPosterCard(
-              item: tmdbResults[i],
-              width: double.infinity,
-              onTap: () => openTmdbItem(context, tmdbResults[i]),
-            ),
           ),
-      ],
+        ),
+      );
+    } else if (rows.isEmpty) {
+      rows.add(
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: EmptyState(
+            icon: Icons.search_off_rounded,
+            title: 'Nessun risultato',
+            message:
+                _tmdbError ??
+                'Prova con un altro titolo o cambia filtro.',
+          ),
+        ),
+      );
+    }
+    return rows;
+  }
+}
+
+class _SearchField extends StatelessWidget {
+  const _SearchField({
+    required this.controller,
+    required this.query,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final String query;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final tv = DeviceTypeService.isTv;
+    final radius = BorderRadius.circular(tv ? 16 : 12);
+    OutlineInputBorder border(Color color, double width) => OutlineInputBorder(
+      borderRadius: radius,
+      borderSide: BorderSide(color: color, width: width),
+    );
+    return TvTextField(
+      controller: controller,
+      clearable: tv,
+      autofocus: !tv,
+      textInputAction: TextInputAction.search,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        hintText: 'Film, serie TV, canali…',
+        filled: true,
+        fillColor: AppColors.surface,
+        isDense: !tv,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: tv ? 18 : 12,
+        ),
+        prefixIcon: Icon(
+          Icons.search_rounded,
+          size: tv ? 26 : 20,
+          color: AppColors.textSecondary,
+        ),
+        suffixIcon: query.isEmpty || tv
+            ? null
+            : IconButton(
+                tooltip: 'Cancella',
+                icon: const Icon(Icons.cancel_rounded, size: 18),
+                color: AppColors.textMuted,
+                onPressed: onClear,
+              ),
+        border: border(AppColors.clear, 0),
+        enabledBorder: border(AppColors.clear, 0),
+        focusedBorder: border(AppColors.primary, tv ? 3 : 1.5),
+      ),
+    );
+  }
+}
+
+class _FilterBar extends StatelessWidget {
+  const _FilterBar({
+    required this.value,
+    required this.padding,
+    required this.onChanged,
+  });
+
+  final SearchFilter value;
+  final double padding;
+  final ValueChanged<SearchFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tv = DeviceTypeService.isTv;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(padding, tv ? 16 : 12, padding, 0),
+      child: Wrap(
+        spacing: tv ? 12 : 8,
+        runSpacing: 8,
+        children: [
+          for (final f in SearchFilter.values)
+            ChoiceChip(
+              label: Text(f.label),
+              selected: f == value,
+              showCheckmark: false,
+              onSelected: (_) => onChanged(f),
+              labelStyle: TextStyle(
+                fontSize: tv ? 16 : 13,
+                fontWeight: FontWeight.w600,
+                color: f == value
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+              ),
+              selectedColor: AppColors.primary,
+              backgroundColor: AppColors.surface,
+              side: BorderSide(color: AppColors.clear),
+              shape: const StadiumBorder(),
+              padding: EdgeInsets.symmetric(
+                horizontal: tv ? 14 : 8,
+                vertical: tv ? 8 : 2,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
