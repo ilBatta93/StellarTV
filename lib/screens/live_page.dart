@@ -572,7 +572,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       return const EmptyState(
         icon: Icons.live_tv_rounded,
         title: 'Nessun canale',
-        message: 'La tua playlist non contiene canali in diretta.',
+        message: 'Nessun contenuto in diretta disponibile.',
       );
     }
     // Default category: "TV Sat" (when the playlist has it).

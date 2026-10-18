@@ -105,3 +105,13 @@
 - [ ] Ottobre 18: verifica diagnostica su dispositivi reali e compilazione con dipendenze originali (richiede prossima build e hardware; build non richiesta).
 
 - [x] Ottobre 18: logo E orbitale v2 approvato, tre SVG editabili, brand app e icone aggiornati senza avviare APK.
+
+## Protezione dati e sincronizzazione cifrata
+- [x] Proseguimento: operazioni simultanee/importazioni preferiti corrette, uscita account protetta, 27 test Flutter isolati e 24 sito superati
+- [x] Copia locale: chiave separata, cifratura account-bound, revisioni e verifica lettura senza cancellare copie precedenti
+- [x] Copia locale: rimozioni preferiti persistenti, isolamento account, accesso telecomando e blocco backup automatici; 21 test isolati Flutter e 10 web superati
+- [ ] Integrare app e sito su nuova richiesta dell’utente: prepararli per pubblicazione e build, senza avviarle
+- [ ] Verifica completa con SDK originale e dispositivi Android/iOS (richiede integrazione e ambiente compatibile)
+- [x] Testi visibili dell’app e nuove note di release neutri; identificatori tecnici invariati per compatibilità
+- [ ] Aggiornamenti storici GitHub (intervento separato sulle vecchie release; non riscrivere la cronologia Git)
+- [ ] Migrare e verificare dati reali con chiave privata dell’utente (nessuna scrittura reale né pulizia eseguita)

@@ -320,7 +320,7 @@ Future<void> showSubtitleSheet(
         children: [
           onlineOption,
           _Unsupported(
-            message: 'ExoPlayer non mostra i sottotitoli incorporati nei flussi IPTV. Passa a mpv per vederli, oppure usa quelli online qui sopra.',
+            message: 'ExoPlayer non mostra i sottotitoli incorporati in questi contenuti. Passa a mpv per vederli, oppure usa quelli online qui sopra.',
             session: session,
           ),
         ],

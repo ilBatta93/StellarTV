@@ -6,9 +6,9 @@ extension ContentTypeExtension on ContentType {
       case ContentType.live:
         return 'Diretta';
       case ContentType.movie:
-        return 'Film';
+        return 'Video';
       case ContentType.series:
-        return 'Serie TV';
+        return 'Raccolte';
       case ContentType.anime:
         return 'Anime';
     }

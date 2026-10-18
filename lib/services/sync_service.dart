@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../providers/reactions_provider.dart';
+import 'personal_vault.dart';
+import 'favorites_service.dart';
 
 /// A snapshot of everything the user cares about, serializable to JSON.
 class SyncPayload {
@@ -59,55 +61,44 @@ class SyncService {
   static const _localHistoryKey = 'local_watch_history';
   static const _lastPushKey = 'sync_last_push';
   static const _lastPullKey = 'sync_last_pull';
-  static const _credentialsKeys = [
-    'auth_method',
-    'xtream_server',
-    'xtream_username',
-    'xtream_password',
-    'playlist_url',
-  ];
+  static bool isSyncedKey(String key) =>
+      PersonalVault.settingKeys.contains(key);
 
-  /// Keys that must never leave the device: caches, device state, local
-  /// files (downloads) and the sync bookkeeping itself. Every other saved
-  /// preference is synced, so new settings reach the cloud automatically.
-  static const _localOnlyKeys = {
-    codeKey,
-    _lastPushKey,
-    _lastPullKey,
-    'stellar_guest_mode',
-    'selected_profile_id',
-    'legacy_history_migrated',
-    'offline_downloads_v1',
-    'live_recordings_v1',
-    'epg_last_run',
-    'playlist_refresh_last_run',
-    'expiry_reminder_state_v1',
-  };
-  static const _localOnlyFragments = [
-    'cache',
-    'images',
-    'verdicts',
-    'genres_v1',
-    'warmup',
-    'last_run',
-  ];
+  final VaultKeyStore _keys = VaultKeyStore();
+  Future<String?> recoveryKey() async {
+    final account = currentUserId;
+    return account == null ? null : _keys.read(account);
+  }
 
-  /// Whether a saved preference belongs in the cloud copy.
-  static bool isSyncedKey(String key) {
-    if (key.startsWith(_localHistoryKey)) return false;
-    if (_localOnlyKeys.contains(key)) return false;
-    final k = key.toLowerCase();
-    // Auth tokens and PKCE verifiers belong to this device only. Never copy
-    // another device's refresh token into SDK storage through cloud settings.
-    if (k.startsWith('supabase.') ||
-        k.startsWith('sb-') ||
-        k.contains('auth-token') ||
-        k.contains('code-verifier'))
-      return false;
-    for (final f in _localOnlyFragments) {
-      if (k.contains(f)) return false;
-    }
-    return true;
+  Future<bool> hasCloudVault() async {
+    final account = currentUserId;
+    if (account == null) throw StateError('Accedi al tuo account');
+    final row = await _client
+        .from('personal_vaults')
+        .select('revision')
+        .eq('user_id', account)
+        .maybeSingle();
+    return row != null;
+  }
+
+  Future<void> authorizeVault(String recovery) async {
+    final account = currentUserId;
+    if (account == null) throw StateError('Accedi al tuo account');
+    PersonalVault.keyBytes(recovery);
+    final row = await _client
+        .from('personal_vaults')
+        .select('envelope')
+        .eq('user_id', account)
+        .maybeSingle();
+    if (row != null)
+      await PersonalVault.decrypt(row['envelope'], recovery, account);
+    if (account != currentUserId) throw StateError('Account cambiato');
+    await _keys.save(account, recovery);
+  }
+
+  Future<void> forgetVaultKey() async {
+    final account = currentUserId;
+    if (account != null) await _keys.forget(account);
   }
 
   /// The cloud "code" is now the id of the signed-in account: every row in
@@ -235,6 +226,7 @@ class SyncService {
     try {
       await _client.auth.signOut(scope: SignOutScope.local);
     } catch (_) {}
+    await FavoritesService.drainPendingWrites();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
   }
@@ -283,16 +275,18 @@ class SyncService {
     String? profileId,
   }) async {
     final local = await loadLocalHistory(profileId: profileId);
-    final merged = {...local};
-    for (final e in remote.entries) {
-      final r = e.value;
-      if (r is! Map<String, dynamic>) continue;
-      final l = merged[e.key];
-      final rw = DateTime.tryParse(r['watched']?.toString() ?? '');
-      final lw = l is Map
-          ? DateTime.tryParse(l['watched']?.toString() ?? '')
-          : null;
-      if (lw == null || (rw != null && rw.isAfter(lw))) merged[e.key] = r;
+    final merged = PersonalVault.mergeHistory(remote, local);
+    // Preserve device-only playback addresses when remote progress is newer.
+    for (final entry in merged.entries) {
+      final previous = local[entry.key];
+      if (entry.value is Map &&
+          previous is Map &&
+          entry.value['deleted'] != true) {
+        merged[entry.key] = {
+          ...Map<String, dynamic>.from(previous),
+          ...Map<String, dynamic>.from(entry.value),
+        };
+      }
     }
     await saveLocalHistory(merged, profileId: profileId);
     return merged;
@@ -308,10 +302,14 @@ class SyncService {
     final settings = <String, dynamic>{};
     for (final key in prefs.getKeys()) {
       if (!isSyncedKey(key)) continue;
-      settings[key] = prefs.get(key);
+      final value = PersonalVault.preference(prefs.get(key));
+      if (value != null) settings[key] = value;
     }
     final localHistory = await loadLocalHistory();
     final profiles = await loadAllProfileHistories();
+    profiles[PersonalVault.favoriteLane] = PersonalVault.object(
+      jsonDecode(prefs.getString('vault_favorite_events_v1') ?? '{}'),
+    );
     return SyncPayload(
       history: localHistory,
       profileHistories: profiles,
@@ -337,12 +335,14 @@ class SyncService {
     for (final entry in settings.entries) {
       final key = entry.key;
       if (!isSyncedKey(key)) continue;
-      final value = key == ReactionsProvider.storageKey && entry.value is String
+      final safe = PersonalVault.preference(entry.value);
+      if (safe == null) continue;
+      final value = key == ReactionsProvider.storageKey && safe is String
           ? ReactionsProvider.merge(
               prefs.getString(key) ?? '{}',
               entry.value as String,
             )
-          : entry.value;
+          : safe;
       final write =
           key == ReactionsProvider.storageKey ||
           overwrite ||
@@ -366,83 +366,167 @@ class SyncService {
 
   /// Overwrites local storage with cloud credentials (used when the local
   /// device has no playlist configured yet).
-  Future<void> applyCredentials(Map<String, dynamic> settings) async {
-    final prefs = await SharedPreferences.getInstance();
-    for (final key in _credentialsKeys) {
-      final value = settings[key];
-      if (value is String) {
-        await prefs.setString(key, value);
-      } else {
-        await prefs.remove(key);
-        if (key == 'auth_method') continue;
-      }
+  Future<void> applyCredentials(Map<String, dynamic> settings) async {}
+  bool hasCredentials(Map<String, dynamic> settings) => false;
+  Future<bool> restorePlaylistFromCloud() async => false;
+
+  Future<List<Map<String, dynamic>>> _all(
+    String table,
+    String fields,
+    String column,
+    String account,
+  ) async {
+    final out = <Map<String, dynamic>>[];
+    for (var offset = 0; ; offset += 500) {
+      final page = await _client
+          .from(table)
+          .select(fields)
+          .eq(column, account)
+          .order(
+            table == 'sync_profiles'
+                ? 'code'
+                : table == 'user_sync_data'
+                ? 'user_id'
+                : 'id',
+          )
+          .range(offset, offset + 499);
+      out.addAll(page.map((v) => Map<String, dynamic>.from(v)));
+      if (page.length < 500) return out;
     }
   }
 
-  bool hasCredentials(Map<String, dynamic> settings) =>
-      settings['auth_method'] is String;
-
-  /// Copies the Xtream list saved on the website (`iptv_playlists`) into this
-  /// device when it has no playlist configured yet. Never overwrites an
-  /// existing local configuration.
-  Future<bool> restorePlaylistFromCloud() async {
-    if (currentUserId == null) return false;
-    final prefs = await SharedPreferences.getInstance();
-    if ((prefs.getString('xtream_server') ?? '').isNotEmpty) return false;
-    try {
-      final rows = await _client
-          .from('iptv_playlists')
-          .select('server_url, username, password, epg_url')
-          .eq('is_active', true)
-          .order('created_at')
-          .limit(1);
-      if (rows.isEmpty) return false;
-      final row = rows.first;
-      await prefs.setString('auth_method', 'xtream');
-      await prefs.setString('xtream_server', row['server_url'] as String);
-      await prefs.setString('xtream_username', row['username'] as String);
-      await prefs.setString('xtream_password', row['password'] as String);
-      final epg = row['epg_url'];
-      if (epg is String && epg.isNotEmpty) {
-        await prefs.setString('epg_url', epg);
-      }
-      return true;
-    } catch (_) {
-      return false;
+  /// Read all old classes, never delete any of them. A failed read aborts
+  /// migration rather than silently producing an incomplete backup.
+  Future<Map<String, dynamic>> _legacy(String account) async {
+    final profiles = await _all('sync_profiles', 'payload', 'code', account);
+    final fallback = await _all(
+      'user_sync_data',
+      'payload',
+      'user_id',
+      account,
+    );
+    final favorites = await _all(
+      'cloud_favorites',
+      'item_key,item_kind,payload',
+      'sync_code',
+      account,
+    );
+    final history = await _all(
+      'watch_history',
+      'content_id,content_type,title,position_seconds,duration_seconds,last_watched_at',
+      'user_id',
+      account,
+    );
+    var out = PersonalVault.clean({});
+    for (final row in [...fallback, ...profiles]) {
+      out = PersonalVault.merge(out, row['payload']);
     }
+    return PersonalVault.merge(out, {
+      'favorite_ids': [
+        for (final row in favorites)
+          if (row['item_kind'] == 'channel') row['item_key'],
+      ],
+      'tmdb_favorites': [
+        for (final row in favorites)
+          if (row['item_kind'] == 'tmdb') row['payload'],
+      ],
+      'history': {
+        for (final row in history)
+          row['content_id'].toString(): {
+            'id': row['content_id'],
+            'type': row['content_type'],
+            'title': row['title'],
+            'pos': row['position_seconds'],
+            'dur': row['duration_seconds'],
+            'watched': row['last_watched_at'],
+          },
+      },
+    });
   }
-
-  // ----- cloud push/pull -----
 
   Future<DateTime?> push(SyncPayload payload, String code) async {
+    if (code != currentUserId) return null;
     try {
-      await _client.from('sync_profiles').upsert({
-        'code': code,
-        'payload': payload.toJson(),
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      });
-      final now = DateTime.now();
+      final recovery = await recoveryKey();
+      if (recovery == null) return null; // No plaintext fallback, ever.
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_lastPushKey, now.toIso8601String());
-      return now;
+      final marker = 'vault_legacy_verified_$code';
+      final legacy = prefs.getBool(marker) == true
+          ? PersonalVault.clean({})
+          : await _legacy(code);
+      if (code != currentUserId) return null;
+      final local = PersonalVault.merge(legacy, payload.toJson());
+      for (var attempt = 0; attempt < 4; attempt++) {
+        final row = await _client
+            .from('personal_vaults')
+            .select('envelope,revision')
+            .eq('user_id', code)
+            .maybeSingle();
+        final remote = row == null
+            ? PersonalVault.clean({})
+            : await PersonalVault.decrypt(row['envelope'], recovery, code);
+        final merged = PersonalVault.merge(remote, local);
+        final envelope = await PersonalVault.encrypt(merged, recovery, code);
+        if (code != currentUserId) return null;
+        dynamic revision;
+        try {
+          revision = await _client.rpc(
+            'save_personal_vault',
+            params: {
+              '_envelope': envelope,
+              '_expected_revision': row?['revision'] ?? 0,
+            },
+          );
+        } on PostgrestException catch (e) {
+          if (e.code == '40001') continue;
+          rethrow;
+        }
+        final check = await _client
+            .from('personal_vaults')
+            .select('envelope,revision')
+            .eq('user_id', code)
+            .single();
+        final decoded = await PersonalVault.decrypt(
+          check['envelope'],
+          recovery,
+          code,
+        );
+        if (code != currentUserId) return null;
+        if (check['revision'] != revision) continue;
+        if (PersonalVault.canonical(decoded) != PersonalVault.canonical(merged))
+          throw StateError('Verifica cifrata non riuscita');
+        final now = DateTime.now();
+        await prefs.setBool(marker, true);
+        await prefs.setString(_lastPushKey, now.toIso8601String());
+        return now;
+      }
     } catch (_) {
-      return null;
+      /* Preserve all local and legacy copies on any failure. */
     }
+    return null;
   }
 
   Future<(SyncPayload?, DateTime?)> pull(String code) async {
+    if (code != currentUserId) return (null, null);
     try {
-      final rows = await _client
-          .from('sync_profiles')
-          .select('payload, updated_at')
-          .eq('code', code)
-          .limit(1);
-      if (rows.isEmpty) return (null, null);
-      final row = rows.first;
-      final payloadJson = row['payload'];
-      final updated = DateTime.tryParse(row['updated_at']?.toString() ?? '');
-      if (payloadJson is! Map<String, dynamic>) return (null, null);
-      return (SyncPayload.fromJson(payloadJson), updated);
+      final recovery = await recoveryKey();
+      if (recovery == null) return (null, null);
+      final row = await _client
+          .from('personal_vaults')
+          .select('envelope,updated_at')
+          .eq('user_id', code)
+          .maybeSingle();
+      if (row == null) return (null, null);
+      final decoded = await PersonalVault.decrypt(
+        row['envelope'],
+        recovery,
+        code,
+      );
+      if (code != currentUserId) return (null, null);
+      return (
+        SyncPayload.fromJson(PersonalVault.merge({}, decoded)),
+        DateTime.tryParse(row['updated_at'].toString()),
+      );
     } catch (_) {
       return (null, null);
     }

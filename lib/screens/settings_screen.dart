@@ -138,7 +138,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         SettingsSection(
           title: 'Cataloghi',
-          description: 'Come appaiono Film e Serie TV.',
+          description: 'Aspetto dei contenuti.',
           children: [
             SettingsValueTile(
               icon: ui.viewMode.icon,
@@ -208,7 +208,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SettingsValueTile(
               icon: Icons.view_week_outlined,
               title: 'Ordine e sezione iniziale',
-              subtitle: 'Riordina Home, Diretta, Film e Serie TV',
+              subtitle: 'Riordina le sezioni',
               value: ui.startSection.label,
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SectionLayoutScreen()),
@@ -217,7 +217,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SettingsValueTile(
               icon: Icons.download_for_offline_outlined,
               title: 'Download',
-              subtitle: 'Film ed episodi da guardare senza connessione',
+              subtitle: 'Contenuti da guardare senza connessione',
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const DownloadsScreen()),
               ),
@@ -232,7 +232,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   builder: (ctx) => AlertDialog(
                     title: const Text('Ripristinare l\'aspetto?'),
                     content: const Text(
-                      'Le altre impostazioni (player, playlist, account) non cambiano.',
+                      'Le altre impostazioni non cambiano.',
                     ),
                     actions: [
                       TextButton(
@@ -287,7 +287,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String _connectionLabel(AppProvider provider) =>
       switch (provider.authMethod.name) {
-        'xtream' => 'Xtream Codes',
+        'xtream' => 'Connessione locale',
         _ => 'Non connesso',
       };
 
@@ -296,9 +296,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _refreshMinutes ?? _loadedRefreshMinutes,
     );
     return SettingsSection(
-      title: 'Aggiornamento playlist',
+      title: 'Aggiornamento contenuti',
       description:
-          'Stato di Diretta, Film e Serie TV: tocca una sezione per ricaricare solo quella.',
+          'Stato dei contenuti: scegli la sezione da aggiornare.',
       children: [
         if (provider.authMethod.name == 'xtream') const PlaylistStatusList(),
         if (provider.authMethod.name == 'xtream')
@@ -307,7 +307,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: 'Aggiorna tutto ora',
             subtitle: provider.isRefreshingAny
                 ? 'Aggiornamento in corso...'
-                : 'Ricarica Diretta, Film e Serie TV insieme',
+                : 'Aggiorna tutti i contenuti',
             onTap: provider.isRefreshingAny
                 ? null
                 : () async {
@@ -320,13 +320,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: Icons.update_rounded,
           title: 'Frequenza aggiornamento',
           subtitle: current == PlaylistRefreshInterval.off
-              ? 'La lista si aggiorna solo aprendo l\'app'
+              ? 'I contenuti si aggiornano solo aprendo l\'app'
               : 'Ultimo aggiornamento: ${_lastRefreshLabel ?? 'in corso'}',
           value: current.label,
           onTap: () async {
             final chosen = await pickOption<PlaylistRefreshInterval>(
               context,
-              title: 'Aggiorna la playlist ogni...',
+              title: 'Aggiorna i contenuti ogni...',
               options: PlaylistRefreshInterval.values,
               current: current,
               label: (v) => v.label,
@@ -407,7 +407,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.no_adult_content_outlined,
                 title: 'Mostra contenuti per adulti',
                 subtitle:
-                    'Canali, film e serie XXX o "for adults" (nascosti di base)',
+                    'Contenuti riservati agli adulti (nascosti di base)',
                 value: provider.showAdult,
                 onChanged: provider.setShowAdult,
               ),
@@ -416,7 +416,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SettingsSection(
             title: 'Account',
             description:
-                'Playlist, profili, cronologia e preferiti sincronizzati su tutti i dispositivi.',
+                'Profili e dati personali protetti tra dispositivi autorizzati.',
             children: [
               SettingsValueTile(
                 icon: Icons.cloud_sync_outlined,
@@ -473,7 +473,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (provider.authMethod.name == 'xtream')
                 SettingsValueTile(
                   icon: Icons.edit_outlined,
-                  title: 'Modifica lista Xtream',
+                  title: 'Modifica connessione locale',
                   subtitle: 'Server URL, nome utente e password',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const XtreamEditScreen()),
@@ -482,7 +482,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (provider.authMethod.name == 'xtream')
                 SettingsValueTile(
                   icon: Icons.badge_outlined,
-                  title: 'Account playlist',
+                  title: 'Connessione locale',
                   subtitle: 'Scadenza, stato, connessioni e dati del provider',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(

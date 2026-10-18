@@ -11,11 +11,14 @@ void main() {
     ]) {
       expect(SyncService.isSyncedKey(key), isFalse, reason: key);
     }
-    expect(SyncService.isSyncedKey('xtream_password'), isTrue);
+    expect(SyncService.isSyncedKey('xtream_password'), isFalse);
+    expect(SyncService.isSyncedKey('xtream_server'), isFalse);
+    expect(SyncService.isSyncedKey('favorite_channels'), isFalse);
+    expect(SyncService.isSyncedKey('unknown_future_setting'), isFalse);
   });
 
   test('player and look settings are synced to the cloud', () {
-    expect(SyncService.isSyncedKey('player_settings_v1_liveTv'), isTrue);
+    expect(SyncService.isSyncedKey('player_settings_tv_live_v1'), isTrue);
     expect(SyncService.isSyncedKey('ui_catalog_view'), isTrue);
     expect(SyncService.isSyncedKey('ui_text_scale'), isTrue);
   });

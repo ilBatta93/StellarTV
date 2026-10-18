@@ -166,7 +166,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
       _appProvider.clearCloudCode();
       await _appProvider.logout();
       await _appProvider.reloadFromStorage();
-      _historyProvider.switchProfile(null);
+      await _historyProvider.switchProfile(null, force: true);
       await _reactions.switchProfile(null);
       await _profileProvider.load(silent: true);
     };

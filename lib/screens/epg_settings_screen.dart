@@ -96,14 +96,14 @@ class EpgSettingsScreen extends StatelessWidget {
           SettingsSection(
             title: 'Fonti',
             description:
-                'La guida della playlist viene usata in automatico. Puoi aggiungere altre fonti XMLTV per i canali che non ce l\'hanno.',
+                'La guida disponibile viene usata in automatico.',
             children: [
               SettingsSwitchTile(
                 icon: Icons.playlist_play_rounded,
-                title: 'Guida della playlist',
+                title: 'Guida disponibile',
                 subtitle: epg.playlistSource == null
                     ? 'Non disponibile per questa connessione'
-                    : 'Fornita dal tuo account IPTV',
+                    : 'Disponibile sul dispositivo',
                 value: epg.usePlaylistGuide,
                 onChanged: epg.setUsePlaylistGuide,
               ),

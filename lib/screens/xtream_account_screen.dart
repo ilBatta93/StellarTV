@@ -31,7 +31,7 @@ class _XtreamAccountScreenState extends State<XtreamAccountScreen> {
   Future<Map<String, dynamic>> _load() {
     final c = context.read<AppProvider>().xtreamCredentials;
     if (c == null) {
-      return Future.error(Exception('Nessuna playlist Xtream collegata.'));
+      return Future.error(Exception('Nessuna configurazione locale collegata.'));
     }
     return XtreamService()
         .accountInfo(
@@ -107,7 +107,7 @@ class _XtreamAccountScreenState extends State<XtreamAccountScreen> {
   @override
   Widget build(BuildContext context) {
     return ApplePageScaffold(
-      title: 'Account playlist',
+      title: 'Connessione locale',
       body: FutureBuilder<Map<String, dynamic>>(
         future: _future,
         builder: (context, snap) {

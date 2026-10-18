@@ -194,7 +194,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _Chip(label: 'Serie TV'),
+                    _Chip(label: 'Raccolte'),
                     if (seasons.isNotEmpty)
                       _Chip(label: '${seasons.length} stagioni'),
                     if (series.episodeCount > 0)
@@ -262,7 +262,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
             child: EmptyState(
               icon: Icons.tv_off_rounded,
               title: 'Nessun episodio',
-              message: 'Questa serie non ha episodi disponibili.',
+              message: 'Questa raccolta non ha contenuti disponibili.',
             ),
           )
         else ...[
@@ -434,7 +434,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       children: [
         const SectionHeader(
           title: 'Titoli simili',
-          subtitle: 'Disponibili nella tua playlist',
+          subtitle: 'Disponibili sul dispositivo',
         ),
         HorizontalRow(
           height: tmdbPosterRowHeight(context),

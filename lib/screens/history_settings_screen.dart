@@ -66,7 +66,7 @@ class HistorySettingsScreen extends StatelessWidget {
                       : 'Nessuna visione recente',
                   message: failed
                       ? 'Controlla la connessione e riprova.'
-                      : 'I canali, i film e le serie che avvii appariranno qui.',
+                      : 'I contenuti che avvii appariranno qui.',
                   action: failed
                       ? OutlinedButton.icon(
                           onPressed: history.refresh,
@@ -186,9 +186,9 @@ class _HistoryTile extends StatelessWidget {
       case ContentType.live:
         return 'Diretta';
       case ContentType.movie:
-        return 'Film';
+        return 'Video';
       case ContentType.series:
-        return 'Serie TV';
+        return 'Raccolte';
       case ContentType.anime:
         return 'Anime';
     }
@@ -236,7 +236,7 @@ class _HistoryTile extends StatelessWidget {
       );
     }
     if (channel == null) {
-      _showMessage(context, 'Contenuto non disponibile nella playlist attuale');
+      _showMessage(context, 'Contenuto non disponibile nella configurazione attuale');
       return;
     }
     if (channel.type == ContentType.series ||

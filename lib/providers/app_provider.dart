@@ -16,6 +16,7 @@ import '../services/tmdb_service.dart';
 import '../services/xtream_service.dart';
 import '../services/cloud_favorites_service.dart';
 import '../services/favorites_service.dart';
+import '../services/sync_hooks.dart';
 import '../services/settings_service.dart';
 import '../services/sync_service.dart';
 import '../services/series_grouping.dart';
@@ -402,9 +403,9 @@ class AppProvider extends ChangeNotifier {
   List<CatalogGroup> groupedCatalog(ContentType type) =>
       _groupedCache[type] ??= CatalogBuilder.groupsOf(
         _visibleChannels(type),
-        categoryOrderOf(type)
-            .where((g) => !hiddenCategoriesOf(type).contains(g))
-            .toList(),
+        categoryOrderOf(
+          type,
+        ).where((g) => !hiddenCategoriesOf(type).contains(g)).toList(),
       );
 
   /// Recently added items of a type, in the playlist's own order (the
@@ -694,12 +695,8 @@ class AppProvider extends ChangeNotifier {
       _tmdbFavorites.any((e) => e.key == item.key);
 
   Future<void> toggleTmdbFavorite(TmdbItem item) async {
-    final before = _tmdbFavorites;
-    _tmdbFavorites = isTmdbFavorite(item)
-        ? before.where((e) => e.key != item.key).toList()
-        : [item, ...before];
+    _tmdbFavorites = await _favoritesService.toggleTmdbFavorite(item);
     notifyListeners();
-    await _favoritesService.toggleTmdbFavorite(item);
     unawaited(_mirrorTmdbFavorite(item).catchError((_) {}));
   }
 
@@ -770,6 +767,14 @@ class AppProvider extends ChangeNotifier {
     'tmdb': _tmdbFavorites.map((e) => e.toJson()).toList(),
   };
 
+  Future<void> applyEncryptedFavorites(Map<String, dynamic> snapshot) async {
+    await _favoritesService.applyEncrypted(snapshot);
+    _favoriteIds = await _favoritesService.getFavoriteIds();
+    _tmdbFavorites = await _favoritesService.getTmdbFavorites();
+    _favoritesCache = null;
+    notifyListeners();
+  }
+
   Future<void> importFavorites(Map<String, dynamic> data) async {
     final ids = (data['ids'] as List?)?.cast<String>() ?? const [];
     final tmdb =
@@ -779,23 +784,7 @@ class AppProvider extends ChangeNotifier {
             .whereType<TmdbItem>()
             .toList() ??
         const <TmdbItem>[];
-    final newIds = <String>[..._favoriteIds];
-    for (final id in ids) {
-      if (!newIds.contains(id)) {
-        // Persist through the service so both storage layers stay aligned.
-        final channel = channelById(id);
-        if (channel != null) await _favoritesService.toggleFavorite(channel);
-        // Remember the id even when the channel is not in the playlist yet
-        // (playlist still loading, or removed from the provider).
-        newIds.add(id);
-      }
-    }
-    await _favoritesService.saveFavoriteIds(newIds);
-    for (final item in tmdb) {
-      if (!_tmdbFavorites.any((e) => e.key == item.key)) {
-        await _favoritesService.toggleTmdbFavorite(item);
-      }
-    }
+    await _favoritesService.importFavorites(ids, tmdb);
     _favoriteIds = await _favoritesService.getFavoriteIds();
     _tmdbFavorites = await _favoritesService.getTmdbFavorites();
     _favoritesCache = null;
@@ -1205,15 +1194,12 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Updates the UI immediately, then saves locally and mirrors to the
-  /// cloud in the background (the cloud call no longer blocks the tap).
+  /// Serialize local membership and its event before publishing UI changes.
+  /// Network synchronization never blocks this local mutation.
   Future<void> toggleFavorite(Channel channel) async {
-    final ids = {..._favoriteIds};
-    if (!ids.remove(channel.id)) ids.add(channel.id);
-    _favoriteIds = ids;
+    _favoriteIds = await _favoritesService.toggleFavorite(channel);
     _favoritesCache = null;
     notifyListeners();
-    await _favoritesService.saveFavoriteIds(ids);
     unawaited(_mirrorChannelFavorite(channel).catchError((_) {}));
   }
 

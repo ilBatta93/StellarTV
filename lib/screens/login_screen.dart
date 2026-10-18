@@ -36,8 +36,8 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return AuthScaffold(
-      title: 'Collega la tua lista',
-      subtitle: 'Account Xtream',
+      title: 'Configura i contenuti',
+      subtitle: 'Connessione locale',
       form: _buildXtreamForm(),
     );
   }

@@ -45,6 +45,7 @@ ResumeItem? latestHistoryResume(List<HistoryEntry> entries, AppProvider app) {
           seriesKey: e.seriesKey.isEmpty ? null : e.seriesKey,
           seriesName: e.seriesName.isEmpty ? null : e.seriesName,
         );
+    if (channel.url.isEmpty && !channel.isSeriesFolder) continue;
     if (!app.kidsMode || app.isKidsContent(channel)) return (e, channel);
   }
   return null;
@@ -195,7 +196,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
         tops: [
           (
             'Top 10 della settimana',
-            'In tendenza e disponibili nella tua playlist',
+            'In tendenza e disponibili sul dispositivo',
             AppColors.primary,
             topMovies,
             topSeries,
@@ -222,7 +223,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
           if (banner.isNotEmpty) _Top10Banner(items: banner),
           if (startedMovies.isNotEmpty) ...[
             SectionHeader(
-              title: 'Film che stai guardando',
+              title: 'Video che stai guardando',
               leading: Icon(
                 Icons.movie_outlined,
                 color: AppColors.primary,
@@ -233,7 +234,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
           ],
           if (startedSeries.isNotEmpty) ...[
             const SectionHeader(
-              title: 'Serie TV che stai guardando',
+              title: 'Raccolte che stai guardando',
               leading: Icon(
                 Icons.video_library_outlined,
                 color: AppColors.secondary,
@@ -300,7 +301,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
           ],
           _TopSection(
             title: 'Top 10 della settimana',
-            subtitle: 'In tendenza e disponibili nella tua playlist',
+            subtitle: 'In tendenza e disponibili sul dispositivo',
             color: AppColors.primary,
             movies: topMovies,
             series: topSeries,
@@ -430,12 +431,12 @@ class _TopSectionState extends State<_TopSection> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _segment(
-                      'Film',
+                      'Video',
                       !showSeries,
                       () => setState(() => _showSeries = false),
                     ),
                     _segment(
-                      'Serie TV',
+                      'Raccolte',
                       showSeries,
                       () => setState(() => _showSeries = true),
                     ),
@@ -1096,7 +1097,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
                         ),
                       if (widget.startedMovies.isNotEmpty)
                         _historySection(
-                          'Film visti di recente',
+                          'Video visti di recente',
                           widget.startedMovies,
                         ),
                       if (widget.forYou.isNotEmpty)
@@ -1243,12 +1244,12 @@ class _TvTopRowState extends State<_TvTopRow> {
                 if (hasMovies || hasSeries) ...[
                   const SizedBox(width: 24),
                   if (hasMovies)
-                    _chip('Film', _movieFocus, !showSeries, () {
+                    _chip('Video', _movieFocus, !showSeries, () {
                       setState(() => _showSeries = false);
                     }),
                   const SizedBox(width: 12),
                   if (hasSeries)
-                    _chip('Serie TV', _seriesFocus, showSeries, () {
+                    _chip('Raccolte', _seriesFocus, showSeries, () {
                       setState(() => _showSeries = true);
                     }),
                 ],
@@ -1443,7 +1444,7 @@ class _TvHeroInfo extends StatelessWidget {
     final meta = <String>[
       if (year.isNotEmpty) year,
       if (it.voteAverage > 0) '★ ${it.voteAverage.toStringAsFixed(1)}',
-      it.mediaType == 'movie' ? 'Film' : 'Serie TV',
+      it.mediaType == 'movie' ? 'Video' : 'Raccolte',
     ].join('  ·  ');
     return LayoutBuilder(
       builder: (context, bounds) {

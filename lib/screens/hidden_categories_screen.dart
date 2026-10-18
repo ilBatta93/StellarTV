@@ -21,8 +21,8 @@ class _HiddenCategoriesScreenState extends State<HiddenCategoriesScreen>
 
   static const _types = [
     (ContentType.live, 'Diretta'),
-    (ContentType.movie, 'Film'),
-    (ContentType.series, 'Serie TV'),
+    (ContentType.movie, 'Video'),
+    (ContentType.series, 'Raccolte'),
   ];
 
   @override
@@ -72,7 +72,7 @@ class _TypeTab extends StatelessWidget {
       return const EmptyState(
         icon: Icons.category_outlined,
         title: 'Nessuna categoria',
-        message: 'Carica la playlist per vedere le categorie.',
+        message: 'Carica i contenuti per vedere le categorie.',
       );
     }
     final hidden = app.hiddenCategoriesOf(type).toSet();
@@ -80,7 +80,7 @@ class _TypeTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
         Text(
-          'Le categorie disattivate non compaiono più in TV, Film e Serie.',
+          'Le categorie disattivate non compaiono nei contenuti.',
           style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
         const SizedBox(height: 8),

@@ -370,7 +370,7 @@ class _Meta extends StatelessWidget {
   Widget build(BuildContext context) {
     final isMovie = item?.isMovie ?? channel?.type == ContentType.movie;
     final chips = <Widget>[
-      _Chip(label: isMovie ? 'Film' : 'Serie TV'),
+      _Chip(label: isMovie ? 'Video' : 'Raccolte'),
       if (item != null && item!.year.isNotEmpty) _Chip(label: item!.year),
       if (item != null && item!.voteAverage > 0)
         RatingBadge(value: item!.voteAverage),
@@ -452,7 +452,7 @@ class _Actions extends StatelessWidget {
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Questo titolo non è presente nella tua playlist.',
+                    'Questo contenuto non è disponibile sul dispositivo.',
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 13,
@@ -557,7 +557,7 @@ class _Actions extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Disponibile nella tua playlist: ${playable!.name}',
+                  'Disponibile sul dispositivo: ${playable!.name}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

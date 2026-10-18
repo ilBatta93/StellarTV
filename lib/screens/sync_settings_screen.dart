@@ -7,6 +7,7 @@ import '../providers/sync_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_tiles.dart';
 import 'account_screen.dart';
+import 'personal_vault_screen.dart';
 
 class SyncSettingsScreen extends StatefulWidget {
   const SyncSettingsScreen({super.key});
@@ -37,15 +38,13 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
           SettingsSection(
             title: 'Come funziona',
             description:
-                'Tutto è legato al tuo account StellarTV: playlist, profili, '
-                'cronologia di ogni profilo, preferiti e impostazioni. Accedi '
-                'con la stessa email e password su ogni dispositivo (telefono, '
-                'tablet, Fire TV, Google TV) e i dati si aggiornano da soli.',
+                'Profili e preferenze sono legati all’account. Cronologia e preferiti si sincronizzano cifrati solo dopo aver autorizzato questo dispositivo con la chiave separata. La configurazione dei contenuti resta locale.',
             children: const [],
           ),
           SettingsSection(
             title: 'Il tuo account',
             children: [
+              SettingsValueTile(icon:Icons.lock_outline,title:'Dati cifrati',subtitle:'Autorizza il dispositivo e conserva la chiave di recupero',onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const PersonalVaultScreen()))),
               SettingsValueTile(
                 icon: Icons.account_circle_outlined,
                 title: 'Email',
@@ -162,8 +161,7 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
         const SnackBar(
           behavior: SnackBarBehavior.floating,
           content: Text(
-            'Dati scaricati e uniti. Se è arrivata la playlist da un altro '
-            'dispositivo, riavvia l\'app per caricarla.',
+            'Dati cifrati scaricati e uniti. La configurazione dei contenuti resta locale.',
           ),
         ),
       );
@@ -191,7 +189,7 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
         backgroundColor: AppColors.surface,
         title: const Text('Uscire dall\'account?'),
         content: const Text(
-          'I tuoi dati restano salvati nel cloud. Da questo dispositivo verranno tolti playlist, profili e cronologia finché non accedi di nuovo.',
+          'Assicurati di aver sincronizzato i dati e conservato la chiave. I dati non sincronizzati su questo dispositivo saranno rimossi; il salvataggio cifrato resta nel cloud.',
         ),
         actions: [
           TextButton(

@@ -7,10 +7,10 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/history_entry.dart';
 import '../services/player_settings_service.dart';
-import '../services/settings_service.dart';
 import 'app_provider.dart';
 import 'sync_provider.dart';
 import '../services/sync_service.dart';
+import '../services/personal_vault.dart';
 
 /// Local-first watch history: entries are always saved on the device
 /// immediately, and mirrored to the cloud sync profile when a pairing code
@@ -24,7 +24,6 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   final SyncService _sync;
   final AppProvider? _favorites;
   final SyncProvider? _syncProvider;
-  final SettingsService _settingsService = SettingsService();
 
   /// Deletion markers (content id -> deletion time). They are saved and
   /// synced with the history so a removed title is not brought back by an
@@ -40,14 +39,17 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Selected profile: each profile has its own private history.
   String? _profileId;
+  int _profileEpoch = 0;
   String? get profileId => _profileId;
 
   /// Switches to the history of [profileId] (null = no profile selected).
-  Future<void> switchProfile(String? profileId) async {
+  Future<void> switchProfile(String? profileId, {bool force = false}) async {
     await _loadFuture;
-    if (profileId == _profileId) return;
+    if (!force && profileId == _profileId) return;
+    _profileEpoch++;
     _pushDebounce?.cancel();
     _profileId = profileId;
+    _deleted.clear();
     _entries = [];
     _notify();
     if (profileId != null) await _migrateLegacy(profileId);
@@ -234,7 +236,11 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       title: title,
       posterUrl: map['poster'] as String? ?? '',
       group: map['group'] as String? ?? '',
-      url: map['url'] as String? ?? '',
+      url:
+          _favorites?.channelById(id)?.url ??
+          entryFor(id)?.url ??
+          map['url'] as String? ??
+          '',
       position: Duration(seconds: (map['pos'] as num?)?.toInt() ?? 0),
       duration: Duration(seconds: (map['dur'] as num?)?.toInt() ?? 0),
       lastWatchedAt: watched,
@@ -245,8 +251,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Map<String, dynamic> _localMap() {
-    final cutoff = DateTime.now().subtract(const Duration(days: 120));
-    _deleted.removeWhere((_, at) => at.isBefore(cutoff));
+    // Keep tombstones: a long-offline device must not resurrect removals.
     final live = {for (final e in _entries) e.contentId};
     return {
       for (final d in _deleted.entries)
@@ -298,22 +303,28 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     _notify();
     try {
       final code = await _sync.getStoredCode();
+      final epoch = _profileEpoch;
       if (code == null) {
         _error = 'Accedi al tuo account per usare il cloud.';
         return false;
       }
       final (payload, updatedAt) = await _sync.pull(code);
+      if (epoch != _profileEpoch || code != _sync.currentUserId) return false;
       if (payload == null) {
         _error = 'Nessun dato salvato nel cloud per questo account.';
         return false;
       }
       // Other profiles' histories are merged straight into local storage.
       for (final e in payload.profileHistories.entries) {
-        if (e.key == _profileId || e.value is! Map<String, dynamic>) continue;
+        if (e.key == PersonalVault.favoriteLane ||
+            e.key == _profileId ||
+            e.value is! Map<String, dynamic>)
+          continue;
         await _sync.mergeHistoryInto(
           e.value as Map<String, dynamic>,
           profileId: e.key,
         );
+        if (epoch != _profileEpoch || code != _sync.currentUserId) return false;
       }
       if (_profileId == null) {
         await _sync.mergeHistoryInto(payload.history);
@@ -342,6 +353,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
       final lastPush = await _sync.lastPush();
+      if (epoch != _profileEpoch || code != _sync.currentUserId) return false;
       final cloudIsNewer =
           updatedAt != null &&
           (lastPush == null || updatedAt.isAfter(lastPush.toUtc()));
@@ -354,12 +366,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
               .where((e) => e.type != ContentType.live)
               .toList()
             ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
-      if (_favorites != null && payload.favoriteIds.isNotEmpty) {
-        await _favorites.importFavorites({
-          'ids': payload.favoriteIds,
-          'tmdb': payload.tmdbFavorites,
-        });
-      }
+      await _favorites?.applyEncryptedFavorites(payload.toJson());
       // Settings and credentials: fill in what the device does not have yet
       // (never overwrite local values with older cloud copies).
       final settingsChanged = await _sync.applySnapshotSettings(
@@ -367,11 +374,6 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
         overwrite: cloudIsNewer,
       );
       if (settingsChanged) await onSettingsRestored?.call();
-      final needsCredentials = await _settingsService.getAuthMethod() == null;
-      if (needsCredentials && _sync.hasCredentials(payload.settings)) {
-        await _sync.applyCredentials(payload.settings);
-        await onCredentialsRestored?.call();
-      }
       await _persistLocal();
       await _syncProvider?.markPulled();
       return true;

@@ -135,7 +135,7 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
     return PopScope(
       canPop: !_busy,
       child: ApplePageScaffold(
-        title: 'Modifica lista Xtream',
+        title: 'Modifica connessione locale',
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: AbsorbPointer(

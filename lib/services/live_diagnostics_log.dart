@@ -43,14 +43,26 @@ class LiveDiagnosticsLog {
     return 'playback_error';
   }
 
+  static Map<String,Object?> _safeDevice(Map<String,Object?> raw) => {
+    for(final e in raw.entries)
+      if({'platform','osVersion','tv','fireTv','version','build','manufacturer','model','sdk'}.contains(e.key) && (e.value is bool || e.value is num || e.value is String && (e.value as String).length<200 && !RegExp(r'https?://|password|username|token=',caseSensitive:false).hasMatch(e.value as String))) e.key:e.value,
+  };
+  static Map<String,Object?> _safeEvent(Map<String,Object?> raw) => {
+    for(final e in raw.entries)
+      if({'at','type','attempt','elapsedMs','startupMs','durationMs','positionMs','preview','softwareDecode','videoFrameConfirmed','midPlay'}.contains(e.key) && (e.value is bool || e.value is num || e.key=='at' && e.value is String && DateTime.tryParse(e.value as String)!=null || e.key=='type' && {'attempt_start','observation_started_midstream','attempt_end','error','first_video_frame','buffer_start','buffer_end','buffer_interrupted','suspected_stall','open_ready'}.contains(e.value))) e.key:e.value,
+    if({'exoPlayer','mpv','mediaKit','exoplayer'}.contains(raw['engine'])) 'engine':raw['engine'],
+    if({'hls','ts','other'}.contains(raw['format'])) 'format':raw['format'],
+    if({'no_video_frames','http_403','http_404','http_429','connection_limit','timeout','decoder','network','playback_error'}.contains(raw['category'])) 'category':raw['category'],
+  };
+
   String report(
     Map<String, Object?> device,
   ) => const JsonEncoder.withIndent('  ').convert({
     'schema': 1,
     'app': 'StellarTV',
     'exportedAt': DateTime.now().toUtc().toIso8601String(),
-    'device': device,
-    'events': events,
+    'device': _safeDevice(device),
+    'events': events.map(_safeEvent).toList(),
     'privacy':
         'No URLs, credentials, channel titles, account identifiers or raw error messages.',
     'measurement':

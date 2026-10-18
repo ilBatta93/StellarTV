@@ -16,6 +16,9 @@
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/banner"
         android:usesCleartextTraffic="true"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/local_only_data"
         android:largeHeap="true">
         <activity
             android:name=".MainActivity"

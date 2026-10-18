@@ -28,7 +28,7 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString(deviceKey), 'this-device-only');
       expect(prefs.containsKey('supabase.auth.token'), isFalse);
-      expect(prefs.getString('xtream_username'), 'updated-list');
+      expect(prefs.getString('xtream_username'), isNull);
       await client.dispose();
     },
   );

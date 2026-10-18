@@ -38,6 +38,11 @@ class SyncProvider extends ChangeNotifier {
   String? get message => _message;
   bool get success => _success;
 
+  Future<String?> recoveryKey() => _sync.recoveryKey();
+  Future<bool> hasCloudVault() => _sync.hasCloudVault();
+  Future<void> authorizeVault(String recovery) => _sync.authorizeVault(recovery);
+  Future<void> forgetVaultKey() => _sync.forgetVaultKey();
+
   String? get email => _sync.currentEmail;
   bool get isSignedIn => _sync.currentUserId != null;
 
@@ -153,7 +158,7 @@ class SyncProvider extends ChangeNotifier {
       }
       if (!silent) {
         _success = false;
-        _message = 'Invio non riuscito. Controlla la connessione.';
+        _message = 'Invio non riuscito. Verifica connessione e chiave in Dati cifrati.';
       }
       return false;
     } finally {

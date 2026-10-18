@@ -71,3 +71,13 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Startup and QR pairing share bundled space artwork as presentation only; pairing polling and one-shot token exchange remain unchanged.
 
 - QR presentation accepts an optional pairing service for isolated layout previews; production defaults to the real service and never seeds pairing data.
+
+- Personal media sync uses account-bound AES-256-GCM envelopes and revision-CAS RPC writes; recovery keys use device-only OS secure storage, never preferences or cloud, to keep server access insufficient for decryption.
+- SyncService owns legacy read/import and verified ciphertext readback; legacy rows are never cleaned automatically, because preservation must precede destructive migration.
+- Favorite events use an encrypted reserved profile lane with persistent timestamped tombstones; this keeps the deployed website wire format compatible and prevents stale devices resurrecting removals.
+- All cloud settings use a fail-closed presentation allowlist; retired source and plaintext favorite adapters are no-ops so older callers cannot upload secrets.
+- Public release notes enumerate every included commit with neutral descriptions rather than copying commit text, preserving coverage without exposing content configuration.
+
+- Android excludes all app data from OS cloud backup and device transfer, while iOS recovery keys use this-device-only keychain accessibility, so recovery requires explicit user transfer.
+- Complete favorite membership mutations, imports, event timestamps and decrypted merges share a serialized local queue; account exit drains that queue before clearing device preferences, preventing lost updates or late writes restoring another account’s data.
+- Each installation imports paginated legacy rows until an encrypted write is read back and verified; a local account-scoped verification marker retires repeated imports, never deleting legacy rows.

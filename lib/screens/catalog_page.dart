@@ -314,7 +314,7 @@ class _CatalogPageState extends State<CatalogPage> {
   static const _recentLabel = 'Ultimi Aggiunti';
   static const _watchedLabel = 'Visti di recente';
   String get _allLabel =>
-      widget.type == ContentType.movie ? 'Tutti i Film' : 'Tutte le Serie';
+      widget.type == ContentType.movie ? 'Tutti i video' : 'Tutte le raccolte';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   String get _noun => switch (widget.type) {
@@ -375,7 +375,7 @@ class _CatalogPageState extends State<CatalogPage> {
         !app.catalogState(widget.type).hasContent) {
       return EmptyState(
         icon: Icons.error_outline_rounded,
-        title: 'Impossibile caricare la playlist',
+        title: 'Impossibile caricare i contenuti',
         message:
             app.catalogState(widget.type).error ?? 'Caricamento non riuscito',
         action: ElevatedButton.icon(
@@ -393,7 +393,7 @@ class _CatalogPageState extends State<CatalogPage> {
       return EmptyState(
         icon: Icons.playlist_add_rounded,
         title: 'Nessun contenuto',
-        message: 'La tua playlist non contiene $_noun.',
+        message: 'Nessun contenuto disponibile.',
         action: ElevatedButton.icon(
           icon: const Icon(Icons.settings_rounded),
           label: const Text('Apri impostazioni'),

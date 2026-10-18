@@ -92,7 +92,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     }
     return ApplePageScaffold(
       title: _tvProfile
-          ? (_live ? 'Dirette TV' : 'Film/Serie')
+          ? (_live ? 'Dirette TV' : 'Video e raccolte')
           : 'Player video',
       body: s == null
           ? Center(child: CircularProgressIndicator(color: AppColors.primary))
@@ -140,7 +140,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           SettingsValueTile(
             icon: Icons.stream_rounded,
             title: 'Formato flusso dirette',
-            subtitle: 'Per i canali Xtream',
+            subtitle: 'Per i contenuti in diretta',
             value: s.liveStreamFormat.label,
             onTap: () => _pick(
               'Formato flusso dirette',
@@ -182,7 +182,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           SettingsValueTile(
             icon: Icons.speed_rounded,
             title: 'Velocità predefinita',
-            subtitle: 'Per film e serie; le dirette restano a velocità normale',
+            subtitle: 'Per i video; le dirette restano a velocità normale',
             value: formatSpeed(s.defaultSpeed),
             onTap: () => _pick(
               'Velocità predefinita',
@@ -221,7 +221,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           SettingsSwitchTile(
             icon: Icons.history_rounded,
             title: 'Riprendi da dove avevi lasciato',
-            subtitle: 'Per film ed episodi',
+            subtitle: 'Per i contenuti registrati',
             value: s.resumePlayback,
             onChanged: (v) => _update((s) => s.resumePlayback = v),
           ),
@@ -325,7 +325,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
   List<Widget> _subtitleSection(PlayerSettings s) => [
     SettingsSection(
       title: 'Sottotitoli',
-      description: 'I sottotitoli incorporati nei flussi IPTV vengono mostrati con mpv.',
+      description: 'I sottotitoli incorporati vengono mostrati con mpv.',
       children: [
         _SubtitlePreview(settings: s),
         if (_mpvOrMdk(s))
@@ -460,7 +460,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           if (_mpvOrMdk(s))
             SettingsSliderTile(
               icon: Icons.cloud_download_outlined,
-              title: 'Buffer film e serie',
+              title: 'Buffer video',
               badge: 'mpv',
               value: s.networkCachingMs.toDouble(),
               min: 300,
@@ -510,7 +510,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           icon: Icons.badge_outlined,
           title: 'User agent personalizzato',
           subtitle:
-              'Alcuni fornitori IPTV richiedono un identificativo specifico',
+              'Alcuni servizi richiedono un identificativo specifico',
           value: s.userAgent.isEmpty ? 'Predefinito' : s.userAgent,
           onTap: _editUserAgent,
         ),
@@ -845,7 +845,7 @@ class _PlayerProfilesHubState extends State<_PlayerProfilesHub> {
           const Padding(
             padding: EdgeInsets.fromLTRB(4, 0, 4, 20),
             child: Text(
-              'Dirette e film usano impostazioni separate: scegli un profilo da modificare.',
+              'Dirette e video usano impostazioni separate: scegli un profilo da modificare.',
               style: TextStyle(color: AppColors.textMuted, fontSize: 15),
             ),
           ),
@@ -877,7 +877,7 @@ class _PlayerProfilesHubState extends State<_PlayerProfilesHub> {
               Expanded(
                 child: _ProfileCard(
                   icon: Icons.movie_filter_rounded,
-                  title: 'Film e Serie TV',
+                  title: 'Video e raccolte',
                   caption: 'On demand, episodi e download',
                   settings: vod,
                   lines: vod == null

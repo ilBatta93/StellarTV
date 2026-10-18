@@ -227,7 +227,7 @@ class _AccountScreenState extends State<AccountScreen> {
     return AuthScaffold(
       title: _register ? 'Crea il tuo account' : 'Bentornato',
       subtitle: _register
-          ? 'Playlist, profili e preferiti. Il tuo account, su ogni schermo.'
+          ? 'Profili e dati personali. Il tuo account, su ogni schermo.'
           : 'Accedi a StellarTV',
       alternatives: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

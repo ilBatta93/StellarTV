@@ -100,7 +100,7 @@ class _SearchScreenState extends State<SearchScreen> {
             textInputAction: TextInputAction.search,
             onChanged: _onChanged,
             decoration: InputDecoration(
-              hintText: 'Cerca canali, film e serie',
+              hintText: 'Cerca contenuti',
               prefixIcon: const Icon(Icons.search_rounded, size: 20),
               suffixIcon: _query.isEmpty
                   ? null
@@ -120,7 +120,7 @@ class _SearchScreenState extends State<SearchScreen> {
               icon: Icons.manage_search_rounded,
               title: 'Cerca ovunque',
               message:
-                  'Trova canali in diretta, film e serie nella tua playlist e in tutto il catalogo.',
+                  'Trova contenuti disponibili sul dispositivo.',
             )
           : _buildResults(app),
     );
@@ -150,9 +150,9 @@ class _SearchScreenState extends State<SearchScreen> {
     final tmdbResults = _tmdbResults.where(app.isTmdbAllowed).toList();
     final sections = [
       (ContentType.live, 'TV in Diretta'),
-      (ContentType.movie, 'Film nella tua playlist'),
-      (ContentType.series, 'Serie TV nella tua playlist'),
-      (ContentType.anime, 'Anime nella tua playlist'),
+      (ContentType.movie, 'Video disponibili'),
+      (ContentType.series, 'Raccolte disponibili'),
+      (ContentType.anime, 'Animazione disponibile'),
     ];
     final local = _local;
 
@@ -169,7 +169,7 @@ class _SearchScreenState extends State<SearchScreen> {
           ],
         const SectionHeader(
           title: 'Dal catalogo',
-          subtitle: 'Film e serie da TMDB',
+          subtitle: 'Contenuti da TMDB',
         ),
         if (_searchingTmdb)
           Padding(
