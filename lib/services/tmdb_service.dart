@@ -141,7 +141,9 @@ class TmdbService {
     return _titleLogos.putIfAbsent(item.key, () async {
       try {
         final body = await _get('${item.mediaType}/${item.id}/images', {
-          'include_image_language': 'it,null,en',
+          // Only Italian or English logos: TMDB also returns untagged
+          // images that can carry text in any other language.
+          'include_image_language': 'it,en',
         });
         return selectTitleLogo(body);
       } catch (_) {
@@ -165,13 +167,13 @@ class TmdbService {
               ).hasMatch(e['file_path'] as String),
         )
         .toList();
+    // Strictly Italian or English: untagged (null) and other languages are
+    // discarded, because untagged logos can show text in any language.
     int priority(Object? language) => language == 'it'
         ? 0
-        : language == null
-        ? 1
         : language == 'en'
-        ? 2
-        : 3;
+        ? 1
+        : 2;
     logos.sort((a, b) {
       final language = priority(
         a['iso_639_1'],
@@ -181,7 +183,7 @@ class TmdbService {
         (a['vote_average'] as num?) ?? 0,
       );
     });
-    final preferred = logos.where((e) => priority(e['iso_639_1']) < 3);
+    final preferred = logos.where((e) => priority(e['iso_639_1']) < 2);
     if (preferred.isEmpty) return null;
     return 'https://image.tmdb.org/t/p/w500${preferred.first['file_path']}';
   }
