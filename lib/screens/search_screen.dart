@@ -150,8 +150,8 @@ class _SearchScreenState extends State<SearchScreen> {
     final tmdbResults = _tmdbResults.where(app.isTmdbAllowed).toList();
     final sections = [
       (ContentType.live, 'TV in Diretta'),
-      (ContentType.movie, 'Video disponibili'),
-      (ContentType.series, 'Raccolte disponibili'),
+      (ContentType.movie, 'Film disponibili'),
+      (ContentType.series, 'Serie TV disponibili'),
       (ContentType.anime, 'Animazione disponibile'),
     ];
     final local = _local;

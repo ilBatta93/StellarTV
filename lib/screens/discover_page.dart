@@ -229,7 +229,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
           if (banner.isNotEmpty) _Top10Banner(items: banner),
           if (startedMovies.isNotEmpty) ...[
             SectionHeader(
-              title: 'Video che stai guardando',
+              title: 'Film che stai guardando',
               leading: Icon(
                 Icons.movie_outlined,
                 color: AppColors.primary,
@@ -240,7 +240,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
           ],
           if (startedSeries.isNotEmpty) ...[
             const SectionHeader(
-              title: 'Raccolte che stai guardando',
+              title: 'Serie TV che stai guardando',
               leading: Icon(
                 Icons.video_library_outlined,
                 color: AppColors.secondary,
@@ -437,12 +437,12 @@ class _TopSectionState extends State<_TopSection> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _segment(
-                      'Video',
+                      'Film',
                       !showSeries,
                       () => setState(() => _showSeries = false),
                     ),
                     _segment(
-                      'Raccolte',
+                      'Serie TV',
                       showSeries,
                       () => setState(() => _showSeries = true),
                     ),
@@ -1250,12 +1250,12 @@ class _TvTopRowState extends State<_TvTopRow> {
                 if (hasMovies || hasSeries) ...[
                   const SizedBox(width: 24),
                   if (hasMovies)
-                    _chip('Video', _movieFocus, !showSeries, () {
+                    _chip('Film', _movieFocus, !showSeries, () {
                       setState(() => _showSeries = false);
                     }),
                   const SizedBox(width: 12),
                   if (hasSeries)
-                    _chip('Raccolte', _seriesFocus, showSeries, () {
+                    _chip('Serie TV', _seriesFocus, showSeries, () {
                       setState(() => _showSeries = true);
                     }),
                 ],
@@ -1450,7 +1450,7 @@ class _TvHeroInfo extends StatelessWidget {
     final meta = <String>[
       if (year.isNotEmpty) year,
       if (it.voteAverage > 0) '★ ${it.voteAverage.toStringAsFixed(1)}',
-      it.mediaType == 'movie' ? 'Video' : 'Raccolte',
+      it.mediaType == 'movie' ? 'Film' : 'Serie TV',
     ].join('  ·  ');
     return LayoutBuilder(
       builder: (context, bounds) {

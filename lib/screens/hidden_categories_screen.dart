@@ -21,8 +21,8 @@ class _HiddenCategoriesScreenState extends State<HiddenCategoriesScreen>
 
   static const _types = [
     (ContentType.live, 'Diretta'),
-    (ContentType.movie, 'Video'),
-    (ContentType.series, 'Raccolte'),
+    (ContentType.movie, 'Film'),
+    (ContentType.series, 'Serie TV'),
   ];
 
   @override

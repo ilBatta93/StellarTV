@@ -370,7 +370,7 @@ class _Meta extends StatelessWidget {
   Widget build(BuildContext context) {
     final isMovie = item?.isMovie ?? channel?.type == ContentType.movie;
     final chips = <Widget>[
-      _Chip(label: isMovie ? 'Video' : 'Raccolte'),
+      _Chip(label: isMovie ? 'Film' : 'Serie TV'),
       if (item != null && item!.year.isNotEmpty) _Chip(label: item!.year),
       if (item != null && item!.voteAverage > 0)
         RatingBadge(value: item!.voteAverage),

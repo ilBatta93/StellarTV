@@ -176,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icons.movie_rounded,
             type: ContentType.movie,
           ),
-          label: 'Video',
+          label: 'Film',
         ),
         AppSection.series => const NavigationDestination(
           icon: CatalogNavigationIcon(
@@ -187,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icons.video_library_rounded,
             type: ContentType.series,
           ),
-          label: 'Raccolte',
+          label: 'Serie TV',
         ),
       };
 

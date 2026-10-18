@@ -314,7 +314,7 @@ class _CatalogPageState extends State<CatalogPage> {
   static const _recentLabel = 'Ultimi Aggiunti';
   static const _watchedLabel = 'Visti di recente';
   String get _allLabel =>
-      widget.type == ContentType.movie ? 'Tutti i video' : 'Tutte le raccolte';
+      widget.type == ContentType.movie ? 'Tutti i film' : 'Tutte le serie TV';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   String get _noun => switch (widget.type) {

@@ -194,7 +194,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _Chip(label: 'Raccolte'),
+                    _Chip(label: 'Serie TV'),
                     if (seasons.isNotEmpty)
                       _Chip(label: '${seasons.length} stagioni'),
                     if (series.episodeCount > 0)
@@ -262,7 +262,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
             child: EmptyState(
               icon: Icons.tv_off_rounded,
               title: 'Nessun episodio',
-              message: 'Questa raccolta non ha contenuti disponibili.',
+              message: 'Questa serie TV non ha episodi disponibili.',
             ),
           )
         else ...[
