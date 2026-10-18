@@ -130,10 +130,17 @@
 
 - [x] Telecomando TV, tasti destra/sinistra durante riproduzione: seek senza aprire comandi player; test telecomando.
 
-- [ ] Prova su TV/telefono e sync tra dispositivi reali: richiede nuova APK autorizzata e dispositivi dell’utente. Nessuna build avviata.
+- [x] Build 3.3.2 (run 39, commit 58bdbf3) pubblicata su GitHub Releases e nel repository pubblico.
+- [ ] Prova su TV/telefono e sync tra dispositivi reali: richiede installazione 3.3.2 e dispositivi dell’utente.
 
 ## Sottotitoli
 - [x] Corrette selezione anno/episodio, ZIP stagionali, sovrapposizioni, aggiornamento dopo seek e scelta sorgente tra player; regolazione Exo online e alternative col telecomando. 21 prove Flutter superate, nessun errore/warning analisi. Nessuna APK avviata.
 - [x] Correzioni app pronte per GitHub; 11 prove servizio superate, inclusi ZIP reale e versione alternativa; sito senza errori.
 - [ ] Pubblicare il servizio sottotitoli aggiornato: richiede richiesta esplicita dell’utente.
-- [ ] Prova su contenuti e TV reali: richiede prossima APK autorizzata e dispositivo utente.
+- [ ] Prova su contenuti e TV reali con 3.3.2: richiede installazione dell’utente.
+
+## Build 3.3.2 — 18 ottobre 2026
+- [x] Build Android 3.3.2 riuscita (run 39): tutti i test Flutter e Android previsti superati, APK da 110 MB pubblicato.
+- [x] Note di rilascio riscritte in modo comprensibile e applicate a entrambe le pubblicazioni.
+- [x] /apk del sito reindirizza a v3.3.2 verificato sul sito live; nel repository pubblico resta solo l'ultima versione.
+- [ ] Servizio sottotitoli del sito da pubblicare: la versione live è precedente, serve richiesta esplicita dell'utente.
