@@ -19,8 +19,8 @@ void main() {
     expect(tester.takeException(), isNull);
     final logo = tester.widget<Image>(find.descendant(of: find.byType(BrandLogo), matching: find.byType(Image)));
     expect(logo.height, 46 * 1.35);
-    expect(logo.width, 46 * 1.35 * 2070 / 526);
-    expect(tester.getSize(find.byType(BrandIntro)).height, closeTo(640 * 526 / 2070, .01));
+    expect(logo.width, 46 * 1.35 * 2283 / 526);
+    expect(tester.getSize(find.byType(BrandIntro)).height, closeTo(640 * 526 / 2283, .01));
     final boundary = key.currentContext?.findRenderObject();
     if (boundary is RenderRepaintBoundary) {
       await tester.runAsync(() async {

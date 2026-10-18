@@ -23,8 +23,8 @@ class BrandIntro extends StatelessWidget {
   const BrandIntro({super.key, required this.progress});
   final double progress;
 
-  // Source pixel columns of the approved artwork (2070 x 526).
-  static const double _w = 2070, _h = 526, _star = 563, _tv = 1580;
+  // Source pixel columns of the approved artwork (2283 x 526).
+  static const double _w = 2283, _h = 526, _star = 563, _tv = 1793;
 
   Widget _part(double left, double right, double scale) => ClipRect(
     child: SizedBox(

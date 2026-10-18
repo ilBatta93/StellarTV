@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 const String kBrandWordmarkAsset = 'assets/branding/stellartv_logo.png';
 const String kBrandSymbolAsset = 'assets/branding/stellartv_stella.png';
 const String kBrandNameAsset = 'assets/branding/stellartv_scritta.png';
-const double kBrandWordmarkAspect = 2070 / 526;
-const double kBrandNameAspect = 1507 / 526;
+const double kBrandWordmarkAspect = 2283 / 526;
+const double kBrandNameAspect = 1720 / 526;
 
 Widget _art(String asset, double w, double h, String label) => Image.asset(
   asset,
