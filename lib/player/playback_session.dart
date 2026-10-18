@@ -225,8 +225,9 @@ class PlaybackSession extends ChangeNotifier {
         await DecoderMemory.ensureLoaded();
       } catch (_) {}
       if (_disposed) return;
+      // Software decoding is a decoder choice, not an engine switch: it
+      // stays available even when automatic engine fallback is off.
       if ((!previewMode || previewFallback) &&
-          settings.autoFallback &&
           DecoderMemory.needsSoftware(url))
         _softwareDecode = true;
     }
@@ -314,6 +315,7 @@ class PlaybackSession extends ChangeNotifier {
 
   Future<void> _openAttempt({Duration? resumeAt}) async {
     final gen = ++_generation;
+    _hlsWatch?.cancel();
     await _releaseCurrent();
     if (gen != _generation || _disposed || _plan.isEmpty) return;
     final attempt = _plan[_attempt.clamp(0, _plan.length - 1)];
@@ -348,6 +350,7 @@ class PlaybackSession extends ChangeNotifier {
       return;
     }
     _diagnostics?.event('open_ready');
+    _watchHlsFrames(engine, gen, resumeAt);
     _status = SessionStatus.playing;
     _notice = null;
     // Fresh stream (new channel or reconnect): timeshift starts from here.
@@ -446,6 +449,25 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
+  Timer? _hlsWatch;
+
+  /// Xtream .m3u8 addresses are often fake playlists that never deliver a
+  /// segment: the player is "ready" but no picture ever arrives. When the
+  /// first frame is missing shortly after opening, move to the next address
+  /// (normally raw MPEG-TS) instead of waiting for the long start timeout.
+  void _watchHlsFrames(PlaybackEngine engine, int gen, Duration? resumeAt) {
+    _hlsWatch?.cancel();
+    if (!isLive || Uri.tryParse(_currentUrl)?.path.endsWith('.m3u8') != true) return;
+    if (_attempt >= _plan.length - 1) return;
+    _hlsWatch = Timer(const Duration(milliseconds: 3500), () {
+      if (_disposed || gen != _generation || _engine != engine) return;
+      if (engine.videoFrameRendered == true) return;
+      if (engine.value.hasError) return;
+      _handleFailure(gen, 'Playlist HLS senza video dopo 3 secondi (timeout)',
+          resumeAt, midPlay: false);
+    });
+  }
+
   void _onEngineChanged() {
     final engine = _engine;
     if (engine == null) return;
@@ -525,7 +547,6 @@ class PlaybackSession extends ChangeNotifier {
     // decodes every broadcast codec. Done once per session.
     if (reason.contains('schermo nero') &&
         !_softwareDecode &&
-        settings.autoFallback &&
         (!previewMode || previewFallback)) {
       _softwareDecode = true;
       final address = _currentUrl.isEmpty ? _candidates.first : _currentUrl;
@@ -793,6 +814,7 @@ class PlaybackSession extends ChangeNotifier {
 
   @override
   void dispose() {
+    _hlsWatch?.cancel();
     _disposed = true;
     _diagnosticTimer?.cancel();
     _diagnostics?.end();

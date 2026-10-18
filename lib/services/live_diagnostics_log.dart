@@ -50,7 +50,7 @@ class LiveDiagnosticsLog {
   static Map<String,Object?> _safeEvent(Map<String,Object?> raw) => {
     for(final e in raw.entries)
       if({'at','type','attempt','elapsedMs','startupMs','durationMs','positionMs','preview','softwareDecode','videoFrameConfirmed','midPlay'}.contains(e.key) && (e.value is bool || e.value is num || e.key=='at' && e.value is String && DateTime.tryParse(e.value as String)!=null || e.key=='type' && {'attempt_start','observation_started_midstream','attempt_end','error','first_video_frame','buffer_start','buffer_end','buffer_interrupted','suspected_stall','open_ready'}.contains(e.value))) e.key:e.value,
-    if({'exoPlayer','mpv','mediaKit','exoplayer'}.contains(raw['engine'])) 'engine':raw['engine'],
+    if({'exoPlayer','mpv','mediaKit','exoplayer','exo','mediakit'}.contains(raw['engine'])) 'engine':raw['engine'],
     if({'hls','ts','other'}.contains(raw['format'])) 'format':raw['format'],
     if({'no_video_frames','http_403','http_404','http_429','connection_limit','timeout','decoder','network','playback_error'}.contains(raw['category'])) 'category':raw['category'],
   };

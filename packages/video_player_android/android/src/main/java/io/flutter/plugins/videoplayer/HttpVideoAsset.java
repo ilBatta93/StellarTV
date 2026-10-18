@@ -17,6 +17,9 @@ import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.exoplayer.source.MediaSource;
+import androidx.media3.extractor.DefaultExtractorsFactory;
+import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory;
+import androidx.media3.extractor.ts.TsExtractor;
 import java.util.Map;
 
 final class HttpVideoAsset extends VideoAsset {
@@ -77,7 +80,23 @@ final class HttpVideoAsset extends VideoAsset {
       Context context, DefaultHttpDataSource.Factory initialFactory) {
     unstableUpdateDataSourceFactory(initialFactory, httpHeaders, userAgent);
     DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, initialFactory);
-    return new DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory);
+    return new DefaultMediaSourceFactory(context, broadcastTolerantExtractors())
+        .setDataSourceFactory(dataSourceFactory);
+  }
+
+  /**
+   * IPTV MPEG-TS streams carry broadcast timestamp jumps, missing IDR frames and corrupted
+   * packets: detect access units and accept non-IDR keyframes so playback resynchronises
+   * instead of stalling, and search further for timestamps on noisy streams.
+   */
+  @OptIn(markerClass = UnstableApi.class)
+  private static DefaultExtractorsFactory broadcastTolerantExtractors() {
+    return new DefaultExtractorsFactory()
+        .setTsExtractorFlags(
+            DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES
+                | DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS)
+        .setTsExtractorMode(TsExtractor.MODE_SINGLE_PMT)
+        .setTsExtractorTimestampSearchBytes(TsExtractor.DEFAULT_TIMESTAMP_SEARCH_BYTES * 3);
   }
 
   // TODO: Migrate to stable API, see https://github.com/flutter/flutter/issues/147039.
