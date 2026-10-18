@@ -18,35 +18,21 @@ class BrandIntroFrame {
   );
 }
 
-/// Approved artwork split into star, name and TV; presentation-only.
+/// Approved logo assembled from its three vectors (star, STELLAR, TV), each
+/// placed at its exact position in the shared artwork; presentation-only.
 class BrandIntro extends StatelessWidget {
   const BrandIntro({super.key, required this.progress});
   final double progress;
 
-  // Source pixel columns of the approved artwork (2283 x 526).
-  static const double _w = 2283, _h = 526, _star = 563, _tv = 1793;
-
-  Widget _part(double left, double right, double scale) => ClipRect(
-    child: SizedBox(
-      width: (right - left) * scale,
-      height: _h * scale,
-      child: OverflowBox(
-        alignment: Alignment.topLeft,
-        minWidth: 0,
-        maxWidth: double.infinity,
-        child: Transform.translate(
-          offset: Offset(-left * scale, 0),
-          child: Image.asset(
-            kBrandWordmarkAsset,
-            width: _w * scale,
-            height: _h * scale,
-            fit: BoxFit.fill,
-            filterQuality: FilterQuality.high,
-          ),
+  static Widget _part(String asset, BrandBox b, double scale, double left, double opacity) =>
+      Positioned(
+        left: left,
+        top: (b.y - kBrandFullBox.y) * scale,
+        child: Opacity(
+          opacity: opacity,
+          child: brandArt(asset, b.w * scale, b.h * scale, ''),
         ),
-      ),
-    ),
-  );
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -58,37 +44,20 @@ class BrandIntro extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, box) {
             final width = box.maxWidth.clamp(0.0, 720.0);
-            final scale = width / _w;
-            final centred = (width - _star * scale) / 2;
+            final full = kBrandFullBox;
+            final scale = width / full.w;
+            double at(BrandBox b) => (b.x - full.x) * scale;
+            final centred = (width - kBrandStarBox.w * scale) / 2;
             return SizedBox(
               width: width,
-              height: _h * scale,
+              height: full.h * scale,
               child: Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  Positioned(
-                    left: centred * (1 - frame.shift),
-                    top: 0,
-                    child: Opacity(
-                      opacity: frame.symbol,
-                      child: _part(0, _star, scale),
-                    ),
-                  ),
-                  Positioned(
-                    left: _star * scale,
-                    top: 0,
-                    child: Opacity(
-                      opacity: frame.stellar,
-                      child: _part(_star, _tv, scale),
-                    ),
-                  ),
-                  Positioned(
-                    left: _tv * scale,
-                    top: 0,
-                    child: Opacity(
-                      opacity: frame.tv,
-                      child: _part(_tv, _w, scale),
-                    ),
-                  ),
+                  _part(kBrandSymbolAsset, kBrandStarBox, scale,
+                      centred * (1 - frame.shift) + at(kBrandStarBox) * frame.shift, frame.symbol),
+                  _part(kBrandStellarAsset, kBrandStellarBox, scale, at(kBrandStellarBox), frame.stellar),
+                  _part(kBrandTvAsset, kBrandTvBox, scale, at(kBrandTvBox), frame.tv),
                 ],
               ),
             );

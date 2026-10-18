@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:stellar_tv/widgets/brand_logo.dart';
 import 'package:stellar_tv/widgets/brand_intro.dart';
 
@@ -17,10 +18,10 @@ void main() {
     await tester.runAsync(() async { await Future<void>.delayed(const Duration(milliseconds: 200)); });
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    final logo = tester.widget<Image>(find.descendant(of: find.byType(BrandLogo), matching: find.byType(Image)));
+    final logo = tester.widget<SvgPicture>(find.descendant(of: find.byType(BrandLogo), matching: find.byType(SvgPicture)));
     expect(logo.height, 46 * 1.35);
-    expect(logo.width, closeTo(46 * 1.35 * 2283 / 526, .001));
-    expect(tester.getSize(find.byType(BrandIntro)).height, closeTo(640 * 526 / 2283, .01));
+    expect(logo.width, closeTo(46 * 1.35 * 1992.1 / 514, .001));
+    expect(tester.getSize(find.byType(BrandIntro)).height, closeTo(640 * 514 / 1992.1, .01));
     final boundary = key.currentContext?.findRenderObject();
     if (boundary is RenderRepaintBoundary) {
       await tester.runAsync(() async {
