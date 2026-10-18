@@ -449,10 +449,17 @@ class SyncService {
   String? lastError;
 
   Future<DateTime?> push(SyncPayload payload, String code) async {
-    if (code != currentUserId) return null;
+    if (code != currentUserId) {
+      lastError = 'account non collegato';
+      return null;
+    }
     try {
       final recovery = await recoveryKey();
-      if (recovery == null) return null; // No plaintext fallback, ever.
+      if (recovery == null) {
+        // No plaintext fallback, ever.
+        lastError = 'chiave di recupero assente su questo dispositivo';
+        return null;
+      }
       final prefs = await SharedPreferences.getInstance();
       final marker = 'vault_legacy_verified_$code';
       // Old tables are only an extra source: a failed read must not block

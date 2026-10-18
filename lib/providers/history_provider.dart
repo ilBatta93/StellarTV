@@ -396,6 +396,8 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Pushes the full snapshot now (history + favorites + settings).
+  String? get lastPushError => _syncProvider?.lastPushError;
+
   Future<bool> pushAllNow() async {
     final ok = await _syncProvider?.pushNow() ?? false;
     return ok;

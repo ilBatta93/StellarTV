@@ -136,7 +136,8 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
         content: Text(
           ok
               ? 'Dati inviati al cloud'
-              : 'Invio non riuscito. Controlla la connessione.',
+              : 'Invio non riuscito. Controlla la connessione.'
+                    '${history.lastPushError == null ? '' : ' (${history.lastPushError})'}',
         ),
       ),
     );

@@ -12,7 +12,11 @@ class SyncProvider extends ChangeNotifier {
 
   final SyncService _sync;
 
-  String? _code;
+  /// Cloud data always belong to the signed-in account. Reading it live
+  /// (instead of caching it at password sign-in) keeps sync working after a
+  /// QR/TV pairing sign-in or a restored session, where the cache stayed
+  /// empty and every upload silently stopped while downloads still worked.
+  String? get _code => _sync.currentUserId;
   DateTime? _lastPush;
   DateTime? _lastPull;
   bool _busy = false;
@@ -55,7 +59,7 @@ class SyncProvider extends ChangeNotifier {
   }
 
   Future<void> load() async {
-    _code = await _sync.getStoredCode();
+    await _sync.getStoredCode();
     _lastPush = await _sync.lastPush();
     _lastPull = await _sync.lastPull();
     notifyListeners();
@@ -82,8 +86,8 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
     final error = await action();
     if (error == null) {
-      _code = await _sync.getStoredCode();
-      if (_code != null) await onCodeReady?.call(_code!);
+      final code = await _sync.getStoredCode();
+      if (code != null) await onCodeReady?.call(code);
     }
     _busy = false;
     notifyListeners();
@@ -96,7 +100,6 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
     _debounce?.cancel();
     await _sync.signOut();
-    _code = null;
     _lastPush = null;
     _lastPull = null;
     await onCodeCleared?.call();
