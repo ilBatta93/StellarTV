@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../screens/trailer_screen.dart';
 import '../models/tmdb_item.dart';
 import '../models/title_trailer.dart';
 import '../providers/discover_provider.dart';
@@ -9,6 +9,10 @@ import 'tv_focusable.dart';
 class TrailerButton extends StatefulWidget {
   const TrailerButton({super.key, required this.item});
   final TmdbItem item;
+
+  /// Test seam: replaces the in-app trailer page.
+  @visibleForTesting
+  static Future<void> Function(BuildContext, TitleTrailer)? opener;
   @override
   State<TrailerButton> createState() => _TrailerButtonState();
 }
@@ -34,20 +38,11 @@ class _TrailerButtonState extends State<TrailerButton> {
     _trailer = context.read<DiscoverProvider>().tmdb.trailer(widget.item);
   }
 
-  Future<void> _open(TitleTrailer trailer) async {
-    try {
-      if (await launchUrl(trailer.url, mode: LaunchMode.externalApplication))
-        return;
-    } catch (_) {}
-    if (!mounted) return;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Impossibile aprire il trailer. Nessuna app compatibile disponibile.',
-        ),
-      ),
-    );
-  }
+  Future<void> _open(TitleTrailer trailer) =>
+      TrailerButton.opener?.call(context, trailer) ??
+      Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => TrailerScreen(trailer: trailer)),
+  );
 
   @override
   Widget build(BuildContext context) => FutureBuilder<TitleTrailer?>(

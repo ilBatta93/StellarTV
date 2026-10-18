@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 import 'package:stellar_tv/providers/discover_provider.dart';
 import 'package:stellar_tv/providers/ui_settings.dart';
 import 'package:stellar_tv/services/tmdb_service.dart';
@@ -19,27 +18,14 @@ class TrailerService extends TmdbService {
       const TitleTrailer(key: 'abcDEF12345', language: 'it');
 }
 
-class Launcher extends UrlLauncherPlatform {
-  @override
-  get linkDelegate => null;
-  String? opened;
-  PreferredLaunchMode? mode;
-  @override
-  Future<bool> launchUrl(String url, LaunchOptions options) async {
-    opened = url;
-    mode = options.mode;
-    return true;
-  }
-}
-
 void main() {
   remote.mainSetupForRemote();
   testWidgets(
-    'Remote OK launches selected trailer externally and returns focus',
+    'Remote OK opens the trailer inside the app',
     (tester) async {
-      final launcher = Launcher(), original = UrlLauncherPlatform.instance;
-      UrlLauncherPlatform.instance = launcher;
-      addTearDown(() => UrlLauncherPlatform.instance = original);
+      String? opened;
+      TrailerButton.opener = (_, t) async => opened = t.key;
+      addTearDown(() => TrailerButton.opener = null);
       final service = DiscoverProvider(TrailerService()),
           settings = UiSettings();
       await tester.pumpWidget(
@@ -63,8 +49,7 @@ void main() {
       final focus = FocusManager.instance.primaryFocus;
       await tester.sendKeyEvent(LogicalKeyboardKey.select, platform: 'android');
       await tester.pump();
-      expect(launcher.opened, 'https://www.youtube.com/watch?v=abcDEF12345');
-      expect(launcher.mode, PreferredLaunchMode.externalApplication);
+      expect(opened, 'abcDEF12345');
       expect(FocusManager.instance.primaryFocus, same(focus));
       await tester.pumpWidget(const SizedBox());
       service.dispose();
