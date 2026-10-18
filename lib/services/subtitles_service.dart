@@ -56,13 +56,19 @@ class SubtitlesService {
     int? season,
     int? episode,
     String language = 'it',
+    bool refresh = false,
+    int variant = 0,
   }) async {
-    final key = '${imdbId}_${season ?? ''}_${episode ?? ''}_$language';
+    if ((season == null) != (episode == null)) {
+      throw Exception('stagione ed episodio mancanti');
+    }
+    final key =
+        'v2_${imdbId}_${season ?? ''}_${episode ?? ''}_${language}_$variant';
     final mem = _memByKey[key];
-    if (mem != null) return mem;
+    if (!refresh && mem != null) return mem;
     try {
       final f = await _offlineFile(key);
-      if (await f.exists()) {
+      if (!refresh && await f.exists()) {
         final cues = parseSrt(await f.readAsString());
         if (cues.isNotEmpty) return _memByKey[key] = cues;
       }
@@ -73,9 +79,12 @@ class SubtitlesService {
         if (season != null && episode != null) 'season': '$season',
         if (season != null && episode != null) 'episode': '$episode',
         'language': language,
+        'variant': '$variant',
       },
     );
-    final res = await http.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 30));
+    final res = await http
+        .get(uri, headers: _authHeaders())
+        .timeout(const Duration(seconds: 30));
     if (res.statusCode == 401) {
       throw Exception('accedi al tuo account per i sottotitoli');
     }
@@ -115,7 +124,9 @@ class SubtitlesService {
         if (isEpisode) 'episode': '$episode',
       },
     );
-    final res = await http.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 12));
+    final res = await http
+        .get(uri, headers: _authHeaders())
+        .timeout(const Duration(seconds: 12));
     if (res.statusCode != 200) {
       throw Exception('ricerca non riuscita (HTTP ${res.statusCode})');
     }
@@ -139,14 +150,15 @@ class SubtitlesService {
   static Future<List<SubtitleCue>?> download(int fileId) async {
     final cached = _cache[fileId];
     if (cached != null) return cached;
-    final uri = Uri.parse(
-      '${SupabaseConfig.apiBase}/opensubtitles',
-    ).replace(queryParameters: {'action': 'download', 'file_id': '$fileId'});
-    final res = await http.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 15));
+    final uri = Uri.parse('${SupabaseConfig.apiBase}/opensubtitles')
+        .replace(queryParameters: {'action': 'download', 'file_id': '$fileId'});
+    final res = await http
+        .get(uri, headers: _authHeaders())
+        .timeout(const Duration(seconds: 15));
     if (res.statusCode != 200) {
       throw Exception('download non riuscito (HTTP ${res.statusCode})');
     }
-    final cues = parseSrt(res.body);
+    final cues = parseSrt(utf8.decode(res.bodyBytes, allowMalformed: true));
     if (cues.isEmpty) return null;
     _cache[fileId] = cues;
     return cues;
@@ -155,6 +167,8 @@ class SubtitlesService {
   static final _timeLine = RegExp(
     r'(\d{1,2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{3})',
   );
+  static final _maxEnds = Expando<List<Duration>>();
+
   static final _tag = RegExp(r'<[^>]+>');
 
   static Duration _t(List<String> m, int o) => Duration(
@@ -166,7 +180,11 @@ class SubtitlesService {
 
   static List<SubtitleCue> parseSrt(String raw) {
     final cues = <SubtitleCue>[];
-    final blocks = raw.replaceAll('\r\n', '\n').split(RegExp(r'\n\s*\n'));
+    final blocks = raw
+        .replaceAll('\uFEFF', '')
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .split(RegExp(r'\n\s*\n'));
     for (final block in blocks) {
       final lines = block.trim().split('\n');
       if (lines.isEmpty) continue;
@@ -176,7 +194,7 @@ class SubtitlesService {
       }
       final match = _timeLine.firstMatch(lines[timeIndex]);
       if (match == null) continue;
-      final m = [for (var i = 1; i <= 8; i++) match[i]!];
+      final m = [for (var i = 1; i <= 8; i++) match.group(i) ?? '0'];
       final text = lines
           .sublist(timeIndex + 1)
           .join('\n')
@@ -184,7 +202,10 @@ class SubtitlesService {
           .replaceAll('{\\an8}', '')
           .trim();
       if (text.isEmpty) continue;
-      cues.add(SubtitleCue(_t(m, 0), _t(m, 4), text));
+      final start = _t(m, 0);
+      final end = _t(m, 4);
+      if (end <= start) continue;
+      cues.add(SubtitleCue(start, end, text));
     }
     cues.sort((a, b) => a.start.compareTo(b.start));
     return cues;
@@ -198,19 +219,30 @@ class SubtitlesService {
     Duration delay,
   ) {
     final t = position - delay;
+    // Upper bound by start only: end times are not monotonic when cues
+    // overlap (dialogue plus signs), so binary-searching ends drops text.
     var lo = 0;
-    var hi = cues.length - 1;
-    while (lo <= hi) {
+    var hi = cues.length;
+    while (lo < hi) {
       final mid = (lo + hi) >> 1;
-      final cue = cues[mid];
-      if (t < cue.start) {
-        hi = mid - 1;
-      } else if (t >= cue.end) {
+      if (cues[mid].start <= t) {
         lo = mid + 1;
       } else {
-        return cue.text;
+        hi = mid;
       }
     }
-    return null;
+    var maxEnds = _maxEnds[cues];
+    if (maxEnds == null) {
+      var end = Duration.zero;
+      maxEnds = [for (final cue in cues) (end = cue.end > end ? cue.end : end)];
+      _maxEnds[cues] = maxEnds;
+    }
+    final active = <String>[];
+    for (var i = lo - 1; i >= 0 && maxEnds[i] > t; i--) {
+      if (cues[i].contains(t) && !active.contains(cues[i].text)) {
+        active.add(cues[i].text);
+      }
+    }
+    return active.isEmpty ? null : active.reversed.join('\n');
   }
 }

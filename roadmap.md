@@ -131,3 +131,9 @@
 - [x] Telecomando TV, tasti destra/sinistra durante riproduzione: seek senza aprire comandi player; test telecomando.
 
 - [ ] Prova su TV/telefono e sync tra dispositivi reali: richiede nuova APK autorizzata e dispositivi dell’utente. Nessuna build avviata.
+
+## Sottotitoli
+- [x] Corrette selezione anno/episodio, ZIP stagionali, sovrapposizioni, aggiornamento dopo seek e scelta sorgente tra player; regolazione Exo online e alternative col telecomando. 21 prove Flutter superate, nessun errore/warning analisi. Nessuna APK avviata.
+- [x] Correzioni app pronte per GitHub; 11 prove servizio superate, inclusi ZIP reale e versione alternativa; sito senza errori.
+- [ ] Pubblicare il servizio sottotitoli aggiornato: richiede richiesta esplicita dell’utente.
+- [ ] Prova su contenuti e TV reali: richiede prossima APK autorizzata e dispositivo utente.

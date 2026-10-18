@@ -284,41 +284,43 @@ Future<void> showSubtitleSheet(
   final engine = session.engine;
   return _showSheet(context, 'Sottotitoli', (ctx) {
     final onlineOption = _Option(
-      label: 'Italiano (OpenSubtitles)',
+      label: 'Italiano (online)',
       detail: onlineLoading
           ? 'Ricerca in corso...'
           : onlineActive
-          ? 'Attivi, scaricati da internet'
+          ? 'Attivi · altra versione'
           : 'Scaricati da internet, in italiano',
       selected: onlineActive,
-      onTap: onlineActive || onlineLoading
+      onTap: onlineLoading
           ? () {}
           : () {
               Navigator.pop(ctx);
               onLoadOnline?.call();
             },
     );
-    if (onlineActive) {
-      return ListView(
-        shrinkWrap: true,
-        children: [
-          onlineOption,
-          _Option(
-            label: 'Disattivati',
-            selected: false,
-            onTap: () {
-              Navigator.pop(ctx);
-              onDisableOnline?.call();
-            },
-          ),
-        ],
-      );
-    }
     if (engine == null || !engine.supportsSubtitleTracks) {
       return ListView(
         shrinkWrap: true,
         children: [
           onlineOption,
+          if (onlineActive)
+            _Option(
+              label: 'Disattivati',
+              selected: false,
+              onTap: () {
+                Navigator.pop(ctx);
+                onDisableOnline?.call();
+              },
+            ),
+          if (onlineActive)
+            _Option(
+              label: 'Sincronizzazione',
+              selected: false,
+              onTap: () {
+                Navigator.pop(ctx);
+                showSyncSheet(context, session);
+              },
+            ),
           _Unsupported(
             message: 'ExoPlayer non mostra i sottotitoli incorporati in questi contenuti. Passa a mpv per vederli, oppure usa quelli online qui sopra.',
             session: session,
@@ -330,13 +332,23 @@ Future<void> showSubtitleSheet(
       shrinkWrap: true,
       children: [
         onlineOption,
+        if (onlineActive)
+          _Option(
+            label: 'Sincronizzazione',
+            selected: false,
+            onTap: () {
+              Navigator.pop(ctx);
+              showSyncSheet(context, session);
+            },
+          ),
         _TrackList(
           tracks: engine.getSubtitleTracks(),
           emptyMessage: 'Nessun sottotitolo incorporato in questo contenuto.',
           noneLabel: 'Disattivati',
           onSelect: (t) {
             if (identical(session.engine, engine)) {
-              engine.selectSubtitleTrack(t);
+              onDisableOnline?.call();
+              session.selectSubtitleTrack(t);
             }
           },
         ),
@@ -430,7 +442,8 @@ Future<void> showEngineSheet(BuildContext context, PlaybackSession session) {
 
 Future<void> showSyncSheet(BuildContext context, PlaybackSession session) {
   return _showSheet(context, 'Sincronizzazione', (ctx) {
-    if (session.engine?.supportsDelays != true) {
+    if (!session.externalSubtitlesActive &&
+        session.engine?.supportsDelays != true) {
       return _Unsupported(
         message: 'La regolazione del ritardo di audio e sottotitoli è disponibile con mpv.',
         session: session,
@@ -448,11 +461,12 @@ Future<void> showSyncSheet(BuildContext context, PlaybackSession session) {
             onChanged: session.setSubtitleDelay,
           ),
           const SizedBox(height: 16),
-          _DelayControl(
-            label: 'Ritardo audio',
-            value: session.audioDelay,
-            onChanged: session.setAudioDelay,
-          ),
+          if (session.engine?.supportsDelays == true)
+            _DelayControl(
+              label: 'Ritardo audio',
+              value: session.audioDelay,
+              onChanged: session.setAudioDelay,
+            ),
           const SizedBox(height: 8),
         ],
       ),
@@ -473,16 +487,26 @@ class _DelayControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget step(String text, int ms) => OutlinedButton(
-      style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.textPrimary,
-        side: const BorderSide(color: AppColors.border),
-        minimumSize: const Size(56, 40),
-        padding: EdgeInsets.zero,
-      ),
-      onPressed: () => onChanged(value + Duration(milliseconds: ms)),
-      child: Text(text),
-    );
+    Widget control(Widget child, VoidCallback action) => DeviceTypeService.isTv
+        ? TvFocusable(onPressed: action, child: child)
+        : child;
+    Widget step(String text, int ms) {
+      void action() => onChanged(value + Duration(milliseconds: ms));
+      return control(
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.textPrimary,
+            side: const BorderSide(color: AppColors.border),
+            minimumSize: const Size(48, 40),
+            padding: EdgeInsets.zero,
+          ),
+          onPressed: action,
+          child: Text(text),
+        ),
+        action,
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -504,19 +528,20 @@ class _DelayControl extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
             step('-500', -500),
-            const SizedBox(width: 8),
             step('-50', -50),
-            const Spacer(),
-            TextButton(
-              onPressed: () => onChanged(Duration.zero),
-              child: const Text('Azzera'),
+            control(
+              TextButton(
+                onPressed: () => onChanged(Duration.zero),
+                child: const Text('Azzera'),
+              ),
+              () => onChanged(Duration.zero),
             ),
-            const Spacer(),
             step('+50', 50),
-            const SizedBox(width: 8),
             step('+500', 500),
           ],
         ),

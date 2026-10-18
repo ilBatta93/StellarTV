@@ -147,6 +147,9 @@ class PlaybackSession extends ChangeNotifier {
   bool muted = false;
   VideoFitMode fitMode;
   Duration subtitleDelay;
+  bool externalSubtitlesActive = false;
+  bool _subtitleSelectionExplicit = false;
+  MediaTrack? _selectedSubtitle;
   Duration audioDelay;
   double _boxRatio = 16 / 9;
   Size _lastVideoSize = Size.zero;
@@ -457,7 +460,11 @@ class PlaybackSession extends ChangeNotifier {
         }
       }
       if (engine.supportsSubtitleTracks) {
-        if (!settings.subtitlesEnabled) {
+        if (externalSubtitlesActive || _subtitleSelectionExplicit) {
+          await engine.selectSubtitleTrack(
+            externalSubtitlesActive ? null : _selectedSubtitle,
+          );
+        } else if (!settings.subtitlesEnabled) {
           await engine.selectSubtitleTrack(null);
         } else {
           final subs = await engine.getSubtitleTracks();
@@ -467,7 +474,13 @@ class PlaybackSession extends ChangeNotifier {
                     trackMatchesLanguage(t, settings.preferredSubtitleLanguage),
               )
               .firstOrNull;
-          if (preferred != null) await engine.selectSubtitleTrack(preferred);
+          if (externalSubtitlesActive || _subtitleSelectionExplicit) {
+            await engine.selectSubtitleTrack(
+              externalSubtitlesActive ? null : _selectedSubtitle,
+            );
+          } else {
+            await engine.selectSubtitleTrack(preferred);
+          }
         }
       }
     } catch (e) {
@@ -919,6 +932,22 @@ class PlaybackSession extends ChangeNotifier {
     if ((ratio - _boxRatio).abs() < 0.01) return;
     _boxRatio = ratio;
     if (fitMode == VideoFitMode.fill) _engine?.applyFitMode(fitMode, ratio);
+  }
+
+  Future<void> setExternalSubtitles(bool active) async {
+    externalSubtitlesActive = active;
+    _subtitleSelectionExplicit = true;
+    _selectedSubtitle = null;
+    if (active) await _engine?.selectSubtitleTrack(null);
+    _notify();
+  }
+
+  Future<void> selectSubtitleTrack(MediaTrack? track) async {
+    externalSubtitlesActive = false;
+    _subtitleSelectionExplicit = true;
+    _selectedSubtitle = track;
+    await _engine?.selectSubtitleTrack(track);
+    _notify();
   }
 
   Future<void> setSubtitleDelay(Duration delay) async {

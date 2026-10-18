@@ -115,6 +115,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   // Sottotitoli online (OpenSubtitles), disegnati sopra il video.
   List<SubtitleCue>? _onlineCues;
   bool _onlineSubsLoading = false;
+  int _onlineVariant = 0;
 
   // IntroDB skip segments (empty when unavailable: no buttons are shown).
   EpisodeSegments _segments = EpisodeSegments.empty;
@@ -916,10 +917,13 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// canale; per i film cerca per titolo. Gli errori finiscono in uno
   /// snackbar e la riproduzione continua senza sottotitoli.
   Future<void> _loadOnlineSubtitles() async {
-    if (_isLive || _onlineSubsLoading || _onlineCues != null) return;
+    if (_isLive || _onlineSubsLoading) return;
     setState(() => _onlineSubsLoading = true);
     try {
       final c = widget.channel;
+      if (_isEpisode && (c.season == null || c.episode == null)) {
+        throw 'stagione o episodio non identificati: usa la traccia incorporata';
+      }
       final title = _isEpisode
           ? (c.seriesName?.isNotEmpty == true ? c.seriesName! : c.name)
           : c.name;
@@ -928,14 +932,21 @@ class _PlayerScreenState extends State<PlayerScreen>
         isMovie: !_isEpisode,
       );
       if (imdbId == null) throw 'titolo non trovato su TMDB';
+      final variant = _onlineCues == null ? 0 : (_onlineVariant + 1) % 5;
       final cues = await SubtitlesService.fetch(
         imdbId: imdbId,
         season: _isEpisode ? c.season : null,
         episode: _isEpisode ? c.episode : null,
+        variant: variant,
       );
+      if (!mounted) return;
       // Evita la doppia scritta spegnendo la traccia incorporata.
-      await _session?.engine?.selectSubtitleTrack(null);
-      if (mounted) setState(() => _onlineCues = cues);
+      await _session?.setExternalSubtitles(true);
+      if (mounted)
+        setState(() {
+          _onlineCues = cues;
+          _onlineVariant = variant;
+        });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -950,7 +961,10 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
-  void _disableOnlineSubtitles() => setState(() => _onlineCues = null);
+  void _disableOnlineSubtitles() {
+    _session?.setExternalSubtitles(false);
+    setState(() => _onlineCues = null);
+  }
 
   void _skipIntro() {
     final intro = _segments.intro;
@@ -1279,10 +1293,9 @@ class _PlayerScreenState extends State<PlayerScreen>
       _lastPositionBuild = now;
       return true;
     }
-    final showsPosition =
-        _controlsVisible || _onlineCues != null || _statsVisible;
+    final showsPosition = _controlsVisible || _statsVisible;
     if (!showsPosition) return false;
-    final gap = _onlineCues != null ? 120 : 500;
+    const gap = 500;
     if (now.difference(_lastPositionBuild).inMilliseconds < gap) return false;
     _lastPositionBuild = now;
     return true;
@@ -1591,12 +1604,15 @@ class _PlayerScreenState extends State<PlayerScreen>
             ),
           ),
         ),
-      if (_onlineCues != null)
-        SubtitleOverlay(
-          cues: _onlineCues!,
-          position: session.value.position,
-          delay: session.subtitleDelay,
-          settings: settings,
+      if (_onlineCues case final cues?)
+        ListenableBuilder(
+          listenable: session,
+          builder: (context, _) => SubtitleOverlay(
+            cues: cues,
+            position: session.value.position,
+            delay: session.subtitleDelay,
+            settings: settings,
+          ),
         ),
       if (status == SessionStatus.playing &&
           _segments.intro != null &&

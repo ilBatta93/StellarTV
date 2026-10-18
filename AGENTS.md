@@ -92,3 +92,5 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - UiScale wraps presentation shells only, never the navigator or player surfaces; logical layout and hit testing scale together while root text scaling remains single-owned.
 
 - PlayerScreen forwards an optional engine factory to PlaybackSession for remote-input tests; hidden-control seeking preserves overlay visibility while explicit OK and visible-control navigation keep their original behavior.
+
+- Subtitle source selection is session-owned across engine replacements; external cues listen directly to playback time and use interval-aware lookup, with local per-content delay and bounded alternative downloads to avoid device-specific timing sync.
