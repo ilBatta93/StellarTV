@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/player_settings.dart';
 import 'decoder_memory.dart';
+import '../services/stream_probe.dart';
 import '../services/live_diagnostics_service.dart';
 import '../services/live_diagnostics_tracker.dart';
 import '../services/live_diagnostics_log.dart';
@@ -124,6 +125,16 @@ class PlaybackSession extends ChangeNotifier {
   bool _disposed = false;
   int _serverRefusalRetries = 0;
   int _reconnects = 0;
+  final Set<String> _probedFormats = {};
+
+  /// Which player identity the server saw, as a fixed label (never the text).
+  String get _uaLabel {
+    final ua = effectiveStreamUserAgent(settings.userAgent);
+    if (ua == kDefaultStreamUserAgent) return 'vlc';
+    if (ua.toLowerCase().startsWith('okhttp')) return 'android';
+    if (ua.toLowerCase().contains('smarters')) return 'smarters';
+    return 'custom';
+  }
 
   /// When the current player started playing: a drop after a long stable
   /// stretch is a new incident, so the reconnect budget is refilled.
@@ -319,7 +330,7 @@ class PlaybackSession extends ChangeNotifier {
     await _releaseCurrent();
     if (gen != _generation || _disposed || _plan.isEmpty) return;
     final attempt = _plan[_attempt.clamp(0, _plan.length - 1)];
-    _diagnostics?.begin(attempt.url, attempt.engine.name, previewMode, _softwareDecode);
+    _diagnostics?.begin(attempt.url, attempt.engine.name, previewMode, _softwareDecode, userAgent: _uaLabel);
     _currentUrl = attempt.url;
     final engine = _create(attempt.engine, attempt.url);
     _engine = engine;
@@ -504,7 +515,29 @@ class PlaybackSession extends ChangeNotifier {
   }) async {
     if (_disposed || gen != _generation || _failedGeneration == gen) return;
     _failedGeneration = gen;
-    _diagnostics?.event('error', data: {'category': LiveDiagnosticsLog.errorKind(reason), 'midPlay': midPlay});
+    final status = StreamProbe.statusIn(reason);
+    _diagnostics?.event('error', data: {
+      'category': LiveDiagnosticsLog.errorKind(reason),
+      'midPlay': midPlay,
+      if (status != null) 'httpStatus': status,
+    });
+    // Opt-in diagnostics: once per address format, with the player already
+    // released (one connection at a time), read what the server really sent.
+    final tracker = _diagnostics;
+    final fmt = Uri.tryParse(_currentUrl)?.path.split('.').last ?? '';
+    if (tracker != null && isLive && !previewMode && !tracker.firstFrame &&
+        _currentUrl.isNotEmpty && _probedFormats.add(fmt)) {
+      await _releaseCurrent();
+      if (_disposed || gen != _generation) return;
+      try {
+        final r = await StreamProbe.run(
+          _currentUrl,
+          effectiveStreamUserAgent(settings.userAgent),
+        ).timeout(const Duration(seconds: 9));
+        tracker.event('stream_probe', data: r);
+      } catch (_) {}
+      if (_disposed || gen != _generation) return;
+    }
     final since = _playingSince;
     if (midPlay &&
         since != null &&

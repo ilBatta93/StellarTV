@@ -47,18 +47,32 @@ class LiveDiagnosticsLog {
     for(final e in raw.entries)
       if({'platform','osVersion','tv','fireTv','version','build','manufacturer','model','sdk'}.contains(e.key) && (e.value is bool || e.value is num || e.value is String && (e.value as String).length<200 && !RegExp(r'https?://|password|username|token=',caseSensitive:false).hasMatch(e.value as String))) e.key:e.value,
   };
+  /// Numeric/boolean fields of the opt-in stream probe (no text, no hosts).
+  static const probeKeys = {
+    for (final p in ['probe', 'variant', 'seg']) ...{
+      '${p}Status', '${p}FirstByteMs', '${p}Bytes', '${p}ReadMs', '${p}TsSync',
+      '${p}Redirects', '${p}HostChanged', '${p}ReadStalled',
+    },
+    'playlistSegments', 'variantSegments', 'targetDuration', 'playlistLive',
+    'segHostChanged', 'probeTimeout',
+  };
   static Map<String,Object?> _safeEvent(Map<String,Object?> raw) => {
     for(final e in raw.entries)
-      if({'at','type','attempt','elapsedMs','startupMs','durationMs','positionMs','preview','softwareDecode','videoFrameConfirmed','midPlay'}.contains(e.key) && (e.value is bool || e.value is num || e.key=='at' && e.value is String && DateTime.tryParse(e.value as String)!=null || e.key=='type' && {'attempt_start','observation_started_midstream','attempt_end','error','first_video_frame','buffer_start','buffer_end','buffer_interrupted','suspected_stall','open_ready'}.contains(e.value))) e.key:e.value,
+      if({'at','type','attempt','elapsedMs','startupMs','durationMs','positionMs','preview','softwareDecode','videoFrameConfirmed','midPlay','httpStatus',...probeKeys}.contains(e.key) && (e.value is bool || e.value is num || e.key=='at' && e.value is String && DateTime.tryParse(e.value as String)!=null || e.key=='type' && {'attempt_start','observation_started_midstream','attempt_end','error','first_video_frame','buffer_start','buffer_end','buffer_interrupted','suspected_stall','open_ready','stream_probe'}.contains(e.value))) e.key:e.value,
     if({'exoPlayer','mpv','mediaKit','exoplayer','exo','mediakit'}.contains(raw['engine'])) 'engine':raw['engine'],
     if({'hls','ts','other'}.contains(raw['format'])) 'format':raw['format'],
+    if({'vlc','android','smarters','custom'}.contains(raw['userAgent'])) 'userAgent':raw['userAgent'],
+    for (final k in const ['probeKind','variantKind','segKind'])
+      if({'m3u8','mpegts','video','binary','html','json','text','other','none'}.contains(raw[k])) k:raw[k],
+    if({'master','media'}.contains(raw['playlistType'])) 'playlistType':raw['playlistType'],
+    if({'socket','tls','http','other'}.contains(raw['probeFailure'])) 'probeFailure':raw['probeFailure'],
     if({'no_video_frames','http_403','http_404','http_429','connection_limit','timeout','decoder','network','playback_error'}.contains(raw['category'])) 'category':raw['category'],
   };
 
   String report(
     Map<String, Object?> device,
   ) => const JsonEncoder.withIndent('  ').convert({
-    'schema': 1,
+    'schema': 2,
     'app': 'StellarTV',
     'exportedAt': DateTime.now().toUtc().toIso8601String(),
     'device': _safeDevice(device),

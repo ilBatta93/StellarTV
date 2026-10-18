@@ -20,6 +20,7 @@ class LiveDiagnosticsTracker {
     bool preview,
     bool software, {
     bool observed = false,
+    String? userAgent,
   }) {
     this.observed = observed;
     running = true;
@@ -41,6 +42,7 @@ class LiveDiagnosticsTracker {
         'engine': engine,
         'preview': preview,
         'softwareDecode': software,
+        if (userAgent != null) 'userAgent': userAgent,
         'format': Uri.tryParse(url)?.path.endsWith('.m3u8') == true
             ? 'hls'
             : Uri.tryParse(url)?.path.endsWith('.ts') == true
