@@ -120,4 +120,5 @@
 - [x] Analisi log 3.3.0 e correzione schermi neri: MPEG-TS prima di HLS, controllo prima immagine, 503 gestito, HLS preparato dai segmenti reali
 - [x] "Visti di recente" della Diretta popolato (lista locale dei canali aperti)
 - [x] Player diretta: freccia sinistra senza comandi apre elenco canali trasparente (categorie + canali), telecomando, Indietro chiude, riproduzione continua
-- [ ] Verifica su TCL dei canali [VS] e dell'elenco canali (richiede nuova build approvata dall'utente)
+- [x] Build 3.3.1 pubblicata su GitHub Releases (run 38, commit 868f99a)
+- [ ] Verifica su TCL dei canali [VS], elenco canali, Home ridimensionata e invio cloud (richiede installazione 3.3.1 e log dell'utente)
