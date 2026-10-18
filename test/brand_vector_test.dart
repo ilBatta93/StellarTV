@@ -27,7 +27,7 @@ void main() {
       await tester.runAsync(() async {
         final image = await boundary.toImage(pixelRatio: 2);
         final data = await image.toByteData(format: ui.ImageByteFormat.png);
-        if (data != null) { await File('/tmp/branding/flutter-brand.png').writeAsBytes(data.buffer.asUint8List()); }
+        if (data != null) { await Directory('/tmp/branding').create(recursive: true); await File('/tmp/branding/flutter-brand.png').writeAsBytes(data.buffer.asUint8List()); }
       });
     }
   });
