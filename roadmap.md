@@ -103,3 +103,5 @@
 - [x] Ottobre 18: diagnostica dirette opzionale locale, piattaforma/dispositivo, avvio, blocchi/errori e esportazione su telefono/TV; 5 test superati nella copia con SDK adattato, nessuna APK avviata.
 - [x] Ottobre 18: invio manuale autenticato e Log errori privati sul sito; lettura/copia/download e rifiuto proprietario diverso verificati nel browser.
 - [ ] Ottobre 18: verifica diagnostica su dispositivi reali e compilazione con dipendenze originali (richiede prossima build e hardware; build non richiesta).
+
+- [x] Ottobre 18: logo E orbitale v2 approvato, tre SVG editabili, brand app e icone aggiornati senza avviare APK.

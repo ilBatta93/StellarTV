@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'brand_logo.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 /// Timeline contains no startup, session or navigation work.
 class BrandIntroFrame {
@@ -18,8 +19,7 @@ class BrandIntroFrame {
   );
 }
 
-/// Exact, unmodified pixels from the approved flattened logo. Its orbit is
-/// baked into the symbol; independent orbit motion awaits original layers.
+/// Approved SVG paths; animation remains presentation-only.
 class BrandIntro extends StatelessWidget {
   const BrandIntro({super.key, required this.progress});
   final double progress;
@@ -27,18 +27,17 @@ class BrandIntro extends StatelessWidget {
   Widget _part(double left, double right, double scale) => ClipRect(
     child: SizedBox(
       width: (right - left) * scale,
-      height: 375 * scale,
+      height: 512 * scale,
       child: Stack(
         children: [
           Positioned(
             left: -left * scale,
             top: 0,
-            width: 1654 * scale,
-            height: 375 * scale,
-            child: Image.asset(
+            width: 1998 * scale,
+            height: 512 * scale,
+            child: SvgPicture.asset(
               kBrandWordmarkAsset,
               fit: BoxFit.fill,
-              filterQuality: FilterQuality.high,
             ),
           ),
         ],
@@ -56,35 +55,38 @@ class BrandIntro extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, box) {
             final width = box.maxWidth.clamp(0.0, 640.0);
-            final scale = width / 1654;
-            final initialLeft = (width - 400 * scale) / 2;
+            final height = width * 375 / 1654;
+            final scale = height / 512;
+            final vectorWidth = 1998 * scale;
+            final inset = (width - vectorWidth) / 2;
+            final initialLeft = (width - 516 * scale) / 2;
             return SizedBox(
               width: width,
-              height: 375 * scale,
+              height: 512 * scale,
               child: Stack(
                 children: [
                   Positioned(
-                    left: initialLeft * (1 - frame.shift),
+                    left: inset + (initialLeft - inset) * (1 - frame.shift),
                     top: 0,
                     child: Opacity(
                       opacity: frame.symbol,
-                      child: _part(0, 400, scale),
+                      child: _part(0, 516, scale),
                     ),
                   ),
                   Positioned(
-                    left: 400 * scale,
+                    left: inset + 516 * scale,
                     top: 0,
                     child: Opacity(
                       opacity: frame.stellar,
-                      child: _part(400, 1390, scale),
+                      child: _part(516, 1522, scale),
                     ),
                   ),
                   Positioned(
-                    left: 1390 * scale,
+                    left: inset + 1522 * scale,
                     top: 0,
                     child: Opacity(
                       opacity: frame.tv,
-                      child: _part(1390, 1654, scale),
+                      child: _part(1522, 1998, scale),
                     ),
                   ),
                 ],

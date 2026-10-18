@@ -45,7 +45,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Player settings show each option only for engines that honour it, driven by PlayerEngineType capability getters, so adding an engine means declaring its capabilities there.
 
 - Account and Xtream login share a presentation-only AuthScaffold; fields use the existing TV shell with explicit OK/tap activation, while session and playlist handlers remain in their original screens.
-- BrandIntro crops the approved raster asset without regeneration or new lettering; its controller is presentation-only and never gates startup/session routing, and independent orbit motion requires original separated layers.
+- All brand widgets render the shared full, symbol and name SVG paths with flutter_svg inside the existing layout envelopes; BrandIntro keeps its presentation-only timeline and never gates startup/session routing. Native icons are size-specific raster exports from these vectors.
 
 - Xtream edits authenticate and recheck refresh activity before persistence, push the complete existing settings snapshot immediately, and refresh through AppProvider.loadFromXtream with explicit partial-download feedback; settings logout uses SyncProvider.signOut before routing to the initial AccountScreen so a saved session cannot bypass login.
 

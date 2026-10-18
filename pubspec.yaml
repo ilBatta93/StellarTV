@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_svg: ^2.2.3
   cupertino_icons: ^1.0.8
   video_player: ^2.14.0
   media_kit: ^1.2.0
@@ -46,7 +47,9 @@ flutter:
   assets:
     - assets/fonts/Sora.ttf
     - assets/fonts/Manrope.ttf
-    - assets/branding/stellartv_wordmark.png
+    - assets/branding/stellartv_logo.svg
+    - assets/branding/stellartv_stella.svg
+    - assets/branding/stellartv_scritta.svg
     - assets/branding/stellar_space.jpg
   fonts:
     - family: Sora
