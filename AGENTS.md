@@ -63,3 +63,4 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 
 - Cached Kids selection is applied before catalog initialization; unresolved offline profiles never announce deselection, preventing startup races from relaxing content permissions.
 - Archive playback retains the catalog identity and shared Kids gate but disables film/history resume writes; native DVR seeks use the current timeline rather than stale controller duration.
+- Live diagnostics observes PlaybackSession without altering engine recovery; collection is device-local opt-in, bounded structured events exclude URLs/raw errors/identities, and explicit authenticated report uploads are owner-scoped for website export.

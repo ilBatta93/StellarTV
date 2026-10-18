@@ -5,6 +5,9 @@ import 'package:flutter/foundation.dart';
 
 import '../models/player_settings.dart';
 import 'decoder_memory.dart';
+import '../services/live_diagnostics_service.dart';
+import '../services/live_diagnostics_tracker.dart';
+import '../services/live_diagnostics_log.dart';
 import 'exo_engine.dart';
 import 'mediakit_engine.dart';
 import 'playback_engine.dart';
@@ -186,7 +189,37 @@ class PlaybackSession extends ChangeNotifier {
     return plan;
   }
 
+  LiveDiagnosticsTracker? _diagnostics;
+  Timer? _diagnosticTimer;
+  bool _diagnosticListening = false;
+  bool _diagnosticEnabled = false;
+  void _diagnosticPreference() {
+    if (_disposed) return;
+    final enabled = LiveDiagnosticsService.instance.enabled;
+    if (enabled == _diagnosticEnabled) return;
+    _diagnosticEnabled = enabled;
+    if (!enabled) {
+      _diagnosticTimer?.cancel(); _diagnosticTimer = null; _diagnostics = null;
+      return;
+    }
+    _diagnostics ??= LiveDiagnosticsTracker();
+    final current = _engine;
+    if (current != null) {
+      _diagnostics?.begin(currentUrl, current.type.name, previewMode, _softwareDecode, observed: true);
+    }
+    _diagnosticTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      final engine = _engine;
+      if (engine != null) _diagnostics?.sample(engine);
+    });
+  }
+
   Future<void> start() async {
+    if (isLive && !_diagnosticListening) {
+      _diagnosticListening = true;
+      LiveDiagnosticsService.instance.addListener(_diagnosticPreference);
+      unawaited(LiveDiagnosticsService.instance.initialize());
+      _diagnosticPreference();
+    }
     if (isLive) {
       try {
         await DecoderMemory.ensureLoaded();
@@ -253,6 +286,7 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> _releaseCurrent() {
     final old = _engine;
     if (old == null) return _releasing;
+    _diagnostics?.end();
     _engine = null;
     old.removeListener(_onEngineChanged);
     _notify(); // the view unmounts on the next frame
@@ -283,6 +317,7 @@ class PlaybackSession extends ChangeNotifier {
     await _releaseCurrent();
     if (gen != _generation || _disposed || _plan.isEmpty) return;
     final attempt = _plan[_attempt.clamp(0, _plan.length - 1)];
+    _diagnostics?.begin(attempt.url, attempt.engine.name, previewMode, _softwareDecode);
     _currentUrl = attempt.url;
     final engine = _create(attempt.engine, attempt.url);
     _engine = engine;
@@ -312,6 +347,7 @@ class PlaybackSession extends ChangeNotifier {
           midPlay: false);
       return;
     }
+    _diagnostics?.event('open_ready');
     _status = SessionStatus.playing;
     _notice = null;
     // Fresh stream (new channel or reconnect): timeshift starts from here.
@@ -445,6 +481,7 @@ class PlaybackSession extends ChangeNotifier {
   }) async {
     if (_disposed || gen != _generation || _failedGeneration == gen) return;
     _failedGeneration = gen;
+    _diagnostics?.event('error', data: {'category': LiveDiagnosticsLog.errorKind(reason), 'midPlay': midPlay});
     final since = _playingSince;
     if (midPlay &&
         since != null &&
@@ -757,6 +794,8 @@ class PlaybackSession extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _diagnosticTimer?.cancel();
+    if (_diagnosticListening) LiveDiagnosticsService.instance.removeListener(_diagnosticPreference);
     _delayTick?.cancel();
     _generation++;
     unawaited(_releaseCurrent());

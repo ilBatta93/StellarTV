@@ -24,6 +24,7 @@ import 'xtream_account_screen.dart';
 import 'section_layout_screen.dart';
 import 'downloads_screen.dart';
 import 'multiview_settings_screen.dart';
+import 'live_diagnostics_screen.dart';
 import '../services/app_update_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -356,6 +357,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SettingsSection(
             title: 'Riproduzione',
             children: [
+              SettingsValueTile(
+                icon: Icons.monitor_heart_outlined,
+                title: 'Diagnostica dirette',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LiveDiagnosticsScreen())),
+              ),
               SettingsValueTile(
                 icon: Icons.dashboard_customize_outlined,
                 title: 'MultiView',

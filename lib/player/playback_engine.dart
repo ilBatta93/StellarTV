@@ -62,6 +62,8 @@ class PlaybackException implements Exception {
 }
 
 abstract class PlaybackEngine extends ChangeNotifier {
+  /// Renderer confirmation, null when the platform does not expose it.
+  bool? get videoFrameRendered => null;
   PlayerEngineType get type;
   PlaybackSnapshot get value;
 

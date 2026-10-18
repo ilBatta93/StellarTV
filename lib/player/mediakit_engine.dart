@@ -132,6 +132,9 @@ class MediaKitEngine extends PlaybackEngine {
   PlayerEngineType get type => PlayerEngineType.mediakit;
 
   @override
+  bool? get videoFrameRendered => _firstFrameRendered;
+
+  @override
   PlaybackSnapshot get value => _value;
 
   @override

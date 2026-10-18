@@ -99,3 +99,7 @@
 - [x] 19 test mirati Flutter superati su copia con dipendenze adattate; API contatori Media3 1.9.2 verificate nel sorgente ufficiale
 - [ ] Test nativo primo fotogramma e compilazione con dipendenze originali (richiedono ambiente Android CI; nessuna nuova build richiesta)
 - [ ] Flussi provider e tutte le piattaforme su dispositivi reali (richiedono hardware/provider dell'utente)
+
+- [x] Ottobre 18: diagnostica dirette opzionale locale, piattaforma/dispositivo, avvio, blocchi/errori e esportazione su telefono/TV; 5 test superati nella copia con SDK adattato, nessuna APK avviata.
+- [x] Ottobre 18: invio manuale autenticato e Log errori privati sul sito; lettura/copia/download e rifiuto proprietario diverso verificati nel browser.
+- [ ] Ottobre 18: verifica diagnostica su dispositivi reali e compilazione con dipendenze originali (richiede prossima build e hardware; build non richiesta).

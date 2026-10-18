@@ -106,6 +106,9 @@ class ExoEngine extends PlaybackEngine {
   PlayerEngineType get type => PlayerEngineType.exo;
 
   @override
+  bool? get videoFrameRendered => _window['firstFrameRendered'] as bool?;
+
+  @override
   PlaybackSnapshot get value => _value;
 
   @override
