@@ -1,3 +1,4 @@
+import 'package:stellar_tv/widgets/poster_card.dart';
 import 'dart:io';
 import 'dart:ui' as image_ui;
 import 'package:flutter/material.dart';
@@ -196,7 +197,7 @@ void main() {
             .descendant(
               of: top,
               matching: find.byWidgetPredicate(
-                (w) => w is HomeLandscapeCard && w.rank != null,
+                (w) => w is RankedPosterCard,
                 skipOffstage: false,
               ),
               skipOffstage: false,

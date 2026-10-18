@@ -1,3 +1,4 @@
+import 'package:stellar_tv/widgets/poster_card.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:ui' as ui;
@@ -331,7 +332,7 @@ void main() {
         final heading = tester.getRect(find.text('Top 10 della settimana'));
         expect(heading.top, greaterThan(size.height - 330));
         final ranked = find
-            .byWidgetPredicate((w) => w is HomeLandscapeCard && w.rank != null)
+            .byType(RankedPosterCard)
             .first;
         expect(tester.getRect(ranked).bottom, lessThanOrEqualTo(size.height));
         final previous = find.text(

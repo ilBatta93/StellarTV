@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import '../widgets/home_art.dart';
 import '../widgets/tv_home_rows.dart';
 import '../services/title_display.dart';
@@ -757,12 +758,10 @@ class _PosterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return HorizontalRow(
-      height: homeRowHeight(context),
+      height: tmdbPosterRowHeight(context),
       itemCount: items.length,
-      itemBuilder: (context, i) => HomeLandscapeCard(
-        title: items[i].title,
-        image: items[i].backdropUrl,
-        rating: items[i].voteAverage,
+      itemBuilder: (context, i) => TmdbPosterCard(
+        item: items[i],
         onTap: () => openTmdbItem(context, items[i]),
       ),
     );
@@ -777,12 +776,11 @@ class _RankedRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return HorizontalRow(
-      height: homeRowHeight(context),
+      height: 180,
       spacing: 4,
       itemCount: items.length,
-      itemBuilder: (context, i) => HomeLandscapeCard(
-        title: items[i].title,
-        image: items[i].backdropUrl,
+      itemBuilder: (context, i) => RankedPosterCard(
+        item: items[i],
         rank: i + 1,
         onTap: () => openTmdbItem(context, items[i]),
       ),
@@ -1043,13 +1041,11 @@ class _TvDiscoverState extends State<_TvDiscover> {
         _TvRowTitle(title),
         HorizontalRow(
           // Poster + two full title lines + focus frame, never clipped.
-          height: homeRowHeight(context),
+          height: tmdbPosterRowHeight(context, mobile: 212),
           spacing: 20,
           itemCount: items.length,
-          itemBuilder: (context, i) => HomeLandscapeCard(
-            title: items[i].title,
-            image: items[i].backdropUrl,
-            rating: items[i].voteAverage,
+          itemBuilder: (context, i) => TmdbPosterCard(
+            item: items[i],
             onTap: () => openTmdbItem(context, items[i]),
             onFocus: () {
               _focus(items[i]);
@@ -1066,7 +1062,10 @@ class _TvDiscoverState extends State<_TvDiscover> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final rowViewport = homeRowHeight(context) + 84;
+        // Vertical posters are taller than the landscape history cards.
+        final rowViewport =
+            math.max(homeRowHeight(context), tmdbPosterRowHeight(context)) +
+            84;
         final heroHeight = (c.maxHeight - rowViewport).clamp(0.0, c.maxHeight);
         return Stack(
           children: [
@@ -1269,7 +1268,7 @@ class _TvTopRowState extends State<_TvTopRow> {
             child: Builder(
               builder: (_) => HorizontalRow(
                 key: _postersKey,
-                height: homeRowHeight(context),
+                height: 204,
                 spacing: 16,
                 itemCount: items.length,
                 itemBuilder: (context, i) => Focus(
@@ -1284,9 +1283,8 @@ class _TvTopRowState extends State<_TvTopRow> {
                     }
                     return KeyEventResult.ignored;
                   },
-                  child: HomeLandscapeCard(
-                    title: items[i].title,
-                    image: items[i].backdropUrl,
+                  child: RankedPosterCard(
+                    item: items[i],
                     rank: i + 1,
                     onTap: () => openTmdbItem(context, items[i]),
                     onFocus: () {
