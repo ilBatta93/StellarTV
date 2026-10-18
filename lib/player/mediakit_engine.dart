@@ -8,6 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../models/player_settings.dart';
 import '../services/device_type_service.dart';
 import 'playback_engine.dart';
+import 'video_health.dart';
 
 /// mpv-backed engine (media_kit): full subtitle and multi-audio-track
 /// support for IPTV streams, far more tolerant than the old VLC engine.
@@ -289,36 +290,22 @@ class MediaKitEngine extends PlaybackEngine {
     HardwareDecoding.disabled => 'no',
     // "mediacodec" exists only on Android: on iPhone it decoded audio with
     // a black picture. VideoToolbox is Apple's hardware decoder.
-    _ => Platform.isIOS ? 'videotoolbox-copy' : 'mediacodec-copy',
+    _ => Platform.isIOS || Platform.isMacOS
+        ? 'videotoolbox-copy'
+        : Platform.isAndroid ? 'mediacodec-copy' : 'auto-safe',
   };
 
   Timer? _blackWatch;
-  int? _lastFrame;
+  bool _firstFrameRendered = false;
 
   /// True only when decoded frames really flow through mpv's video chain.
   /// The old check used the track resolution, which mpv reads from the
   /// stream headers before the decoder outputs anything: a channel with
   /// audio and a black picture looked "fine" and the fallback never ran.
   Future<bool?> _framesFlowing() async {
-    final platform = _player.platform;
-    if (platform is! NativePlayer) return null;
-    try {
-      final fps = double.tryParse(
-        (await platform.getProperty('estimated-vf-fps')).trim(),
-      );
-      if (fps != null && fps > 0.5) return true;
-    } catch (_) {}
-    try {
-      final frame = int.tryParse(
-        (await platform.getProperty('estimated-frame-number')).trim(),
-      );
-      if (frame != null) {
-        final moved = _lastFrame != null && frame > _lastFrame!;
-        _lastFrame = frame;
-        return moved;
-      }
-    } catch (_) {}
-    return null;
+    // estimated-frame-number is derived from playback time, not output.
+    // Only the controller's rendering signal confirms startup succeeded.
+    return _firstFrameRendered;
   }
 
   /// Audio playing but no decoded video frame = black screen. Checked every
@@ -327,9 +314,11 @@ class MediaKitEngine extends PlaybackEngine {
   /// software decoding and remembers it for the next time.
   void _watchBlackScreen() {
     _blackWatch?.cancel();
-    var strikes = 0;
     var checking = false;
-    final limit = softwareDecode ? 12 : (previewMode ? 4 : 5);
+    // Allow provider keyframe intervals and surface attachment to finish;
+    // a two-second threshold repeatedly interrupts otherwise valid live.
+    final limit = softwareDecode ? 15 : 10;
+    final health = VideoHealth(missingLimit: limit);
     _blackWatch = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (_disposed) return _blackWatch?.cancel();
       if (checking) return;
@@ -339,20 +328,16 @@ class MediaKitEngine extends PlaybackEngine {
       );
       // Radio / audio-only channels and paused or buffering players.
       if (!hasVideoTrack || !st.playing || st.buffering) {
-        strikes = 0;
+        health.check(playing: st.playing, buffering: st.buffering,
+            audioOnly: !hasVideoTrack, frameAvailable: null);
         return;
       }
       checking = true;
       final flowing = await _framesFlowing();
       checking = false;
       if (_disposed) return;
-      final ok = flowing ?? ((st.width ?? 0) > 0 && (st.height ?? 0) > 0);
-      if (ok) {
-        strikes = 0;
-        return;
-      }
-      strikes++;
-      if (strikes >= limit) {
+      if (health.check(playing: st.playing, buffering: st.buffering,
+          audioOnly: !hasVideoTrack, frameAvailable: flowing)) {
         _blackWatch?.cancel();
         _onError('Nessuna immagine dal flusso (schermo nero)');
       }
@@ -361,6 +346,10 @@ class MediaKitEngine extends PlaybackEngine {
 
   @override
   Future<void> open({double initialVolume = 1}) async {
+    // VideoController applies native output/hwdec options after a frame.
+    // Tune only after that initialization, so it cannot overwrite tuning.
+    await _videoController.platform.future;
+    if (_disposed) throw const PlaybackException('Chiuso');
     final configuredUa = _settings.userAgent.trim();
     await _tuneNetwork(configuredUa.isEmpty ? 'StellarTV/1.0' : configuredUa);
     // Live tuning (no frame drops, codec allowlist, deinterlacing) matters
@@ -382,6 +371,7 @@ class MediaKitEngine extends PlaybackEngine {
     }
     if (_disposed) throw const PlaybackException('Chiuso');
     await _player.setRate(isLive ? 1.0 : _settings.defaultSpeed);
+    unawaited(_observeFirstFrame());
     _watchBlackScreen();
     await _playing!.future.timeout(
       Duration(seconds: _settings.startTimeoutSeconds + 5),
@@ -391,6 +381,15 @@ class MediaKitEngine extends PlaybackEngine {
   }
 
   String _urlWithUserAgent(String ua) => url; // media_kit uses httpHeaders.
+
+  Future<void> _observeFirstFrame() async {
+    try {
+      await _videoController.waitUntilFirstFrameRendered;
+      if (!_disposed) _firstFrameRendered = true;
+    } catch (_) {
+      // The existing session deadline/recovery handles controller failure.
+    }
+  }
 
   @override
   Widget buildView(double boxRatio) => Video(

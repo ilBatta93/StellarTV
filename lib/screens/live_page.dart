@@ -107,7 +107,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       _releaseQueue = _releaseQueue.then((_) async {
         try {
           old.dispose();
-          await old.released.timeout(const Duration(seconds: 6));
+          await old.released;
         } catch (_) {}
       });
       _app.setPlaybackActive(false);
@@ -149,6 +149,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
         isLive: true,
         settings: settings,
         previewMode: true,
+        previewFallback: true,
       );
       _app.setPlaybackActive(true);
       setState(() => _preview = session);
@@ -314,9 +315,11 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                           onFocusChange: (focus) {
                                             if (focus) _select(c, p);
                                           },
-                                          onPressed: () {
+                                          onPressed: () async {
                                             _stopPreview();
                                             setState(() {});
+                                            await _releaseQueue;
+                                            if (!context.mounted || !widget.active) return;
                                             showChannelGuide(context, c);
                                           },
                                           child: Container(

@@ -119,6 +119,7 @@ void main() {
         url: 'http://tv.example.com/live/user/pass/42.m3u8',
         isLive: true,
         previewMode: true,
+        previewFallback: true,
         settings: PlayerSettings(primaryEngine: PlayerEngineType.mediakit),
         engineFactory: (type) {
           second.add(type);

@@ -92,3 +92,10 @@
 - [x] 37 test selezionati passati nella copia di verifica con SDK locale adattato
 - [x] APK 3.2.1 pubblicato: build con dipendenze originali, test Flutter e test nativi DVR superati (run 26)
 - [ ] Provare flussi reali e prestazioni su Fire TV/Google TV/Chromecast/Android/iOS (richiede dispositivi e provider dell'utente)
+
+## Ottobre 18 — correzioni dirette
+- [x] Valutare proposte allegate senza eliminare MultiView, DVR o impostazioni provider
+- [x] Rendering reale anziché dimensioni, rilascio completo prima del cambio player, fallback anteprima e memoria software dopo successo
+- [x] 19 test mirati Flutter superati su copia con dipendenze adattate; API contatori Media3 1.9.2 verificate nel sorgente ufficiale
+- [ ] Test nativo primo fotogramma e compilazione con dipendenze originali (richiedono ambiente Android CI; nessuna nuova build richiesta)
+- [ ] Flussi provider e tutte le piattaforme su dispositivi reali (richiedono hardware/provider dell'utente)

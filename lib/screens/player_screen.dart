@@ -832,10 +832,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     setState(() => _session = null);
     previous?.dispose();
     // Wait until decoder, surface and provider connection are really free.
-    await (previous?.released ?? Future<void>.value()).timeout(
-      const Duration(seconds: 6),
-      onTimeout: () {},
-    );
+    await (previous?.released ?? Future<void>.value());
     if (!mounted) return;
     unawaited(
       Navigator.of(context).pushReplacement(
@@ -878,10 +875,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     setState(() => _session = null);
     previous?.dispose();
     // Wait until decoder, surface and provider connection are really free.
-    await (previous?.released ?? Future<void>.value()).timeout(
-      const Duration(seconds: 6),
-      onTimeout: () {},
-    );
+    await (previous?.released ?? Future<void>.value());
     if (!mounted) return;
     playChannel(
       context,
@@ -1008,10 +1002,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     setState(() => _session = null);
     previous?.dispose();
     // Wait until decoder, surface and provider connection are really free.
-    await (previous?.released ?? Future<void>.value()).timeout(
-      const Duration(seconds: 6),
-      onTimeout: () {},
-    );
+    await (previous?.released ?? Future<void>.value());
     if (!mounted) return;
     final entry = _history.entryFor(next.id);
     playChannel(
@@ -1053,10 +1044,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     setState(() => _session = null);
     previous?.dispose();
     // Wait until decoder, surface and provider connection are really free.
-    await (previous?.released ?? Future<void>.value()).timeout(
-      const Duration(seconds: 6),
-      onTimeout: () {},
-    );
+    await (previous?.released ?? Future<void>.value());
     if (!mounted) return;
     playChannel(context, channel, replace: true);
   }

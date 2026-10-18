@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 
 import '../models/player_settings.dart';
 import 'playback_engine.dart';
+import 'video_health.dart';
 
 class ExoEngine extends PlaybackEngine {
   /// [shared] is for MultiView and the Live preview: several players run at
@@ -190,7 +191,8 @@ class ExoEngine extends PlaybackEngine {
   /// session tries the next format or engine instead of a black screen.
   void _watchBlackScreen() {
     _blackWatch?.cancel();
-    var strikes = 0;
+    final health = VideoHealth(missingLimit: _blackStrikes);
+    int? lastRendered;
     _blackWatch = Timer.periodic(const Duration(seconds: 3), (_) {
       if (_disposed) {
         _blackWatch?.cancel();
@@ -198,16 +200,26 @@ class ExoEngine extends PlaybackEngine {
       }
       final v = _controller.value;
       if (v.hasError || !v.isInitialized) return;
-      final hasFrame = v.size.width > 0 && v.size.height > 0;
-      if (hasFrame) {
-        _blackWatch?.cancel();
-        return;
+      final rendered = (_window['renderedFrames'] as num?)?.toInt();
+      bool? hasFrame;
+      if (_window.containsKey('firstFrameRendered')) {
+        hasFrame = _window['firstFrameRendered'] == true;
+        if (hasFrame && rendered != null && lastRendered != null) {
+          hasFrame = rendered > (lastRendered ?? 0);
+        }
+      } else if (v.size.width <= 0 || v.size.height <= 0) {
+        // Other native platforms do not expose output telemetry. Unknown
+        // metadata must not be presented as confirmed rendered video.
+        hasFrame = false;
       }
-      if (_window['tracksKnown'] == true && _window['hasVideoTrack'] == false)
-        return;
-      if (!v.isPlaying || v.isBuffering) return;
-      strikes++;
-      if (strikes >= _blackStrikes) {
+      lastRendered = rendered;
+      if (health.check(
+        playing: v.isPlaying,
+        buffering: v.isBuffering,
+        audioOnly: _window['tracksKnown'] == true &&
+            _window['hasVideoTrack'] == false,
+        frameAvailable: hasFrame,
+      )) {
         _blackWatch?.cancel();
         _blackError = 'Nessuna immagine dal flusso (schermo nero)';
         _sync();

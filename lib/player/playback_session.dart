@@ -164,6 +164,7 @@ class PlaybackSession extends ChangeNotifier {
     // would fail the same way, so each address is tried with ExoPlayer and
     // then at once with mpv before moving on.
     if (fallback &&
+        settings.autoFallback &&
         previewMode &&
         previewFallback &&
         primary.other != primary) {
@@ -264,7 +265,9 @@ class PlaybackSession extends ChangeNotifier {
       try {
         final Object? result = (old as dynamic).dispose();
         if (result is Future) {
-          await result.timeout(const Duration(seconds: 4));
+          // A deadline is not proof that the decoder has been released.
+          // Never permit the replacement to overlap a pending disposal.
+          await result;
         }
       } catch (e) {
         debugPrint('Player release failed: $e');
@@ -304,6 +307,11 @@ class PlaybackSession extends ChangeNotifier {
     }
     if (gen != _generation || _disposed || _engine != engine) return;
     engine.addListener(_onEngineChanged);
+    if (engine.value.hasError) {
+      await _handleFailure(gen, engine.value.error ?? 'Errore video', resumeAt,
+          midPlay: false);
+      return;
+    }
     _status = SessionStatus.playing;
     _notice = null;
     // Fresh stream (new channel or reconnect): timeshift starts from here.
@@ -311,6 +319,11 @@ class PlaybackSession extends ChangeNotifier {
     _pausedAt = null;
     _liveStartedAt = isLive ? DateTime.now() : null;
     _playingSince = DateTime.now();
+    if (isLive && _softwareDecode) {
+      // Persist only after the fallback actually opens, not on the original
+      // failure: broken provider connections must not poison decoder memory.
+      unawaited(DecoderMemory.remember(url));
+    }
     _notify();
     try {
       await _applyInitialState(engine, resumeAt, gen);

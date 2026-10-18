@@ -102,6 +102,19 @@ public final class VideoPlayerTest {
   }
 
   @Test
+  public void frameHealthDoesNotConfuseDimensionsWithRenderedVideo() {
+    when(mockExoPlayer.getCurrentTimeline()).thenReturn(androidx.media3.common.Timeline.EMPTY);
+    VideoPlayer player = createVideoPlayer();
+    ArgumentCaptor<androidx.media3.exoplayer.analytics.AnalyticsListener> analytics =
+        ArgumentCaptor.forClass(androidx.media3.exoplayer.analytics.AnalyticsListener.class);
+    verify(mockExoPlayer).addAnalyticsListener(analytics.capture());
+    assertEquals(false, player.getLiveWindow().get("firstFrameRendered"));
+    analytics.getValue().onRenderedFirstFrame(null, new Object(), 0L);
+    assertEquals(true, player.getLiveWindow().get("firstFrameRendered"));
+    player.dispose();
+  }
+
+  @Test
   public void liveSeekClampsToCurrentWindow() {
     VideoPlayer player = createVideoPlayer();
     when(mockExoPlayer.isCurrentMediaItemLive()).thenReturn(true);

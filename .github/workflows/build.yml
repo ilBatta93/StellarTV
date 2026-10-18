@@ -77,7 +77,7 @@ jobs:
           flutter pub get
 
       - name: Verify Home and episode completion
-        run: flutter test test/profile_startup_safety_test.dart test/home_progress_rules_test.dart test/overlay_history_completion_test.dart test/horizontal_row_remote_test.dart test/home_banner_remote_test.dart test/sync_keys_test.dart test/home_logo_loading_test.dart test/discover_loading_test.dart test/xtream_catchup_test.dart test/playback_session_test.dart test/episode_card_test.dart test/title_trailer_test.dart test/trailer_button_test.dart
+        run: flutter test test/video_health_test.dart test/profile_startup_safety_test.dart test/home_progress_rules_test.dart test/overlay_history_completion_test.dart test/horizontal_row_remote_test.dart test/home_banner_remote_test.dart test/sync_keys_test.dart test/home_logo_loading_test.dart test/discover_loading_test.dart test/xtream_catchup_test.dart test/playback_session_test.dart test/episode_card_test.dart test/title_trailer_test.dart test/trailer_button_test.dart
 
       - name: Build APK (Release)
         env:
@@ -91,7 +91,7 @@ jobs:
 
       - name: Verify native live window
         working-directory: android
-        run: ./gradlew :video_player_android:testReleaseUnitTest --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.liveSeekClampsToCurrentWindow' --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.unseekableLiveDoesNotSeek' --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.liveDefaultPositionUsesNativeDefault'
+        run: ./gradlew :video_player_android:testReleaseUnitTest --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.frameHealthDoesNotConfuseDimensionsWithRenderedVideo' --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.liveSeekClampsToCurrentWindow' --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.unseekableLiveDoesNotSeek' --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.liveDefaultPositionUsesNativeDefault'
 
       - name: Prepara APK per Release
         run: |

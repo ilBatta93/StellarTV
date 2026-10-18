@@ -42,6 +42,15 @@ public abstract class VideoPlayer implements VideoPlayerInstanceApi {
 
   private final Handler mainHandler = new Handler(Looper.getMainLooper());
   private boolean isDisposed = false;
+  private boolean firstFrameRendered = false;
+  private final androidx.media3.exoplayer.analytics.AnalyticsListener renderingListener =
+      new androidx.media3.exoplayer.analytics.AnalyticsListener() {
+        @Override
+        public void onRenderedFirstFrame(
+            EventTime eventTime, Object output, long renderTimeMs) {
+          firstFrameRendered = true;
+        }
+      };
 
   /** A closure-compatible signature since {@link java.util.function.Supplier} is API level 24. */
   public interface ExoPlayerProvider {
@@ -75,6 +84,7 @@ public abstract class VideoPlayer implements VideoPlayerInstanceApi {
     this.videoPlayerEvents = events;
     this.surfaceProducer = surfaceProducer;
     exoPlayer = exoPlayerProvider.get();
+    exoPlayer.addAnalyticsListener(renderingListener);
 
     // Try to get the track selector from the ExoPlayer if it was built with one
     if (exoPlayer.getTrackSelector() instanceof DefaultTrackSelector) {
@@ -452,6 +462,12 @@ public abstract class VideoPlayer implements VideoPlayerInstanceApi {
   @UnstableApi
   public java.util.Map<String, Object> getLiveWindow() {
     java.util.Map<String, Object> out = new java.util.HashMap<>();
+    out.put("firstFrameRendered", firstFrameRendered);
+    androidx.media3.exoplayer.DecoderCounters counters = exoPlayer.getVideoDecoderCounters();
+    if (counters != null) {
+      counters.ensureUpdated();
+      out.put("renderedFrames", counters.renderedOutputBufferCount);
+    }
     androidx.media3.common.Timeline timeline = exoPlayer.getCurrentTimeline();
     if (timeline.isEmpty()) return out;
     androidx.media3.common.Timeline.Window window = timeline.getWindow(exoPlayer.getCurrentMediaItemIndex(), new androidx.media3.common.Timeline.Window());

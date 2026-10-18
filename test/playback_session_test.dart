@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,6 +18,7 @@ class _FakeEngine extends PlaybackEngine {
   final String url;
   final bool succeed;
   bool disposed = false;
+  Completer<void>? releaseGate;
   Duration? sought;
   bool defaultLiveSought = false;
   @override
@@ -102,6 +104,7 @@ class _FakeEngine extends PlaybackEngine {
   Future<void> dispose() async {
     if (disposed) return;
     disposed = true;
+    await releaseGate?.future;
     alive--;
     super.dispose();
   }
@@ -110,6 +113,52 @@ class _FakeEngine extends PlaybackEngine {
 const _xtream = 'http://tv.example.com/live/user/pass/42.m3u8';
 
 void main() {
+  test('a disposal longer than four seconds never opens another decoder', () async {
+    final gate = Completer<void>();
+    final engines = <_FakeEngine>[];
+    final session = PlaybackSession(
+      url: _xtream,
+      isLive: true,
+      settings: PlayerSettings(primaryEngine: PlayerEngineType.exo),
+      engineFactory: (type) {
+        final engine = _FakeEngine(type, _xtream, succeed: true);
+        if (engines.isEmpty) engine.releaseGate = gate;
+        engines.add(engine);
+        return engine;
+      },
+    );
+    await session.start();
+    final replacing = session.switchEngine(PlayerEngineType.mediakit);
+    await Future<void>.delayed(const Duration(seconds: 5));
+    expect(engines.length, 1);
+    expect(_FakeEngine.alive, 1);
+    gate.complete();
+    await replacing;
+    expect(engines.length, 2);
+    expect(_FakeEngine.maxAlive, 1);
+    session.dispose();
+    await session.released;
+  });
+
+  test('preview recovery remains disabled when autoFallback is off', () async {
+    final types = <PlayerEngineType>[];
+    final session = PlaybackSession(
+      url: 'https://example.invalid/live.ts',
+      isLive: true,
+      previewMode: true,
+      previewFallback: true,
+      settings: PlayerSettings(autoFallback: false),
+      engineFactory: (type) {
+        types.add(type);
+        return _FakeEngine(type, _xtream, succeed: false);
+      },
+    );
+    await session.start();
+    expect(types, [PlayerEngineType.exo]);
+    session.dispose();
+    await session.released;
+  });
+
   test(
     'Native DVR clamps to actual window and LIVE uses native default',
     () async {
