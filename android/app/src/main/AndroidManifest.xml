@@ -14,6 +14,7 @@
         android:label="StellarTV"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:banner="@drawable/banner"
         android:usesCleartextTraffic="true"
         android:allowBackup="false"
