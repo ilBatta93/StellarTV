@@ -66,6 +66,7 @@ class SyncService {
     'xtream_password',
     'playlist_url',
   ];
+
   /// Keys that must never leave the device: caches, device state, local
   /// files (downloads) and the sync bookkeeping itself. Every other saved
   /// preference is synced, so new settings reach the cloud automatically.
@@ -82,13 +83,27 @@ class SyncService {
     'playlist_refresh_last_run',
     'expiry_reminder_state_v1',
   };
-  static const _localOnlyFragments = ['cache', 'images', 'verdicts', 'genres_v1', 'warmup', 'last_run'];
+  static const _localOnlyFragments = [
+    'cache',
+    'images',
+    'verdicts',
+    'genres_v1',
+    'warmup',
+    'last_run',
+  ];
 
   /// Whether a saved preference belongs in the cloud copy.
   static bool isSyncedKey(String key) {
     if (key.startsWith(_localHistoryKey)) return false;
     if (_localOnlyKeys.contains(key)) return false;
     final k = key.toLowerCase();
+    // Auth tokens and PKCE verifiers belong to this device only. Never copy
+    // another device's refresh token into SDK storage through cloud settings.
+    if (k.startsWith('supabase.') ||
+        k.startsWith('sb-') ||
+        k.contains('auth-token') ||
+        k.contains('code-verifier'))
+      return false;
     for (final f in _localOnlyFragments) {
       if (k.contains(f)) return false;
     }
@@ -109,62 +124,15 @@ class SyncService {
     return id;
   }
 
-  /// iOS restarts the app from scratch after a while in background: the saved
-  /// session is restored and refreshed asynchronously, often while the network
-  /// is still waking up. When this device was signed in before (a sync code is
-  /// stored), wait a bounded time for the session instead of showing the login.
+  /// Supabase.initialize has already restored local session before runApp.
+  /// Offline refresh errors are not logout; the SDK owns token rotation.
   Future<bool> waitForSession({
     Duration timeout = const Duration(seconds: 8),
   }) async {
-    final signedIn = currentUserId;
-    if (signedIn != null) {
-      await _storeCode(signedIn);
-      return true;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    // Accounts signed in by QR never stored the code, so their expired
-    // session was not refreshed on reopen: a persisted session counts too.
-    final hasStoredSession = prefs.getKeys().any(
-      (k) => k.endsWith('-auth-token') || k == 'supabase.auth.token',
-    );
-    if ((prefs.getString(codeKey) ?? '').isEmpty && !hasStoredSession) {
-      return false;
-    }
-    final done = Completer<bool>();
-    final sub = _client.auth.onAuthStateChange.listen((state) {
-      if (state.session != null && !done.isCompleted) done.complete(true);
-      if (state.event == AuthChangeEvent.signedOut && !done.isCompleted) {
-        done.complete(false);
-      }
-    }, onError: (_) {});
-    // A refresh with the stored token may succeed once the network is back.
-    final retry = Timer.periodic(const Duration(milliseconds: 1500), (_) {
-      if (done.isCompleted) return;
-      if (currentUserId != null) {
-        done.complete(true);
-        return;
-      }
-      () async {
-        try {
-          final r = await _client.auth.refreshSession();
-          if (r.session != null && !done.isCompleted) done.complete(true);
-        } catch (_) {
-          // Network still asleep: try again on the next tick.
-        }
-      }();
-    });
-    try {
-      final ok = await done.future.timeout(
-        timeout,
-        onTimeout: () => currentUserId != null,
-      );
-      final id = currentUserId;
-      if (ok && id != null) await _storeCode(id);
-      return ok;
-    } finally {
-      retry.cancel();
-      await sub.cancel();
-    }
+    final id = currentUserId;
+    if (id == null) return false;
+    await _storeCode(id);
+    return true;
   }
 
   Future<String?> getStoredCode() async {
@@ -265,7 +233,7 @@ class SyncService {
   /// Signs out and wipes every local copy of account data from this device.
   Future<void> signOut() async {
     try {
-      await _client.auth.signOut();
+      await _client.auth.signOut(scope: SignOutScope.local);
     } catch (_) {}
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
@@ -496,4 +464,3 @@ class SyncService {
     await prefs.setString(_lastPullKey, DateTime.now().toIso8601String());
   }
 }
-

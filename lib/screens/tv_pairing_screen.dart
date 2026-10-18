@@ -11,6 +11,7 @@ import '../providers/sync_provider.dart';
 import '../services/tv_pairing_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/tv_focusable.dart';
 import 'login_screen.dart';
 import 'profile_picker_screen.dart';
 
@@ -18,14 +19,16 @@ import 'profile_picker_screen.dart';
 /// approves them from the website (Collega TV) and this device signs in
 /// automatically — no email or password typed with the remote.
 class TvPairingScreen extends StatefulWidget {
-  const TvPairingScreen({super.key});
+  const TvPairingScreen({super.key, this.service});
+  final TvPairingService? service;
 
   @override
   State<TvPairingScreen> createState() => _TvPairingScreenState();
 }
 
 class _TvPairingScreenState extends State<TvPairingScreen> {
-  final _service = TvPairingService(Supabase.instance.client);
+  late final _service =
+      widget.service ?? TvPairingService(Supabase.instance.client);
   TvPairing? _pairing;
   Timer? _poll;
   Timer? _countdown;
@@ -121,117 +124,187 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pairing = _pairing;
-    final minutes = (_secondsLeft ~/ 60).toString();
-    final seconds = (_secondsLeft % 60).toString().padLeft(2, '0');
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Center(child: BrandLogo(size: 52)),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Collega questa TV',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Dal telefono o dal computer vai su\nstellartv.lovable.app/collega\ne inserisci questo codice.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 14,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Text(
-                        _error!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: AppColors.error),
-                      ),
-                    ),
-                  if (pairing == null)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 48),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else ...[
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: QrImageView(
-                          data: pairing.url,
-                          version: QrVersions.auto,
-                          size: 180,
-                        ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            'assets/branding/stellar_space.jpg',
+            fit: BoxFit.cover,
+            cacheWidth: 1920,
+            excludeFromSemantics: true,
+          ),
+          ColoredBox(color: AppColors.background.withValues(alpha: .45)),
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, bounds) {
+                final wide = bounds.maxWidth >= 760;
+                final intro = Column(
+                  crossAxisAlignment: wide
+                      ? CrossAxisAlignment.start
+                      : CrossAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const BrandLogo(size: 46),
+                    const SizedBox(height: 30),
+                    Text(
+                      'La tua TV.\nIl tuo StellarTV.',
+                      textAlign: wide ? TextAlign.left : TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 34,
+                        height: 1.12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.4),
-                          ),
-                        ),
-                        child: Text(
-                          pairing.code,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 34,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 8,
-                          ),
-                        ),
+                    Text(
+                      'Inquadra il QR con il telefono\ne autorizza l’accesso al tuo account.',
+                      textAlign: wide ? TextAlign.left : TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        height: 1.5,
+                        color: AppColors.textSecondary,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Il codice scade tra $minutes:$seconds',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
+                    const SizedBox(height: 22),
+                    const Text(
+                      'stellartv.lovable.app/collega',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    TvFocusable(
+                      autofocus: true,
+                      focusedScale: 1,
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.arrow_back_rounded,
+                              size: 20,
+                              color: AppColors.textSecondary,
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              'Accedi con email',
+                              style: TextStyle(color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
-                  const SizedBox(height: 28),
-                  TextButton.icon(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    label: const Text('Torna all\'accesso con email'),
+                );
+                final code = _pairing;
+                final qr = Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_error case final error?) ...[
+                      Text(
+                        error,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: AppColors.error),
+                      ),
+                      const SizedBox(height: 16),
+                      TvFocusable(
+                        onPressed: _start,
+                        child: const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Text('Riprova'),
+                        ),
+                      ),
+                    ],
+                    if (code == null && _error == null)
+                      const SizedBox(
+                        width: 232,
+                        height: 232,
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (code != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.qrSurface,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: QrImageView(
+                          data: code.url,
+                          version: QrVersions.auto,
+                          size: 200,
+                          backgroundColor: AppColors.qrSurface,
+                          eyeStyle: const QrEyeStyle(color: AppColors.qrInk),
+                          dataModuleStyle: const QrDataModuleStyle(
+                            color: AppColors.qrInk,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      Text(
+                        code.code,
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Scade tra ${_secondsLeft ~/ 60}:${(_secondsLeft % 60).toString().padLeft(2, '0')}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _completing
+                            ? 'Accesso in corso…'
+                            : 'In attesa di autorizzazione',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+                return Center(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: wide ? 48 : 24,
+                      vertical: 28,
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1040),
+                      child: wide
+                          ? Row(
+                              children: [
+                                Expanded(child: intro),
+                                const SizedBox(width: 64),
+                                SizedBox(width: 300, child: qr),
+                              ],
+                            )
+                          : Column(
+                              children: [intro, const SizedBox(height: 32), qr],
+                            ),
+                    ),
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
-        ),
+        ],
       ),
     );
   }

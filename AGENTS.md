@@ -64,3 +64,10 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Cached Kids selection is applied before catalog initialization; unresolved offline profiles never announce deselection, preventing startup races from relaxing content permissions.
 - Archive playback retains the catalog identity and shared Kids gate but disables film/history resume writes; native DVR seeks use the current timeline rather than stale controller duration.
 - Live diagnostics observes PlaybackSession without altering engine recovery; collection is device-local opt-in, bounded structured events exclude URLs/raw errors/identities, and explicit authenticated report uploads are owner-scoped for website export.
+
+- SDK auth storage stays device-local and is excluded from both snapshot collection and restore; startup reads the session restored before runApp and device logout uses local scope, preventing token rotation races and cross-device revocation.
+
+- Title logo URL metadata uses a versioned language-safe bounded disk cache and small adjacent decode warmups; initial catalog rendering never waits for logo downloads.
+- Startup and QR pairing share bundled space artwork as presentation only; pairing polling and one-shot token exchange remain unchanged.
+
+- QR presentation accepts an optional pairing service for isolated layout previews; production defaults to the real service and never seeds pairing data.

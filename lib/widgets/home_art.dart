@@ -19,6 +19,31 @@ class HomeTitleArt extends StatefulWidget {
   State<HomeTitleArt> createState() => _HomeTitleArtState();
 }
 
+/// Resolves only a small adjacent set after display, never a catalog scan.
+void warmTitleLogos(BuildContext context, Iterable<TmdbItem> items) {
+  final tmdb = context.read<DiscoverProvider>().tmdb;
+  final selected = items.take(3).toList();
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    for (final item in selected) {
+      final url = await tmdb.titleLogo(item);
+      if (!context.mounted) return;
+      if (url != null) {
+        await precacheImage(
+          ResizeImage(
+            CachedNetworkImageProvider(
+              url,
+              cacheManager: AppImageCache.manager,
+            ),
+            width: 640,
+          ),
+          context,
+          onError: (_, _) {},
+        );
+      }
+    }
+  });
+}
+
 class _HomeTitleArtState extends State<HomeTitleArt> {
   Future<String?>? _logo;
   String? _key;
@@ -38,6 +63,7 @@ class _HomeTitleArtState extends State<HomeTitleArt> {
     if (_key == widget.item.key) return;
     _key = widget.item.key;
     _logo = context.read<DiscoverProvider>().tmdb.titleLogo(widget.item);
+    warmTitleLogos(context, [widget.item]);
   }
 
   @override
@@ -94,9 +120,14 @@ class _HomeTitleArtState extends State<HomeTitleArt> {
   }
 }
 
-double homeCardWidth() => DeviceTypeService.isTv ? 244 : 208;
+double homeCardWidth([BuildContext? context]) {
+  if (!DeviceTypeService.isTv) return 208;
+  if (context == null) return 244;
+  return (MediaQuery.sizeOf(context).width * 0.255).clamp(244.0, 326.0);
+}
+
 double homeRowHeight(BuildContext context) =>
-    homeCardWidth() * 9 / 16 +
+    homeCardWidth(context) * 9 / 16 +
     MediaQuery.textScalerOf(context).scale(13) * 1.25 * 2 +
     34;
 
@@ -125,7 +156,7 @@ class HomeLandscapeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final watched = progress?.clamp(0.0, 1.0);
-    final width = homeCardWidth();
+    final width = homeCardWidth(context);
     return Pressable(
       onTap: onTap,
       onFocus: onFocus,

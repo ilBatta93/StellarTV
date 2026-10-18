@@ -129,7 +129,7 @@ class _TvHomeRowsState extends State<TvHomeRows> {
               return KeyEventResult.handled;
             },
             child: Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 12),
+              padding: const EdgeInsets.only(top: 8, bottom: 4),
               child: widget.sections[index],
             ),
           ),

@@ -29,6 +29,9 @@ class AppColors {
   static const warning = Color(0xFFFFD60A);
   static const error = Color(0xFFFF453A);
 
+  static const qrSurface = Color(0xFFFFFFFF);
+  static const qrInk = Color(0xFF000000);
+
   static const textPrimary = Color(0xFFFFFFFF);
   static const textSecondary = Color(0xFFAEAEB2);
   static const textMuted = Color(0xFF8E8E93);

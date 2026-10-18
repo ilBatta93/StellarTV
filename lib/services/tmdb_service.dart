@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'title_logo_cache.dart';
 import 'package:http/http.dart' as http;
 import '../config/supabase_config.dart';
 import '../models/streaming_platform.dart';
@@ -140,12 +141,16 @@ class TmdbService {
     }
     return _titleLogos.putIfAbsent(item.key, () async {
       try {
+        final cached = await TitleLogoCache.read(item.key);
+        if (cached != null) return cached.url;
         final body = await _get('${item.mediaType}/${item.id}/images', {
           // Only Italian or English logos: TMDB also returns untagged
           // images that can carry text in any other language.
           'include_image_language': 'it,en',
         });
-        return selectTitleLogo(body);
+        final url = selectTitleLogo(body);
+        await TitleLogoCache.write(item.key, url);
+        return url;
       } catch (_) {
         _titleLogos.remove(item.key);
         return null; // Retry on the next presentation after a transient failure.

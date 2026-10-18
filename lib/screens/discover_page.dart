@@ -940,8 +940,11 @@ class _TvDiscoverState extends State<_TvDiscover> {
     _userFocused = true;
     _heroRequest++;
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 220), () {
-      if (mounted) _hero.value = item;
+    _debounce = Timer(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        warmTitleLogos(context, [item]);
+        _hero.value = item;
+      }
     });
   }
 
@@ -967,7 +970,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
     final tmdb = context.read<DiscoverProvider>().tmdb;
     _debounce?.cancel();
     _debounce = Timer(
-      initial ? Duration.zero : const Duration(milliseconds: 220),
+      initial ? Duration.zero : const Duration(milliseconds: 100),
       () async {
         final item = _historyInfo.containsKey(key)
             ? _historyInfo[key]
@@ -1043,6 +1046,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
             onTap: () => openTmdbItem(context, items[i]),
             onFocus: () {
               _focus(items[i]);
+              warmTitleLogos(context, items.skip(i + 1));
               _revealHeading(rowContext);
             },
           ),
@@ -1055,7 +1059,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        final rowViewport = homeRowHeight(context) + 104;
+        final rowViewport = homeRowHeight(context) + 84;
         final heroHeight = (c.maxHeight - rowViewport).clamp(0.0, c.maxHeight);
         return Stack(
           children: [
@@ -1280,6 +1284,7 @@ class _TvTopRowState extends State<_TvTopRow> {
                     onTap: () => openTmdbItem(context, items[i]),
                     onFocus: () {
                       widget.onFocusItem(items[i]);
+                      warmTitleLogos(context, items.skip(i + 1));
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         final heading = _headingKey.currentContext;
                         if (mounted && heading != null)

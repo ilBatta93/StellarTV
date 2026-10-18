@@ -160,17 +160,28 @@ class _SplashScreenState extends State<SplashScreen>
     }
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: RepaintBoundary(
-            child: AnimatedBuilder(
-              animation: _animController,
-              builder: (context, _) =>
-                  BrandIntro(progress: _animController.value),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            'assets/branding/stellar_space.jpg',
+            fit: BoxFit.cover,
+            cacheWidth: 1920,
+            excludeFromSemantics: true,
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: RepaintBoundary(
+                child: AnimatedBuilder(
+                  animation: _animController,
+                  builder: (context, _) =>
+                      BrandIntro(progress: _animController.value),
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
