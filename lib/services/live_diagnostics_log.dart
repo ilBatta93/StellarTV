@@ -48,7 +48,7 @@ class LiveDiagnosticsLog {
       if({'platform','osVersion','tv','fireTv','version','build','manufacturer','model','sdk'}.contains(e.key) && (e.value is bool || e.value is num || e.value is String && (e.value as String).length<200 && !RegExp(r'https?://|password|username|token=',caseSensitive:false).hasMatch(e.value as String))) e.key:e.value,
   };
   /// Numeric/boolean fields of the opt-in stream probe (no text, no hosts).
-  static const probeKeys = {
+  static final probeKeys = <String>{
     for (final p in ['probe', 'variant', 'seg']) ...{
       '${p}Status', '${p}FirstByteMs', '${p}Bytes', '${p}ReadMs', '${p}TsSync',
       '${p}Redirects', '${p}HostChanged', '${p}ReadStalled',
