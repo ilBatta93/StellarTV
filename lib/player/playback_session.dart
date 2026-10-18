@@ -795,6 +795,7 @@ class PlaybackSession extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _diagnosticTimer?.cancel();
+    _diagnostics?.end();
     if (_diagnosticListening) LiveDiagnosticsService.instance.removeListener(_diagnosticPreference);
     _delayTick?.cancel();
     _generation++;
