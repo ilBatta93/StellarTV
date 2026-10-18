@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'brand_logo.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 /// Timeline contains no startup, session or navigation work.
 class BrandIntroFrame {
@@ -19,28 +18,32 @@ class BrandIntroFrame {
   );
 }
 
-/// Approved SVG paths; animation remains presentation-only.
+/// Approved artwork split into star, name and TV; presentation-only.
 class BrandIntro extends StatelessWidget {
   const BrandIntro({super.key, required this.progress});
   final double progress;
 
+  // Source pixel columns of the approved artwork (2070 x 526).
+  static const double _w = 2070, _h = 526, _star = 563, _tv = 1580;
+
   Widget _part(double left, double right, double scale) => ClipRect(
     child: SizedBox(
       width: (right - left) * scale,
-      height: 512 * scale,
-      child: Stack(
-        children: [
-          Positioned(
-            left: -left * scale,
-            top: 0,
-            width: 1998 * scale,
-            height: 512 * scale,
-            child: SvgPicture.asset(
-              kBrandWordmarkAsset,
-              fit: BoxFit.fill,
-            ),
+      height: _h * scale,
+      child: OverflowBox(
+        alignment: Alignment.topLeft,
+        minWidth: 0,
+        maxWidth: double.infinity,
+        child: Transform.translate(
+          offset: Offset(-left * scale, 0),
+          child: Image.asset(
+            kBrandWordmarkAsset,
+            width: _w * scale,
+            height: _h * scale,
+            fit: BoxFit.fill,
+            filterQuality: FilterQuality.high,
           ),
-        ],
+        ),
       ),
     ),
   );
@@ -54,39 +57,36 @@ class BrandIntro extends StatelessWidget {
       child: ExcludeSemantics(
         child: LayoutBuilder(
           builder: (context, box) {
-            final width = box.maxWidth.clamp(0.0, 640.0);
-            final height = width * 375 / 1654;
-            final scale = height / 512;
-            final vectorWidth = 1998 * scale;
-            final inset = (width - vectorWidth) / 2;
-            final initialLeft = (width - 516 * scale) / 2;
+            final width = box.maxWidth.clamp(0.0, 720.0);
+            final scale = width / _w;
+            final centred = (width - _star * scale) / 2;
             return SizedBox(
               width: width,
-              height: 512 * scale,
+              height: _h * scale,
               child: Stack(
                 children: [
                   Positioned(
-                    left: inset + (initialLeft - inset) * (1 - frame.shift),
+                    left: centred * (1 - frame.shift),
                     top: 0,
                     child: Opacity(
                       opacity: frame.symbol,
-                      child: _part(0, 516, scale),
+                      child: _part(0, _star, scale),
                     ),
                   ),
                   Positioned(
-                    left: inset + 516 * scale,
+                    left: _star * scale,
                     top: 0,
                     child: Opacity(
                       opacity: frame.stellar,
-                      child: _part(516, 1522, scale),
+                      child: _part(_star, _tv, scale),
                     ),
                   ),
                   Positioned(
-                    left: inset + 1522 * scale,
+                    left: _tv * scale,
                     top: 0,
                     child: Opacity(
                       opacity: frame.tv,
-                      child: _part(1522, 1998, scale),
+                      child: _part(_tv, _w, scale),
                     ),
                   ),
                 ],

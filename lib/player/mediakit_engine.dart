@@ -353,8 +353,7 @@ class MediaKitEngine extends PlaybackEngine {
     // Tune only after that initialization, so it cannot overwrite tuning.
     await _videoController.platform.future;
     if (_disposed) throw const PlaybackException('Chiuso');
-    final configuredUa = _settings.userAgent.trim();
-    await _tuneNetwork(configuredUa.isEmpty ? 'StellarTV/1.0' : configuredUa);
+    await _tuneNetwork(effectiveStreamUserAgent(_settings.userAgent));
     // Live tuning (no frame drops, codec allowlist, deinterlacing) matters
     // on phones too: iPhone showed the same audio-with-black-picture bug.
     if (DeviceTypeService.isTv || isLive) await _tuneForTv();
@@ -363,8 +362,7 @@ class MediaKitEngine extends PlaybackEngine {
     await _player.setVolume(initialVolume.clamp(0.0, 1.0) * 100);
     _playing = Completer<void>();
     try {
-      final configured = _settings.userAgent.trim();
-      final ua = configured.isEmpty ? 'StellarTV/1.0' : configured;
+      final ua = effectiveStreamUserAgent(_settings.userAgent);
       await _player.open(
         Media(_urlWithUserAgent(ua), httpHeaders: {'User-Agent': ua}),
         play: true,

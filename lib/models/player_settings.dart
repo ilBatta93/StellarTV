@@ -168,7 +168,7 @@ class PlayerSettings {
     this.skipFrames = true,
     this.audioPassthrough = false,
     this.audioTimeStretch = true,
-    this.userAgent = 'StellarTV/1.0',
+    this.userAgent = '',
     this.preferredAudioLanguage = 'it',
     this.preferredSubtitleLanguage = 'it',
     this.subtitlesEnabled = false,
@@ -307,4 +307,14 @@ class PlayerSettings {
     'backgroundAudio': backgroundAudio,
     'showStats': showStats,
   };
+}
+
+/// Classic player identity: many IPTV panels throttle or reject unknown
+/// clients on live channels, while VLC is accepted almost everywhere.
+const String kDefaultStreamUserAgent = 'VLC/3.0.20 LibVLC/3.0.20';
+
+/// Empty or the old built-in "StellarTV/1.0" means "use the default".
+String effectiveStreamUserAgent(String configured) {
+  final v = configured.trim();
+  return v.isEmpty || v == 'StellarTV/1.0' ? kDefaultStreamUserAgent : v;
 }

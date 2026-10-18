@@ -11,6 +11,8 @@ import '../services/xtream_edit.dart';
 import '../widgets/apple_page_scaffold.dart';
 import '../widgets/auth_scaffold.dart';
 import '../widgets/tv_text_field.dart';
+import '../services/key_handoff.dart';
+import '../widgets/phone_handoff_panel.dart';
 
 class XtreamEditScreen extends StatefulWidget {
   const XtreamEditScreen({super.key});
@@ -26,6 +28,7 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
   final _passwordFocus = FocusNode();
   bool _busy = false;
   bool _obscure = true;
+  bool _phone = false;
   @override
   void initState() {
     super.initState();
@@ -190,6 +193,40 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
                     ),
                   ),
                 ),
+        if (context.watch<SyncProvider>().isSignedIn) ...[
+          const SizedBox(height: 16),
+          if (_phone)
+            PhoneHandoffPanel(
+              mode: 'x',
+              onReceived: (raw) {
+                final x = XtreamHandoff.parse(raw);
+                setState(() => _phone = false);
+                if (x == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Dati ricevuti non validi. Riprova.')));
+                  return;
+                }
+                _server.text = x.server;
+                _user.text = x.username;
+                _password.text = x.password;
+                _save();
+              },
+              onClose: (m) {
+                setState(() => _phone = false);
+                if (m != null) ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(m)));
+              },
+            )
+          else
+            AuthAction(
+              onPressed: () => setState(() => _phone = true),
+              child: OutlinedButton.icon(
+                onPressed: () => setState(() => _phone = true),
+                icon: const Icon(Icons.smartphone),
+                label: const Text('Inserisci dal telefono'),
+              ),
+            ),
+        ],
                 const SizedBox(height: 24),
                 AuthAction(
                   onPressed: save,

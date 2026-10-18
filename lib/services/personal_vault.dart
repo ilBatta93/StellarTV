@@ -221,7 +221,7 @@ class PersonalVault {
         if (event['deleted'] == true) {
           items.remove(id);
         } else {
-          items[id] = event;
+          items[id] = _entry(event);
         }
       }
     }

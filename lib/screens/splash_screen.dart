@@ -30,7 +30,7 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
     _animController = AnimationController(
-      duration: const Duration(milliseconds: 2100),
+      duration: const Duration(milliseconds: 3200),
       vsync: this,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -97,8 +97,14 @@ class _SplashScreenState extends State<SplashScreen>
     _navigate(needsProfile ? const ProfilePickerScreen() : const HomeScreen());
   }
 
-  void _navigate(Widget target) {
+  Future<void> _navigate(Widget target) async {
     _navigated = true;
+    // Let the intro finish and hold the full logo briefly before leaving.
+    if (_animController.isAnimating) {
+      await _animController.forward().orCancel.catchError((_) {});
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+    }
+    if (!mounted) return;
     // Read the setting NOW, while the splash is still mounted. The transition
     // builder keeps running after this screen is replaced and disposed, so
     // looking up UiSettings from the splash context inside it throws

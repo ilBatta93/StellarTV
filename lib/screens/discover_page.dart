@@ -102,6 +102,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final started = <ResumeItem>[
       for (final e in history.continueWatching)
         if (app.channelById(e.contentId) ??
+                // Cloud-restored episodes carry no stream address: fall back
+                // to their series folder so "Serie in corso" stays visible.
+                ((e.type == ContentType.series || e.type == ContentType.anime) &&
+                        e.seriesKey.isNotEmpty
+                    ? app.seriesFolderFor(e.seriesKey)
+                    : null) ??
                 (e.url.isEmpty
                     ? null
                     : Channel(
@@ -1097,7 +1103,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
                         ),
                       if (widget.startedMovies.isNotEmpty)
                         _historySection(
-                          'Video visti di recente',
+                          'Film visti di recente',
                           widget.startedMovies,
                         ),
                       if (widget.forYou.isNotEmpty)

@@ -493,7 +493,8 @@ class SyncService {
         );
         if (code != currentUserId) return null;
         if (check['revision'] != revision) continue;
-        if (PersonalVault.canonical(decoded) != PersonalVault.canonical(merged))
+        if (PersonalVault.canonical(decoded) !=
+            PersonalVault.canonical(PersonalVault.clean(merged)))
           throw StateError('Verifica cifrata non riuscita');
         final now = DateTime.now();
         await prefs.setBool(marker, true);

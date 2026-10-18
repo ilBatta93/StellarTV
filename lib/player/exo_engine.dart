@@ -23,9 +23,7 @@ class ExoEngine extends PlaybackEngine {
          Uri.parse(url),
          formatHint: _formatHint(url),
          httpHeaders: {
-           'User-Agent': settings.userAgent.trim().isEmpty
-               ? 'StellarTV/1.0'
-               : settings.userAgent.trim(),
+           'User-Agent': effectiveStreamUserAgent(settings.userAgent),
          },
          videoPlayerOptions: VideoPlayerOptions(
            // Without this every new player steals the audio focus and

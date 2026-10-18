@@ -5,6 +5,9 @@ import '../theme/app_theme.dart';
 import '../widgets/auth_scaffold.dart';
 import '../services/device_type_service.dart';
 import '../widgets/tv_text_field.dart';
+import '../providers/sync_provider.dart';
+import '../services/key_handoff.dart';
+import '../widgets/phone_handoff_panel.dart';
 import 'profile_picker_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -22,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _xtreamPassFocus = FocusNode();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _phone = false;
 
   @override
   void dispose() {
@@ -98,6 +102,40 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+        if (context.watch<SyncProvider>().isSignedIn) ...[
+          const SizedBox(height: 16),
+          if (_phone)
+            PhoneHandoffPanel(
+              mode: 'x',
+              onReceived: (raw) {
+                final x = XtreamHandoff.parse(raw);
+                setState(() => _phone = false);
+                if (x == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Dati ricevuti non validi. Riprova.')));
+                  return;
+                }
+                _xtreamServerController.text = x.server;
+                _xtreamUserController.text = x.username;
+                _xtreamPassController.text = x.password;
+                _handleXtreamLogin();
+              },
+              onClose: (m) {
+                setState(() => _phone = false);
+                if (m != null) ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(m)));
+              },
+            )
+          else
+            AuthAction(
+              onPressed: () => setState(() => _phone = true),
+              child: OutlinedButton.icon(
+                onPressed: () => setState(() => _phone = true),
+                icon: const Icon(Icons.smartphone),
+                label: const Text('Inserisci dal telefono'),
+              ),
+            ),
+        ],
         const SizedBox(height: 24),
         SizedBox(
           width: double.infinity,

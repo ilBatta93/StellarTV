@@ -511,7 +511,9 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           title: 'User agent personalizzato',
           subtitle:
               'Alcuni servizi richiedono un identificativo specifico',
-          value: s.userAgent.isEmpty ? 'Predefinito' : s.userAgent,
+          value: effectiveStreamUserAgent(s.userAgent) == kDefaultStreamUserAgent
+              ? 'Predefinito (VLC)'
+              : s.userAgent,
           onTap: _editUserAgent,
         ),
       ],
@@ -715,12 +717,27 @@ class _UserAgentDialogState extends State<_UserAgentDialog> {
     return AlertDialog(
       backgroundColor: AppColors.surface,
       title: const Text('User agent'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        decoration: const InputDecoration(
-          hintText: 'Lascia vuoto per il predefinito',
-        ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (label, value) in const [
+            ('Predefinito (VLC)', ''),
+            ('Android (okhttp)', 'okhttp/4.12.0'),
+            ('IPTV Smarters', 'IPTVSmartersPro'),
+          ])
+            TextButton(
+              autofocus: value.isEmpty,
+              onPressed: () => Navigator.pop(context, value),
+              child: Text(label),
+            ),
+          TextField(
+            controller: _controller,
+            decoration: const InputDecoration(
+              hintText: 'Oppure scrivine uno personalizzato',
+            ),
+          ),
+        ],
       ),
       actions: [
         TextButton(

@@ -52,13 +52,16 @@ class KeyHandoff {
   }
 
   final SupabaseClient _client;
-  KeyHandoff(this._client);
+  KeyHandoff(this._client, {this.mode = ''});
+  /// '' = recovery key, 'x' = Xtream list details.
+  final String mode;
   SimpleKeyPair? _pair;
   String? _id;
   String code = '';
   String publicKey = '';
 
-  String get link => '$siteUrl?c=$code&k=$publicKey';
+  String get link =>
+      '$siteUrl?c=$code&k=$publicKey${mode.isEmpty ? '' : '&m=$mode'}';
 
   Future<void> start() async {
     await cancel();
@@ -108,4 +111,24 @@ class KeyHandoff {
   }
 
   void forget() => _pair = null;
+}
+
+/// Xtream details sent from the phone; shape-validated before use.
+class XtreamHandoff {
+  const XtreamHandoff(this.server, this.username, this.password);
+  final String server, username, password;
+  static XtreamHandoff? parse(String raw) {
+    try {
+      final j = jsonDecode(raw);
+      if (j is! Map || j['kind'] != 'xtream') return null;
+      final h = j['host'], u = j['username'], p = j['password'];
+      if (h is! String || u is! String || p is! String) return null;
+      final uri = Uri.tryParse(h);
+      if (uri == null || !['http', 'https'].contains(uri.scheme) ||
+          uri.host.isEmpty || u.isEmpty || p.isEmpty) return null;
+      return XtreamHandoff(h, u, p);
+    } catch (_) {
+      return null;
+    }
+  }
 }

@@ -50,6 +50,9 @@ flutter:
     - assets/fonts/Sora.ttf
     - assets/fonts/Manrope.ttf
     - assets/branding/stellartv_logo.svg
+    - assets/branding/stellartv_logo.png
+    - assets/branding/stellartv_stella.png
+    - assets/branding/stellartv_scritta.png
     - assets/branding/stellartv_stella.svg
     - assets/branding/stellartv_scritta.svg
     - assets/branding/stellar_space.jpg
