@@ -461,7 +461,8 @@ class PlaybackSession extends ChangeNotifier {
     if (_attempt >= _plan.length - 1) return;
     _hlsWatch = Timer(const Duration(milliseconds: 3500), () {
       if (_disposed || gen != _generation || _engine != engine) return;
-      if (engine.videoFrameRendered == true) return;
+      // Only engines that report renderer telemetry can prove no picture.
+      if (engine.videoFrameRendered != false) return;
       if (engine.value.hasError) return;
       _handleFailure(gen, 'Playlist HLS senza video dopo 3 secondi (timeout)',
           resumeAt, midPlay: false);

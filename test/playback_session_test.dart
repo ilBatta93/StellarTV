@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:stellar_tv/models/player_settings.dart';
+import 'package:stellar_tv/player/decoder_memory.dart';
 import 'package:stellar_tv/player/playback_engine.dart';
 import 'package:stellar_tv/player/playback_session.dart';
 
@@ -183,7 +184,7 @@ void main() {
     },
   );
 
-  test('Black-video recovery respects disabled engine fallback', () async {
+  test('Black-video software decoding works even with engine fallback off', () async {
     late PlaybackSession session;
     final types = <PlayerEngineType>[];
     _FakeEngine? current;
@@ -204,12 +205,13 @@ void main() {
     await session.start();
     current?.emitError('schermo nero');
     await Future<void>.delayed(const Duration(seconds: 3));
-    expect(types, isNot(contains(PlayerEngineType.mediakit)));
+    expect(types, [PlayerEngineType.exo, PlayerEngineType.mediakit]);
     session.dispose();
     await session.released;
   });
 
-  setUp(() {
+  setUp(() async {
+    await DecoderMemory.clear();
     _FakeEngine.alive = 0;
     _FakeEngine.maxAlive = 0;
   });
