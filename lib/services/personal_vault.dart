@@ -58,6 +58,7 @@ class PersonalVault {
     'ui_home_banner_size',
     'ui_home_overview',
     'ui_scale',
+    'ui_watched_percent',
   };
   static const _fields = {
     'id',

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+
 import 'navigation/app_routes.dart';
+
 import 'package:media_kit/media_kit.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'config/supabase_config.dart';
 import 'providers/app_provider.dart';
 import 'providers/discover_provider.dart';
@@ -125,6 +128,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
       _appProvider,
       _syncProvider,
     );
+    _historyProvider.setWatchedPercent(_uiSettings.watchedPercent);
     _profileProvider = ProfileProvider(profileService, syncService);
     // Load profiles at startup so the top-bar avatar and the splash routing
     // know which profile is active on this device.
@@ -186,6 +190,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
 
   void _onUiSettingsChanged() {
     if (!_uiSettings.loaded) return;
+    _historyProvider.setWatchedPercent(_uiSettings.watchedPercent);
     final sig = _uiSettings.signature;
     if (sig == _uiSignature) return;
     final first = _uiSignature.isEmpty;

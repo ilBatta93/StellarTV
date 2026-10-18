@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../models/multiview_layout.dart';
 import '../models/home_layout_preferences.dart';
+import '../models/watch_completion_policy.dart';
 
 enum AppSection { home, live, movies, series }
 
@@ -89,6 +90,13 @@ class UiSettings extends ChangeNotifier {
   HomeBannerSize homeBannerSize = HomeBannerSize.balanced;
   bool homeOverview = true;
   int uiScalePercent = 100;
+  int watchedPercent = WatchCompletionPolicy.defaultPercent;
+
+  Future<void> setWatchedPercent(int value) async {
+    watchedPercent = WatchCompletionPolicy.normalize(value);
+    await _save(WatchCompletionPolicy.key, watchedPercent);
+    notifyListeners();
+  }
 
   Future<void> setHomePosterShape(HomePosterShape value) async {
     homePosterShape = value;
@@ -232,6 +240,7 @@ class UiSettings extends ChangeNotifier {
   /// Changes whenever any saved look-and-feel preference changes: used to
   /// push the new values to the cloud at once.
   String get signature => [
+    watchedPercent,
     accentName,
     _gridSize,
     _showPosters,
@@ -310,6 +319,9 @@ class UiSettings extends ChangeNotifier {
         ? prefs.get('ui_home_overview') as bool
         : true;
     uiScalePercent = HomeLayoutPolicy.uiScale(prefs.get('ui_scale'));
+    watchedPercent = WatchCompletionPolicy.normalize(
+      prefs.get(WatchCompletionPolicy.key),
+    );
     _loaded = true;
     AppColors.primary = _accent;
     notifyListeners();

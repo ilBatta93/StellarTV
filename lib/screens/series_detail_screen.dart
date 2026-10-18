@@ -210,6 +210,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                 if (DeviceTypeService.isTv) ...[
                   _buildTvActions(context, isFav),
                   const SizedBox(height: 16),
+                ] else ...[
+                  _buildPlaybackButton(context),
+                  const SizedBox(height: 16),
                 ],
                 if (!DeviceTypeService.isTv && item != null)
                   TrailerButton(item: item),
@@ -375,13 +378,19 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     return lastWatched + 1 < all.length ? all[lastWatched + 1] : all.first;
   }
 
-  /// TV only: focusable buttons at the top of the page (first focus).
-  Widget _buildTvActions(BuildContext context, bool isFav) {
+  /// Countdown and playback always refer to the same selected episode.
+  Widget _buildPlaybackButton(BuildContext context) {
     final history = context.watch<HistoryProvider>();
-    final app = context.read<AppProvider>();
     final episode = _resumeEpisode(history);
-    final started =
-        episode != null && history.entryFor(episode.channel.id) != null;
+    final entry = episode == null ? null : history.entryFor(episode.channel.id);
+    final started = entry != null;
+    final remaining = entry?.startedRemainingMinutes;
+    final baseLabel = episode == null
+        ? (_loading ? 'Caricamento episodi...' : 'Guarda ora')
+        : '${started ? 'Riprendi' : 'Guarda'} ${episode.code}';
+    final label = remaining == null
+        ? baseLabel
+        : '$baseLabel · $remaining min rim.';
     void play() {
       if (episode == null) return;
       playChannel(
@@ -392,23 +401,25 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       );
     }
 
+    return TvFocusable(
+      autofocus: DeviceTypeService.isTv,
+      onPressed: play,
+      child: ElevatedButton.icon(
+        icon: const Icon(Icons.play_arrow_rounded),
+        label: Text(label, textAlign: TextAlign.center),
+        onPressed: episode == null ? null : play,
+      ),
+    );
+  }
+
+  /// TV only: focusable buttons at the top of the page (first focus).
+  Widget _buildTvActions(BuildContext context, bool isFav) {
+    final app = context.read<AppProvider>();
     return Wrap(
       spacing: 12,
       runSpacing: 12,
       children: [
-        TvFocusable(
-          autofocus: true,
-          onPressed: play,
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: Text(
-              episode == null
-                  ? (_loading ? 'Caricamento episodi...' : 'Guarda ora')
-                  : '${started ? 'Riprendi' : 'Guarda'} ${episode.code}',
-            ),
-            onPressed: play,
-          ),
-        ),
+        _buildPlaybackButton(context),
         TvFocusable(
           onPressed: () => app.toggleFavorite(widget.series),
           child: OutlinedButton.icon(

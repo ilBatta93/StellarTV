@@ -163,7 +163,7 @@ class HomeLandscapeCard extends StatelessWidget {
   final double? rating;
   final double? progress;
 
-  /// Small label on the right of the title space (e.g. "S1 · E2").
+  /// Shared right-aligned metadata (episode coordinates or movie time left).
   final String? trailing;
   @override
   Widget build(BuildContext context) {

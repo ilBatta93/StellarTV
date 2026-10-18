@@ -94,3 +94,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - PlayerScreen forwards an optional engine factory to PlaybackSession for remote-input tests; hidden-control seeking preserves overlay visibility while explicit OK and visible-control navigation keep their original behavior.
 
 - Subtitle source selection is session-owned across engine replacements; external cues listen directly to playback time and use interval-aware lookup, with local per-content delay and bounded alternative downloads to avoid device-specific timing sync.
+- HistoryEntry owns completion classification and remaining-time calculations from actual saved progress; Home metadata and detail actions reuse that policy, and series action countdowns target the same resume episode as playback, without a new sync wire format.
+- WatchCompletionPolicy validates the portable watched threshold; HistoryProvider projects the current preference onto entries without changing serialized progress, and UiSettings changes refresh every history consumer immediately.
+
+- Settings option pickers mount their bounded option list eagerly inside a scroll view, so the current offscreen value receives TV autofocus and arrow navigation starts from it.

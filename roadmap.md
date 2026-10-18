@@ -144,3 +144,10 @@
 - [x] Note di rilascio riscritte in modo comprensibile e applicate a entrambe le pubblicazioni.
 - [x] /apk del sito reindirizza a v3.3.2 verificato sul sito live; nel repository pubblico resta solo l'ultima versione.
 - [ ] Servizio sottotitoli del sito da pubblicare: la versione live è precedente, serve richiesta esplicita dell'utente.
+
+## Film recenti e completamento 95% — 18 ottobre 2026
+- [x] Soglia visto regolabile nelle impostazioni, iniziale 95%, sincronizzata tra dispositivi.
+- [x] Schede film e serie: minuti rimanenti nel pulsante Guarda ora per contenuti già avviati.
+- [x] Minuti rimanenti a destra dei film recenti, con lo stesso layout di stagione/episodio.
+- [x] Regola condivisa di completamento dal 95% per film ed episodi, con test e verifica GitHub.
+- [ ] Prova su TV reale: richiede nuova APK autorizzata e dispositivo dell’utente.

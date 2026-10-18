@@ -1,4 +1,5 @@
 import 'content_type.dart';
+import 'watch_completion_policy.dart';
 
 class HistoryEntry {
   const HistoryEntry({
@@ -14,6 +15,7 @@ class HistoryEntry {
     this.seriesKey = '',
     this.seriesName = '',
     this.seriesPoster = '',
+    this.watchedPercent = WatchCompletionPolicy.defaultPercent,
   });
 
   final String contentId;
@@ -31,6 +33,7 @@ class HistoryEntry {
   final String seriesKey;
   final String seriesName;
   final String seriesPoster;
+  final int watchedPercent;
 
   bool get isLive => type == ContentType.live;
 
@@ -41,22 +44,32 @@ class HistoryEntry {
     return (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
   }
 
-  /// Netflix-style "watched": 95% of the runtime reached (or less than two
-  /// minutes left, which covers end credits on short episodes).
+  /// Completion is derived from real progress, never by changing the position.
   bool get isWatched {
     if (isLive || duration <= Duration.zero) return false;
-    final ratio = position.inMilliseconds / duration.inMilliseconds;
-    return ratio >= 0.95 ||
-        (position > Duration.zero &&
-            duration - position <= const Duration(minutes: 2) &&
-            duration >= const Duration(minutes: 10));
+    return position.inMilliseconds * 100 >=
+        duration.inMilliseconds *
+            WatchCompletionPolicy.normalize(watchedPercent);
   }
+
+  /// Actual time left, rounded up so a partial minute never shows zero.
+  int? get remainingMinutes {
+    if (isLive || duration <= Duration.zero) return null;
+    final remaining = duration.inMilliseconds - position.inMilliseconds;
+    if (remaining <= 0) return 0;
+    return (remaining / Duration.millisecondsPerMinute).ceil();
+  }
+
+  int? get remainingMovieMinutes =>
+      type == ContentType.movie ? remainingMinutes : null;
+
+  /// Detail actions show a countdown only after playback actually advances.
+  int? get startedRemainingMinutes =>
+      position > Duration.zero ? remainingMinutes : null;
 
   Duration? get resumePosition {
     if (isLive || duration <= Duration.zero || isWatched) return null;
-    final remaining = duration - position;
-    if (position <= const Duration(seconds: 5) ||
-        remaining <= const Duration(minutes: 1)) {
+    if (position <= const Duration(seconds: 5)) {
       return null;
     }
     return position;
@@ -67,6 +80,7 @@ class HistoryEntry {
     Duration? position,
     Duration? duration,
     DateTime? lastWatchedAt,
+    int? watchedPercent,
   }) {
     return HistoryEntry(
       contentId: contentId,
@@ -81,6 +95,7 @@ class HistoryEntry {
       seriesKey: seriesKey,
       seriesName: seriesName,
       seriesPoster: seriesPoster,
+      watchedPercent: watchedPercent ?? this.watchedPercent,
     );
   }
 
@@ -99,8 +114,12 @@ class HistoryEntry {
       posterUrl: row['poster_url'] as String? ?? '',
       group: row['group_name'] as String? ?? '',
       url: row['url'] as String? ?? '',
-      position: Duration(seconds: (row['position_seconds'] as num?)?.toInt() ?? 0),
-      duration: Duration(seconds: (row['duration_seconds'] as num?)?.toInt() ?? 0),
+      position: Duration(
+        seconds: (row['position_seconds'] as num?)?.toInt() ?? 0,
+      ),
+      duration: Duration(
+        seconds: (row['duration_seconds'] as num?)?.toInt() ?? 0,
+      ),
       lastWatchedAt: watched.toLocal(),
     );
   }

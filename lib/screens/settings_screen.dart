@@ -9,6 +9,7 @@ import '../widgets/catalog_section_status.dart';
 import '../providers/app_provider.dart';
 import '../providers/ui_settings.dart';
 import '../models/home_layout_preferences.dart';
+import '../models/watch_completion_policy.dart';
 import '../services/playlist_refresh_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_tiles.dart';
@@ -142,6 +143,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SettingsSection(
           title: 'Home',
           children: [
+            SettingsValueTile(
+              icon: Icons.check_circle_outline_rounded,
+              title: 'Soglia contenuto visto',
+              value: '${ui.watchedPercent}%',
+              onTap: () => pick<int>(
+                'Soglia contenuto visto',
+                WatchCompletionPolicy.options,
+                ui.watchedPercent,
+                (v) => '$v%',
+                ui.setWatchedPercent,
+              ),
+            ),
             SettingsValueTile(
               icon: Icons.crop_portrait_rounded,
               title: 'Forma locandine consigliati e Top',

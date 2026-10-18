@@ -744,6 +744,12 @@ class _HistoryCard extends StatelessWidget {
       historyTitle: entry.title,
       channelTitle: channel.name,
     );
+    final minutesLeft = entry.remainingMovieMinutes;
+    final trailing = isEpisode
+        ? code
+        : minutesLeft == null
+        ? null
+        : '$minutesLeft min rim.';
     // Clean name only: season/episode move to the badge on the right.
     final title = isEpisode && seriesName != null
         ? displayTitle(seriesName)
@@ -760,7 +766,7 @@ class _HistoryCard extends StatelessWidget {
         title: title,
         image: image,
         progress: progress,
-        trailing: code,
+        trailing: trailing,
         onFocus: onFocus,
         onTap: () => playChannel(
           context,

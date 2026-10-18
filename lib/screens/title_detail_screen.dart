@@ -419,8 +419,16 @@ class _Actions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+    final history = context.watch<HistoryProvider>();
+    final channel = playable;
+    final remaining = channel == null
+        ? null
+        : history.entryFor(channel.id)?.startedRemainingMinutes;
+    final playLabel = remaining == null
+        ? 'Guarda ora'
+        : 'Guarda ora · $remaining min rim.';
     final inList = item != null && app.isTmdbFavorite(item!);
-    if (DeviceTypeService.isTv) return _tvActions(context, app);
+    if (DeviceTypeService.isTv) return _tvActions(context, app, playLabel);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -430,7 +438,7 @@ class _Actions extends StatelessWidget {
             onPressed: () => _play(context),
             child: ElevatedButton.icon(
               icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Guarda ora'),
+              label: Text(playLabel, textAlign: TextAlign.center),
               onPressed: () => _play(context),
             ),
           ),
@@ -577,7 +585,7 @@ class _Actions extends StatelessWidget {
     );
   }
 
-  Widget _tvActions(BuildContext context, AppProvider app) {
+  Widget _tvActions(BuildContext context, AppProvider app, String playLabel) {
     final channel = playable;
     final titleItem = item;
     final inList = titleItem != null && app.isTmdbFavorite(titleItem);
@@ -593,7 +601,7 @@ class _Actions extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: () => _play(context),
               icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Guarda ora'),
+              label: Text(playLabel, textAlign: TextAlign.center),
             ),
           ),
           TvFocusable(

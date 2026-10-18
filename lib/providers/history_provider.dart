@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/history_entry.dart';
+import '../models/watch_completion_policy.dart';
 import '../services/player_settings_service.dart';
 import 'app_provider.dart';
 import 'sync_provider.dart';
@@ -76,7 +77,17 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _disposed = false;
   Timer? _pushDebounce;
 
-  List<HistoryEntry> get entries => _entries;
+  int _watchedPercent = WatchCompletionPolicy.defaultPercent;
+  void setWatchedPercent(int value) {
+    final next = WatchCompletionPolicy.normalize(value);
+    if (next == _watchedPercent) return;
+    _watchedPercent = next;
+    _notify();
+  }
+
+  HistoryEntry _present(HistoryEntry entry) =>
+      entry.copyWith(watchedPercent: _watchedPercent);
+  List<HistoryEntry> get entries => _entries.map(_present).toList();
   bool get isLoading => _loading;
   bool get hasLoaded => _loaded;
   String? get error => _error;
@@ -87,14 +98,14 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// One item per series: only the most recently watched episode counts.
   /// Older half-watched episodes of the same series are hidden, and when the
   /// latest episode was completed none of the older ones resurfaces.
-  List<HistoryEntry> get continueWatching => onePerSeries(_entries).where((e) {
+  List<HistoryEntry> get continueWatching => onePerSeries(entries).where((e) {
     if (e.isLive || e.position < const Duration(seconds: 5)) return false;
     if (e.duration <= Duration.zero) return true;
     return !e.isWatched;
   }).toList();
 
   /// History with episodes collapsed to the latest one of each series.
-  List<HistoryEntry> get entriesOnePerSeries => onePerSeries(_entries);
+  List<HistoryEntry> get entriesOnePerSeries => onePerSeries(entries);
 
   static final _episodeTag = RegExp(
     r'\bS\d{1,2}\s*E\d{1,4}\b.*$|\b\d{1,2}x\d{1,4}\b.*$',
@@ -187,7 +198,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   HistoryEntry? entryFor(String contentId) {
     for (final e in _entries) {
-      if (e.contentId == contentId) return e;
+      if (e.contentId == contentId) return _present(e);
     }
     return null;
   }

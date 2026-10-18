@@ -408,8 +408,9 @@ Future<T?> pickOption<T>(
               child: Text(title, style: Theme.of(ctx).textTheme.titleMedium),
             ),
             Flexible(
-              child: ListView(
-                shrinkWrap: true,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                 children: [
                   for (final o in options)
                     _tvOption(
@@ -441,6 +442,7 @@ Future<T?> pickOption<T>(
                       ),
                     ),
                 ],
+                ),
               ),
             ),
             const SizedBox(height: 8),
