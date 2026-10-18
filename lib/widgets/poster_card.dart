@@ -8,6 +8,7 @@ import '../providers/ui_settings.dart';
 import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
 import 'tv_focusable.dart';
+import 'tv_home_layout.dart';
 
 class PosterImage extends StatelessWidget {
   final String? url;
@@ -140,7 +141,9 @@ class TmdbPosterCard extends StatelessWidget {
       ),
     );
     final fillsCell = !width.isFinite;
-    final effectiveWidth = DeviceTypeService.isTv && !fillsCell ? 112.0 : width;
+    final effectiveWidth = DeviceTypeService.isTv && !fillsCell
+        ? TvHomeLayout.maybeOf(context)?.posterWidth ?? 112.0
+        : width;
     return Pressable(
       onTap: onTap,
       onFocus: onFocus,
@@ -203,11 +206,15 @@ class RankedPosterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final home = DeviceTypeService.isTv ? TvHomeLayout.maybeOf(context) : null;
+    final homePosterWidth = home == null ? null : (home.rankedHeight - 16) * 2 / 3;
     return Pressable(
       onTap: onTap,
       onFocus: onFocus,
       child: SizedBox(
-        width: DeviceTypeService.isTv
+        width: homePosterWidth != null
+            ? homePosterWidth + (rank >= 10 ? 72 : 50)
+            : DeviceTypeService.isTv
             ? (rank >= 10 ? 184 : 158)
             : (rank >= 10 ? 196 : 172),
         child: Stack(
@@ -218,7 +225,9 @@ class RankedPosterCard extends StatelessWidget {
               child: Text(
                 '$rank',
                 style: TextStyle(
-                  fontSize: DeviceTypeService.isTv ? 100 : 128,
+                  fontSize: home == null
+                      ? (DeviceTypeService.isTv ? 100 : 128)
+                      : (home.rankedHeight * 0.55).clamp(64.0, 140.0),
                   fontWeight: FontWeight.w700,
                   height: 1.2,
                   letterSpacing: DeviceTypeService.isTv ? 0 : -10,
@@ -295,6 +304,8 @@ class RatingBadge extends StatelessWidget {
 /// three-line title, including the TV focus padding and system text scaling.
 double tmdbPosterRowHeight(BuildContext context, {double mobile = 210}) {
   if (!DeviceTypeService.isTv) return mobile;
+  final home = TvHomeLayout.maybeOf(context);
+  if (home != null) return home.carouselHeight;
   final line = MediaQuery.textScalerOf(context).scale(14) * 1.2;
   // 112px poster (2:3) + title padding + three lines + list vertical padding.
   return 112 * 3 / 2 + 17 + line * 3 + 16 + 10;

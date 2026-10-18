@@ -53,6 +53,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Player resume writes share a serialized per-screen writer; only the automatic next-episode overlay completes history and clears URL resume before the existing decoder release, so manual next and late lifecycle saves cannot change that intent.
 
 - TV Home foreground starts below the real menu; TvHomeRows owns a snap-locked vertical viewport and retained row focus so each row occupies the entire remaining space and implicit child reveals cannot leak adjacent rows. Both actual series and movie routes publish resolved identity before optional metadata and use bounded official title art.
+- TV Home scopes adaptive carousel dimensions through TvHomeLayout so synopsis and cards share the available height without changing touch or catalog defaults; recent episode labels use structured numbers with an explicit-title fallback, never modifying history identifiers.
 
 - TV Top selectors use runtime focus roles and explicit selector/poster transitions inside the existing snap pager, so lateral keys never change rows.
 - Trailer metadata uses the shared TMDB proxy and a validated YouTube URL launched externally, separate from IPTV playback/history to avoid extracting protected streams.

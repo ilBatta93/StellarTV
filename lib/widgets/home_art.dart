@@ -9,6 +9,7 @@ import '../services/image_cache_service.dart';
 import '../services/title_display.dart';
 import '../theme/app_theme.dart';
 import 'poster_card.dart';
+import 'tv_home_layout.dart';
 
 /// Same bounded presentation on TV and touch, no new focus stops.
 class HomeTitleArt extends StatefulWidget {
@@ -123,6 +124,8 @@ class _HomeTitleArtState extends State<HomeTitleArt> {
 double homeCardWidth([BuildContext? context]) {
   if (!DeviceTypeService.isTv) return 208;
   if (context == null) return 244;
+  final layout = TvHomeLayout.maybeOf(context);
+  if (layout != null) return layout.historyWidth;
   return (MediaQuery.sizeOf(context).width * 0.255).clamp(244.0, 326.0);
 }
 
@@ -156,6 +159,7 @@ class HomeLandscapeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final watched = progress?.clamp(0.0, 1.0);
+    final label = trailing;
     final width = homeCardWidth(context);
     return Pressable(
       onTap: onTap,
@@ -253,19 +257,26 @@ class HomeLandscapeCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (trailing != null) ...[
-                    const SizedBox(width: 8),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 1),
-                      child: Text(
-                        trailing!,
-                        maxLines: 1,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
-                          height: 1.25,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.2,
+                  if (label != null) ...[
+                    const SizedBox(width: 12),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: (width - 30) * 0.42),
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        widthFactor: 1,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.topRight,
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              height: 1.25,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
                     ),

@@ -1,5 +1,6 @@
-import 'dart:math' as math;
 import '../widgets/home_art.dart';
+import '../widgets/tv_home_layout.dart';
+import '../services/history_episode_label.dart';
 import '../widgets/tv_home_rows.dart';
 import '../services/title_display.dart';
 import 'dart:async';
@@ -681,7 +682,9 @@ class _HistoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final tv = DeviceTypeService.isTv;
     return HorizontalRow(
-      height: homeRowHeight(context),
+      height: tv
+          ? TvHomeLayout.maybeOf(context)?.carouselHeight ?? homeRowHeight(context)
+          : homeRowHeight(context),
       spacing: tv ? 20 : 12,
       itemCount: items.length,
       itemBuilder: (context, i) => _HistoryCard(
@@ -719,9 +722,13 @@ class _HistoryCard extends StatelessWidget {
     final seriesName =
         folder?.displaySeriesName ??
         (entry.seriesName.isNotEmpty ? entry.seriesName : null);
-    final code = channel.season != null && channel.episode != null
-        ? 'S${channel.season} · E${channel.episode}'
-        : null;
+    final code = historyEpisodeLabel(
+      type: entry.type,
+      season: channel.season,
+      episode: channel.episode,
+      historyTitle: entry.title,
+      channelTitle: channel.name,
+    );
     // Clean name only: season/episode move to the badge on the right.
     final title = isEpisode && seriesName != null
         ? displayTitle(seriesName)
@@ -1041,7 +1048,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
         _TvRowTitle(title),
         HorizontalRow(
           // Poster + two full title lines + focus frame, never clipped.
-          height: tmdbPosterRowHeight(context, mobile: 212),
+          height: tmdbPosterRowHeight(rowContext, mobile: 212),
           spacing: 20,
           itemCount: items.length,
           itemBuilder: (context, i) => TmdbPosterCard(
@@ -1062,12 +1069,13 @@ class _TvDiscoverState extends State<_TvDiscover> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, c) {
-        // Vertical posters are taller than the landscape history cards.
-        final rowViewport =
-            math.max(homeRowHeight(context), tmdbPosterRowHeight(context)) +
-            84;
-        final heroHeight = (c.maxHeight - rowViewport).clamp(0.0, c.maxHeight);
-        return Stack(
+        // Reserve the synopsis first, then size every carousel to the actual
+        // remaining height. Fixed catalog sizes must not squeeze out the plot.
+        final heroHeight = c.maxHeight * 0.43;
+        return TvHomeLayout(
+          rowHeight: c.maxHeight - heroHeight,
+          captionHeight: MediaQuery.textScalerOf(context).scale(14) * 1.2 * 3,
+          child: Stack(
           children: [
             Positioned.fill(
               child: ValueListenableBuilder<TmdbItem?>(
@@ -1129,6 +1137,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
               ],
             ),
           ],
+          ),
         );
       },
     );
@@ -1228,6 +1237,8 @@ class _TvTopRowState extends State<_TvTopRow> {
                     children: [
                       Text(
                         title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontFamily: 'Sora',
                           color: AppColors.textPrimary,
@@ -1268,7 +1279,7 @@ class _TvTopRowState extends State<_TvTopRow> {
             child: Builder(
               builder: (_) => HorizontalRow(
                 key: _postersKey,
-                height: 204,
+                height: TvHomeLayout.maybeOf(context)?.rankedHeight ?? 204,
                 spacing: 16,
                 itemCount: items.length,
                 itemBuilder: (context, i) => Focus(
@@ -1357,6 +1368,8 @@ class _TvRowTitle extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(32, 14, 32, 8),
       child: Text(
         title,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
         style: const TextStyle(
           fontFamily: 'Sora',
           color: AppColors.textPrimary,
@@ -1452,48 +1465,49 @@ class _TvHeroInfo extends StatelessWidget {
     ].join('  ·  ');
     return LayoutBuilder(
       builder: (context, bounds) {
-        // Same composition as the title sheet: flush to the left edge and
-        // grown to fill the free band between the top bar and the row.
-        const vPad = 14.0;
-        final showOverview = it.overview.isNotEmpty && bounds.maxHeight >= 150;
-        final overviewLines = bounds.maxHeight < 220 ? 2 : 3;
-        final textBlock =
-            8 + 20 + (showOverview ? 10 + overviewLines * 21.0 : 0);
+        const vPad = 10.0;
+        final scale = MediaQuery.textScalerOf(context);
+        final overviewLineHeight = scale.scale(14) * 1.35;
+        final metaHeight = scale.scale(14) * 1.25;
+        final showOverview = it.overview.trim().isNotEmpty;
+        final overviewLines = bounds.maxHeight >= 250 ? 3 : 2;
+        final textBlock = 6 + metaHeight +
+            (showOverview ? 8 + overviewLines * overviewLineHeight : 0);
         final logoH = (bounds.maxHeight - vPad * 2 - textBlock)
-            .clamp(56.0, 200.0)
-            .toDouble();
+            .clamp(0.0, 100.0).toDouble();
         return Container(
           width: double.infinity,
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.fromLTRB(16, vPad, 24, vPad),
           child: FractionallySizedBox(
             alignment: Alignment.centerLeft,
-            widthFactor: 0.55,
+            widthFactor: 0.60,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 HomeTitleArt(item: it, height: logoH),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   meta,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: AppColors.textSecondary,
-                    fontSize: 15,
+                    fontSize: 14,
+                    height: 1.25,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 if (showOverview) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Text(
                     it.overview,
                     maxLines: overviewLines,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.textSecondary,
-                      fontSize: 15,
+                      fontSize: 14,
                       height: 1.35,
                     ),
                   ),
