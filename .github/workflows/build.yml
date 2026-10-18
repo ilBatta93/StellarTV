@@ -129,3 +129,17 @@ jobs:
           files: dist/*.apk
           draft: false
           prerelease: false
+
+      - name: Tieni solo l'ultima release pubblica
+        if: ${{ env.RELEASE_TOKEN != '' }}
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          set -e
+          REPO=ilBatta93/StellarTV-releases
+          gh release list --repo "$REPO" --limit 200 --json tagName -q '.[].tagName' | while read -r TAG; do
+            if [ "$TAG" != "v$VERSION" ]; then
+              gh release delete "$TAG" --repo "$REPO" --yes --cleanup-tag || true
+            fi
+          done
