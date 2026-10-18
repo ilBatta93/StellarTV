@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+
 import '../widgets/apple_page_scaffold.dart';
+
 import 'package:provider/provider.dart';
+
 import '../widgets/catalog_section_status.dart';
 
 import '../providers/app_provider.dart';
 import '../providers/ui_settings.dart';
+import '../models/home_layout_preferences.dart';
 import '../services/playlist_refresh_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_tiles.dart';
@@ -122,8 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SettingsSwitchTile(
               icon: Icons.auto_awesome_outlined,
               title: 'Bagliore di selezione',
-              subtitle:
-                  'Alone colorato attorno all\'elemento selezionato col telecomando',
+              subtitle: 'Alone colorato attorno all\'elemento selezionato col telecomando',
               value: ui.focusGlow,
               onChanged: ui.setFocusGlow,
             ),
@@ -133,6 +136,127 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: 'Transizioni ed effetti al tocco',
               value: ui.animations,
               onChanged: ui.setAnimations,
+            ),
+          ],
+        ),
+        SettingsSection(
+          title: 'Home',
+          children: [
+            SettingsValueTile(
+              icon: Icons.crop_portrait_rounded,
+              title: 'Forma locandine consigliati e Top',
+              value: ui.homePosterShape.label,
+              onTap: () => pick<HomePosterShape>(
+                'Forma locandine',
+                HomePosterShape.values,
+                ui.homePosterShape,
+                (v) => v.label,
+                ui.setHomePosterShape,
+              ),
+            ),
+            SettingsValueTile(
+              icon: Icons.view_column_rounded,
+              title: 'Locandine visibili consigliati e Top',
+              value: ui.homePosterDensity.label,
+              onTap: () => pick<HomeDensity>(
+                'Locandine visibili',
+                HomeDensity.values,
+                ui.homePosterDensity,
+                (v) => v.label,
+                ui.setHomePosterDensity,
+              ),
+            ),
+            SettingsValueTile(
+              icon: Icons.format_list_numbered_rounded,
+              title: 'Numero titoli consigliati per riga',
+              value: '${ui.homeRecommendationLimit}',
+              onTap: () => pick<int>(
+                'Titoli consigliati',
+                HomeLayoutPolicy.recommendationLimits,
+                ui.homeRecommendationLimit,
+                (v) => '$v',
+                ui.setHomeRecommendationLimit,
+              ),
+            ),
+            SettingsValueTile(
+              icon: Icons.crop_landscape_rounded,
+              title: 'Forma locandine viste di recente',
+              value: ui.homeRecentShape.label,
+              onTap: () => pick<HomePosterShape>(
+                'Forma recenti',
+                HomePosterShape.values,
+                ui.homeRecentShape,
+                (v) => v.label,
+                ui.setHomeRecentShape,
+              ),
+            ),
+            SettingsValueTile(
+              icon: Icons.view_carousel_rounded,
+              title: 'Locandine visibili viste di recente',
+              value: ui.homeRecentDensity.label,
+              onTap: () => pick<HomeDensity>(
+                'Locandine recenti visibili',
+                HomeDensity.values,
+                ui.homeRecentDensity,
+                (v) => v.label,
+                ui.setHomeRecentDensity,
+              ),
+            ),
+            SettingsValueTile(
+              icon: Icons.history_rounded,
+              title: 'Numero titoli recenti per riga',
+              value: '${ui.homeRecentLimit}',
+              onTap: () => pick<int>(
+                'Titoli recenti',
+                HomeLayoutPolicy.itemLimits,
+                ui.homeRecentLimit,
+                (v) => '$v',
+                ui.setHomeRecentLimit,
+              ),
+            ),
+            SettingsValueTile(
+              icon: Icons.panorama_outlined,
+              title: 'Dimensione banner',
+              value: ui.homeBannerSize.label,
+              onTap: () => pick<HomeBannerSize>(
+                'Dimensione banner',
+                HomeBannerSize.values,
+                ui.homeBannerSize,
+                (v) => v.label,
+                ui.setHomeBannerSize,
+              ),
+            ),
+            SettingsSwitchTile(
+              icon: Icons.subject_rounded,
+              title: 'Trama nel banner',
+              value: ui.homeOverview,
+              onChanged: ui.setHomeOverview,
+            ),
+            SettingsValueTile(
+              icon: Icons.zoom_in_rounded,
+              title: 'Scala interfaccia',
+              value: '${ui.uiScalePercent}%',
+              onTap: () => pick<int>(
+                'Scala interfaccia',
+                HomeLayoutPolicy.uiScales,
+                ui.uiScalePercent,
+                (v) => '$v%',
+                ui.setUiScale,
+              ),
+            ),
+            SettingsValueTile(
+              icon: Icons.restart_alt_rounded,
+              title: 'Ripristina Home e scala',
+              onTap: () async {
+                final ok = await pickOption<bool>(
+                  context,
+                  title: 'Ripristinare Home e scala?',
+                  options: const [false, true],
+                  current: false,
+                  label: (v) => v ? 'Ripristina' : 'Annulla',
+                );
+                if (ok == true) await ui.resetHomeLayout();
+              },
             ),
           ],
         ),
@@ -231,9 +355,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   context: context,
                   builder: (ctx) => AlertDialog(
                     title: const Text('Ripristinare l\'aspetto?'),
-                    content: const Text(
-                      'Le altre impostazioni non cambiano.',
-                    ),
+                    content: const Text('Le altre impostazioni non cambiano.'),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
@@ -297,8 +419,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     return SettingsSection(
       title: 'Aggiornamento contenuti',
-      description:
-          'Stato dei contenuti: scegli la sezione da aggiornare.',
+      description: 'Stato dei contenuti: scegli la sezione da aggiornare.',
       children: [
         if (provider.authMethod.name == 'xtream') const PlaylistStatusList(),
         if (provider.authMethod.name == 'xtream')
@@ -360,7 +481,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SettingsValueTile(
                 icon: Icons.monitor_heart_outlined,
                 title: 'Diagnostica dirette',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LiveDiagnosticsScreen())),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const LiveDiagnosticsScreen(),
+                  ),
+                ),
               ),
               SettingsValueTile(
                 icon: Icons.dashboard_customize_outlined,
@@ -374,8 +499,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SettingsValueTile(
                 icon: Icons.play_circle_outline_rounded,
                 title: 'Player video',
-                subtitle:
-                    'Motori, audio, sottotitoli, buffer, HDR e Picture-in-Picture',
+                subtitle: 'Motori, audio, sottotitoli, buffer, HDR e Picture-in-Picture',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => const PlayerSettingsScreen(),
@@ -406,8 +530,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SettingsSwitchTile(
                 icon: Icons.no_adult_content_outlined,
                 title: 'Mostra contenuti per adulti',
-                subtitle:
-                    'Contenuti riservati agli adulti (nascosti di base)',
+                subtitle: 'Contenuti riservati agli adulti (nascosti di base)',
                 value: provider.showAdult,
                 onChanged: provider.setShowAdult,
               ),
@@ -415,8 +538,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SettingsSection(
             title: 'Account',
-            description:
-                'Profili e dati personali protetti tra dispositivi autorizzati.',
+            description: 'Profili e dati personali protetti tra dispositivi autorizzati.',
             children: [
               SettingsValueTile(
                 icon: Icons.cloud_sync_outlined,
@@ -430,8 +552,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SettingsSection(
             title: 'Profili',
-            description:
-                'Un profilo per ogni persona che usa l\'app. Il profilo scelto resta attivo al prossimo avvio.',
+            description: 'Un profilo per ogni persona che usa l\'app. Il profilo scelto resta attivo al prossimo avvio.',
             children: [
               SettingsValueTile(
                 icon: Icons.people_outline_rounded,

@@ -1,4 +1,7 @@
+import '../widgets/ui_scale.dart';
+
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -88,7 +91,9 @@ class _HomeScreenState extends State<HomeScreen> {
       Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => UiScale(builder: _buildContent);
+
+  Widget _buildContent(BuildContext context) {
     _syncLayout(context.watch<UiSettings>());
     if (DeviceTypeService.isTv) return _buildTv(context);
     return Scaffold(

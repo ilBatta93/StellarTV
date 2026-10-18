@@ -1,4 +1,7 @@
+import '../models/home_layout_preferences.dart';
+import 'home_presentation.dart';
 import '../services/image_cache_service.dart';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -125,12 +128,19 @@ class TmdbPosterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final home = HomePresentation.contains(context);
+    final ui = context.watch<UiSettings>();
+    final ratio = home ? ui.homePosterShape.aspectRatio : 2 / 3;
     final poster = ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          PosterImage(url: item.posterUrl),
+          PosterImage(
+            url: home && ui.homePosterShape == HomePosterShape.landscape
+                ? item.backdropUrl ?? item.posterUrl
+                : item.posterUrl,
+          ),
           if (item.voteAverage > 0)
             Positioned(
               top: 6,
@@ -141,7 +151,9 @@ class TmdbPosterCard extends StatelessWidget {
       ),
     );
     final fillsCell = !width.isFinite;
-    final effectiveWidth = DeviceTypeService.isTv && !fillsCell
+    final effectiveWidth = home && !fillsCell
+        ? HomePresentation.width(context)
+        : DeviceTypeService.isTv && !fillsCell
         ? TvHomeLayout.maybeOf(context)?.posterWidth ?? 112.0
         : width;
     return Pressable(
@@ -155,7 +167,7 @@ class TmdbPosterCard extends StatelessWidget {
             if (fillsCell)
               Expanded(child: poster)
             else
-              AspectRatio(aspectRatio: 2 / 3, child: poster),
+              AspectRatio(aspectRatio: ratio, child: poster),
             Padding(
               padding: DeviceTypeService.isTv
                   ? const EdgeInsets.fromLTRB(9, 8, 9, 9)
@@ -207,7 +219,15 @@ class RankedPosterCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final home = DeviceTypeService.isTv ? TvHomeLayout.maybeOf(context) : null;
-    final homePosterWidth = home == null ? null : (home.rankedHeight - 16) * 2 / 3;
+    final customized = HomePresentation.contains(context);
+    final ui = context.watch<UiSettings>();
+    final ratio = customized ? ui.homePosterShape.aspectRatio : 2 / 3;
+    final imageWidth = customized
+        ? HomePresentation.width(context, ranked: true)
+        : null;
+    final imageHeight = imageWidth == null ? null : imageWidth / ratio;
+    final homePosterWidth =
+        imageWidth ?? (home == null ? null : (home.rankedHeight - 16) * 2 / 3);
     return Pressable(
       onTap: onTap,
       onFocus: onFocus,
@@ -225,7 +245,9 @@ class RankedPosterCard extends StatelessWidget {
               child: Text(
                 '$rank',
                 style: TextStyle(
-                  fontSize: home == null
+                  fontSize: imageHeight != null
+                      ? (imageHeight * 0.55).clamp(36.0, 140.0)
+                      : home == null
                       ? (DeviceTypeService.isTv ? 100 : 128)
                       : (home.rankedHeight * 0.55).clamp(64.0, 140.0),
                   fontWeight: FontWeight.w700,
@@ -241,15 +263,22 @@ class RankedPosterCard extends StatelessWidget {
             Positioned(
               right: 0,
               top: 0,
-              bottom: 0,
+              bottom: imageHeight == null ? 0 : null,
+              height: imageHeight,
               child: AspectRatio(
-                aspectRatio: 2 / 3,
+                aspectRatio: ratio,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      PosterImage(url: item.posterUrl),
+                      PosterImage(
+                        url:
+                            customized &&
+                                ui.homePosterShape == HomePosterShape.landscape
+                            ? item.backdropUrl ?? item.posterUrl
+                            : item.posterUrl,
+                      ),
                       if (DeviceTypeService.isTv && item.voteAverage > 0)
                         Positioned(
                           top: 6,
@@ -303,7 +332,15 @@ class RatingBadge extends StatelessWidget {
 /// Height of a horizontal row of [TmdbPosterCard]s that never clips the
 /// three-line title, including the TV focus padding and system text scaling.
 double tmdbPosterRowHeight(BuildContext context, {double mobile = 210}) {
-  if (!DeviceTypeService.isTv) return mobile;
+  if (!DeviceTypeService.isTv) {
+    if (HomePresentation.contains(context)) {
+      final ui = context.watch<UiSettings>();
+      return HomePresentation.width(context) / ui.homePosterShape.aspectRatio +
+          MediaQuery.textScalerOf(context).scale(12) * 2.2 +
+          18;
+    }
+    return mobile;
+  }
   final home = TvHomeLayout.maybeOf(context);
   if (home != null) return home.carouselHeight;
   final line = MediaQuery.textScalerOf(context).scale(14) * 1.2;

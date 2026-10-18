@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stellar_tv/services/personal_vault.dart';
@@ -9,6 +10,30 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const key =
       'STV1-000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F';
+  test(
+    'legacy vault merge drops all players but preserves Home preferences',
+    () {
+      final merged = PersonalVault.merge(
+        {
+          'settings': {
+            'player_settings_v1': '{"volume":0.5}',
+            'player_settings_tv_live_v1': '{"engine":"exo"}',
+            'player_settings_tv_vod_v1': '{"codec":"auto"}',
+            'ui_home_shape': 'square',
+            'ui_scale': 110,
+          },
+        },
+        {
+          'settings': {'ui_home_recent_limit': 30},
+        },
+      );
+      expect(merged['settings'], {
+        'ui_home_shape': 'square',
+        'ui_scale': 110,
+        'ui_home_recent_limit': 30,
+      });
+    },
+  );
   test(
     'separate 256-bit recovery key round trips without source fields',
     () async {

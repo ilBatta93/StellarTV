@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -48,9 +49,15 @@ class PersonalVault {
     'ui_start_section',
     'ui_multiview_layout',
     'show_adult_content',
-    'player_settings_v1',
-    'player_settings_tv_live_v1',
-    'player_settings_tv_vod_v1',
+    'ui_home_shape',
+    'ui_home_recent_shape',
+    'ui_home_density',
+    'ui_home_recent_density',
+    'ui_home_recommendation_limit',
+    'ui_home_recent_limit',
+    'ui_home_banner_size',
+    'ui_home_overview',
+    'ui_scale',
   };
   static const _fields = {
     'id',
@@ -168,9 +175,8 @@ class PersonalVault {
   }
 
   static int _at(dynamic v) =>
-      DateTime.tryParse(
-        object(v)['watched']?.toString() ?? '',
-      )?.microsecondsSinceEpoch ??
+      DateTime.tryParse(object(v)['watched']?.toString() ?? '')
+          ?.microsecondsSinceEpoch ??
       0;
   static Map<String, dynamic> mergeHistory(dynamic a, dynamic b) {
     final out = object(a);

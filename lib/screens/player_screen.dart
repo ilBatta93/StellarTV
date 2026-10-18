@@ -15,6 +15,7 @@ import '../providers/app_provider.dart';
 import 'multiview_screen.dart';
 import '../providers/epg_provider.dart';
 import '../player/playback_session.dart';
+import '../player/playback_engine.dart';
 import '../providers/history_provider.dart';
 import '../services/imdb_resolver.dart';
 import '../services/introdb_service.dart';
@@ -41,6 +42,9 @@ class PlayerScreen extends StatefulWidget {
   final Duration? startAt;
   final bool archivePlayback;
 
+  /// Optional engine seam for deterministic remote-input tests.
+  final PlaybackEngine Function(PlayerEngineType)? engineFactory;
+
   /// Ordered episodes of the series being watched (null for films/live).
   final List<Channel>? queue;
 
@@ -49,6 +53,7 @@ class PlayerScreen extends StatefulWidget {
     required this.channel,
     this.startAt,
     this.archivePlayback = false,
+    this.engineFactory,
     this.queue,
   });
 
@@ -251,11 +256,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (key == LogicalKeyboardKey.mediaFastForward ||
         key == LogicalKeyboardKey.mediaRewind) {
       if (_canSeek(session)) {
-        _showTvControls(TvPlayerRowKind.progress);
         final delta = step * 3;
         _tvSeekBy(
           key == LogicalKeyboardKey.mediaRewind ? -delta : delta,
           repeat,
+          revealControls: _controlsVisible,
         );
       }
       return;
@@ -335,8 +340,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         return;
       }
       if ((left || right) && _canSeek(session)) {
-        _showTvControls(TvPlayerRowKind.progress);
-        _tvSeekBy(left ? -step : step, repeat);
+        _tvSeekBy(left ? -step : step, repeat, revealControls: false);
         return;
       }
       _showTvControls(TvPlayerRowKind.center);
@@ -424,7 +428,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _scheduleHide();
   }
 
-  void _tvSeekBy(Duration delta, bool repeat) {
+  void _tvSeekBy(Duration delta, bool repeat, {bool revealControls = true}) {
     final session = _session;
     if (session == null) return;
     final duration = session.value.duration;
@@ -439,7 +443,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     // One seek after the user stops pressing: repeated seeks on every press
     // made the engines stutter and rebuffer.
     _tvSeekTimer = Timer(const Duration(milliseconds: 700), _commitTvSeek);
-    _onInteraction();
+    if (revealControls) _onInteraction();
   }
 
   void _commitTvSeek() {
@@ -1141,6 +1145,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       isLive: _isLive,
       settings: settings,
       startAt: startAt,
+      engineFactory: widget.engineFactory,
     )..addListener(_onSessionChanged);
 
     setState(() {

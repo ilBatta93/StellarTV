@@ -1,6 +1,10 @@
+import '../widgets/ui_scale.dart';
+
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/tmdb_item.dart';
@@ -135,7 +139,9 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => UiScale(builder: _buildContent);
+
+  Widget _buildContent(BuildContext context) {
     final app = context.watch<AppProvider>();
     if (_localSource != app.allChannels || _computedFor != _localQuery) {
       _computeLocal(app);
@@ -184,8 +190,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   child: EmptyState(
                     icon: Icons.search_rounded,
                     title: 'Cerca film, serie TV e canali',
-                    message:
-                        'Scrivi almeno due lettere: cerco nella tua lista e nel catalogo.',
+                    message: 'Scrivi almeno due lettere: cerco nella tua lista e nel catalogo.',
                   ),
                 )
               else
@@ -278,9 +283,7 @@ class _SearchScreenState extends State<SearchScreen> {
           child: EmptyState(
             icon: Icons.search_off_rounded,
             title: 'Nessun risultato',
-            message:
-                _tmdbError ??
-                'Prova con un altro titolo o cambia filtro.',
+            message: _tmdbError ?? 'Prova con un altro titolo o cambia filtro.',
           ),
         ),
       );

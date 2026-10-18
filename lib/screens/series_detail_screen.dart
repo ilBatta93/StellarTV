@@ -1,3 +1,5 @@
+import '../widgets/ui_scale.dart';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -105,7 +107,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => UiScale(builder: _buildContent);
+
+  Widget _buildContent(BuildContext context) {
     final series = _details?.series ?? widget.series;
     final app = context.watch<AppProvider>();
     final isFav = app.favoriteIds.contains(widget.series.id);

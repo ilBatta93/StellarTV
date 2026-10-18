@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme/app_theme.dart';
 import '../models/multiview_layout.dart';
+import '../models/home_layout_preferences.dart';
 
 enum AppSection { home, live, movies, series }
 
@@ -26,7 +27,8 @@ extension CatalogViewModeInfo on CatalogViewMode {
     CatalogViewMode.compact => 'Tanti titoli insieme, come TiviMate',
     CatalogViewMode.list => 'Locandina, categoria e voto in righe',
     CatalogViewMode.landscape => 'Copertine larghe, come Apple TV',
-    CatalogViewMode.spotlight => 'Scheda grande del titolo selezionato, come Infuse',
+    CatalogViewMode.spotlight =>
+      'Scheda grande del titolo selezionato, come Infuse',
   };
 
   IconData get icon => switch (this) {
@@ -67,7 +69,112 @@ class UiSettings extends ChangeNotifier {
   static const _titlesKey = 'ui_show_titles';
   static const _focusGlowKey = 'ui_focus_glow';
 
-  static const textScales = {'normale': 1.0, 'grande': 1.12, 'molto_grande': 1.25};
+  static const homeKeys = {
+    'ui_home_shape',
+    'ui_home_recent_shape',
+    'ui_home_density',
+    'ui_home_recent_density',
+    'ui_home_recommendation_limit',
+    'ui_home_recent_limit',
+    'ui_home_banner_size',
+    'ui_home_overview',
+    'ui_scale',
+  };
+  HomePosterShape homePosterShape = HomePosterShape.portrait;
+  HomePosterShape homeRecentShape = HomePosterShape.landscape;
+  HomeDensity homePosterDensity = HomeDensity.automatic;
+  HomeDensity homeRecentDensity = HomeDensity.automatic;
+  int homeRecommendationLimit = 20;
+  int homeRecentLimit = 50;
+  HomeBannerSize homeBannerSize = HomeBannerSize.balanced;
+  bool homeOverview = true;
+  int uiScalePercent = 100;
+
+  Future<void> setHomePosterShape(HomePosterShape value) async {
+    homePosterShape = value;
+    await _save('ui_home_shape', value.name);
+    notifyListeners();
+  }
+
+  Future<void> setHomeRecentShape(HomePosterShape value) async {
+    homeRecentShape = value;
+    await _save('ui_home_recent_shape', value.name);
+    notifyListeners();
+  }
+
+  Future<void> setHomePosterDensity(HomeDensity value) async {
+    homePosterDensity = value;
+    await _save('ui_home_density', value.name);
+    notifyListeners();
+  }
+
+  Future<void> setHomeRecentDensity(HomeDensity value) async {
+    homeRecentDensity = value;
+    await _save('ui_home_recent_density', value.name);
+    notifyListeners();
+  }
+
+  Future<void> setHomeRecommendationLimit(int value) async {
+    homeRecommendationLimit = HomeLayoutPolicy.recommendationLimit(value);
+    await _save('ui_home_recommendation_limit', homeRecommendationLimit);
+    notifyListeners();
+  }
+
+  Future<void> setHomeRecentLimit(int value) async {
+    homeRecentLimit = HomeLayoutPolicy.itemLimit(value, fallback: 50);
+    await _save('ui_home_recent_limit', homeRecentLimit);
+    notifyListeners();
+  }
+
+  Future<void> setHomeBannerSize(HomeBannerSize value) async {
+    homeBannerSize = value;
+    await _save('ui_home_banner_size', value.name);
+    notifyListeners();
+  }
+
+  Future<void> setHomeOverview(bool value) async {
+    homeOverview = value;
+    await _save('ui_home_overview', value);
+    notifyListeners();
+  }
+
+  Future<void> setUiScale(int value) async {
+    uiScalePercent = HomeLayoutPolicy.uiScale(value);
+    await _save('ui_scale', uiScalePercent);
+    notifyListeners();
+  }
+
+  Future<void> resetHomeLayout() async {
+    // Write defaults (not remove keys): defaults must replace remote settings.
+    homePosterShape = HomePosterShape.portrait;
+    homeRecentShape = HomePosterShape.landscape;
+    homePosterDensity = homeRecentDensity = HomeDensity.automatic;
+    homeRecommendationLimit = 20;
+    homeRecentLimit = 50;
+    homeBannerSize = HomeBannerSize.balanced;
+    homeOverview = true;
+    uiScalePercent = 100;
+    for (final e in <String, Object>{
+      'ui_home_shape': homePosterShape.name,
+      'ui_home_recent_shape': homeRecentShape.name,
+      'ui_home_density': homePosterDensity.name,
+      'ui_home_recent_density': homeRecentDensity.name,
+      'ui_home_recommendation_limit': homeRecommendationLimit,
+      'ui_home_recent_limit': homeRecentLimit,
+      'ui_home_banner_size': homeBannerSize.name,
+      'ui_home_overview': homeOverview,
+      'ui_scale': uiScalePercent,
+    }.entries) {
+      await _save(e.key, e.value);
+    }
+    notifyListeners();
+  }
+
+  static const textScales = {
+    'normale': 1.0,
+    'grande': 1.12,
+    'molto_grande': 1.25,
+  };
   MultiViewLayout _multiViewLayout = MultiViewLayout.automatic;
   MultiViewLayout get multiViewLayout => _multiViewLayout;
   Future<void> setMultiViewLayout(MultiViewLayout layout) async {
@@ -139,6 +246,15 @@ class UiSettings extends ChangeNotifier {
     _showQuality,
     _showTitles,
     _focusGlow,
+    homePosterShape.name,
+    homeRecentShape.name,
+    homePosterDensity.name,
+    homeRecentDensity.name,
+    homeRecommendationLimit,
+    homeRecentLimit,
+    homeBannerSize.name,
+    homeOverview,
+    uiScalePercent,
   ].join('|');
   List<AppSection> get sectionOrder => List.unmodifiable(_sectionOrder);
   AppSection get startSection => _startSection;
@@ -168,6 +284,32 @@ class UiSettings extends ChangeNotifier {
     _showQuality = prefs.getBool(_qualityKey) ?? true;
     _showTitles = prefs.getBool(_titlesKey) ?? true;
     _focusGlow = prefs.getBool(_focusGlowKey) ?? true;
+    homePosterShape =
+        HomePosterShape.values.asNameMap()[prefs.get('ui_home_shape')] ??
+        HomePosterShape.portrait;
+    homeRecentShape =
+        HomePosterShape.values.asNameMap()[prefs.get('ui_home_recent_shape')] ??
+        HomePosterShape.landscape;
+    homePosterDensity =
+        HomeDensity.values.asNameMap()[prefs.get('ui_home_density')] ??
+        HomeDensity.automatic;
+    homeRecentDensity =
+        HomeDensity.values.asNameMap()[prefs.get('ui_home_recent_density')] ??
+        HomeDensity.automatic;
+    homeRecommendationLimit = HomeLayoutPolicy.recommendationLimit(
+      prefs.get('ui_home_recommendation_limit'),
+    );
+    homeRecentLimit = HomeLayoutPolicy.itemLimit(
+      prefs.get('ui_home_recent_limit'),
+      fallback: 50,
+    );
+    homeBannerSize =
+        HomeBannerSize.values.asNameMap()[prefs.get('ui_home_banner_size')] ??
+        HomeBannerSize.balanced;
+    homeOverview = prefs.get('ui_home_overview') is bool
+        ? prefs.get('ui_home_overview') as bool
+        : true;
+    uiScalePercent = HomeLayoutPolicy.uiScale(prefs.get('ui_scale'));
     _loaded = true;
     AppColors.primary = _accent;
     notifyListeners();
@@ -177,6 +319,7 @@ class UiSettings extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     if (value is String) await prefs.setString(key, value);
     if (value is bool) await prefs.setBool(key, value);
+    if (value is int) await prefs.setInt(key, value);
   }
 
   Future<void> setAccent(String name) async {
@@ -328,6 +471,7 @@ class UiSettings extends ChangeNotifier {
     ]) {
       await prefs.remove(key);
     }
+    await resetHomeLayout();
     await load();
   }
 }

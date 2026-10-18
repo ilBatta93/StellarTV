@@ -1,4 +1,6 @@
+import '../widgets/ui_scale.dart';
 import '../services/image_cache_service.dart';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -96,7 +98,9 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => UiScale(builder: _buildContent);
+
+  Widget _buildContent(BuildContext context) {
     final app = context.watch<AppProvider>();
     final item = _item;
     // A title opened from the playlist always plays that exact item; the

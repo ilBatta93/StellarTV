@@ -76,7 +76,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Personal media sync uses account-bound AES-256-GCM envelopes and revision-CAS RPC writes; recovery keys use device-only OS secure storage, never preferences or cloud, to keep server access insufficient for decryption.
 - SyncService owns legacy read/import and verified ciphertext readback; legacy rows are never cleaned automatically, because preservation must precede destructive migration.
 - Favorite events use an encrypted reserved profile lane with persistent timestamped tombstones; this keeps the deployed website wire format compatible and prevents stale devices resurrecting removals.
-- All cloud settings use a fail-closed presentation allowlist; retired source and plaintext favorite adapters are no-ops so older callers cannot upload secrets.
+- All cloud settings use a fail-closed presentation allowlist shared with website and SQL sanitization; player, codec and device settings are excluded on collection, merge and restore, keeping compatibility local.
 - Public release notes enumerate every included commit with neutral descriptions rather than copying commit text, preserving coverage without exposing content configuration.
 
 - Android excludes all app data from OS cloud backup and device transfer, while iOS recovery keys use this-device-only keychain accessibility, so recovery requires explicit user transfer.
@@ -87,3 +87,8 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Live sessions end a player that is ready but draws no first picture within an engine-specific deadline, choosing decoder fallback only when media time advances, so silent buffering never leaves a permanent black screen.
 - Diretta "Visti di recente" uses a device-local id list separate from watch history, because live channels are intentionally excluded from history, Home rows and cloud sync.
 - The in-player live channel list is a transparent dialog route over the running session, so the early player key handler yields to it and playback never stops while browsing.
+
+- HomePresentation scopes validated layout preferences to Home cards and keeps image/caption bounds inside the existing TV snap rows, preserving focus reveal and catalog defaults.
+- UiScale wraps presentation shells only, never the navigator or player surfaces; logical layout and hit testing scale together while root text scaling remains single-owned.
+
+- PlayerScreen forwards an optional engine factory to PlaybackSession for remote-input tests; hidden-control seeking preserves overlay visibility while explicit OK and visible-control navigation keep their original behavior.

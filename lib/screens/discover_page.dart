@@ -1,8 +1,12 @@
+import '../providers/ui_settings.dart';
+import '../models/home_layout_preferences.dart';
+import '../widgets/home_presentation.dart';
 import '../widgets/home_art.dart';
 import '../widgets/tv_home_layout.dart';
 import '../services/history_episode_label.dart';
 import '../widgets/tv_home_rows.dart';
 import '../services/title_display.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -71,7 +75,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      HomePresentation(child: Builder(builder: _buildHome));
+
+  Widget _buildHome(BuildContext context) {
+    final ui = context.watch<UiSettings>();
     final app = context.watch<AppProvider>();
     final discover = context.watch<DiscoverProvider>();
     final history = context.watch<HistoryProvider>();
@@ -106,7 +114,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
         if (app.channelById(e.contentId) ??
                 // Cloud-restored episodes carry no stream address: fall back
                 // to their series folder so "Serie in corso" stays visible.
-                ((e.type == ContentType.series || e.type == ContentType.anime) &&
+                ((e.type == ContentType.series ||
+                            e.type == ContentType.anime) &&
                         e.seriesKey.isNotEmpty
                     ? app.seriesFolderFor(e.seriesKey)
                     : null) ??
@@ -129,12 +138,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final startedMovies = <ResumeItem>[
       for (final it in started)
         if (it.$1.type == ContentType.movie) it,
-    ].take(50).toList();
+    ].take(ui.homeRecentLimit).toList();
     final startedSeries = <ResumeItem>[
       for (final it in started)
         if (it.$1.type == ContentType.series || it.$1.type == ContentType.anime)
           it,
-    ].take(50).toList();
+    ].take(ui.homeRecentLimit).toList();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted)
         context.read<DiscoverProvider>().loadForYou(
@@ -534,7 +543,11 @@ class _Top10BannerState extends State<_Top10Banner> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         AspectRatio(
-          aspectRatio: 4 / 3.4,
+          aspectRatio:
+              4 /
+              (3.4 *
+                  context.watch<UiSettings>().homeBannerSize.fraction /
+                  0.43),
           child: PageView.builder(
             controller: _controller,
             itemCount: widget.items.length,
@@ -626,12 +639,13 @@ class _BannerSlide extends StatelessWidget {
                 const SizedBox(height: 8),
                 HomeTitleArt(item: item),
                 const SizedBox(height: 8),
-                Text(
-                  item.overview,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+                if (context.watch<UiSettings>().homeOverview)
+                  Text(
+                    item.overview,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -683,7 +697,8 @@ class _HistoryRow extends StatelessWidget {
     final tv = DeviceTypeService.isTv;
     return HorizontalRow(
       height: tv
-          ? TvHomeLayout.maybeOf(context)?.carouselHeight ?? homeRowHeight(context)
+          ? TvHomeLayout.maybeOf(context)?.carouselHeight ??
+                homeRowHeight(context)
           : homeRowHeight(context),
       spacing: tv ? 20 : 12,
       itemCount: items.length,
@@ -766,7 +781,9 @@ class _PosterRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return HorizontalRow(
       height: tmdbPosterRowHeight(context),
-      itemCount: items.length,
+      itemCount: items
+          .take(context.watch<UiSettings>().homeRecommendationLimit)
+          .length,
       itemBuilder: (context, i) => TmdbPosterCard(
         item: items[i],
         onTap: () => openTmdbItem(context, items[i]),
@@ -783,7 +800,7 @@ class _RankedRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return HorizontalRow(
-      height: 180,
+      height: TvHomeLayout.maybeOf(context)?.rankedHeight ?? 196,
       spacing: 4,
       itemCount: items.length,
       itemBuilder: (context, i) => RankedPosterCard(
@@ -1050,7 +1067,9 @@ class _TvDiscoverState extends State<_TvDiscover> {
           // Poster + two full title lines + focus frame, never clipped.
           height: tmdbPosterRowHeight(rowContext, mobile: 212),
           spacing: 20,
-          itemCount: items.length,
+          itemCount: items
+              .take(context.watch<UiSettings>().homeRecommendationLimit)
+              .length,
           itemBuilder: (context, i) => TmdbPosterCard(
             item: items[i],
             onTap: () => openTmdbItem(context, items[i]),
@@ -1071,72 +1090,73 @@ class _TvDiscoverState extends State<_TvDiscover> {
       builder: (context, c) {
         // Reserve the synopsis first, then size every carousel to the actual
         // remaining height. Fixed catalog sizes must not squeeze out the plot.
-        final heroHeight = c.maxHeight * 0.43;
+        final heroHeight =
+            c.maxHeight * context.watch<UiSettings>().homeBannerSize.fraction;
         return TvHomeLayout(
           rowHeight: c.maxHeight - heroHeight,
           captionHeight: MediaQuery.textScalerOf(context).scale(14) * 1.2 * 3,
           child: Stack(
-          children: [
-            Positioned.fill(
-              child: ValueListenableBuilder<TmdbItem?>(
-                valueListenable: _hero,
-                builder: (_, item, _) => _TvHeroBackdrop(item: item),
+            children: [
+              Positioned.fill(
+                child: ValueListenableBuilder<TmdbItem?>(
+                  valueListenable: _hero,
+                  builder: (_, item, _) => _TvHeroBackdrop(item: item),
+                ),
               ),
-            ),
-            Column(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  height: heroHeight,
-                  child: Column(
-                    children: [
-                      const ExpiryBanner(),
-                      Expanded(
-                        child: ValueListenableBuilder<TmdbItem?>(
-                          valueListenable: _hero,
-                          builder: (_, item, _) => _TvHeroInfo(item: item),
+              Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: heroHeight,
+                    child: Column(
+                      children: [
+                        const ExpiryBanner(),
+                        Expanded(
+                          child: ValueListenableBuilder<TmdbItem?>(
+                            valueListenable: _hero,
+                            builder: (_, item, _) => _TvHeroInfo(item: item),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: TvHomeRows(
-                    sections: [
-                      if (widget.startedSeries.isNotEmpty)
-                        _historySection(
-                          'Serie viste di recente',
-                          widget.startedSeries,
-                        ),
-                      if (widget.startedMovies.isNotEmpty)
-                        _historySection(
-                          'Film visti di recente',
-                          widget.startedMovies,
-                        ),
-                      if (widget.forYou.isNotEmpty)
-                        _row(
-                          widget.forYouSource == null
-                              ? 'Consigliati per te'
-                              : 'Consigliati per te · perché hai guardato '
-                                    '${displayTitle(widget.forYouSource ?? "")}',
-                          widget.forYou,
-                        ),
-                      if (widget.forYouSeries.isNotEmpty)
-                        _row(
-                          widget.forYouSeriesSource == null
-                              ? 'Serie consigliate per te'
-                              : 'Serie consigliate per te · perché hai '
-                                    'guardato ${displayTitle(widget.forYouSeriesSource ?? "")}',
-                          widget.forYouSeries,
-                        ),
-                      for (final t in widget.tops)
-                        _TvTopRow(spec: t, onFocusItem: _focus),
-                    ],
+                  Expanded(
+                    child: TvHomeRows(
+                      sections: [
+                        if (widget.startedSeries.isNotEmpty)
+                          _historySection(
+                            'Serie viste di recente',
+                            widget.startedSeries,
+                          ),
+                        if (widget.startedMovies.isNotEmpty)
+                          _historySection(
+                            'Film visti di recente',
+                            widget.startedMovies,
+                          ),
+                        if (widget.forYou.isNotEmpty)
+                          _row(
+                            widget.forYouSource == null
+                                ? 'Consigliati per te'
+                                : 'Consigliati per te · perché hai guardato '
+                                      '${displayTitle(widget.forYouSource ?? "")}',
+                            widget.forYou,
+                          ),
+                        if (widget.forYouSeries.isNotEmpty)
+                          _row(
+                            widget.forYouSeriesSource == null
+                                ? 'Serie consigliate per te'
+                                : 'Serie consigliate per te · perché hai '
+                                      'guardato ${displayTitle(widget.forYouSeriesSource ?? "")}',
+                            widget.forYouSeries,
+                          ),
+                        for (final t in widget.tops)
+                          _TvTopRow(spec: t, onFocusItem: _focus),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
           ),
         );
       },
@@ -1469,12 +1489,17 @@ class _TvHeroInfo extends StatelessWidget {
         final scale = MediaQuery.textScalerOf(context);
         final overviewLineHeight = scale.scale(14) * 1.35;
         final metaHeight = scale.scale(14) * 1.25;
-        final showOverview = it.overview.trim().isNotEmpty;
+        final showOverview =
+            context.watch<UiSettings>().homeOverview &&
+            it.overview.trim().isNotEmpty;
         final overviewLines = bounds.maxHeight >= 250 ? 3 : 2;
-        final textBlock = 6 + metaHeight +
+        final textBlock =
+            6 +
+            metaHeight +
             (showOverview ? 8 + overviewLines * overviewLineHeight : 0);
         final logoH = (bounds.maxHeight - vPad * 2 - textBlock)
-            .clamp(0.0, 100.0).toDouble();
+            .clamp(0.0, 100.0)
+            .toDouble();
         return Container(
           width: double.infinity,
           alignment: Alignment.centerLeft,
@@ -1482,37 +1507,39 @@ class _TvHeroInfo extends StatelessWidget {
           child: FractionallySizedBox(
             alignment: Alignment.centerLeft,
             widthFactor: 0.60,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                HomeTitleArt(item: it, height: logoH),
-                const SizedBox(height: 6),
-                Text(
-                  meta,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 14,
-                    height: 1.25,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (showOverview) ...[
-                  const SizedBox(height: 8),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  HomeTitleArt(item: it, height: logoH),
+                  const SizedBox(height: 6),
                   Text(
-                    it.overview,
-                    maxLines: overviewLines,
+                    meta,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 14,
-                      height: 1.35,
+                      height: 1.25,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
+                  if (showOverview) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      it.overview,
+                      maxLines: overviewLines,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         );

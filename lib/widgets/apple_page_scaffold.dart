@@ -1,4 +1,7 @@
+import 'ui_scale.dart';
+
 import 'package:flutter/material.dart';
+
 import '../services/device_type_service.dart';
 
 /// A shared secondary-page shell. The body keeps its own scrolling and focus.
@@ -14,7 +17,9 @@ class ApplePageScaffold extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => UiScale(builder: _buildContent);
+
+  Widget _buildContent(BuildContext context) {
     final tv = DeviceTypeService.isTv;
     return Scaffold(
       appBar: AppBar(

@@ -1,6 +1,10 @@
+import '../models/home_layout_preferences.dart';
+import 'home_presentation.dart';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/tmdb_item.dart';
 import '../providers/discover_provider.dart';
 import '../providers/ui_settings.dart';
@@ -122,6 +126,8 @@ class _HomeTitleArtState extends State<HomeTitleArt> {
 }
 
 double homeCardWidth([BuildContext? context]) {
+  if (context != null && HomePresentation.contains(context))
+    return HomePresentation.width(context, recent: true);
   if (!DeviceTypeService.isTv) return 208;
   if (context == null) return 244;
   final layout = TvHomeLayout.maybeOf(context);
@@ -130,7 +136,10 @@ double homeCardWidth([BuildContext? context]) {
 }
 
 double homeRowHeight(BuildContext context) =>
-    homeCardWidth(context) * 9 / 16 +
+    homeCardWidth(context) /
+        (HomePresentation.contains(context)
+            ? context.watch<UiSettings>().homeRecentShape.aspectRatio
+            : 16 / 9) +
     MediaQuery.textScalerOf(context).scale(13) * 1.25 * 2 +
     34;
 
@@ -170,7 +179,9 @@ class HomeLandscapeCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
-              aspectRatio: 16 / 9,
+              aspectRatio: HomePresentation.contains(context)
+                  ? context.watch<UiSettings>().homeRecentShape.aspectRatio
+                  : 16 / 9,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Stack(
@@ -260,7 +271,9 @@ class HomeLandscapeCard extends StatelessWidget {
                   if (label != null) ...[
                     const SizedBox(width: 12),
                     ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: (width - 30) * 0.42),
+                      constraints: BoxConstraints(
+                        maxWidth: (width - 30) * 0.42,
+                      ),
                       child: Align(
                         alignment: Alignment.topRight,
                         widthFactor: 1,
@@ -336,7 +349,12 @@ class _HomeHistoryArtworkState extends State<HomeHistoryArtwork> {
   @override
   Widget build(BuildContext context) => FutureBuilder<TmdbItem?>(
     future: _item,
-    builder: (_, snapshot) =>
-        widget.builder(snapshot.data?.backdropUrl ?? widget.fallback),
+    builder: (_, snapshot) => widget.builder(
+      HomePresentation.contains(context) &&
+              context.watch<UiSettings>().homeRecentShape !=
+                  HomePosterShape.landscape
+          ? snapshot.data?.posterUrl ?? widget.fallback
+          : snapshot.data?.backdropUrl ?? widget.fallback,
+    ),
   );
 }

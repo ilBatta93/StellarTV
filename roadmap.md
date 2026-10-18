@@ -122,3 +122,12 @@
 - [x] Player diretta: freccia sinistra senza comandi apre elenco canali trasparente (categorie + canali), telecomando, Indietro chiude, riproduzione continua
 - [x] Build 3.3.1 pubblicata su GitHub Releases (run 38, commit 868f99a)
 - [ ] Verifica su TCL dei canali [VS], elenco canali, Home ridimensionata e invio cloud (richiede installazione 3.3.1 e log dell'utente)
+
+## Personalizzazione Home e UI
+- [x] Preferenze Home: forma, densità, quantità consigliati/recenti, banner e scala UI con limiti sicuri.
+- [x] Sync immediata delle preferenze comuni; player e compatibilità solo locali anche nel ripristino.
+- [x] Test di regole, persistenza, geometria e navigazione: 32 Flutter + 13 sito superati; analisi senza errori/warning, lock originale preservato.
+
+- [x] Telecomando TV, tasti destra/sinistra durante riproduzione: seek senza aprire comandi player; test telecomando.
+
+- [ ] Prova su TV/telefono e sync tra dispositivi reali: richiede nuova APK autorizzata e dispositivi dell’utente. Nessuna build avviata.
