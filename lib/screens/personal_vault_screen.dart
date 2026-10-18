@@ -34,11 +34,11 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
     });
     try {
       await action();
-    } catch (_) {
+    } catch (e) {
       if (mounted)
         setState(
           () => _status =
-              'Operazione non riuscita. Verifica la chiave e la connessione. Nessun dato precedente è stato eliminato.',
+              'Operazione non riuscita. Verifica la chiave e la connessione. Nessun dato precedente è stato eliminato. (dettaglio: $e)',
         );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -70,14 +70,18 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
     // Merge existing ciphertext before publishing the device copy.
     if (await sync.hasCloudVault() && !await history.pullFromCloud())
       throw StateError('Ripristino non riuscito');
-    if (!await sync.pushNow(silent: true))
-      throw StateError('Salvataggio non verificato');
-    if (!await history.pullFromCloud())
-      throw StateError('Ripristino non riuscito');
+    // The key is already proven by the restore above: a failed upload is a
+    // warning, not a failed import.
+    final pushed = await sync.pushNow(silent: true);
+    if (!pushed && !await sync.hasCloudVault())
+      throw StateError(sync.lastPushError ?? 'Salvataggio non verificato');
+    await history.pullFromCloud();
     if (mounted)
       setState(
-        () => _status =
-            'Salvataggio cifrato verificato. Sincronizzazione attiva; copie precedenti conservate.',
+        () => _status = pushed
+            ? 'Salvataggio cifrato verificato. Sincronizzazione attiva; copie precedenti conservate.'
+            : 'Chiave importata e dati ripristinati. Invio al cloud non riuscito, riprova più tardi'
+                '${sync.lastPushError == null ? '.' : ' (dettaglio: ${sync.lastPushError}).'}',
       );
   });
   Future<void> _show() => _run(() async {

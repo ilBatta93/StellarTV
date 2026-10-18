@@ -63,6 +63,26 @@ class KeyHandoff {
   String get link =>
       '$siteUrl?c=$code&k=$publicKey${mode.isEmpty ? '' : '&m=$mode'}';
 
+  /// QR login: the TV made [pair] before pairing and put its public key in
+  /// the QR; once signed in it opens the receiver under the pairing [fixed]
+  /// code, so the phone can send list details without a second scan.
+  Future<void> startWith(SimpleKeyPair pair, String fixed) async {
+    await cancel();
+    _pair = pair;
+    publicKey = b64u((await pair.extractPublicKey()).bytes);
+    code = fixed;
+    final row = await _client
+        .from('key_handoffs')
+        .insert({'code': code, 'receiver_key': publicKey})
+        .select('id')
+        .single();
+    _id = row['id'] as String;
+  }
+
+  static Future<SimpleKeyPair> newPair() => _x.newKeyPair();
+  static Future<String> publicOf(SimpleKeyPair p) async =>
+      b64u((await p.extractPublicKey()).bytes);
+
   Future<void> start() async {
     await cancel();
     _pair = await _x.newKeyPair();
@@ -127,6 +147,30 @@ class XtreamHandoff {
       if (uri == null || !['http', 'https'].contains(uri.scheme) ||
           uri.host.isEmpty || u.isEmpty || p.isEmpty) return null;
       return XtreamHandoff(h, u, p);
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+/// QR-login bundle sent from the phone: optional list details and/or key.
+class BundleHandoff {
+  const BundleHandoff(this.xtream, this.key);
+  final XtreamHandoff? xtream;
+  final String? key;
+  static BundleHandoff? parse(String raw) {
+    try {
+      final j = jsonDecode(raw);
+      if (j is! Map || j['kind'] != 'bundle') return null;
+      final x = j['xtream'] is Map
+          ? XtreamHandoff.parse(jsonEncode({...j['xtream'] as Map, 'kind': 'xtream'}))
+          : null;
+      final k = j['key'];
+      final key = k is String && RegExp(r'^STV1-', caseSensitive: false).hasMatch(k.trim())
+          ? k.trim()
+          : null;
+      if (x == null && key == null) return null;
+      return BundleHandoff(x, key);
     } catch (_) {
       return null;
     }

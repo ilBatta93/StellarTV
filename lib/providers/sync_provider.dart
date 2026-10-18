@@ -41,6 +41,7 @@ class SyncProvider extends ChangeNotifier {
   Future<String?> recoveryKey() => _sync.recoveryKey();
   Future<bool> hasCloudVault() => _sync.hasCloudVault();
   Future<void> authorizeVault(String recovery) => _sync.authorizeVault(recovery);
+  String? get lastPushError => _sync.lastError;
   Future<void> forgetVaultKey() => _sync.forgetVaultKey();
 
   String? get email => _sync.currentEmail;
@@ -158,7 +159,9 @@ class SyncProvider extends ChangeNotifier {
       }
       if (!silent) {
         _success = false;
-        _message = 'Invio non riuscito. Verifica connessione e chiave in Dati cifrati.';
+        final why = _sync.lastError;
+        _message = 'Invio non riuscito. Verifica connessione e chiave in Dati cifrati.'
+            '${why == null ? '' : ' (dettaglio: ${why.length > 120 ? why.substring(0, 120) : why})'}';
       }
       return false;
     } finally {

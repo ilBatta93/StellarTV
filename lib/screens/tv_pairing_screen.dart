@@ -9,6 +9,8 @@ import '../providers/app_provider.dart';
 import '../providers/history_provider.dart';
 import '../providers/sync_provider.dart';
 import '../services/tv_pairing_service.dart';
+import '../services/key_handoff.dart';
+import 'package:cryptography/cryptography.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/tv_focusable.dart';
@@ -35,6 +37,13 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
   int _secondsLeft = 0;
   String? _error;
   bool _completing = false;
+  // QR login extra: the phone can send list details/key right after approving.
+  SimpleKeyPair? _pair;
+  String _qrUrl = '';
+  KeyHandoff? _receiver;
+  bool _waitingPhone = false;
+  int _phoneLeft = 120;
+  String _phoneStatus = '';
 
   @override
   void initState() {
@@ -46,6 +55,7 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
   void dispose() {
     _poll?.cancel();
     _countdown?.cancel();
+    _receiver?.cancel();
     super.dispose();
   }
 
@@ -58,8 +68,12 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
     });
     try {
       final pairing = await _service.create();
+      final pair = await KeyHandoff.newPair();
+      final pub = await KeyHandoff.publicOf(pair);
       if (!mounted) return;
       setState(() {
+        _pair = pair;
+        _qrUrl = '${pairing.url}${pairing.url.contains('?') ? '&' : '?'}k=$pub';
         _pairing = pairing;
         _secondsLeft = pairing.expiresIn;
       });
@@ -91,29 +105,9 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
       _countdown?.cancel();
       await _service.completeWithToken(token);
       if (!mounted) return;
-      // Same restore as a normal sign-in: cloud data, then the playlists
-      // saved from the website when this device has none yet.
-      final history = context.read<HistoryProvider>();
-      final sync = context.read<SyncProvider>();
-      try {
-        await history.pullFromCloud().timeout(
-          const Duration(seconds: 10),
-          onTimeout: () => false,
-        );
-      } catch (_) {}
-      try {
-        await sync.restorePlaylistFromCloud();
-      } catch (_) {}
-      if (!mounted) return;
-      final app = context.read<AppProvider>();
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => app.isAuthenticated
-              ? const ProfilePickerScreen()
-              : const LoginScreen(),
-        ),
-        (_) => false,
-      );
+      await _waitForPhone(pairing.code);
+    } on _PhoneDone {
+      return;
     } catch (_) {
       if (!mounted) return;
       setState(() => _error = 'Codice scaduto: te ne mostro uno nuovo.');
@@ -121,6 +115,114 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
       _start();
     }
   }
+
+  /// After sign-in, gives the phone two minutes to send list details and/or
+  /// the recovery key (sealed for [_pair]); "Salta" continues as before.
+  Future<void> _waitForPhone(String code) async {
+    final pair = _pair;
+    if (pair != null) {
+      final r = KeyHandoff(Supabase.instance.client);
+      try {
+        await r.startWith(pair, code);
+        _receiver = r;
+        setState(() {
+          _waitingPhone = true;
+          _phoneLeft = 120;
+        });
+        _poll = Timer.periodic(const Duration(seconds: 2), (_) async {
+          if (!mounted || !_waitingPhone) return;
+          setState(() => _phoneLeft -= 2);
+          try {
+            final raw = await r.poll();
+            if (raw == null) {
+              if (_phoneLeft <= 0) _finish(null);
+              return;
+            }
+            _finish(BundleHandoff.parse(raw));
+          } catch (_) {
+            _finish(null);
+          }
+        });
+        throw _PhoneDone();
+      } on _PhoneDone {
+        rethrow;
+      } catch (_) {
+        // Receiver unavailable: continue with the normal sign-in.
+      }
+    }
+    await _finish(null);
+    throw _PhoneDone();
+  }
+
+  bool _finished = false;
+  Future<void> _finish(BundleHandoff? bundle) async {
+    if (_finished) return;
+    _finished = true;
+    _poll?.cancel();
+    _receiver?.cancel();
+    _receiver?.forget();
+    _pair = null;
+    if (!mounted) return;
+    setState(() => _phoneStatus = 'Configurazione in corso…');
+    final history = context.read<HistoryProvider>();
+    final sync = context.read<SyncProvider>();
+    if (bundle?.key case final key?) {
+      try {
+        await sync.authorizeVault(key);
+      } catch (_) {}
+    }
+    try {
+      await history.pullFromCloud().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => false,
+      );
+    } catch (_) {}
+    try {
+      await sync.restorePlaylistFromCloud();
+    } catch (_) {}
+    if (!mounted) return;
+    final app = context.read<AppProvider>();
+    final x = bundle?.xtream;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => x != null
+            ? LoginScreen(initial: x)
+            : app.isAuthenticated
+            ? const ProfilePickerScreen()
+            : const LoginScreen(),
+      ),
+      (_) => false,
+    );
+  }
+
+  Widget _phoneWait() => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const Icon(Icons.smartphone_rounded, size: 56, color: AppColors.textPrimary),
+      const SizedBox(height: 18),
+      Text(
+        _phoneStatus.isNotEmpty
+            ? _phoneStatus
+            : 'Accesso riuscito.\nOra sul telefono inserisci i dati della lista\no la chiave di recupero: la TV si configura da sola.',
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 18, height: 1.4, color: AppColors.textPrimary),
+      ),
+      const SizedBox(height: 12),
+      if (_phoneStatus.isEmpty)
+        Text('${_phoneLeft.clamp(0, 120)} s',
+            style: const TextStyle(color: AppColors.textSecondary)),
+      const SizedBox(height: 20),
+      if (_phoneStatus.isEmpty)
+        TvFocusable(
+          autofocus: true,
+          onPressed: () => _finish(null),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+            child: Text('Salta'),
+          ),
+        ),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -137,7 +239,9 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
           ),
           ColoredBox(color: AppColors.background.withValues(alpha: .45)),
           SafeArea(
-            child: LayoutBuilder(
+            child: _waitingPhone
+                ? Center(child: _phoneWait())
+                : LayoutBuilder(
               builder: (context, bounds) {
                 final wide = bounds.maxWidth >= 760;
                 final intro = Column(
@@ -239,7 +343,7 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: QrImageView(
-                          data: code.url,
+                          data: _qrUrl.isEmpty ? code.url : _qrUrl,
                           version: QrVersions.auto,
                           size: 200,
                           backgroundColor: AppColors.qrSurface,
@@ -309,3 +413,5 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
     );
   }
 }
+
+class _PhoneDone implements Exception {}

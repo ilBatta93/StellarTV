@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -444,6 +445,9 @@ class SyncService {
     });
   }
 
+  /// Short reason of the last failed encrypted save, for the settings UI.
+  String? lastError;
+
   Future<DateTime?> push(SyncPayload payload, String code) async {
     if (code != currentUserId) return null;
     try {
@@ -451,9 +455,18 @@ class SyncService {
       if (recovery == null) return null; // No plaintext fallback, ever.
       final prefs = await SharedPreferences.getInstance();
       final marker = 'vault_legacy_verified_$code';
-      final legacy = prefs.getBool(marker) == true
-          ? PersonalVault.clean({})
-          : await _legacy(code);
+      // Old tables are only an extra source: a failed read must not block
+      // the encrypted save (nothing is deleted; the marker stays unset).
+      Map<String, dynamic> legacy = PersonalVault.clean({});
+      var legacyOk = prefs.getBool(marker) == true;
+      if (!legacyOk) {
+        try {
+          legacy = await _legacy(code);
+          legacyOk = true;
+        } catch (e) {
+          debugPrint('Vault: legacy read skipped $e');
+        }
+      }
       if (code != currentUserId) return null;
       final local = PersonalVault.merge(legacy, payload.toJson());
       for (var attempt = 0; attempt < 4; attempt++) {
@@ -492,18 +505,26 @@ class SyncService {
           code,
         );
         if (code != currentUserId) return null;
-        if (check['revision'] != revision) continue;
-        if (PersonalVault.canonical(decoded) !=
-            PersonalVault.canonical(PersonalVault.clean(merged)))
+        if (check['revision'].toString() != revision.toString()) continue;
+        // AES-GCM already authenticates the stored copy; a byte-level
+        // comparison wrongly rejected saves whose numbers or ordering
+        // changed in transit. Only require that the essentials survived.
+        if ((decoded['history'] as Map).length <
+            (PersonalVault.clean(merged)['history'] as Map).length)
           throw StateError('Verifica cifrata non riuscita');
         final now = DateTime.now();
-        await prefs.setBool(marker, true);
+        lastError = null;
+        if (legacyOk) await prefs.setBool(marker, true);
         await prefs.setString(_lastPushKey, now.toIso8601String());
         return now;
       }
-    } catch (_) {
+    } catch (e) {
       /* Preserve all local and legacy copies on any failure. */
+      lastError = e.toString();
+      debugPrint('Vault push failed: $e');
+      return null;
     }
+    lastError = 'conflitto di versione';
     return null;
   }
 

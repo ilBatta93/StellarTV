@@ -11,7 +11,11 @@ import '../widgets/phone_handoff_panel.dart';
 import 'profile_picker_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.initial});
+
+  /// List details already received from the phone (QR login): filled in and
+  /// submitted automatically.
+  final XtreamHandoff? initial;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -26,6 +30,20 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _phone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final x = widget.initial;
+    if (x != null) {
+      _xtreamServerController.text = x.server;
+      _xtreamUserController.text = x.username;
+      _xtreamPassController.text = x.password;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _handleXtreamLogin();
+      });
+    }
+  }
 
   @override
   void dispose() {
