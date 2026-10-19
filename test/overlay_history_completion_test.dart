@@ -88,7 +88,7 @@ void main() {
       await history.updatePosition(
         episode.id,
         const Duration(minutes: 15),
-        const Duration(minutes: 60),
+        const Duration(minutes: 20),
       );
       await settings.saveResumePosition(
         episode.url,
@@ -98,7 +98,7 @@ void main() {
       await writer.complete(() async {
         await history.markWatched(
           episode,
-          duration: const Duration(minutes: 60),
+          duration: const Duration(minutes: 20),
         );
         await settings.saveResumePosition(episode.url, null);
       });
@@ -106,7 +106,7 @@ void main() {
         () => history.updatePosition(
           episode.id,
           const Duration(minutes: 15),
-          const Duration(minutes: 60),
+          const Duration(minutes: 20),
         ),
       );
       expect(history.entryFor('ep1')?.progress, 1.0);
@@ -115,7 +115,7 @@ void main() {
       expect(await settings.getResumePosition(episode.url), isNull);
       final stored = await sync.loadLocalHistory(profileId: 'alberto');
       expect((stored['ep1'] as Map)['pos'], 1200);
-      expect((stored['ep1'] as Map)['dur'], 3600);
+      expect((stored['ep1'] as Map)['dur'], 1200);
       await history.switchProfile('kids');
       expect(history.entryFor('ep1'), isNull);
       await history.switchProfile('alberto');
