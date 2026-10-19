@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/content_type.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
@@ -8,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
 import '../widgets/tv_catalog_navigation.dart';
 import '../widgets/tv_filter_panel.dart';
+import '../widgets/tv_focusable.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
 import 'catalog_page.dart';
@@ -83,11 +85,36 @@ class FavoritesPage extends StatelessWidget {
                             )
                             .toList();
                         if (items.isEmpty) {
+                          final tabs = DefaultTabController.of(context);
+                          void next() =>
+                              tabs.animateTo((tabs.index + 1) % tabs.length);
                           return EmptyState(
                             icon: Icons.favorite_border_rounded,
                             title: 'Nessun preferito in $label',
-                            message:
-                                'Tocca il cuore su un contenuto (o tienilo premuto) per salvarlo qui.',
+                            message: 'Tocca il cuore su un contenuto (o tienilo premuto) per salvarlo qui.',
+                            action: DeviceTypeService.isTv
+                                ? TvFocusable(
+                                    // Keeps the remote anchored when the
+                                    // last favourite of this tab is removed.
+                                    autofocus: true,
+                                    focusedScale: 1,
+                                    borderRadius: BorderRadius.circular(8),
+                                    onPressed: next,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 18,
+                                        vertical: 10,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: AppColors.border,
+                                        ),
+                                      ),
+                                      child: const Text('Scheda successiva'),
+                                    ),
+                                  )
+                                : null,
                           );
                         }
                         return ChannelGrid(
@@ -116,8 +143,7 @@ class _MyList extends StatelessWidget {
       return const EmptyState(
         icon: Icons.bookmark_border_rounded,
         title: 'La tua lista è vuota',
-        message:
-            'Aggiungi film e serie dalle classifiche e dai consigli per ritrovarli qui.',
+        message: 'Aggiungi film e serie dalle classifiche e dai consigli per ritrovarli qui.',
       );
     }
     final ui = context.watch<UiSettings>();

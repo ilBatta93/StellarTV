@@ -36,6 +36,16 @@ class RecentLiveChannels extends ChangeNotifier {
     await prefs.setStringList(_key, _ids);
   }
 
+  /// Removes a single channel from the list.
+  Future<void> remove(String channelId) async {
+    await load();
+    if (!_ids.contains(channelId)) return;
+    _ids = List.unmodifiable(_ids.where((e) => e != channelId));
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_key, _ids);
+  }
+
   Future<void> clear() async {
     _ids = const [];
     notifyListeners();

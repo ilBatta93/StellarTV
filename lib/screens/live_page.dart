@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/channel.dart';
@@ -115,8 +116,65 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     }
   }
 
+  /// Guide row currently scrolled in time and its first visible programme.
+  String? _epgRow;
+  int _epgOffset = 0;
+
+  List<EpgProgram> _upcoming(EpgProvider epg, Channel c) => epg
+      .programmesFor(c)
+      .where((p) => p.endTime.isAfter(DateTime.now()))
+      .toList();
+
+  Future<void> _confirmClearRecent() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Svuotare i canali visti di recente?'),
+        actions: [
+          TextButton(
+            autofocus: true,
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Svuota'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await _recentLive.clear();
+  }
+
+  Future<void> _confirmRemoveRecent(Channel c) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text('Rimuovere "${c.name}" dai visti di recente?'),
+        actions: [
+          TextButton(
+            autofocus: true,
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Rimuovi'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await _recentLive.remove(c.id);
+  }
+
   void _select(Channel channel, [EpgProgram? program]) {
     final same = _selectedChannel?.id == channel.id;
+    if (_epgRow != channel.id) {
+      _epgRow = channel.id;
+      _epgOffset = 0;
+    }
     setState(() {
       _selectedChannel = channel;
       _selectedProgram = program;
@@ -169,7 +227,18 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     if (mounted && widget.active) playChannel(context, channel);
   }
 
+  List<String> _headerTimes(EpgProvider epg, Channel? selected) {
+    final visible = selected == null
+        ? const <EpgProgram>[]
+        : _upcoming(epg, selected).skip(_epgOffset).take(3).toList();
+    return [
+      for (var i = 0; i < 3; i++)
+        i < visible.length ? _hm(visible[i].startTime) : '',
+    ];
+  }
+
   Widget _tvGuide(List<Channel> channels, EpgProvider epg, AppProvider app) {
+    final showWatched = _category == _watchedLabel;
     final selected = channels
         .where((c) => c.id == _selectedChannel?.id)
         .firstOrNull;
@@ -200,7 +269,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                               ),
                             ),
                           ),
-                          for (final title in ['Ora', 'A seguire', 'Poi'])
+                          for (final title in _headerTimes(epg, selected))
                             Expanded(
                               child: Text(
                                 title,
@@ -223,11 +292,14 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                         ),
                         itemBuilder: (context, i) {
                           final c = channels[i];
-                          final programs = epg
-                              .programmesFor(c)
-                              .where((p) => p.endTime.isAfter(DateTime.now()))
-                              .take(3)
-                              .toList();
+                          final all = _upcoming(epg, c);
+                          final offset = c.id == _epgRow
+                              ? _epgOffset.clamp(
+                                  0,
+                                  all.isEmpty ? 0 : all.length - 1,
+                                )
+                              : 0;
+                          final programs = all.skip(offset).take(3).toList();
                           return TvCatalogItem(
                             index: i,
                             columns: 1,
@@ -245,6 +317,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                         if (focus) _select(c);
                                       },
                                       onPressed: () => _watch(c),
+                                      onLongPress: showWatched
+                                          ? () => _confirmRemoveRecent(c)
+                                          : null,
                                       child: GestureDetector(
                                         onTap: () => _watch(c),
                                         child: Container(
@@ -305,84 +380,117 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                     ),
                                   )
                                 else
-                                  for (final p in programs)
+                                  for (final (slot, p) in programs.indexed)
                                     Expanded(
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 6,
-                                        ),
-                                        child: TvFocusable(
-                                          focusedScale: 1,
-                                          onFocusChange: (focus) {
-                                            if (focus) _select(c, p);
-                                          },
-                                          onPressed: () async {
-                                            _stopPreview();
-                                            setState(() {});
-                                            await _releaseQueue;
-                                            if (!context.mounted ||
-                                                !widget.active)
-                                              return;
-                                            showChannelGuide(context, c);
-                                          },
-                                          child: Container(
-                                            height: 92,
-                                            padding: const EdgeInsets.all(10),
-                                            decoration: BoxDecoration(
-                                              color:
-                                                  p.startTime.isBefore(
-                                                    DateTime.now(),
-                                                  )
-                                                  ? AppColors.card
-                                                  : AppColors.surface,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color: AppColors.border,
-                                              ),
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  p.title,
-                                                  maxLines: 2,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 13,
-                                                    height: 1.2,
-                                                  ),
+                                      child: Focus(
+                                        canRequestFocus: false,
+                                        skipTraversal: true,
+                                        onKeyEvent: (node, event) {
+                                          if (event is! KeyDownEvent &&
+                                              event is! KeyRepeatEvent) {
+                                            return KeyEventResult.ignored;
+                                          }
+                                          final key = event.logicalKey;
+                                          if (key ==
+                                                  LogicalKeyboardKey
+                                                      .arrowRight &&
+                                              slot == programs.length - 1 &&
+                                              offset + programs.length <
+                                                  all.length) {
+                                            _epgRow = c.id;
+                                            _epgOffset = offset + 1;
+                                            _select(c, all[offset + slot + 1]);
+                                            return KeyEventResult.handled;
+                                          }
+                                          if (key ==
+                                                  LogicalKeyboardKey
+                                                      .arrowLeft &&
+                                              slot == 0 &&
+                                              offset > 0) {
+                                            _epgRow = c.id;
+                                            _epgOffset = offset - 1;
+                                            _select(c, all[offset - 1]);
+                                            return KeyEventResult.handled;
+                                          }
+                                          return KeyEventResult.ignored;
+                                        },
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 6,
+                                          ),
+                                          child: TvFocusable(
+                                            focusedScale: 1,
+                                            onFocusChange: (focus) {
+                                              if (focus) _select(c, p);
+                                            },
+                                            onPressed: () async {
+                                              _stopPreview();
+                                              setState(() {});
+                                              await _releaseQueue;
+                                              if (!context.mounted ||
+                                                  !widget.active)
+                                                return;
+                                              showChannelGuide(context, c);
+                                            },
+                                            child: Container(
+                                              height: 92,
+                                              padding: const EdgeInsets.all(10),
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    p.startTime.isBefore(
+                                                      DateTime.now(),
+                                                    )
+                                                    ? AppColors.card
+                                                    : AppColors.surface,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: AppColors.border,
                                                 ),
-                                                const Spacer(),
-                                                FittedBox(
-                                                  fit: BoxFit.scaleDown,
-                                                  alignment:
-                                                      Alignment.centerLeft,
-                                                  child: Text(
-                                                    '${_hm(p.startTime)} – ${_hm(p.endTime)}',
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    p.title,
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                     style: const TextStyle(
-                                                      color:
-                                                          AppColors.textMuted,
-                                                      fontSize: 11,
+                                                      fontSize: 13,
+                                                      height: 1.2,
                                                     ),
                                                   ),
-                                                ),
-                                                const SizedBox(height: 7),
-                                                LinearProgressIndicator(
-                                                  value:
-                                                      p.startTime.isBefore(
-                                                        DateTime.now(),
-                                                      )
-                                                      ? _progressOf(p)
-                                                      : 0,
-                                                  minHeight: 2,
-                                                  color: AppColors.primary,
-                                                  backgroundColor:
-                                                      AppColors.border,
-                                                ),
-                                              ],
+                                                  const Spacer(),
+                                                  FittedBox(
+                                                    fit: BoxFit.scaleDown,
+                                                    alignment:
+                                                        Alignment.centerLeft,
+                                                    child: Text(
+                                                      '${_hm(p.startTime)} – ${_hm(p.endTime)}',
+                                                      style: const TextStyle(
+                                                        color:
+                                                            AppColors.textMuted,
+                                                        fontSize: 11,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 7),
+                                                  LinearProgressIndicator(
+                                                    value:
+                                                        p.startTime.isBefore(
+                                                          DateTime.now(),
+                                                        )
+                                                        ? _progressOf(p)
+                                                        : 0,
+                                                    minHeight: 2,
+                                                    color: AppColors.primary,
+                                                    backgroundColor:
+                                                        AppColors.border,
+                                                  ),
+                                                ],
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -668,6 +776,12 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                   showWatched,
                   () => setState(() => _category = _watchedLabel),
                 ),
+                if (showWatched && _recentLive.ids.isNotEmpty)
+                  TvFilterOption(
+                    'Svuota visti di recente',
+                    false,
+                    _confirmClearRecent,
+                  ),
                 for (final group in groups)
                   TvFilterOption(
                     group.label,
@@ -763,6 +877,8 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                   showWatched,
                   () => setState(() => _category = _watchedLabel),
                 ),
+                if (showWatched && _recentLive.ids.isNotEmpty)
+                  _chip('Svuota recenti', false, _confirmClearRecent),
                 for (final g in groups)
                   _chip(
                     g.label,
@@ -808,6 +924,23 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                             )
                           : null,
                     );
+                    if (showWatched) {
+                      final c = channels[i];
+                      return Dismissible(
+                        key: ValueKey('recent-${c.id}'),
+                        direction: DismissDirection.endToStart,
+                        onDismissed: (_) => _recentLive.remove(c.id),
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          child: const Icon(
+                            Icons.delete_outline_rounded,
+                            color: AppColors.error,
+                          ),
+                        ),
+                        child: tile,
+                      );
+                    }
                     return TvCatalogItem(index: i, columns: 1, child: tile);
                   },
                 ),

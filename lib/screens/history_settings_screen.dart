@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+
 import '../widgets/apple_page_scaffold.dart';
+
 import 'package:provider/provider.dart';
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/history_entry.dart';
@@ -13,8 +16,80 @@ import '../widgets/tv_focusable.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
 
-class HistorySettingsScreen extends StatelessWidget {
+/// History filter shown above the list.
+enum HistoryFilter { all, movies, series }
+
+/// Pure split used by the history screen; live entries only appear in "Tutti".
+List<HistoryEntry> filterHistory(List<HistoryEntry> e, HistoryFilter f) =>
+    switch (f) {
+      HistoryFilter.all => e,
+      HistoryFilter.movies =>
+        e.where((x) => x.type == ContentType.movie).toList(),
+      HistoryFilter.series =>
+        e
+            .where(
+              (x) =>
+                  x.type == ContentType.series || x.type == ContentType.anime,
+            )
+            .toList(),
+    };
+
+class HistorySettingsScreen extends StatefulWidget {
   const HistorySettingsScreen({super.key});
+
+  @override
+  State<HistorySettingsScreen> createState() => _HistorySettingsScreenState();
+}
+
+class _HistorySettingsScreenState extends State<HistorySettingsScreen> {
+  HistoryFilter _filter = HistoryFilter.all;
+
+  Widget _filters(List<HistoryEntry> all) {
+    Widget chip(HistoryFilter f, String label) {
+      final n = filterHistory(all, f).length;
+      final on = _filter == f;
+      void pick() => setState(() => _filter = f);
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: TvFocusable(
+          focusedScale: 1,
+          autofocus: f == HistoryFilter.all && DeviceTypeService.isTv,
+          borderRadius: BorderRadius.circular(18),
+          onPressed: pick,
+          child: GestureDetector(
+            onTap: pick,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: on
+                    ? AppColors.primary.withValues(alpha: 0.18)
+                    : AppColors.surface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: on ? AppColors.primary : AppColors.border,
+                ),
+              ),
+              child: Text(
+                '$label · $n',
+                style: TextStyle(
+                  fontWeight: on ? FontWeight.w700 : FontWeight.w500,
+                  color: on ? AppColors.primary : AppColors.textPrimary,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        chip(HistoryFilter.all, 'Tutti'),
+        chip(HistoryFilter.movies, 'Film'),
+        chip(HistoryFilter.series, 'Serie TV'),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +157,7 @@ class HistorySettingsScreen extends StatelessWidget {
       );
     }
 
+    final shown = filterHistory(entries, _filter);
     return ApplePageScaffold(
       title: 'Cronologia',
       body: RefreshIndicator(
@@ -89,11 +165,27 @@ class HistorySettingsScreen extends StatelessWidget {
         child: ListView.separated(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          itemCount: entries.length + 1,
+          itemCount: shown.length + 2,
           separatorBuilder: (_, _) => const SizedBox(height: 8),
           itemBuilder: (context, i) {
             if (i == 0) return _Header(count: entries.length);
-            final entry = entries[i - 1];
+            if (i == 1) {
+              if (shown.isNotEmpty) return _filters(entries);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _filters(entries),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Text(
+                      'Nessun contenuto in questa categoria.',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                  ),
+                ],
+              );
+            }
+            final entry = shown[i - 2];
             return _HistoryTile(key: ValueKey(entry.contentId), entry: entry);
           },
         ),
@@ -236,7 +328,10 @@ class _HistoryTile extends StatelessWidget {
       );
     }
     if (channel == null) {
-      _showMessage(context, 'Contenuto non disponibile nella configurazione attuale');
+      _showMessage(
+        context,
+        'Contenuto non disponibile nella configurazione attuale',
+      );
       return;
     }
     if (channel.type == ContentType.series ||
