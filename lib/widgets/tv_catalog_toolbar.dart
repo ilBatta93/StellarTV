@@ -72,6 +72,8 @@ class TvCatalogToolbar extends StatefulWidget {
     this.trailing,
     this.category,
     this.filters,
+    this.platforms,
+    this.platformActive = false,
     this.genresOnly = false,
     this.viewMode,
     this.onViewMode,
@@ -86,6 +88,10 @@ class TvCatalogToolbar extends StatefulWidget {
   final Widget? trailing;
   final String? category;
   final WidgetBuilder? filters;
+
+  /// Streaming platform panel (Film / Serie TV); opens in the same space.
+  final WidgetBuilder? platforms;
+  final bool platformActive;
   final bool genresOnly;
 
   /// Poster layout picker (grid / compact / list); null hides the button.
@@ -106,7 +112,9 @@ class TvCatalogToolbar extends StatefulWidget {
 class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   bool _expanded = false;
   bool _filtersOpen = false;
+  bool _platformsOpen = false;
   final _filterButton = FocusNode(debugLabel: 'catalogFilters');
+  final _platformButton = FocusNode(debugLabel: 'catalogPlatforms');
   final _panel = FocusScopeNode(debugLabel: 'catalog panel');
   final _field = FocusNode();
   final _search = FocusNode(debugLabel: 'catalogSearch');
@@ -115,6 +123,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   @override
   void dispose() {
     _filterButton.dispose();
+    _platformButton.dispose();
     _panel.dispose();
     _field.dispose();
     _search.dispose();
@@ -131,6 +140,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
     }
     setState(() {
       _filtersOpen = false;
+      _platformsOpen = false;
       _expanded = true;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -155,12 +165,42 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
       _toggleFilters();
       return true;
     }
+    if (_platformsOpen) {
+      _togglePlatforms();
+      return true;
+    }
     return false;
+  }
+
+  void _focusPanel() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !(_filtersOpen || _platformsOpen)) return;
+      final nodes = _panel.traversalDescendants.where(
+        (n) => n.canRequestFocus && !n.skipTraversal,
+      );
+      if (nodes.isNotEmpty) nodes.first.requestFocus();
+    });
+  }
+
+  void _togglePlatforms() {
+    _collapse();
+    setState(() {
+      _filtersOpen = false;
+      _platformsOpen = !_platformsOpen;
+    });
+    if (_platformsOpen) {
+      _focusPanel();
+    } else {
+      _platformButton.requestFocus();
+    }
   }
 
   void _toggleFilters() {
     _collapse();
-    setState(() => _filtersOpen = !_filtersOpen);
+    setState(() {
+      _platformsOpen = false;
+      _filtersOpen = !_filtersOpen;
+    });
     if (_filtersOpen) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_filtersOpen) return;
@@ -258,8 +298,11 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
       },
       onFocusChange: (focused) {
         if (!focused && _expanded) _collapse();
-        if (!focused && _filtersOpen) {
-          setState(() => _filtersOpen = false);
+        if (!focused && (_filtersOpen || _platformsOpen)) {
+          setState(() {
+            _filtersOpen = false;
+            _platformsOpen = false;
+          });
         }
       },
       child: Padding(
@@ -267,7 +310,8 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (_filtersOpen && widget.filters != null)
+            if ((_filtersOpen && widget.filters != null) ||
+                (_platformsOpen && widget.platforms != null))
               Expanded(
                 child: FocusScope(
                   node: _panel,
@@ -277,13 +321,15 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
                             event.logicalKey == LogicalKeyboardKey.escape ||
                             event.logicalKey ==
                                 LogicalKeyboardKey.browserBack)) {
-                      _toggleFilters();
+                      _platformsOpen ? _togglePlatforms() : _toggleFilters();
                       return KeyEventResult.handled;
                     }
                     return KeyEventResult.ignored;
                   },
                   child:
-                      widget.filters?.call(context) ?? const SizedBox.shrink(),
+                      (_platformsOpen ? widget.platforms : widget.filters)
+                          ?.call(context) ??
+                      const SizedBox.shrink(),
                 ),
               )
             else if (_expanded)
@@ -355,6 +401,28 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
                         : (widget.genresOnly
                               ? Icons.style_outlined
                               : Icons.filter_list_rounded),
+                  ),
+                ),
+              ),
+            if (widget.platforms != null)
+              TvFocusable(
+                focusNode: _platformButton,
+                onPressed: _togglePlatforms,
+                child: IconButton(
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.surface,
+                    foregroundColor: _platformsOpen || widget.platformActive
+                        ? AppColors.primary
+                        : AppColors.textPrimary,
+                  ),
+                  tooltip: _platformsOpen
+                      ? 'Chiudi piattaforme'
+                      : 'Piattaforme streaming',
+                  onPressed: _togglePlatforms,
+                  icon: Icon(
+                    _platformsOpen
+                        ? Icons.close_rounded
+                        : Icons.connected_tv_rounded,
                   ),
                 ),
               ),

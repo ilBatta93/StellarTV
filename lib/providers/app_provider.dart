@@ -22,6 +22,7 @@ import '../services/sync_service.dart';
 import '../services/series_grouping.dart';
 import '../services/kids_content_service.dart';
 import '../services/catalog_cache_service.dart';
+import '../models/custom_category.dart';
 
 enum AuthMethod { none, xtream }
 
@@ -61,6 +62,8 @@ class AppProvider extends ChangeNotifier {
   Set<String> _favoriteIds = {};
   List<TmdbItem> _tmdbFavorites = [];
   Map<String, List<String>> _hiddenCategories = {};
+  Map<String, List<String>> _categoryOrder = {};
+  List<CustomCategory> _customCategories = [];
   bool _isLoading = false;
   bool _initialized = false;
   String? _error;
@@ -399,14 +402,182 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// Catalog grouped by category, preserving the playlist's category order,
-  /// with duplicates removed and hidden categories excluded.
+  /// with duplicates removed and hidden categories excluded. Personal
+  /// categories come first; the user's saved order then wins over both.
   List<CatalogGroup> groupedCatalog(ContentType type) =>
-      _groupedCache[type] ??= CatalogBuilder.groupsOf(
-        _visibleChannels(type),
-        categoryOrderOf(
-          type,
-        ).where((g) => !hiddenCategoriesOf(type).contains(g)).toList(),
-      );
+      _groupedCache[type] ??= () {
+        final base = CatalogBuilder.groupsOf(
+          _visibleChannels(type),
+          categoryOrderOf(
+            type,
+          ).where((g) => !hiddenCategoriesOf(type).contains(g)).toList(),
+        );
+        final customs = customCategoriesOf(type);
+        final byLabel = <String, CatalogGroup>{};
+        if (customs.isNotEmpty) {
+          final byId = <String, CatalogEntry>{
+            for (final g in base)
+              for (final e in g.entries) e.primary.id: e,
+          };
+          for (final c in customs) {
+            byLabel[c.name] = CatalogGroup(
+              label: c.name,
+              entries: [
+                for (final id in c.itemIds)
+                  if (byId[id] case final entry?) entry,
+              ],
+            );
+          }
+        }
+        for (final g in base) {
+          byLabel.putIfAbsent(g.label, () => g);
+        }
+        return [
+          for (final label in applyCategoryOrder(
+            byLabel.keys.toList(),
+            _categoryOrder[type.name] ?? const [],
+          ))
+            if (byLabel[label] case final group?)
+              if (group.entries.isNotEmpty) group,
+        ];
+      }();
+
+  // ---- Personal categories and category order (device-local) ----
+
+  List<CustomCategory> get customCategories => _customCategories;
+
+  List<CustomCategory> customCategoriesOf(ContentType type) => [
+    for (final c in _customCategories)
+      if (c.type == type) c,
+  ];
+
+  /// Every label shown for [type] (personal + visible playlist categories)
+  /// in the order the catalog uses, including empty personal categories.
+  List<String> orderedCategoryLabels(ContentType type) {
+    final defaults = <String>[
+      for (final c in customCategoriesOf(type)) c.name,
+      for (final g in categoryOrderOf(type))
+        if (!hiddenCategoriesOf(type).contains(g)) g,
+    ];
+    return applyCategoryOrder(
+      defaults.toSet().toList(),
+      _categoryOrder[type.name] ?? const [],
+    );
+  }
+
+  void _categoriesChanged(ContentType type) {
+    _groupedCache.remove(type);
+    _allCache.remove(type);
+    _recentCache.remove(type);
+    notifyListeners();
+  }
+
+  Future<void> setCategoryOrder(ContentType type, List<String> order) async {
+    _categoryOrder = {..._categoryOrder, type.name: order};
+    _categoriesChanged(type);
+    await _settingsService.setCategoryOrder(_categoryOrder);
+  }
+
+  Future<void> resetCategoryOrder(ContentType type) async {
+    _categoryOrder = {..._categoryOrder}..remove(type.name);
+    _categoriesChanged(type);
+    await _settingsService.setCategoryOrder(_categoryOrder);
+  }
+
+  Future<void> _saveCustom(ContentType type) async {
+    _categoriesChanged(type);
+    await _settingsService.setCustomCategories(_customCategories);
+  }
+
+  /// Returns null on success or an Italian error for the user.
+  Future<String?> createCustomCategory(ContentType type, String name) async {
+    final clean = name.trim();
+    if (clean.isEmpty) return 'Scrivi un nome';
+    if (clean.length > 40) return 'Massimo 40 caratteri';
+    final taken = {
+      ...customCategoriesOf(type).map((c) => c.name.toLowerCase()),
+      ...categoryOrderOf(type).map((g) => g.toLowerCase()),
+    };
+    if (taken.contains(clean.toLowerCase())) return 'Nome già usato';
+    _customCategories = [
+      ..._customCategories,
+      CustomCategory(
+        id: '${type.name}-${DateTime.now().microsecondsSinceEpoch}',
+        name: clean,
+        type: type,
+      ),
+    ];
+    await _saveCustom(type);
+    return null;
+  }
+
+  Future<String?> renameCustomCategory(String id, String name) async {
+    final current = _customCategories.where((c) => c.id == id).firstOrNull;
+    if (current == null) return 'Categoria non trovata';
+    final clean = name.trim();
+    if (clean.isEmpty) return 'Scrivi un nome';
+    if (clean.length > 40) return 'Massimo 40 caratteri';
+    final taken = {
+      for (final c in customCategoriesOf(current.type))
+        if (c.id != id) c.name.toLowerCase(),
+      ...categoryOrderOf(current.type).map((g) => g.toLowerCase()),
+    };
+    if (taken.contains(clean.toLowerCase())) return 'Nome già usato';
+    final order = _categoryOrder[current.type.name];
+    if (order != null) {
+      _categoryOrder = {
+        ..._categoryOrder,
+        current.type.name: [
+          for (final l in order) l == current.name ? clean : l,
+        ],
+      };
+      await _settingsService.setCategoryOrder(_categoryOrder);
+    }
+    _customCategories = [
+      for (final c in _customCategories)
+        c.id == id ? c.copyWith(name: clean) : c,
+    ];
+    await _saveCustom(current.type);
+    return null;
+  }
+
+  Future<void> deleteCustomCategory(String id) async {
+    final current = _customCategories.where((c) => c.id == id).firstOrNull;
+    if (current == null) return;
+    _customCategories = [
+      for (final c in _customCategories)
+        if (c.id != id) c,
+    ];
+    await _saveCustom(current.type);
+  }
+
+  bool isInCustomCategory(String categoryId, Channel item) => _customCategories
+      .any((c) => c.id == categoryId && c.itemIds.contains(item.id));
+
+  Future<void> toggleInCustomCategory(String categoryId, Channel item) async {
+    final current = _customCategories
+        .where((c) => c.id == categoryId)
+        .firstOrNull;
+    if (current == null) return;
+    final ids = [...current.itemIds];
+    if (!ids.remove(item.id)) ids.insert(0, item.id);
+    _customCategories = [
+      for (final c in _customCategories)
+        c.id == categoryId ? c.copyWith(itemIds: ids) : c,
+    ];
+    await _saveCustom(current.type);
+  }
+
+  /// Titles of a personal category resolved against the current playlist.
+  List<CatalogEntry> customCategoryEntries(CustomCategory category) {
+    final byId = <String, CatalogEntry>{
+      for (final e in allEntries(category.type)) e.primary.id: e,
+    };
+    return [
+      for (final id in category.itemIds)
+        if (byId[id] case final entry?) entry,
+    ];
+  }
 
   /// Recently added items of a type, in the playlist's own order (the
   /// provider lists newest entries last, so newest-first means reversed).
@@ -807,6 +978,8 @@ class AppProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _showAdult = prefs.getBool(_showAdultKey) ?? false;
     _hiddenCategories = await _settingsService.getHiddenCategories();
+    _categoryOrder = await _settingsService.getCategoryOrder();
+    _customCategories = await _settingsService.getCustomCategories();
     final creds = await _settingsService.getXtreamCredentials();
     final credsChanged =
         creds != null &&
@@ -851,6 +1024,8 @@ class AppProvider extends ChangeNotifier {
       unawaited(_restoreCloudFavorites(_syncCode!).catchError((_) {}));
     }
     _hiddenCategories = await _settingsService.getHiddenCategories();
+    _categoryOrder = await _settingsService.getCategoryOrder();
+    _customCategories = await _settingsService.getCustomCategories();
     final methodStr = await _settingsService.getAuthMethod();
     _authMethod = switch (methodStr) {
       'xtream' => AuthMethod.xtream,

@@ -27,6 +27,7 @@ import '../widgets/reaction_buttons.dart';
 import '../widgets/trailer_button.dart';
 import '../services/download_service.dart';
 import '../services/title_display.dart';
+import '../widgets/category_assign_button.dart';
 
 class TitleDetailScreen extends StatefulWidget {
   final TmdbItem? item;
@@ -475,6 +476,8 @@ class _Actions extends StatelessWidget {
             ),
           ),
         if (item case final trailerItem?) TrailerButton(item: trailerItem),
+        if (playable case final assignable?)
+          CategoryAssignButton(item: assignable),
         if (variants.length > 1) ...[
           const SizedBox(height: 8),
           const Text(

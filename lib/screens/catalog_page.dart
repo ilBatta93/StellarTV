@@ -21,6 +21,10 @@ import '../widgets/tv_catalog_navigation.dart';
 import '../widgets/tv_focusable.dart';
 import '../services/catalog_rating_service.dart';
 import '../services/image_warmup_service.dart';
+import '../services/platform_catalog_service.dart';
+import '../models/streaming_platform.dart';
+import '../models/tmdb_item.dart';
+import '../providers/discover_provider.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/tv_category_panel.dart';
 import '../widgets/tv_text_field.dart';
@@ -309,6 +313,9 @@ class _CatalogPageState extends State<CatalogPage> {
   String _query = '';
   String? _selectedCategory;
   int? _genreId;
+  StreamingPlatform? _platform;
+  Set<String>? _platformIds;
+  String? _platformIdsKey;
   bool _infoRequested = false;
 
   static const _recentLabel = 'Ultimi Aggiunti';
@@ -332,6 +339,77 @@ class _CatalogPageState extends State<CatalogPage> {
   void initState() {
     super.initState();
     CatalogRatingService.instance.addListener(_ratingsChanged);
+    PlatformCatalogService.instance.addListener(_platformsChanged);
+  }
+
+  void _platformsChanged() {
+    if (mounted && _platform != null) setState(() {});
+  }
+
+  bool get _platformMovies => widget.type == ContentType.movie;
+
+  void _selectPlatform(StreamingPlatform? platform) {
+    setState(() => _platform = _platform == platform ? null : platform);
+    final chosen = _platform;
+    if (chosen != null) {
+      PlatformCatalogService.instance.ensure(
+        context.read<DiscoverProvider>().tmdb,
+        chosen,
+        movies: _platformMovies,
+      );
+    }
+  }
+
+  String _platformKey(AppProvider app, StreamingPlatform p) =>
+      '${p.name}:${PlatformCatalogService.instance.version}:'
+      '${identityHashCode(app.allChannels)}';
+
+  /// Playlist ids TMDB lists for the selected platform (matched locally).
+  Set<String> _platformMatches(AppProvider app, StreamingPlatform p) {
+    final service = PlatformCatalogService.instance;
+    final key = _platformKey(app, p);
+    if (_platformIds != null && _platformIdsKey == key) return _platformIds!;
+    final ids = <String>{};
+    for (final item
+        in service.itemsOf(p, movies: _platformMovies) ?? const <TmdbItem>[]) {
+      final match = app.findChannelFor(item);
+      if (match != null) ids.add(match.id);
+    }
+    _platformIdsKey = key;
+    return _platformIds = ids;
+  }
+
+  Widget _buildPlatformPanel() => TvFilterPanel(
+    options: [
+      TvFilterOption(
+        'Tutte le piattaforme',
+        _platform == null,
+        () => _selectPlatform(null),
+      ),
+      for (final p in StreamingPlatform.all)
+        TvFilterOption(
+          PlatformCatalogService.instance.isLoading(p, movies: _platformMovies)
+              ? '${p.name} · caricamento…'
+              : p.name,
+          _platform == p,
+          () => _selectPlatform(p),
+        ),
+    ],
+  );
+
+  Future<void> _pickPlatformMobile() async {
+    const none = 'Tutte le piattaforme';
+    final chosen = await pickOption<String>(
+      context,
+      title: 'Piattaforme streaming',
+      options: [none, for (final p in StreamingPlatform.all) p.name],
+      current: _platform?.name ?? none,
+      label: (v) => v,
+    );
+    if (chosen == null || !mounted) return;
+    final platform = StreamingPlatform.byName(chosen);
+    if (platform == _platform) return;
+    _selectPlatform(platform);
   }
 
   Timer? _ratingsTimer;
@@ -357,6 +435,7 @@ class _CatalogPageState extends State<CatalogPage> {
   @override
   void dispose() {
     CatalogRatingService.instance.removeListener(_ratingsChanged);
+    PlatformCatalogService.instance.removeListener(_platformsChanged);
     _ratingsTimer?.cancel();
     _searchController.dispose();
     _spotlight.dispose();
@@ -487,6 +566,10 @@ class _CatalogPageState extends State<CatalogPage> {
               scaffoldKey: _scaffoldKey,
               genresOnly: true,
               filters: (_) => _buildTvFilters(app, groups),
+              platforms: widget.type == ContentType.live
+                  ? null
+                  : (_) => _buildPlatformPanel(),
+              platformActive: _platform != null,
             )
           else
             Padding(
@@ -526,6 +609,13 @@ class _CatalogPageState extends State<CatalogPage> {
                       );
                     },
                   ),
+                  if (widget.type != ContentType.live)
+                    IconButton(
+                      tooltip: 'Piattaforme streaming',
+                      color: _platform != null ? AppColors.primary : null,
+                      icon: const Icon(Icons.connected_tv_rounded),
+                      onPressed: _pickPlatformMobile,
+                    ),
                   IconButton(
                     tooltip: 'Categorie',
                     icon: const Icon(Icons.category_outlined),
@@ -555,6 +645,15 @@ class _CatalogPageState extends State<CatalogPage> {
       widget.type == ContentType.movie ? _movieGenres : _tvGenres;
 
   bool _matchesGenre(AppProvider app, CatalogEntry e) {
+    final platform = _platform;
+    if (platform != null &&
+        !belongsToPlatform(
+          platform,
+          e.primary,
+          _platformMatches(app, platform),
+        )) {
+      return false;
+    }
     final id = _genreId;
     if (id == null) return true;
     return app.genresOf(e.primary)?.contains(id) ?? false;
@@ -697,7 +796,7 @@ class _CatalogPageState extends State<CatalogPage> {
 
   Widget _buildRecentGrid(AppProvider app) {
     final entries = _ordered(
-      _genreId != null ? _allOfGenre(app) : app.recentEntries(widget.type),
+      _genreId != null || _platform != null ? _allOfGenre(app) : app.recentEntries(widget.type),
     );
     if (entries.isEmpty) {
       return EmptyState(
@@ -897,6 +996,7 @@ class _CatalogPageState extends State<CatalogPage> {
   Object? _filterSource;
   String? _filterTag;
   int? _filterGenre;
+  String? _filterPlatform;
   int? _filterInfoVersion;
   List<CatalogEntry>? _filterResult;
 
@@ -906,17 +1006,22 @@ class _CatalogPageState extends State<CatalogPage> {
     String tag,
     List<CatalogEntry> Function() compute,
   ) {
-    if (_genreId == null && source is List<CatalogEntry>) return source;
+    if (_genreId == null && _platform == null && source is List<CatalogEntry>) {
+      return source;
+    }
     if (_filterResult != null &&
         identical(_filterSource, source) &&
         _filterTag == tag &&
         _filterGenre == _genreId &&
+        _filterPlatform ==
+            (_platform == null ? null : _platformKey(app, _platform!)) &&
         _filterInfoVersion == app.titleInfoVersion) {
       return _filterResult!;
     }
     _filterSource = source;
     _filterTag = tag;
     _filterGenre = _genreId;
+    _filterPlatform = _platform == null ? null : _platformKey(app, _platform!);
     _filterInfoVersion = app.titleInfoVersion;
     return _filterResult = compute();
   }

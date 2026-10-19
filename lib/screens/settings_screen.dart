@@ -31,6 +31,7 @@ import 'downloads_screen.dart';
 import 'multiview_settings_screen.dart';
 import 'live_diagnostics_screen.dart';
 import '../services/app_update_service.dart';
+import 'category_manager_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -541,6 +542,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => const HistorySettingsScreen(),
+                  ),
+                ),
+              ),
+              SettingsValueTile(
+                icon: Icons.reorder_rounded,
+                title: 'Categorie personali e ordine',
+                subtitle: 'Crea le tue categorie e riordina quelle della playlist',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const CategoryManagerScreen(),
                   ),
                 ),
               ),

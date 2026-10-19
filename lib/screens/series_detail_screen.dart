@@ -23,6 +23,7 @@ import '../widgets/episode_card.dart';
 import '../widgets/home_art.dart';
 import '../widgets/trailer_button.dart';
 import '../services/title_display.dart';
+import '../widgets/category_assign_button.dart';
 
 class SeriesDetailScreen extends StatefulWidget {
   final Channel series;
@@ -216,6 +217,8 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                 ],
                 if (!DeviceTypeService.isTv && item != null)
                   TrailerButton(item: item),
+                if (!DeviceTypeService.isTv)
+                  CategoryAssignButton(item: widget.series),
                 if (_item case final reactionItem?)
                   ReactionButtons(item: reactionItem),
                 if (plot.trim().isNotEmpty) ...[
@@ -436,6 +439,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
           ),
         ),
         if (_item case final item?) TrailerButton(item: item),
+        CategoryAssignButton(item: widget.series),
       ],
     );
   }

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'sync_hooks.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/custom_category.dart';
 
 class SettingsService {
   static const _themeKey = 'theme_mode';
@@ -88,5 +89,49 @@ class SettingsService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_hiddenCategoriesKey, jsonEncode(map));
     SyncHooks.settingsChanged();
+  }
+
+  static const _categoryOrderKey = 'category_order_v1';
+  static const _customCategoriesKey = 'custom_categories_v1';
+
+  /// User category order per content type; device-local like hidden
+  /// categories because labels come from the provider.
+  Future<Map<String, List<String>>> getCategoryOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      final decoded = jsonDecode(prefs.getString(_categoryOrderKey) ?? '{}');
+      if (decoded is! Map) return {};
+      return {
+        for (final e in decoded.entries)
+          if (e.value is List)
+            e.key.toString(): (e.value as List).whereType<String>().toList(),
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> setCategoryOrder(Map<String, List<String>> map) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_categoryOrderKey, jsonEncode(map));
+  }
+
+  Future<List<CustomCategory>> getCustomCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      final decoded = jsonDecode(prefs.getString(_customCategoriesKey) ?? '[]');
+      if (decoded is! List) return [];
+      return decoded.map(CustomCategory.tryParse).whereType<CustomCategory>().toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> setCustomCategories(List<CustomCategory> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _customCategoriesKey,
+      jsonEncode([for (final c in list) c.toJson()]),
+    );
   }
 }

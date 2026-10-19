@@ -90,7 +90,12 @@ class DiscoverProvider extends ChangeNotifier {
       }
       notifyListeners();
       final at = DateTime.tryParse(m['at']?.toString() ?? '');
-      _freshAt = at;
+      // A platform added by an update (e.g. Disney+) has no saved Top yet:
+      // refresh now instead of waiting for the cache to expire.
+      final complete = StreamingPlatform.all.every(
+        (p) => _platformTops.containsKey(p.name),
+      );
+      _freshAt = complete ? at : null;
       return _isFresh;
     } catch (_) {
       return false;

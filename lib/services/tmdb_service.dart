@@ -114,6 +114,39 @@ class TmdbService {
     return PlatformTops(movies: results[0], series: results[1]);
   }
 
+  /// Wider platform catalog used by the Film / Serie TV platform filter:
+  /// up to [pages] TMDB pages of the platform's titles available in Italy,
+  /// most popular first. Only TMDB is queried; the playlist never leaves the
+  /// device (matching happens locally).
+  Future<List<TmdbItem>> platformCatalog(
+    StreamingPlatform platform, {
+    required bool movies,
+    int pages = 10,
+  }) async {
+    final type = movies ? 'movie' : 'tv';
+    final out = <TmdbItem>[];
+    // Sequential batches of 3 pages keep the TMDB request rate gentle.
+    for (var start = 1; start <= pages; start += 3) {
+      final batch = await Future.wait([
+        for (var page = start; page < start + 3 && page <= pages; page++)
+          _get('discover/$type', {
+            'with_watch_providers': platform.providerIds,
+            'watch_region': platform.region,
+            'sort_by': 'popularity.desc',
+            'page': '$page',
+          }).catchError((_) => <String, dynamic>{}),
+      ]);
+      var empty = true;
+      for (final body in batch) {
+        final items = _parseResults(body, type: type);
+        if (items.isNotEmpty) empty = false;
+        out.addAll(items);
+      }
+      if (empty) break;
+    }
+    return _dedupe(out);
+  }
+
   static List<TmdbItem> _dedupe(List<TmdbItem> items) {
     final seen = <String>{};
     return [
