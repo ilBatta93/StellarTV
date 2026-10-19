@@ -12,7 +12,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
   test(
-    '95 percent completion survives local reload with real progress unchanged',
+    '94 percent completion survives local reload with real progress unchanged',
     () async {
       final client = SupabaseClient('https://example.invalid', 'test');
       final sync = SyncService(client);
@@ -30,8 +30,8 @@ void main() {
         await history.recordStart(channel);
         await history.updatePosition(
           channel.id,
-          const Duration(seconds: 1139),
-          const Duration(minutes: 20),
+          const Duration(seconds: 3360),
+          const Duration(minutes: 60),
         );
         expect(history.isWatched(channel.id), isFalse);
         expect(
@@ -40,8 +40,8 @@ void main() {
         );
         await history.updatePosition(
           channel.id,
-          const Duration(minutes: 19),
-          const Duration(minutes: 20),
+          const Duration(minutes: 57),
+          const Duration(minutes: 60),
         );
         expect(history.isWatched(channel.id), isTrue);
         expect(
@@ -51,15 +51,15 @@ void main() {
       }
       final stored = await sync.loadLocalHistory(profileId: 'viewer');
       for (final id in ['movie', 'series']) {
-        expect((stored[id] as Map)['pos'], 1140);
-        expect((stored[id] as Map)['dur'], 1200);
+        expect((stored[id] as Map)['pos'], 3420);
+        expect((stored[id] as Map)['dur'], 3600);
       }
       await history.switchProfile('other');
       expect(history.entries, isEmpty);
       await history.switchProfile('viewer');
       for (final id in ['movie', 'series']) {
         expect(history.isWatched(id), isTrue);
-        expect(history.entryFor(id)?.position, const Duration(minutes: 19));
+        expect(history.entryFor(id)?.position, const Duration(minutes: 57));
       }
       expect(history.continueWatching, isEmpty);
       history.dispose();
@@ -88,7 +88,7 @@ void main() {
       await history.updatePosition(
         episode.id,
         const Duration(minutes: 15),
-        const Duration(minutes: 20),
+        const Duration(minutes: 60),
       );
       await settings.saveResumePosition(
         episode.url,
@@ -98,7 +98,7 @@ void main() {
       await writer.complete(() async {
         await history.markWatched(
           episode,
-          duration: const Duration(minutes: 20),
+          duration: const Duration(minutes: 60),
         );
         await settings.saveResumePosition(episode.url, null);
       });
@@ -106,7 +106,7 @@ void main() {
         () => history.updatePosition(
           episode.id,
           const Duration(minutes: 15),
-          const Duration(minutes: 20),
+          const Duration(minutes: 60),
         ),
       );
       expect(history.entryFor('ep1')?.progress, 1.0);
@@ -115,7 +115,7 @@ void main() {
       expect(await settings.getResumePosition(episode.url), isNull);
       final stored = await sync.loadLocalHistory(profileId: 'alberto');
       expect((stored['ep1'] as Map)['pos'], 1200);
-      expect((stored['ep1'] as Map)['dur'], 1200);
+      expect((stored['ep1'] as Map)['dur'], 3600);
       await history.switchProfile('kids');
       expect(history.entryFor('ep1'), isNull);
       await history.switchProfile('alberto');

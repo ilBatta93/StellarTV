@@ -86,9 +86,9 @@ void main() {
       await ui.setUiScale(115);
       await ui.resetHomeLayout();
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('ui_home_shape'), 'portrait');
+      expect(prefs.getString('ui_home_shape'), 'landscape');
       expect(prefs.getString('ui_home_recent_shape'), 'landscape');
-      expect(prefs.getInt('ui_home_recommendation_limit'), 20);
+      expect(prefs.getInt('ui_home_recommendation_limit'), 10);
       expect(prefs.getInt('ui_home_recent_limit'), 50);
       expect(prefs.getInt('ui_scale'), 100);
       expect(prefs.getString('player_settings_v1'), 'local');

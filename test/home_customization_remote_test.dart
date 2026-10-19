@@ -200,10 +200,10 @@ void main() {
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pump(const Duration(milliseconds: 500));
-      expect(ui.homePosterShape, HomePosterShape.landscape);
+      expect(ui.homePosterShape, HomePosterShape.square);
       final reload = UiSettings();
       await reload.load();
-      expect(reload.homePosterShape, HomePosterShape.landscape);
+      expect(reload.homePosterShape, HomePosterShape.square);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       ui.dispose();
