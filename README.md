@@ -15,7 +15,3 @@ Android, Android TV, Fire TV e iOS. I controlli sono utilizzabili anche con tele
 ## Installazione
 
 Usa il collegamento condiviso dal proprietario per ottenere l’ultima versione disponibile.
-
-## Sviluppo
-
-Mantieni la configurazione locale, i lettori e gli identificatori esistenti. Esegui i test prima dell’integrazione. La compilazione Android viene avviata solo su richiesta esplicita.
