@@ -57,6 +57,8 @@ class PersonalVault {
     'ui_home_recent_limit',
     'ui_home_banner_size',
     'ui_home_overview',
+    'ui_home_titles',
+    'ui_home_recent_titles',
     'ui_scale',
     'ui_watched_percent',
   };

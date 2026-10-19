@@ -25,9 +25,10 @@ class HomePresentation extends InheritedWidget {
         : recent
         ? (layout?.carouselHeight ?? 260) -
               16 -
-              8 -
-              MediaQuery.textScalerOf(context).scale(13) * 2.5 -
-              10
+              10 -
+              (ui.homeRecentTitles
+                  ? 8 + MediaQuery.textScalerOf(context).scale(13) * 2.5
+                  : 0)
         : layout?.posterHeight ?? 180;
     // Recent rows fill their available height for non-landscape shapes, so
     // portrait/square cards match recommended rows instead of shrinking.

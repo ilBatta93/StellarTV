@@ -19,8 +19,10 @@ void main() {
     expect(ui.homeRecentDensity, HomeDensity.automatic);
     expect(ui.homeRecommendationLimit, 10);
     expect(ui.homeRecentLimit, 50);
-    expect(ui.homeBannerSize, HomeBannerSize.large);
+    expect(ui.homeBannerSize, HomeBannerSize.compact);
     expect(ui.homeOverview, isTrue);
+    expect(ui.homeTitles, isTrue);
+    expect(ui.homeRecentTitles, isTrue);
     expect(ui.uiScalePercent, 100);
     expect(ui.viewMode, CatalogViewMode.landscape);
     expect(ui.compact, isFalse);
@@ -28,7 +30,10 @@ void main() {
   });
 
   test('Playlist and guide refresh once a day by default', () async {
-    expect(await PlaylistRefreshService(() async {}).loadIntervalMinutes(), 1440);
+    expect(
+      await PlaylistRefreshService(() async {}).loadIntervalMinutes(),
+      1440,
+    );
     expect(await EpgService().intervalMinutes(), 1440);
   });
 

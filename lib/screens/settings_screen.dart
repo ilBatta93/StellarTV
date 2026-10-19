@@ -245,6 +245,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: ui.homeOverview,
               onChanged: ui.setHomeOverview,
             ),
+            SettingsSwitchTile(
+              icon: Icons.title_rounded,
+              title: 'Titoli sotto consigliati',
+              value: ui.homeTitles,
+              onChanged: ui.setHomeTitles,
+            ),
+            SettingsSwitchTile(
+              icon: Icons.short_text_rounded,
+              title: 'Titoli sotto viste di recente',
+              value: ui.homeRecentTitles,
+              onChanged: ui.setHomeRecentTitles,
+            ),
             SettingsValueTile(
               icon: Icons.zoom_in_rounded,
               title: 'Scala interfaccia',

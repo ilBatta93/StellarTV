@@ -168,33 +168,34 @@ class TmdbPosterCard extends StatelessWidget {
               Expanded(child: poster)
             else
               AspectRatio(aspectRatio: ratio, child: poster),
-            Padding(
-              padding: DeviceTypeService.isTv
-                  ? const EdgeInsets.fromLTRB(9, 8, 9, 9)
-                  : const EdgeInsets.only(top: 8),
-              child: DeviceTypeService.isTv
-                  ? TvPosterTitle(item.title)
-                  : Text(
-                      item.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: DeviceTypeService.isTv ? 14 : 12,
-                        fontWeight: DeviceTypeService.isTv
-                            ? FontWeight.w700
-                            : FontWeight.w600,
-                        height: DeviceTypeService.isTv ? 1.2 : 1.1,
-                        shadows: [
-                          Shadow(
-                            color: AppColors.overlay,
-                            offset: const Offset(0, 1),
-                            blurRadius: 2,
-                          ),
-                        ],
+            if (!home || ui.homeTitles)
+              Padding(
+                padding: DeviceTypeService.isTv
+                    ? const EdgeInsets.fromLTRB(9, 8, 9, 9)
+                    : const EdgeInsets.only(top: 8),
+                child: DeviceTypeService.isTv
+                    ? TvPosterTitle(item.title)
+                    : Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: DeviceTypeService.isTv ? 14 : 12,
+                          fontWeight: DeviceTypeService.isTv
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          height: DeviceTypeService.isTv ? 1.2 : 1.1,
+                          shadows: [
+                            Shadow(
+                              color: AppColors.overlay,
+                              offset: const Offset(0, 1),
+                              blurRadius: 2,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-            ),
+              ),
           ],
         ),
       ),
@@ -336,8 +337,9 @@ double tmdbPosterRowHeight(BuildContext context, {double mobile = 210}) {
     if (HomePresentation.contains(context)) {
       final ui = context.watch<UiSettings>();
       return HomePresentation.width(context) / ui.homePosterShape.aspectRatio +
-          MediaQuery.textScalerOf(context).scale(12) * 2.2 +
-          18;
+          (ui.homeTitles
+              ? MediaQuery.textScalerOf(context).scale(12) * 2.2 + 18
+              : 12);
     }
     return mobile;
   }

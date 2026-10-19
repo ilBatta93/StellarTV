@@ -39,6 +39,8 @@ void main() {
       'ui_home_recent_limit',
       'ui_home_banner_size',
       'ui_home_overview',
+      'ui_home_titles',
+      'ui_home_recent_titles',
       'ui_scale',
     ]) {
       expect(SyncService.isSyncedKey(key), isTrue, reason: key);

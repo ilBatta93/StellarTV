@@ -140,8 +140,10 @@ double homeRowHeight(BuildContext context) =>
         (HomePresentation.contains(context)
             ? context.watch<UiSettings>().homeRecentShape.aspectRatio
             : 16 / 9) +
-    MediaQuery.textScalerOf(context).scale(13) * 1.25 * 2 +
-    34;
+    (HomePresentation.contains(context) &&
+            !context.watch<UiSettings>().homeRecentTitles
+        ? 14
+        : MediaQuery.textScalerOf(context).scale(13) * 1.25 * 2 + 34);
 
 class HomeLandscapeCard extends StatelessWidget {
   const HomeLandscapeCard({
@@ -170,6 +172,9 @@ class HomeLandscapeCard extends StatelessWidget {
     final watched = progress?.clamp(0.0, 1.0);
     final label = trailing;
     final width = homeCardWidth(context);
+    final showTitle =
+        !HomePresentation.contains(context) ||
+        context.watch<UiSettings>().homeRecentTitles;
     return Pressable(
       onTap: onTap,
       onFocus: onFocus,
@@ -212,6 +217,31 @@ class HomeLandscapeCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                    if (!showTitle && label != null)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: AppColors.overlay,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            child: Text(
+                              label,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     if (rating != null && rating! > 0)
                       Positioned(
                         top: 8,
@@ -250,53 +280,54 @@ class HomeLandscapeCard extends StatelessWidget {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(9, 8, 9, 0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      displayTitle(title),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 13,
-                        height: 1.25,
-                        fontWeight: FontWeight.w600,
+            if (showTitle)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(9, 8, 9, 0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        displayTitle(title),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 13,
+                          height: 1.25,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                  if (label != null) ...[
-                    const SizedBox(width: 12),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: (width - 30) * 0.42,
-                      ),
-                      child: Align(
-                        alignment: Alignment.topRight,
-                        widthFactor: 1,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
+                    if (label != null) ...[
+                      const SizedBox(width: 6),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: (width - 30) * 0.42,
+                        ),
+                        child: Align(
                           alignment: Alignment.topRight,
-                          child: Text(
-                            label,
-                            maxLines: 1,
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                              height: 1.25,
-                              fontWeight: FontWeight.w600,
+                          widthFactor: 1,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.topRight,
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                                height: 1.25,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
           ],
         ),
       ),

@@ -79,6 +79,8 @@ class UiSettings extends ChangeNotifier {
     'ui_home_recent_limit',
     'ui_home_banner_size',
     'ui_home_overview',
+    'ui_home_titles',
+    'ui_home_recent_titles',
     'ui_scale',
   };
   HomePosterShape homePosterShape = HomePosterShape.landscape;
@@ -87,8 +89,10 @@ class UiSettings extends ChangeNotifier {
   HomeDensity homeRecentDensity = HomeDensity.automatic;
   int homeRecommendationLimit = 10;
   int homeRecentLimit = 50;
-  HomeBannerSize homeBannerSize = HomeBannerSize.large;
+  HomeBannerSize homeBannerSize = HomeBannerSize.compact;
   bool homeOverview = true;
+  bool homeTitles = true;
+  bool homeRecentTitles = true;
   int uiScalePercent = 100;
   int watchedPercent = WatchCompletionPolicy.defaultPercent;
 
@@ -146,6 +150,18 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setHomeTitles(bool value) async {
+    homeTitles = value;
+    await _save('ui_home_titles', value);
+    notifyListeners();
+  }
+
+  Future<void> setHomeRecentTitles(bool value) async {
+    homeRecentTitles = value;
+    await _save('ui_home_recent_titles', value);
+    notifyListeners();
+  }
+
   Future<void> setUiScale(int value) async {
     uiScalePercent = HomeLayoutPolicy.uiScale(value);
     await _save('ui_scale', uiScalePercent);
@@ -159,8 +175,9 @@ class UiSettings extends ChangeNotifier {
     homePosterDensity = homeRecentDensity = HomeDensity.automatic;
     homeRecommendationLimit = 10;
     homeRecentLimit = 50;
-    homeBannerSize = HomeBannerSize.large;
+    homeBannerSize = HomeBannerSize.compact;
     homeOverview = true;
+    homeTitles = homeRecentTitles = true;
     uiScalePercent = 100;
     for (final e in <String, Object>{
       'ui_home_shape': homePosterShape.name,
@@ -171,6 +188,8 @@ class UiSettings extends ChangeNotifier {
       'ui_home_recent_limit': homeRecentLimit,
       'ui_home_banner_size': homeBannerSize.name,
       'ui_home_overview': homeOverview,
+      'ui_home_titles': homeTitles,
+      'ui_home_recent_titles': homeRecentTitles,
       'ui_scale': uiScalePercent,
     }.entries) {
       await _save(e.key, e.value);
@@ -263,6 +282,8 @@ class UiSettings extends ChangeNotifier {
     homeRecentLimit,
     homeBannerSize.name,
     homeOverview,
+    homeTitles,
+    homeRecentTitles,
     uiScalePercent,
   ].join('|');
   List<AppSection> get sectionOrder => List.unmodifiable(_sectionOrder);
@@ -314,7 +335,13 @@ class UiSettings extends ChangeNotifier {
     );
     homeBannerSize =
         HomeBannerSize.values.asNameMap()[prefs.get('ui_home_banner_size')] ??
-        HomeBannerSize.large;
+        HomeBannerSize.compact;
+    homeTitles = prefs.get('ui_home_titles') is bool
+        ? prefs.get('ui_home_titles') as bool
+        : true;
+    homeRecentTitles = prefs.get('ui_home_recent_titles') is bool
+        ? prefs.get('ui_home_recent_titles') as bool
+        : true;
     homeOverview = prefs.get('ui_home_overview') is bool
         ? prefs.get('ui_home_overview') as bool
         : true;

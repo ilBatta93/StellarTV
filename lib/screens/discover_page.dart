@@ -915,6 +915,7 @@ class _TvDiscover extends StatefulWidget {
 
 class _TvDiscoverState extends State<_TvDiscover> {
   late final ValueNotifier<TmdbItem?> _hero;
+  final ValueNotifier<String?> _heroNote = ValueNotifier(null);
   Timer? _debounce;
   int _heroRequest = 0;
   bool _userFocused = false;
@@ -966,6 +967,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
   void dispose() {
     _debounce?.cancel();
     _hero.dispose();
+    _heroNote.dispose();
     super.dispose();
   }
 
@@ -978,6 +980,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
     _debounce = Timer(const Duration(milliseconds: 100), () {
       if (mounted) {
         warmTitleLogos(context, [item]);
+        _heroNote.value = null;
         _hero.value = item;
       }
     });
@@ -1014,6 +1017,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
                   .catchError((_) => null);
         if (!mounted || request != _heroRequest) return;
         _historyInfo[key] = item;
+        _heroNote.value = _historyNote(resume);
         _hero.value =
             item ??
             TmdbItem(
@@ -1029,6 +1033,29 @@ class _TvDiscoverState extends State<_TvDiscover> {
             );
       },
     );
+  }
+
+  /// Episode coordinates or minutes left, plus progress, for the hero banner.
+  static String? _historyNote(ResumeItem resume) {
+    final (entry, channel) = resume;
+    final parts = <String>[];
+    if (entry.type == ContentType.movie) {
+      final left = entry.remainingMovieMinutes;
+      if (left != null) parts.add('$left min rimanenti');
+    } else {
+      final code = historyEpisodeLabel(
+        type: entry.type,
+        season: channel.season,
+        episode: channel.episode,
+        historyTitle: entry.title,
+        channelTitle: channel.name,
+      );
+      if (code != null && code.isNotEmpty) parts.add(code);
+    }
+    final p = entry.progress;
+    if (p != null && p > 0)
+      parts.add('${(p.clamp(0.0, 1.0) * 100).round()}% visto');
+    return parts.isEmpty ? null : parts.join('  ·  ');
   }
 
   void _revealHeading(BuildContext rowContext) {
@@ -1101,6 +1128,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
         return TvHomeLayout(
           rowHeight: c.maxHeight - heroHeight,
           captionHeight: MediaQuery.textScalerOf(context).scale(14) * 1.2 * 3,
+          showTitles: context.watch<UiSettings>().homeTitles,
           child: Stack(
             children: [
               Positioned.fill(
@@ -1120,7 +1148,12 @@ class _TvDiscoverState extends State<_TvDiscover> {
                         Expanded(
                           child: ValueListenableBuilder<TmdbItem?>(
                             valueListenable: _hero,
-                            builder: (_, item, _) => _TvHeroInfo(item: item),
+                            builder: (_, item, _) =>
+                                ValueListenableBuilder<String?>(
+                                  valueListenable: _heroNote,
+                                  builder: (_, note, _) =>
+                                      _TvHeroInfo(item: item, note: note),
+                                ),
                           ),
                         ),
                       ],
@@ -1474,8 +1507,9 @@ class _TvHeroBackdrop extends StatelessWidget {
 
 class _TvHeroInfo extends StatelessWidget {
   final TmdbItem? item;
+  final String? note;
 
-  const _TvHeroInfo({required this.item});
+  const _TvHeroInfo({required this.item, this.note});
 
   @override
   Widget build(BuildContext context) {
@@ -1502,6 +1536,7 @@ class _TvHeroInfo extends StatelessWidget {
         final textBlock =
             6 +
             metaHeight +
+            (note != null ? 6 + metaHeight : 0) +
             (showOverview ? 8 + overviewLines * overviewLineHeight : 0);
         final logoH = (bounds.maxHeight - vPad * 2 - textBlock)
             .clamp(0.0, 100.0)
@@ -1531,6 +1566,20 @@ class _TvHeroInfo extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  if (note != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      note!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 14,
+                        height: 1.25,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                   if (showOverview) ...[
                     const SizedBox(height: 8),
                     Text(
