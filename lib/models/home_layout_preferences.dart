@@ -52,7 +52,7 @@ class HomeLayoutPolicy {
   static const itemLimits = [10, 20, 30, 50];
   static const recommendationLimits = [5, 10, 15, 20];
   static int recommendationLimit(Object? value) =>
-      recommendationLimits.contains(value) ? value as int : 20;
+      recommendationLimits.contains(value) ? value as int : 10;
   static const uiScales = [90, 100, 110, 115];
   static int itemLimit(Object? value, {int fallback = 20}) =>
       itemLimits.contains(value) ? value as int : fallback;

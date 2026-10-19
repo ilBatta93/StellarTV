@@ -24,7 +24,7 @@ class PhoneHandoffPanel extends StatefulWidget {
 class _PhoneHandoffPanelState extends State<PhoneHandoffPanel> {
   KeyHandoff? _h;
   Timer? _poll;
-  int _left = 120;
+  int _left = 600;
   bool _done = false;
 
   @override
@@ -129,7 +129,7 @@ class _PhoneHandoffPanelState extends State<PhoneHandoffPanel> {
                   ),
                 ),
                 Text(
-                  'In attesa del telefono… ${_left.clamp(0, 120)} s',
+                  'In attesa del telefono… ${_left.clamp(0, 600)} s',
                   style: const TextStyle(fontSize: 13),
                 ),
                 const SizedBox(height: 6),

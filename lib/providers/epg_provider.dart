@@ -25,7 +25,7 @@ class EpgProvider extends ChangeNotifier {
   String? _error;
   bool _usePlaylist = true;
   List<String> _manual = const [];
-  int _intervalMinutes = 720;
+  int _intervalMinutes = 1440;
   DateTime? _lastRun;
   String? _scheduledFor;
   Map<String, String>? _nameIndex;

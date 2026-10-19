@@ -42,7 +42,7 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
   String _qrUrl = '';
   KeyHandoff? _receiver;
   bool _waitingPhone = false;
-  int _phoneLeft = 120;
+  int _phoneLeft = 600;
   String _phoneStatus = '';
 
   @override
@@ -127,7 +127,7 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
         _receiver = r;
         setState(() {
           _waitingPhone = true;
-          _phoneLeft = 120;
+          _phoneLeft = 600;
         });
         _poll = Timer.periodic(const Duration(seconds: 2), (_) async {
           if (!mounted || !_waitingPhone) return;
@@ -209,7 +209,7 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
       ),
       const SizedBox(height: 12),
       if (_phoneStatus.isEmpty)
-        Text('${_phoneLeft.clamp(0, 120)} s',
+        Text('${_phoneLeft.clamp(0, 600)} s',
             style: const TextStyle(color: AppColors.textSecondary)),
       const SizedBox(height: 20),
       if (_phoneStatus.isEmpty)

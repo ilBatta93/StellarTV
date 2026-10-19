@@ -6,7 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Receives the recovery key typed on a phone. The X25519 private key lives
 /// only in memory; the cloud row holds public keys and AES-GCM ciphertext and
-/// is deleted as soon as it is read (or after two minutes).
+/// is deleted as soon as it is read (or after ten minutes).
 class KeyHandoff {
   static const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   static const siteUrl = 'https://stellartv.lovable.app/chiave';

@@ -470,6 +470,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             await provider.saveRefreshInterval(chosen.minutes);
             if (!mounted) return;
             setState(() {
+              // Keep the saved choice visible instead of the stale value.
+              _loadedRefreshMinutes = chosen.minutes;
               _refreshMinutes = null;
               _lastRefreshLabel = _formatLastRefresh(_lastRefresh);
             });

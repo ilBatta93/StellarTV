@@ -39,8 +39,8 @@ class PlaylistRefreshService {
 
   Future<int> loadIntervalMinutes() async {
     final prefs = await SharedPreferences.getInstance();
-    // Default: refresh every 12 hours until the user picks another value.
-    return prefs.getInt(_intervalKey) ?? PlaylistRefreshInterval.h12.minutes;
+    // Default: refresh once a day until the user picks another value.
+    return prefs.getInt(_intervalKey) ?? PlaylistRefreshInterval.daily.minutes;
   }
 
   Future<void> saveIntervalMinutes(int minutes) async {

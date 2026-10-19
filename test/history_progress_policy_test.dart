@@ -10,15 +10,16 @@ HistoryEntry entry(ContentType type, int positionMs, int durationMs) => HistoryE
   position: Duration(milliseconds: positionMs),
   duration: Duration(milliseconds: durationMs),
   lastWatchedAt: DateTime(2026, 10, 18),
+  watchedPercent: 95,
 );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
-  test('Watched threshold defaults to 95 and is adjustable persistently', () async {
+  test('Watched threshold defaults to 94 and is adjustable persistently', () async {
     final ui = UiSettings();
     await ui.load();
-    expect(ui.watchedPercent, 95);
+    expect(ui.watchedPercent, 94);
     final original = ui.signature;
     await ui.setWatchedPercent(90);
     expect(ui.signature, isNot(original));
@@ -29,8 +30,8 @@ void main() {
     expect(entry(ContentType.series, 900000, 1000000).copyWith(watchedPercent: 90).isWatched, isTrue);
     expect(entry(ContentType.movie, 999999, 1000000).copyWith(watchedPercent: 100).isWatched, isFalse);
     expect(entry(ContentType.movie, 1000000, 1000000).copyWith(watchedPercent: 100).isWatched, isTrue);
-    expect(WatchCompletionPolicy.normalize(0), 95);
-    expect(WatchCompletionPolicy.normalize(101), 95);
+    expect(WatchCompletionPolicy.normalize(0), 94);
+    expect(WatchCompletionPolicy.normalize(101), 94);
     ui.dispose(); reloaded.dispose();
   });
   test('Detail countdown applies to started movies and the selected episode only', () {

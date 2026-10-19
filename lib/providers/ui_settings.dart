@@ -81,13 +81,13 @@ class UiSettings extends ChangeNotifier {
     'ui_home_overview',
     'ui_scale',
   };
-  HomePosterShape homePosterShape = HomePosterShape.portrait;
+  HomePosterShape homePosterShape = HomePosterShape.landscape;
   HomePosterShape homeRecentShape = HomePosterShape.landscape;
   HomeDensity homePosterDensity = HomeDensity.automatic;
   HomeDensity homeRecentDensity = HomeDensity.automatic;
-  int homeRecommendationLimit = 20;
+  int homeRecommendationLimit = 10;
   int homeRecentLimit = 50;
-  HomeBannerSize homeBannerSize = HomeBannerSize.balanced;
+  HomeBannerSize homeBannerSize = HomeBannerSize.large;
   bool homeOverview = true;
   int uiScalePercent = 100;
   int watchedPercent = WatchCompletionPolicy.defaultPercent;
@@ -154,12 +154,12 @@ class UiSettings extends ChangeNotifier {
 
   Future<void> resetHomeLayout() async {
     // Write defaults (not remove keys): defaults must replace remote settings.
-    homePosterShape = HomePosterShape.portrait;
+    homePosterShape = HomePosterShape.landscape;
     homeRecentShape = HomePosterShape.landscape;
     homePosterDensity = homeRecentDensity = HomeDensity.automatic;
-    homeRecommendationLimit = 20;
+    homeRecommendationLimit = 10;
     homeRecentLimit = 50;
-    homeBannerSize = HomeBannerSize.balanced;
+    homeBannerSize = HomeBannerSize.large;
     homeOverview = true;
     uiScalePercent = 100;
     for (final e in <String, Object>{
@@ -212,7 +212,7 @@ class UiSettings extends ChangeNotifier {
   bool _showPosters = true;
   bool _animations = true;
   bool _compact = false;
-  CatalogViewMode _viewMode = CatalogViewMode.grid;
+  CatalogViewMode _viewMode = CatalogViewMode.landscape;
   String _textScale = 'normale';
   bool _showRatings = true;
   bool _showQuality = true;
@@ -280,7 +280,7 @@ class UiSettings extends ChangeNotifier {
     _compact = prefs.getBool(_compactKey) ?? false;
     _viewMode =
         CatalogViewMode.values.asNameMap()[prefs.getString(_viewModeKey)] ??
-        CatalogViewMode.grid;
+        CatalogViewMode.landscape;
     _sectionOrder = _parseSectionOrder(prefs.getStringList(sectionOrderKey));
     _startSection =
         _parseSection(prefs.getString(startSectionKey)) ?? AppSection.home;
@@ -295,7 +295,7 @@ class UiSettings extends ChangeNotifier {
     _focusGlow = prefs.getBool(_focusGlowKey) ?? true;
     homePosterShape =
         HomePosterShape.values.asNameMap()[prefs.get('ui_home_shape')] ??
-        HomePosterShape.portrait;
+        HomePosterShape.landscape;
     homeRecentShape =
         HomePosterShape.values.asNameMap()[prefs.get('ui_home_recent_shape')] ??
         HomePosterShape.landscape;
@@ -314,7 +314,7 @@ class UiSettings extends ChangeNotifier {
     );
     homeBannerSize =
         HomeBannerSize.values.asNameMap()[prefs.get('ui_home_banner_size')] ??
-        HomeBannerSize.balanced;
+        HomeBannerSize.large;
     homeOverview = prefs.get('ui_home_overview') is bool
         ? prefs.get('ui_home_overview') as bool
         : true;

@@ -85,9 +85,9 @@ class EpgService {
     SyncHooks.settingsChanged();
   }
 
-  /// Default: update the guide every 12 hours.
+  /// Default: update the guide once a day.
   Future<int> intervalMinutes() async =>
-      (await SharedPreferences.getInstance()).getInt(_intervalKey) ?? 720;
+      (await SharedPreferences.getInstance()).getInt(_intervalKey) ?? 1440;
 
   Future<void> saveIntervalMinutes(int minutes) async {
     await (await SharedPreferences.getInstance()).setInt(_intervalKey, minutes);
