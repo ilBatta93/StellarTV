@@ -269,7 +269,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
               )
               .isNotEmpty) ...[
             SectionHeader(
-              title: 'Consigliati per te',
+              title: 'Film consigliati per te',
               subtitle: 'Perché hai guardato ${discover.forYouSource}',
               leading: const Icon(
                 Icons.auto_awesome_rounded,
@@ -1081,21 +1081,22 @@ class _TvDiscoverState extends State<_TvDiscover> {
     ),
   );
 
-  Widget _row(String title, List<TmdbItem> items) {
+  Widget _row(String title, List<TmdbItem> items, {String? subtitle}) {
     return Builder(
-      builder: (rowContext) => _posterRow(title, items, rowContext),
+      builder: (rowContext) => _posterRow(title, items, rowContext, subtitle: subtitle),
     );
   }
 
   Widget _posterRow(
     String title,
     List<TmdbItem> items,
-    BuildContext rowContext,
-  ) {
+    BuildContext rowContext, {
+    String? subtitle,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _TvRowTitle(title),
+        _TvRowTitle(title, subtitle: subtitle),
         HorizontalRow(
           // Poster + two full title lines + focus frame, never clipped.
           height: tmdbPosterRowHeight(rowContext, mobile: 212),
@@ -1174,19 +1175,21 @@ class _TvDiscoverState extends State<_TvDiscover> {
                           ),
                         if (widget.forYou.isNotEmpty)
                           _row(
-                            widget.forYouSource == null
-                                ? 'Consigliati per te'
-                                : 'Consigliati per te · perché hai guardato '
-                                      '${displayTitle(widget.forYouSource ?? "")}',
+                            'Film consigliati per te',
                             widget.forYou,
+                            subtitle: widget.forYouSource == null
+                                ? null
+                                : 'Perché hai guardato '
+                                      '${displayTitle(widget.forYouSource ?? "")}',
                           ),
                         if (widget.forYouSeries.isNotEmpty)
                           _row(
-                            widget.forYouSeriesSource == null
-                                ? 'Serie consigliate per te'
-                                : 'Serie consigliate per te · perché hai '
-                                      'guardato ${displayTitle(widget.forYouSeriesSource ?? "")}',
+                            'Serie consigliate per te',
                             widget.forYouSeries,
+                            subtitle: widget.forYouSeriesSource == null
+                                ? null
+                                : 'Perché hai guardato '
+                                      '${displayTitle(widget.forYouSeriesSource ?? "")}',
                           ),
                         for (final t in widget.tops)
                           _TvTopRow(spec: t, onFocusItem: _focus),
@@ -1418,23 +1421,45 @@ class _TvTopRowState extends State<_TvTopRow> {
 
 class _TvRowTitle extends StatelessWidget {
   final String title;
+  final String? subtitle;
 
-  const _TvRowTitle(this.title);
+  const _TvRowTitle(this.title, {this.subtitle});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(32, 14, 32, 8),
-      child: Text(
-        title,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          fontFamily: 'Sora',
-          color: AppColors.textPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: 'Sora',
+              color: AppColors.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
+          if (subtitle != null && subtitle!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                subtitle!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Sora',
+                  color: AppColors.textSecondary.withValues(alpha: 0.85),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
