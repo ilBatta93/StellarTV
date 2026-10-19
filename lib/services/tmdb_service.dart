@@ -124,6 +124,29 @@ class TmdbService {
     int pages = 10,
   }) async {
     final type = movies ? 'movie' : 'tv';
+    // Shared cloud catalog first: one download serves every installation.
+    try {
+      final res = await http
+          .get(
+            Uri.parse('${SupabaseConfig.apiBase}/platform-catalog').replace(
+              queryParameters: {
+                'provider': platform.providerIds,
+                'region': platform.region,
+                'type': type,
+              },
+            ),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body);
+        if (body is Map<String, dynamic>) {
+          final items = _parseResults(body, type: type);
+          if (items.isNotEmpty) return _dedupe(items);
+        }
+      }
+    } catch (_) {
+      // Fall through to the direct TMDB lookup.
+    }
     final out = <TmdbItem>[];
     // Sequential batches of 3 pages keep the TMDB request rate gentle.
     for (var start = 1; start <= pages; start += 3) {

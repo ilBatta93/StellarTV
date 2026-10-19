@@ -305,7 +305,7 @@ class _CatalogPageState extends State<CatalogPage> {
     });
   }
 
-  CatalogSort? _sort = CatalogSort.provider;
+  CatalogSort? _sort = CatalogSort.dateDesc;
   List<CatalogEntry>? _sortedSource;
   List<CatalogEntry>? _sortedEntries;
   CatalogSort? _sortedOrder;

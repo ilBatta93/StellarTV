@@ -13,8 +13,8 @@ enum CatalogSort {
   provider('Predefinito'),
   nameAsc('A–Z'),
   nameDesc('Z–A'),
-  dateAsc('Data crescente'),
-  dateDesc('Data decrescente'),
+  dateAsc('Primo aggiunto'),
+  dateDesc('Ultimo aggiunto'),
   rating('Voto');
 
   const CatalogSort(this.label);
