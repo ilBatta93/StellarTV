@@ -197,7 +197,7 @@ class _TypeTab extends StatelessWidget {
             onPressed: () => _create(context),
             child: Card(
               child: ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.add_circle_outline_rounded,
                   color: AppColors.primary,
                 ),
