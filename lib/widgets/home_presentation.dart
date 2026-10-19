@@ -29,8 +29,12 @@ class HomePresentation extends InheritedWidget {
               MediaQuery.textScalerOf(context).scale(13) * 2.5 -
               10
         : layout?.posterHeight ?? 180;
+    // Recent rows fill their available height for non-landscape shapes, so
+    // portrait/square cards match recommended rows instead of shrinking.
     final automatic = recent
-        ? (layout?.historyWidth ?? 208) * shape.aspectRatio / (16 / 9)
+        ? (shape.aspectRatio >= 16 / 9
+              ? (layout?.historyWidth ?? 208)
+              : maxHeight * shape.aspectRatio)
         : (layout?.posterWidth ?? 120) * shape.aspectRatio / (2 / 3);
     return HomeLayoutPolicy.cardWidth(
       viewportWidth: MediaQuery.sizeOf(context).width,
