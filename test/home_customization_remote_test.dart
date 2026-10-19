@@ -198,6 +198,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pump(const Duration(milliseconds: 500));
       expect(ui.homePosterShape, HomePosterShape.square);
