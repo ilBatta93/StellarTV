@@ -18,6 +18,9 @@ import 'providers/ui_settings.dart';
 import 'screens/splash_screen.dart';
 import 'services/profile_service.dart';
 import 'services/device_type_service.dart';
+import 'services/device_identity.dart';
+import 'services/remote_signout_service.dart';
+import 'screens/account_screen.dart';
 import 'services/expiry_reminder_service.dart';
 import 'services/tv_remote_keys.dart';
 import 'services/sync_service.dart';
@@ -46,9 +49,12 @@ Future<void> main() async {
       ..maximumSize = 400
       ..maximumSizeBytes = 150 << 20;
   }
+  await DeviceIdentity.initialize();
   await Supabase.initialize(
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.anonKey,
+    // Lets the account website name this device's sessions precisely.
+    headers: {'User-Agent': DeviceIdentity.userAgent},
   );
   final savedKids = await ProfileProvider.savedSelectionIsKids(
     ProfileService(Supabase.instance.client),
@@ -184,7 +190,16 @@ class _StellarTvAppState extends State<StellarTvApp> {
       });
     });
     _syncProvider.load();
+    _remoteSignout = RemoteSignoutService(Supabase.instance.client, () async {
+      await _syncProvider.signOut();
+      appNavigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AccountScreen()),
+        (_) => false,
+      );
+    })..start();
   }
+
+  late final RemoteSignoutService _remoteSignout;
 
   String _uiSignature = '';
 
@@ -216,6 +231,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
 
   @override
   void dispose() {
+    _remoteSignout.dispose();
     _appProvider.removeListener(_onAppChanged);
     _uiSettings.removeListener(_onUiSettingsChanged);
     _uiSettings.dispose();
