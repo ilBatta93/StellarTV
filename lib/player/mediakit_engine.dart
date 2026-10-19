@@ -92,10 +92,16 @@ class MediaKitEngine extends PlaybackEngine {
       // loop filter so weak TV CPUs keep up.
       if (softwareDecode) 'deinterlace': 'yes',
       if (softwareDecode) 'vd-lavc-skiploopfilter': 'nonref',
-      'audio-buffer': isLive ? '0.5' : '0.2',
+      // A deeper audio buffer absorbs Android audio-driver hiccups, so
+      // mpv no longer repeats/skips frames to chase the audio clock.
+      'audio-buffer': '0.5',
       // Never drop frames on live: a jittery IPTV clock made mpv discard
-      // every picture at start (audio with a black screen).
-      'framedrop': (!isLive && _settings.dropLateFrames) ? 'vo' : 'no',
+      // every picture at start (audio with a black screen). On film/series
+      // "vo" dropping turned tiny presentation delays into visible jumps;
+      // only CPU software decoding keeps dropping (it really falls behind).
+      'framedrop': (!isLive && softwareDecode && _settings.dropLateFrames)
+          ? 'vo'
+          : 'no',
       // Broadcast H.264 1080i, MPEG-2 and VC-1 channels gave audio with a
       // black picture through MediaCodec on Fire TV / Google TV /
       // Chromecast (no hardware deinterlacing towards the texture). Live:
@@ -106,7 +112,12 @@ class MediaKitEngine extends PlaybackEngine {
         'hwdec-codecs': isLive ? 'hevc,vp9,av1' : 'h264,hevc,vp9,av1',
       if (isLive && !softwareDecode) 'deinterlace': 'auto',
       'cache-pause-initial': 'no',
-      'vd-lavc-threads': '0',
+      // Auto threads oversubscribed entry-level quad-core TV CPUs and
+      // starved the render thread; phones keep automatic detection.
+      'vd-lavc-threads': DeviceTypeService.isTv ? '4' : '0',
+      // Film/series had mpv's 150 MiB default: on 1-2 GB TVs that forced
+      // Android memory reclaim pauses. 48 MiB is still minutes of video.
+      if (!isLive && DeviceTypeService.isTv) 'demuxer-max-bytes': '48MiB',
     };
     for (final entry in options.entries) {
       try {
