@@ -1,6 +1,9 @@
 import 'dart:convert';
+
 import 'title_logo_cache.dart';
+
 import 'package:http/http.dart' as http;
+
 import '../config/supabase_config.dart';
 import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
@@ -28,9 +31,8 @@ class TmdbService {
     String path, [
     Map<String, String> params = const {},
   ]) async {
-    final uri = Uri.parse(
-      SupabaseConfig.tmdbProxyUrl,
-    ).replace(queryParameters: {'path': path, ...params});
+    final uri = Uri.parse(SupabaseConfig.tmdbProxyUrl)
+        .replace(queryParameters: {'path': path, ...params});
     final http.Response res;
     try {
       res = await http
@@ -143,6 +145,11 @@ class TmdbService {
       try {
         final cached = await TitleLogoCache.read(item.key);
         if (cached != null) return cached.url;
+        final shared = await sharedLogo(item);
+        if (shared != null) {
+          await TitleLogoCache.write(item.key, shared.url);
+          return shared.url;
+        }
         final body = await _get('${item.mediaType}/${item.id}/images', {
           // Only Italian or English logos: TMDB also returns untagged
           // images that can carry text in any other language.
@@ -158,6 +165,49 @@ class TmdbService {
     });
   }
 
+  /// Shared cloud cache of public TMDB paths, common to every installation.
+  /// Returns null when unavailable so the direct TMDB lookup still runs.
+  /// Only TMDB title/id are sent: provider names, URLs or covers never leave
+  /// the device.
+  Future<TitleLogoEntry?> sharedLogo(TmdbItem item) async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${SupabaseConfig.apiBase}/artwork'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'items': [
+                {
+                  'title': item.title,
+                  'type': item.mediaType,
+                  'tmdb_id': item.id,
+                },
+              ],
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return null;
+      return parseSharedLogo(jsonDecode(res.body));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static TitleLogoEntry? parseSharedLogo(Object? body) {
+    if (body is! Map || body['results'] is! List) return null;
+    final list = body['results'] as List;
+    if (list.isEmpty || list.first is! Map) return null;
+    final row = list.first as Map;
+    if (row['tmdb_id'] is! int) return null;
+    final path = row['logo_path'];
+    if (path == null) return const TitleLogoEntry(null);
+    if (path is! String ||
+        !RegExp(r'^/[a-zA-Z0-9_.-]+\.(png|jpg|webp)$').hasMatch(path)) {
+      return null;
+    }
+    return TitleLogoEntry('https://image.tmdb.org/t/p/w500$path');
+  }
+
   static String? selectTitleLogo(Map<String, dynamic> body) {
     final raw = body['logos'];
     if (raw is! List) return null;
@@ -167,9 +217,8 @@ class TmdbService {
           (e) =>
               e['file_path'] is String &&
               (e['file_path'] as String).startsWith('/') &&
-              RegExp(
-                r'^/[a-zA-Z0-9_.-]+\.(png|jpg|webp)$',
-              ).hasMatch(e['file_path'] as String),
+              RegExp(r'^/[a-zA-Z0-9_.-]+\.(png|jpg|webp)$')
+                  .hasMatch(e['file_path'] as String),
         )
         .toList();
     // Strictly Italian or English: untagged (null) and other languages are
@@ -180,9 +229,8 @@ class TmdbService {
         ? 1
         : 2;
     logos.sort((a, b) {
-      final language = priority(
-        a['iso_639_1'],
-      ).compareTo(priority(b['iso_639_1']));
+      final language = priority(a['iso_639_1'])
+          .compareTo(priority(b['iso_639_1']));
       if (language != 0) return language;
       return ((b['vote_average'] as num?) ?? 0).compareTo(
         (a['vote_average'] as num?) ?? 0,
