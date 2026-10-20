@@ -39,7 +39,9 @@ class MediaKitEngine extends PlaybackEngine {
             settings.hardwareDecoding != HardwareDecoding.disabled,
         // hwdec must be given here: the controller applies its own value
         // asynchronously and silently overrode the one set at open.
-        hwdec: softwareDecode ? 'no' : _hwdec(settings.hardwareDecoding),
+        hwdec: softwareDecode
+            ? 'no'
+            : _hwdec(settings.hardwareDecoding, vod: !isLive && !previewMode),
         vo: null,
       ),
     );
@@ -124,7 +126,9 @@ class MediaKitEngine extends PlaybackEngine {
       // late vsync no longer stalls the decoder (visible micro-stutter);
       // live keeps the default low-latency path.
       if (!isLive && !previewMode) 'video-latency-hacks': 'no',
-      if (!isLive && !previewMode) 'opengl-swapinterval': '1',
+      // Film/series: no extra GL vsync on top of Flutter's own frame pacing
+      // (the double wait caused uneven frame delivery on TV panels).
+      if (!isLive && !previewMode) 'opengl-swapinterval': '0',
       if (!isLive && !previewMode) 'cache-secs': '30',
       // Auto threads oversubscribed entry-level quad-core TV CPUs and
       // starved the render thread; phones keep automatic detection.
@@ -378,7 +382,12 @@ class MediaKitEngine extends PlaybackEngine {
   /// "mediacodec" (zero-copy) renders black on several Fire TV/Android TV
   /// GPUs with live MPEG-TS; the copy variant keeps hardware decoding but
   /// always reaches the screen.
-  static String _hwdec(HardwareDecoding mode) => switch (mode) {
+  /// Film/series (progressive) use zero-copy "mediacodec,mediacodec-copy":
+  /// the copy variant moved every decoded frame through shared TV RAM
+  /// (micro-stutter, confirmed by diagnostics); mpv falls back to copy
+  /// automatically when zero-copy cannot start. Live keeps copy only.
+  static String _hwdec(HardwareDecoding mode, {bool vod = false}) =>
+      switch (mode) {
     HardwareDecoding.disabled => 'no',
     // "mediacodec" exists only on Android: on iPhone it decoded audio with
     // a black picture. VideoToolbox is Apple's hardware decoder.
@@ -386,9 +395,9 @@ class MediaKitEngine extends PlaybackEngine {
       Platform.isIOS || Platform.isMacOS
           ? 'videotoolbox-copy'
           : Platform.isAndroid
-          ? 'mediacodec-copy'
+          ? (vod ? 'mediacodec,mediacodec-copy' : 'mediacodec-copy')
           : 'auto-safe',
-  };
+      };
 
   /// Opt-in diagnostics: numeric mpv metrics only. Every property is read
   /// under its own guard and with its own deadline, because a build without

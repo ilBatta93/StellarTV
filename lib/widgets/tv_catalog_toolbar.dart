@@ -75,6 +75,8 @@ class TvCatalogToolbar extends StatefulWidget {
     this.platforms,
     this.platformActive = false,
     this.genresOnly = false,
+    this.filterActive = false,
+    this.activeFilters = const [],
     this.viewMode,
     this.onViewMode,
   });
@@ -93,6 +95,13 @@ class TvCatalogToolbar extends StatefulWidget {
   final WidgetBuilder? platforms;
   final bool platformActive;
   final bool genresOnly;
+
+  /// Genre/category filter applied: the filter icon stays orange.
+  final bool filterActive;
+
+  /// Labels of applied genre/platform filters, shown as pills next to the
+  /// category title while no panel or search field is open.
+  final List<String> activeFilters;
 
   /// Poster layout picker (grid / compact / list); null hides the button.
   final CatalogViewMode? viewMode;
@@ -350,13 +359,20 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
               Expanded(
                 child: SizedBox(
                   height: 48,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      widget.category ?? '',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          widget.category ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      for (final label in widget.activeFilters) ...[
+                        const SizedBox(width: 8),
+                        _FilterPill(label),
+                      ],
+                    ],
                   ),
                 ),
               ),
@@ -385,7 +401,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
                 child: IconButton(
                   style: IconButton.styleFrom(
                     backgroundColor: AppColors.surface,
-                    foregroundColor: _filtersOpen
+                    foregroundColor: _filtersOpen || widget.filterActive
                         ? AppColors.primary
                         : AppColors.textPrimary,
                   ),
@@ -456,4 +472,29 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
       ),
     );
   }
+}
+
+/// Read-only reminder of an applied filter (never focusable).
+class _FilterPill extends StatelessWidget {
+  const _FilterPill(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: AppColors.primary.withValues(alpha: 0.18),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: AppColors.primary.withValues(alpha: 0.6)),
+    ),
+    child: Text(
+      label,
+      maxLines: 1,
+      style: const TextStyle(
+        color: AppColors.primary,
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
 }

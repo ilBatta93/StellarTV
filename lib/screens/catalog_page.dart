@@ -314,6 +314,10 @@ class _CatalogPageState extends State<CatalogPage> {
   String? _selectedCategory;
   int? _genreId;
   StreamingPlatform? _platform;
+
+  /// "Solo 4K": keeps titles with at least one 4K/UHD copy. Combinable
+  /// with a platform and a genre.
+  bool _only4k = false;
   Set<String>? _platformIds;
   String? _platformIdsKey;
   bool _infoRequested = false;
@@ -379,8 +383,24 @@ class _CatalogPageState extends State<CatalogPage> {
     return _platformIds = ids;
   }
 
+  static bool _is4k(CatalogEntry e) => e.variants.any(
+    (c) => CatalogBuilder.qualityLabel(c.name) == '4K',
+  );
+
+  List<String> get _activeFilterLabels => [
+    if (_genreId != null && _genreNames[_genreId] != null)
+      _genreNames[_genreId]!,
+    if (_platform != null) _platform!.name,
+    if (_only4k) '4K',
+  ];
+
   Widget _buildPlatformPanel() => TvFilterPanel(
     options: [
+      TvFilterOption(
+        'Solo 4K',
+        _only4k,
+        () => setState(() => _only4k = !_only4k),
+      ),
       TvFilterOption(
         'Tutte le piattaforme',
         _platform == null,
@@ -402,11 +422,19 @@ class _CatalogPageState extends State<CatalogPage> {
     final chosen = await pickOption<String>(
       context,
       title: 'Piattaforme streaming',
-      options: [none, for (final p in StreamingPlatform.all) p.name],
+      options: [
+        _only4k ? 'Solo 4K ✓' : 'Solo 4K',
+        none,
+        for (final p in StreamingPlatform.all) p.name,
+      ],
       current: _platform?.name ?? none,
       label: (v) => v,
     );
     if (chosen == null || !mounted) return;
+    if (chosen.startsWith('Solo 4K')) {
+      setState(() => _only4k = !_only4k);
+      return;
+    }
     final platform = StreamingPlatform.byName(chosen);
     if (platform == _platform) return;
     _selectPlatform(platform);
@@ -569,7 +597,9 @@ class _CatalogPageState extends State<CatalogPage> {
               platforms: widget.type == ContentType.live
                   ? null
                   : (_) => _buildPlatformPanel(),
-              platformActive: _platform != null,
+              platformActive: _platform != null || _only4k,
+              filterActive: _genreId != null,
+              activeFilters: _activeFilterLabels,
             )
           else
             Padding(
@@ -612,7 +642,7 @@ class _CatalogPageState extends State<CatalogPage> {
                   if (widget.type != ContentType.live)
                     IconButton(
                       tooltip: 'Piattaforme streaming',
-                      color: _platform != null ? AppColors.primary : null,
+                      color: _platform != null || _only4k ? AppColors.primary : null,
                       icon: const Icon(Icons.connected_tv_rounded),
                       onPressed: _pickPlatformMobile,
                     ),
@@ -654,6 +684,7 @@ class _CatalogPageState extends State<CatalogPage> {
         )) {
       return false;
     }
+    if (_only4k && !_is4k(e)) return false;
     final id = _genreId;
     if (id == null) return true;
     return app.genresOf(e.primary)?.contains(id) ?? false;
@@ -796,7 +827,7 @@ class _CatalogPageState extends State<CatalogPage> {
 
   Widget _buildRecentGrid(AppProvider app) {
     final entries = _ordered(
-      _genreId != null || _platform != null ? _allOfGenre(app) : app.recentEntries(widget.type),
+      _genreId != null || _platform != null || _only4k ? _allOfGenre(app) : app.recentEntries(widget.type),
     );
     if (entries.isEmpty) {
       return EmptyState(
@@ -999,6 +1030,7 @@ class _CatalogPageState extends State<CatalogPage> {
   String? _filterPlatform;
   int? _filterInfoVersion;
   List<CatalogEntry>? _filterResult;
+  bool _filter4k = false;
 
   List<CatalogEntry> _filtered(
     AppProvider app,
@@ -1006,13 +1038,17 @@ class _CatalogPageState extends State<CatalogPage> {
     String tag,
     List<CatalogEntry> Function() compute,
   ) {
-    if (_genreId == null && _platform == null && source is List<CatalogEntry>) {
+    if (_genreId == null &&
+        _platform == null &&
+        !_only4k &&
+        source is List<CatalogEntry>) {
       return source;
     }
     if (_filterResult != null &&
         identical(_filterSource, source) &&
         _filterTag == tag &&
         _filterGenre == _genreId &&
+        _filter4k == _only4k &&
         _filterPlatform ==
             (_platform == null ? null : _platformKey(app, _platform!)) &&
         _filterInfoVersion == app.titleInfoVersion) {
@@ -1021,6 +1057,7 @@ class _CatalogPageState extends State<CatalogPage> {
     _filterSource = source;
     _filterTag = tag;
     _filterGenre = _genreId;
+    _filter4k = _only4k;
     _filterPlatform = _platform == null ? null : _platformKey(app, _platform!);
     _filterInfoVersion = app.titleInfoVersion;
     return _filterResult = compute();
