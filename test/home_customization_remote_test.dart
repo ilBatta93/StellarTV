@@ -189,8 +189,11 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 500));
+      // TV settings open on the first macro area: enter "Aspetto e Home".
+      await tester.tap(find.text('Aspetto e Home'));
+      await tester.pump(const Duration(milliseconds: 500));
       final field = find.text('Forma locandine consigliati e Top');
-      await tester.drag(find.byType(ListView).first, const Offset(0, -1200));
+      await tester.drag(find.byKey(const ValueKey(1)), const Offset(0, -1200));
       await tester.pump(const Duration(milliseconds: 500));
       await tester.ensureVisible(field);
       await tester.pump(const Duration(milliseconds: 500));
