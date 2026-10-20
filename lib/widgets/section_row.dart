@@ -118,21 +118,35 @@ class HorizontalRow extends StatelessWidget {
                     // the remote repeats faster than a scroll animation.
                     scrollable.position.ensureVisible(target, alignment: 0.5);
                     // Vertical reveal (e.g. entering "Titoli simili" from
-                    // above) only when the card is off-screen, without
-                    // animation, so it never competes with the row scroll.
+                    // above) only when the card is truly off-screen: the page
+                    // is nudged by the exact missing pixels and never while
+                    // the remote simply walks sideways through the row.
                     final outer = Scrollable.maybeOf(scrollable.context);
                     if (outer != null &&
-                        outer.position.axis == Axis.vertical) {
-                      outer.position.ensureVisible(
-                        target,
-                        alignmentPolicy:
-                            ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
-                      );
-                      outer.position.ensureVisible(
-                        target,
-                        alignmentPolicy:
-                            ScrollPositionAlignmentPolicy.keepVisibleAtStart,
-                      );
+                        outer.position.axis == Axis.vertical &&
+                        target is RenderBox &&
+                        outer.context.findRenderObject() is RenderBox) {
+                      final cardBox = target as RenderBox;
+                      final pageBox =
+                          outer.context.findRenderObject()! as RenderBox;
+                      final cardRect =
+                          cardBox.localToGlobal(Offset.zero) & cardBox.size;
+                      final pageRect =
+                          pageBox.localToGlobal(Offset.zero) & pageBox.size;
+                      var delta = 0.0;
+                      if (cardRect.bottom > pageRect.bottom) {
+                        delta = cardRect.bottom - pageRect.bottom;
+                      } else if (cardRect.top < pageRect.top) {
+                        delta = cardRect.top - pageRect.top;
+                      }
+                      if (delta != 0) {
+                        final position = outer.position;
+                        final next = (position.pixels + delta).clamp(
+                          position.minScrollExtent,
+                          position.maxScrollExtent,
+                        ).toDouble();
+                        position.jumpTo(next);
+                      }
                     }
                   });
                 },

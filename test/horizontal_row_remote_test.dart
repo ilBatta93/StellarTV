@@ -112,4 +112,52 @@ void main() {
       vertical.dispose();
     });
   }
+
+  testWidgets('Entering a row from above reveals an off-screen card',
+      (tester) async {
+    tester.view.physicalSize = const Size(960, 540);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final nodes = List.generate(6, (i) => FocusNode(debugLabel: 'card $i'));
+    final vertical = ScrollController();
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ListView(
+          controller: vertical,
+          children: [
+            const SizedBox(height: 700),
+            HorizontalRow(
+              height: 200,
+              spacing: 20,
+              itemCount: 6,
+              itemBuilder: (_, i) => Focus(
+                focusNode: nodes[i],
+                child: SizedBox(
+                  key: ValueKey('card-$i'),
+                  width: 112,
+                  height: 180,
+                  child: Text('Titolo $i'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 600),
+          ],
+        ),
+      ),
+    ));
+    nodes.first.requestFocus();
+    await tester.pump();
+    await tester.pump();
+    expect(vertical.offset, greaterThan(0));
+    final rect = tester.getRect(find.byKey(const ValueKey('card-0')));
+    expect(rect.top, greaterThanOrEqualTo(0));
+    expect(rect.bottom, lessThanOrEqualTo(540.5));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    for (final node in nodes) {
+      node.dispose();
+    }
+    vertical.dispose();
+  });
 }
