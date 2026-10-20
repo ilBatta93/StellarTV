@@ -247,7 +247,9 @@ class MediaKitEngine extends PlaybackEngine {
       final progressed =
           now.position > before ||
           (now.playing && !now.buffering && _firstFrameRendered);
-      if (progressed) return;
+      // Paused by the viewer: a frozen clock is expected, not a failure
+      // (this restarted paused live channels after a moment).
+      if (progressed || !now.playing) return;
       _onError(message);
     });
   }

@@ -74,6 +74,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   int _tvCol = 0;
   Duration? _tvSeekTarget;
   Timer? _tvSeekTimer;
+  int _tvRepeatCount = 0;
   int _tvOutroCol = 0;
   DateTime? _exitArmedAt;
   DateTime _lastBackAt = DateTime(2000);
@@ -388,6 +389,16 @@ class _PlayerScreenState extends State<PlayerScreen>
       _tvSeekBy(left ? -step : step, repeat);
       return;
     }
+    // Holding Left/Right anywhere in the controls scrubs like dragging the
+    // bar: the selection jumps to the progress row and the seek accelerates.
+    if ((left || right) && repeat && !_isLive && _canSeek(session) &&
+        rows.any((r) => r.kind == TvPlayerRowKind.progress)) {
+      if (_tvRow != TvPlayerRowKind.progress) {
+        setState(() => _tvRow = TvPlayerRowKind.progress);
+      }
+      _tvSeekBy(left ? -step : step, true);
+      return;
+    }
     if (left || right) {
       if (row.actions.isEmpty) return;
       final next = (col + (left ? -1 : 1)).clamp(0, row.actions.length - 1);
@@ -445,7 +456,8 @@ class _PlayerScreenState extends State<PlayerScreen>
     final duration = session.value.duration;
     if (duration <= Duration.zero) return;
     final base = _tvSeekTarget ?? session.value.position;
-    var target = base + (repeat ? delta * 3 : delta);
+    _tvRepeatCount = repeat ? _tvRepeatCount + 1 : 0;
+    var target = base + delta * tvScrubMultiplier(repeat, _tvRepeatCount);
     if (target < Duration.zero) target = Duration.zero;
     final end = duration - const Duration(seconds: 1);
     if (target > end) target = end;
@@ -455,6 +467,17 @@ class _PlayerScreenState extends State<PlayerScreen>
     // made the engines stutter and rebuffer.
     _tvSeekTimer = Timer(const Duration(milliseconds: 700), _commitTvSeek);
     if (revealControls) _onInteraction();
+  }
+
+  void _restartFromBeginning() {
+    _tvSeekTimer?.cancel();
+    setState(() => _tvSeekTarget = null);
+    final session = _session;
+    if (session == null) return;
+    session.seekTo(Duration.zero).then((_) {
+      if (!session.value.isPlaying) session.togglePlay();
+    });
+    _onInteraction();
   }
 
   void _commitTvSeek() {
@@ -571,6 +594,13 @@ class _PlayerScreenState extends State<PlayerScreen>
           label: 'Esci',
           onPressed: _exitPlayer,
         ),
+        if (!_isLive && canSeek)
+          TvPlayerAction(
+            id: 'restart',
+            icon: Icons.replay_rounded,
+            label: 'Ricomincia',
+            onPressed: _restartFromBeginning,
+          ),
         if (!_isLive)
           TvPlayerAction(
             id: 'title',
@@ -660,7 +690,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                 ? () => session.timeshiftBy(step)
                 : null,
           ),
-        if (_isLive && session.isBehindLive)
+        if (_isLive &&
+            (session.isBehindLive ||
+                !v.isPlaying ||
+                session.liveResumePending))
           TvPlayerAction(
             id: 'goLive',
             icon: Icons.sensors_rounded,
@@ -1703,6 +1736,7 @@ class _PlayerScreenState extends State<PlayerScreen>
             position: session.value.position,
             delay: session.subtitleDelay,
             settings: settings,
+            playing: session.value.isPlaying,
           ),
         ),
       if (status == SessionStatus.playing &&
@@ -2404,4 +2438,11 @@ class _EpisodePickerState extends State<_EpisodePicker> {
       ),
     ),
   );
+}
+
+/// Seek multiplier while a remote arrow is held: 3x at first, growing every
+/// ~10 repeats up to 30x, so long titles can be crossed quickly.
+int tvScrubMultiplier(bool repeat, int repeats) {
+  if (!repeat) return 1;
+  return (3 + (repeats ~/ 10) * 3).clamp(3, 30);
 }

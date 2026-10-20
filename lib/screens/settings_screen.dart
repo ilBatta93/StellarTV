@@ -14,6 +14,7 @@ import '../services/playlist_refresh_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_tiles.dart';
 import '../widgets/tv_focusable.dart';
+import '../services/device_type_service.dart';
 import 'account_screen.dart';
 import 'xtream_edit_screen.dart';
 import '../providers/sync_provider.dart';
@@ -496,102 +497,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final provider = context.watch<AppProvider>();
+  /// Settings macro areas (tvOS-style sidebar on TV, drill-down on phone).
+  int _category = 0;
+  bool _phoneDetail = false;
 
-    return ApplePageScaffold(
-      title: 'Impostazioni',
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+  static const _categories = <(IconData, String, String)>[
+    (Icons.person_rounded, 'Account e profili', 'Accesso, sincronizzazione, profili e connessione'),
+    (Icons.palette_rounded, 'Aspetto e Home', 'Colori, testo, locandine, banner e cataloghi'),
+    (Icons.play_circle_fill_rounded, 'Riproduzione', 'Player, sottotitoli, MultiView e cronologia'),
+    (Icons.video_library_rounded, 'Contenuti', 'Categorie, aggiornamento e guida TV'),
+    (Icons.monitor_heart_rounded, 'Diagnostica', 'Rapporti di dirette, film e serie'),
+    (Icons.info_rounded, 'Informazioni', 'Versione e aggiornamenti'),
+  ];
+
+  List<Widget> _sectionsFor(int index, AppProvider provider) => switch (index) {
+    0 => [
+      SettingsSection(
+        title: 'Account',
+        description: 'Profili e dati personali protetti tra dispositivi autorizzati.',
         children: [
-          SettingsSection(
-            title: 'Riproduzione',
-            children: [
-              SettingsValueTile(
-                icon: Icons.monitor_heart_outlined,
-                title: 'Diagnostica dirette',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const LiveDiagnosticsScreen(),
-                  ),
-                ),
-              ),
-              SettingsValueTile(
-                icon: Icons.movie_filter_outlined,
-                title: 'Diagnostica film e serie',
-                subtitle:
-                    'Fotogrammi scartati, buffer e scatti del lettore mpv/ExoPlayer',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const VodDiagnosticsScreen(),
-                  ),
-                ),
-              ),
-
-              SettingsValueTile(
-                icon: Icons.dashboard_customize_outlined,
-                title: 'MultiView',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const MultiViewSettingsScreen(),
-                  ),
-                ),
-              ),
-              SettingsValueTile(
-                icon: Icons.play_circle_outline_rounded,
-                title: 'Player video',
-                subtitle: 'Motori, audio, sottotitoli, buffer, HDR e Picture-in-Picture',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const PlayerSettingsScreen(),
-                  ),
-                ),
-              ),
-              SettingsValueTile(
-                icon: Icons.history_rounded,
-                title: 'Cronologia',
-                subtitle:
-                    'Gestisci i contenuti visti e le posizioni di ripresa',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const HistorySettingsScreen(),
-                  ),
-                ),
-              ),
-              SettingsValueTile(
-                icon: Icons.reorder_rounded,
-                title: 'Categorie personali e ordine',
-                subtitle: 'Crea le tue categorie e riordina quelle della playlist',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const CategoryManagerScreen(),
-                  ),
-                ),
-              ),
-              SettingsValueTile(
-                icon: Icons.visibility_off_outlined,
-                title: 'Categorie nascoste',
-                subtitle: 'Nascondi le categorie che non ti interessano',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const HiddenCategoriesScreen(),
-                  ),
-                ),
-              ),
-              SettingsSwitchTile(
-                icon: Icons.no_adult_content_outlined,
-                title: 'Mostra contenuti per adulti',
-                subtitle: 'Contenuti riservati agli adulti (nascosti di base)',
-                value: provider.showAdult,
-                onChanged: provider.setShowAdult,
-              ),
-            ],
-          ),
-          SettingsSection(
-            title: 'Account',
-            description: 'Profili e dati personali protetti tra dispositivi autorizzati.',
-            children: [
               SettingsValueTile(
                 icon: Icons.cloud_sync_outlined,
                 title: 'Backup e sincronizzazione',
@@ -600,12 +524,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   MaterialPageRoute(builder: (_) => const SyncSettingsScreen()),
                 ),
               ),
-            ],
-          ),
-          SettingsSection(
-            title: 'Profili',
-            description: 'Un profilo per ogni persona che usa l\'app. Il profilo scelto resta attivo al prossimo avvio.',
-            children: [
+        ],
+      ),
+      SettingsSection(
+        title: 'Profili',
+        children: [
               SettingsValueTile(
                 icon: Icons.people_outline_rounded,
                 title: 'Gestisci profili',
@@ -617,27 +540,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
-            ],
-          ),
-          _buildUiCustomization(context),
-          _buildPlaylistRefresh(context, provider),
-          SettingsSection(
-            title: 'Guida TV',
-            children: [
-              SettingsValueTile(
-                icon: Icons.calendar_view_day_rounded,
-                title: 'Guida TV (EPG)',
-                subtitle:
-                    'Fonti, aggiornamento automatico (ogni 12 ore di base)',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const EpgSettingsScreen()),
-                ),
-              ),
-            ],
-          ),
-          SettingsSection(
-            title: 'Account',
-            children: [
+        ],
+      ),
+      SettingsSection(
+        title: 'Connessione',
+        children: [
               SettingsValueTile(
                 icon: Icons.login_rounded,
                 title: 'Metodo di connessione',
@@ -687,11 +594,128 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: AppColors.error,
                   onTap: () => _handleLogout(provider),
                 ),
-            ],
-          ),
-          SettingsSection(
-            title: 'Informazioni',
-            children: [
+        ],
+      ),
+    ],
+    1 => [_buildUiCustomization(context)],
+    2 => [
+      SettingsSection(
+        title: 'Riproduzione',
+        children: [
+              SettingsValueTile(
+                icon: Icons.dashboard_customize_outlined,
+                title: 'MultiView',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const MultiViewSettingsScreen(),
+                  ),
+                ),
+              ),
+              SettingsValueTile(
+                icon: Icons.play_circle_outline_rounded,
+                title: 'Player video',
+                subtitle: 'Motori, audio, sottotitoli, buffer, HDR e Picture-in-Picture',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const PlayerSettingsScreen(),
+                  ),
+                ),
+              ),
+              SettingsValueTile(
+                icon: Icons.history_rounded,
+                title: 'Cronologia',
+                subtitle:
+                    'Gestisci i contenuti visti e le posizioni di ripresa',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const HistorySettingsScreen(),
+                  ),
+                ),
+              ),
+        ],
+      ),
+    ],
+    3 => [
+      SettingsSection(
+        title: 'Categorie',
+        children: [
+              SettingsValueTile(
+                icon: Icons.reorder_rounded,
+                title: 'Categorie personali e ordine',
+                subtitle: 'Crea le tue categorie e riordina quelle della playlist',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const CategoryManagerScreen(),
+                  ),
+                ),
+              ),
+              SettingsValueTile(
+                icon: Icons.visibility_off_outlined,
+                title: 'Categorie nascoste',
+                subtitle: 'Nascondi le categorie che non ti interessano',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const HiddenCategoriesScreen(),
+                  ),
+                ),
+              ),
+              SettingsSwitchTile(
+                icon: Icons.no_adult_content_outlined,
+                title: 'Mostra contenuti per adulti',
+                subtitle: 'Contenuti riservati agli adulti (nascosti di base)',
+                value: provider.showAdult,
+                onChanged: provider.setShowAdult,
+              ),
+        ],
+      ),
+      _buildPlaylistRefresh(context, provider),
+      SettingsSection(
+        title: 'Guida TV',
+        children: [
+              SettingsValueTile(
+                icon: Icons.calendar_view_day_rounded,
+                title: 'Guida TV (EPG)',
+                subtitle:
+                    'Fonti, aggiornamento automatico (ogni 12 ore di base)',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const EpgSettingsScreen()),
+                ),
+              ),
+        ],
+      ),
+    ],
+    4 => [
+      SettingsSection(
+        title: 'Diagnostica',
+        children: [
+              SettingsValueTile(
+                icon: Icons.monitor_heart_outlined,
+                title: 'Diagnostica dirette',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const LiveDiagnosticsScreen(),
+                  ),
+                ),
+              ),
+              SettingsValueTile(
+                icon: Icons.movie_filter_outlined,
+                title: 'Diagnostica film e serie',
+                subtitle:
+                    'Fotogrammi scartati, buffer e scatti del lettore mpv/ExoPlayer',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const VodDiagnosticsScreen(),
+                  ),
+                ),
+              ),
+
+        ],
+      ),
+    ],
+    _ => [
+      SettingsSection(
+        title: 'Informazioni',
+        children: [
               SettingsValueTile(
                 icon: Icons.info_outline_rounded,
                 title: 'Versione',
@@ -708,8 +732,146 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Piattaforma',
                 value: 'Android e iOS',
               ),
+        ],
+      ),
+    ],
+  };
+
+  Widget _categoryTile(int i, {required bool tv}) {
+    final (icon, title, subtitle) = _categories[i];
+    final selected = tv && i == _category;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: TvFocusable(
+        autofocus: tv && i == 0,
+        borderRadius: BorderRadius.circular(14),
+        onFocusChange: tv
+            ? (f) {
+                if (f && _category != i) setState(() => _category = i);
+              }
+            : null,
+        onPressed: () => setState(() {
+          _category = i;
+          if (!tv) _phoneDetail = true;
+        }),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: tv ? 14 : 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primary.withValues(alpha: 0.16)
+                : AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, size: 20, color: AppColors.textPrimary),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: tv ? 17 : 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (!tv)
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                      ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final tv = DeviceTypeService.isTv;
+    if (tv) {
+      return ApplePageScaffold(
+        title: 'Impostazioni',
+        body: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 320,
+              child: FocusTraversalGroup(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 12, 32),
+                  children: [
+                    for (var i = 0; i < _categories.length; i++)
+                      _categoryTile(i, tv: true),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: FocusTraversalGroup(
+                child: ListView(
+                  key: ValueKey(_category),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 32, 32),
+                  children: _sectionsFor(_category, provider),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_phoneDetail) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) setState(() => _phoneDetail = false);
+        },
+        child: ApplePageScaffold(
+          title: _categories[_category].$2,
+          actions: [
+            IconButton(
+              tooltip: 'Tutte le impostazioni',
+              icon: const Icon(Icons.grid_view_rounded),
+              onPressed: () => setState(() => _phoneDetail = false),
+            ),
+          ],
+          body: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            children: _sectionsFor(_category, provider),
+          ),
+        ),
+      );
+    }
+    return ApplePageScaffold(
+      title: 'Impostazioni',
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          for (var i = 0; i < _categories.length; i++)
+            _categoryTile(i, tv: false),
         ],
       ),
     );

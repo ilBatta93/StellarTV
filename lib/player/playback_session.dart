@@ -627,6 +627,14 @@ class PlaybackSession extends ChangeNotifier {
   }) async {
     if (_disposed || gen != _generation || _failedGeneration == gen) return;
     _failedGeneration = gen;
+    // A live channel paused by the viewer: providers often drop the idle
+    // connection, and reconnecting at once restarted the picture by itself.
+    // Keep the pause; the stream reopens at LIVE when the viewer resumes.
+    if (midPlay && isLive && _userPausedLive) {
+      _deferredLiveFailure = true;
+      _notify();
+      return;
+    }
     final status = StreamProbe.statusIn(reason);
     _diagnostics?.event(
       'error',
@@ -880,6 +888,8 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> goLive() async {
     final engine = _engine;
     if (engine == null) return;
+    if (_deferredLiveFailure) return _resumeDeferredLive();
+    _userPausedLive = false;
     if (engine.value.nativeLiveSeekable) {
       await engine.seekToLive();
       if (!engine.value.isPlaying) await engine.play();
@@ -911,9 +921,25 @@ class PlaybackSession extends ChangeNotifier {
     }
   }
 
+  bool _userPausedLive = false;
+  bool _deferredLiveFailure = false;
+
+  /// True while a paused live channel waits to reopen at LIVE.
+  bool get liveResumePending => _deferredLiveFailure;
+
+  Future<void> _resumeDeferredLive() async {
+    _deferredLiveFailure = false;
+    _userPausedLive = false;
+    _shift = Duration.zero;
+    _pausedAt = null;
+    await retry();
+  }
+
   Future<void> togglePlay() async {
     final engine = _engine;
     if (engine == null) return;
+    if (isLive && _deferredLiveFailure) return _resumeDeferredLive();
+    if (isLive) _userPausedLive = engine.value.isPlaying;
     if (isLive && canTimeshift) {
       _liveStartedAt ??= DateTime.now();
       if (engine.value.isPlaying) {

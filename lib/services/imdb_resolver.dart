@@ -36,7 +36,9 @@ class ImdbResolver {
         final v = (jsonDecode(res.body) as Map)['imdb_id'];
         if (v is String && RegExp(r'^tt\d+$').hasMatch(v)) id = v;
       }
-      _cache[cacheKey] = id;
+      // Cache only definitive answers: a timeout or server error must not
+      // disable subtitles for the rest of the session.
+      if (id != null || res.statusCode == 404) _cache[cacheKey] = id;
       return id;
     } catch (_) {
       return null;
