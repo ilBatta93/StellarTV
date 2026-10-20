@@ -124,10 +124,14 @@ void main() {
         await tester.pumpWidget(const SizedBox()); await tester.pump();
         await tester.pumpWidget(mount(const SettingsScreen()));
         await tester.pump(const Duration(seconds: 1));
-        await tester.tap(find.text('Aspetto e Home'));
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
         await tester.pump(const Duration(milliseconds: 500));
         final threshold = find.text('Soglia contenuto visto');
-        await tester.drag(find.byKey(const ValueKey(1)), const Offset(0, -1200));
+        final pane = find.byType(ListView).last;
+        for (var i = 0; i < 6 && !tester.any(threshold); i++) {
+          await tester.drag(pane, const Offset(0, -400));
+          await tester.pump(const Duration(milliseconds: 300));
+        }
         await tester.pump(const Duration(milliseconds: 500));
         await tester.ensureVisible(threshold); await tester.pumpAndSettle();
         await tester.tap(threshold); await tester.pumpAndSettle();
