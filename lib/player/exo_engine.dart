@@ -18,6 +18,7 @@ class ExoEngine extends PlaybackEngine {
     required String url,
     required PlayerSettings settings,
     bool shared = false,
+    this.isLive = false,
   }) : _blackStrikes = shared ? 2 : 3,
        _controller = VideoPlayerController.networkUrl(
          Uri.parse(url),
@@ -39,6 +40,7 @@ class ExoEngine extends PlaybackEngine {
          viewType: VideoViewType.textureView,
        );
 
+  final bool isLive;
   final VideoPlayerController _controller;
   final int _blackStrikes;
   final Map<String, VideoTrack> _videoTracks = {};
@@ -152,7 +154,7 @@ class ExoEngine extends PlaybackEngine {
       isReady: v.isInitialized,
       isPlaying: v.isPlaying,
       isBuffering: v.isBuffering,
-      isEnded: v.isCompleted,
+      isEnded: !isLive && v.isCompleted,
       position: supportsTimeshift
           ? Duration(
               milliseconds:

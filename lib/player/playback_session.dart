@@ -324,6 +324,7 @@ class PlaybackSession extends ChangeNotifier {
           url: address,
           settings: settings,
           shared: previewMode,
+          isLive: isLive,
         ),
         PlayerEngineType.mediakit => MediaKitEngine(
           url: address,
@@ -630,7 +631,7 @@ class PlaybackSession extends ChangeNotifier {
     // A live channel paused by the viewer: providers often drop the idle
     // connection, and reconnecting at once restarted the picture by itself.
     // Keep the pause; the stream reopens at LIVE when the viewer resumes.
-    if (midPlay && isLive && _userPausedLive) {
+    if (isLive && _userPausedLive) {
       _deferredLiveFailure = true;
       _notify();
       return;
@@ -939,7 +940,14 @@ class PlaybackSession extends ChangeNotifier {
     final engine = _engine;
     if (engine == null) return;
     if (isLive && _deferredLiveFailure) return _resumeDeferredLive();
-    if (isLive) _userPausedLive = engine.value.isPlaying;
+    if (isLive) {
+      _userPausedLive = engine.value.isPlaying;
+      if (_userPausedLive) {
+        _firstPictureTimer?.cancel();
+      } else {
+        _watchFirstPicture(engine, _generation);
+      }
+    }
     if (isLive && canTimeshift) {
       _liveStartedAt ??= DateTime.now();
       if (engine.value.isPlaying) {
@@ -953,7 +961,7 @@ class PlaybackSession extends ChangeNotifier {
       _notify();
       return;
     }
-    if (engine.value.isEnded) {
+    if (!isLive && engine.value.isEnded) {
       await engine.seekTo(Duration.zero);
       _vod?.markSeek();
       await engine.play();
@@ -995,7 +1003,7 @@ class PlaybackSession extends ChangeNotifier {
   /// Resumes a player paused by the system (e.g. Android audio focus).
   Future<void> ensurePlaying() async {
     final engine = _engine;
-    if (engine == null || _disposed) return;
+    if (engine == null || _disposed || (isLive && _userPausedLive)) return;
     if (!engine.value.isPlaying) await engine.play();
   }
 

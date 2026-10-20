@@ -222,9 +222,11 @@ class PlayerControls extends StatelessWidget {
     final nextLive = nextChannel;
     final step = Duration(seconds: seekStepSeconds);
     final canSeek = !session.isLive && v.duration > Duration.zero;
-    final playIcon = v.isEnded
+    final ended = !session.isLive && v.isEnded;
+    final playing = !session.liveResumePending && v.isPlaying;
+    final playIcon = ended
         ? Icons.replay_rounded
-        : v.isPlaying
+        : playing
         ? Icons.pause_rounded
         : Icons.play_arrow_rounded;
     return Row(
@@ -271,7 +273,7 @@ class PlayerControls extends StatelessWidget {
                 focusNode: playFocusNode,
                 size: 72,
                 filled: true,
-                tooltip: v.isPlaying ? 'Pausa' : 'Riproduci',
+                tooltip: ended ? 'Riproduci di nuovo' : playing ? 'Pausa' : 'Riproduci',
                 onPressed: () => _act(session.togglePlay),
               ),
         const SizedBox(width: 32),

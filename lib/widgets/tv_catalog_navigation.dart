@@ -55,7 +55,6 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
   @override
   void initState() {
     super.initState();
-    HardwareKeyboard.instance.addHandler(_key);
   }
 
   void _first(FocusScopeNode scope) {
@@ -181,7 +180,7 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
 
   @override
   void dispose() {
-    HardwareKeyboard.instance.removeHandler(_key);
+
     _tools.dispose();
     _filters.dispose();
     _items.dispose();
@@ -189,14 +188,21 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      FocusScope(node: _tools, child: widget.toolbar),
-      FocusScope(node: _filters, child: widget.filters),
-      Expanded(
-        child: FocusScope(node: _items, child: widget.items),
-      ),
-    ],
+  Widget build(BuildContext context) => Focus(
+    canRequestFocus: false,
+    skipTraversal: true,
+    onKeyEvent: (_, event) => _key(event)
+        ? KeyEventResult.handled
+        : KeyEventResult.ignored,
+    child: Column(
+      children: [
+        FocusScope(node: _tools, child: widget.toolbar),
+        FocusScope(node: _filters, child: widget.filters),
+        Expanded(
+          child: FocusScope(node: _items, child: widget.items),
+        ),
+      ],
+    ),
   );
 }
 

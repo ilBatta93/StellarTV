@@ -207,8 +207,15 @@ class _HomeScreenState extends State<HomeScreen> {
     (i) => FocusNode(debugLabel: 'tvTab$i'),
   );
 
+  final _navSearch = FocusNode(debugLabel: 'tvNavSearch');
+  final _navProfile = FocusNode(debugLabel: 'tvNavProfile');
+  final _navSettings = FocusNode(debugLabel: 'tvNavSettings');
+
   @override
   void dispose() {
+    _navSearch.dispose();
+    _navProfile.dispose();
+    _navSettings.dispose();
     _tvNavScope.dispose();
     _tvContentScope.dispose();
     for (final n in _tabNodes) {
@@ -252,6 +259,21 @@ class _HomeScreenState extends State<HomeScreen> {
   // Arrow Down on the top menu always enters the content of the current tab.
   KeyEventResult _onNavKey(FocusNode node, KeyEvent event) {
     if (!_isKeyPress(event)) return KeyEventResult.ignored;
+    final left = event.logicalKey == LogicalKeyboardKey.arrowLeft;
+    final right = event.logicalKey == LogicalKeyboardKey.arrowRight;
+    if (left || right) {
+      final stops = [
+        _navSearch,
+        ..._tabNodes.take(_order.length + 1),
+        _navProfile,
+        _navSettings,
+      ];
+      final index = stops.indexWhere((n) => n.hasFocus);
+      if (index < 0) return KeyEventResult.ignored;
+      final next = index + (right ? 1 : -1);
+      if (next >= 0 && next < stops.length) stops[next].requestFocus();
+      return KeyEventResult.handled;
+    }
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       _focusContent();
       return KeyEventResult.handled;
@@ -348,6 +370,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     selectedIndex: _currentIndex,
                     sections: _order,
                     tabNodes: _tabNodes,
+                    searchNode: _navSearch,
+                    profileNode: _navProfile,
+                    settingsNode: _navSettings,
                     onSelected: _selectTab,
                     onSearch: () => _push(const SearchScreen()),
                     onProfile: () => _push(const ProfilePickerScreen()),
@@ -369,6 +394,9 @@ class _TvTopBar extends StatelessWidget {
   final int selectedIndex;
   final List<AppSection> sections;
   final List<FocusNode> tabNodes;
+  final FocusNode searchNode;
+  final FocusNode profileNode;
+  final FocusNode settingsNode;
   final ValueChanged<int> onSelected;
   final VoidCallback onSearch;
   final VoidCallback onProfile;
@@ -378,6 +406,9 @@ class _TvTopBar extends StatelessWidget {
     required this.selectedIndex,
     required this.sections,
     required this.tabNodes,
+    required this.searchNode,
+    required this.profileNode,
+    required this.settingsNode,
     required this.onSelected,
     required this.onSearch,
     required this.onProfile,
@@ -420,6 +451,7 @@ class _TvTopBar extends StatelessWidget {
           SizedBox(width: compact ? 16 : 32),
           _TvNavPill(
             label: 'Cerca',
+            focusNode: searchNode,
             icon: Icons.search_rounded,
             compact: compact,
             onPressed: onSearch,
@@ -449,11 +481,13 @@ class _TvTopBar extends StatelessWidget {
           ),
           _TvNavPill(
             label: name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+            focusNode: profileNode,
             compact: compact,
             onPressed: onProfile,
           ),
           _TvNavPill(
             icon: Icons.settings_rounded,
+            focusNode: settingsNode,
             compact: compact,
             onPressed: onSettings,
           ),

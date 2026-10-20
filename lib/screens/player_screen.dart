@@ -672,12 +672,16 @@ class _PlayerScreenState extends State<PlayerScreen>
           ),
         TvPlayerAction(
           id: 'play',
-          icon: v.isEnded
+          icon: !session.isLive && v.isEnded
               ? Icons.replay_rounded
-              : v.isPlaying
+              : !session.liveResumePending && v.isPlaying
               ? Icons.pause_rounded
               : Icons.play_arrow_rounded,
-          label: v.isPlaying ? 'Pausa' : 'Riproduci',
+          label: !session.isLive && v.isEnded
+              ? 'Riproduci di nuovo'
+              : !session.liveResumePending && v.isPlaying
+              ? 'Pausa'
+              : 'Riproduci',
           primary: true,
           onPressed: session.togglePlay,
         ),
@@ -1309,7 +1313,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!_isLive) _checkOutro(v.position);
 
     // Netflix-style: at the end of an episode go straight to the next one.
-    if (v.isEnded && _next != null && !_nextDismissed) {
+    if (!_isLive && v.isEnded && _next != null && !_nextDismissed) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _playNext();
       });

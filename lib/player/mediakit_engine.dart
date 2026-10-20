@@ -315,7 +315,7 @@ class MediaKitEngine extends PlaybackEngine {
       isReady: true,
       isPlaying: p.playing,
       isBuffering: p.buffering,
-      isEnded: p.completed,
+      isEnded: !isLive && p.completed,
       position: p.position,
       duration: p.duration,
       bufferedUntil: p.buffer,
@@ -481,9 +481,10 @@ class MediaKitEngine extends PlaybackEngine {
       final flowing = await _framesFlowing();
       checking = false;
       if (_disposed) return;
+      final current = _player.state;
       if (health.check(
-        playing: st.playing,
-        buffering: st.buffering,
+        playing: current.playing,
+        buffering: current.buffering,
         audioOnly: !hasVideoTrack,
         frameAvailable: flowing,
       )) {

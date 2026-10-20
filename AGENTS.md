@@ -9,6 +9,9 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - The playlist opens from the device copy at every start; only sections never saved are downloaded immediately, and a full refresh runs only when the chosen interval has elapsed since the last complete download.
 - Large derived caches (kids verdicts, playlist sections) are persisted to files through background isolates with batched writes, never to preferences or the main thread.
 
+- TV catalog boundary keys bubble through a non-focusable ancestor before geometric traversal; the Home-owned top menu links every stop explicitly across spacers, so Up returns to the active tab and lateral movement never selects a tab by itself.
+- Live completion flags never enter replay controls; explicit viewer pause cancels startup health deadlines and defers recovery until manual resume, so monitoring cannot restart a paused stream.
+
 - TV catalogs keep filters/categories in a lazy inline panel shared by live and VOD: remote movement stays inside open panels until their vertical boundary, returns to tools above the first row and enters content below the last; default sorting preserves provider order and category drawers retain left-edge access.
 - TV poster ratings use a shared two-request queue and an isolate-written device cache; unknown ratings sort last, and only the selected category is queued for vote sorting.
 - TV person details reuse the fixed title backdrop and compact poster grid; the touch person layout stays unchanged.
