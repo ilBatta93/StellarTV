@@ -34,7 +34,9 @@ class PosterImage extends StatelessWidget {
     );
     // The "Mostra anteprime" setting: when off, all poster images become a
     // neutral placeholder tile.
-    if (!context.watch<UiSettings>().showPosters) return fallback;
+    if (!context.select<UiSettings, bool>((ui) => ui.showPosters)) {
+      return fallback;
+    }
     if (url == null || url!.isEmpty) return fallback;
     // Decode images at their on-screen size: full-size decoding of every
     // poster exhausts memory on TV boxes and makes the app close.
@@ -47,7 +49,7 @@ class PosterImage extends StatelessWidget {
         }
         return CachedNetworkImage(
           cacheManager: AppImageCache.manager,
-          imageUrl: url!,
+          imageUrl: tmdbSizedUrl(url!, cacheWidth),
           fit: fit,
           memCacheWidth: cacheWidth,
           fadeInDuration: const Duration(milliseconds: 200),
@@ -82,7 +84,7 @@ class _PressableState extends State<Pressable> {
 
   @override
   Widget build(BuildContext context) {
-    final animations = context.watch<UiSettings>().animations;
+    final animations = context.select<UiSettings, bool>((ui) => ui.animations);
     final gesture = GestureDetector(
       onTapDown: animations ? (_) => setState(() => _pressed = true) : null,
       onTapCancel: animations ? () => setState(() => _pressed = false) : null,
