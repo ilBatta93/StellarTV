@@ -144,7 +144,9 @@ class KidsContentService {
 
   /// Bulk-reads titles already classified in the cloud (shared by every
   /// device and profile), so only truly new titles hit the slow check.
-  Future<void> _cloudLookup() async {
+  /// False when the shared cache could not be read: the slow per-title
+  /// check then waits for the next scan instead of flooding the server.
+  Future<bool> _cloudLookup() async {
     final keys = <String, String>{};
     for (final b in _pending) {
       final type = b.split('\u0000').first;
@@ -171,7 +173,7 @@ class KidsContentService {
               body: jsonEncode({'keys': chunk}),
             )
             .timeout(const Duration(seconds: 30));
-        if (res.statusCode != 200) return;
+        if (res.statusCode != 200) return false;
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         for (final r in (body['results'] as List? ?? const [])) {
           if (r is! Map ||
@@ -190,19 +192,23 @@ class KidsContentService {
           changed = true;
         }
       } catch (_) {
-        return;
+        return false;
       }
     }
     if (changed) {
       await _save();
       onVerdicts?.call();
     }
+    return true;
   }
 
   Future<void> _run() async {
     _running = true;
     try {
-      await _cloudLookup();
+      if (!await _cloudLookup()) {
+        _pending.clear();
+        return;
+      }
       while (_pending.isNotEmpty) {
         final batch = _pending.take(_batchSize).toList();
         _pending.removeAll(batch);
