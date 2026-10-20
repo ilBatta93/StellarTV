@@ -21,6 +21,16 @@ class TvHomeSelectorNode extends FocusNode {
 /// Uses exactly one focus node per item (children are excluded from focus), so
 /// the D-Pad never lands on invisible duplicate nodes and moves one item per
 /// press. Holding OK triggers [onLongPress].
+/// Marks cards inside a HorizontalRow: the row owns their reveal, so the
+/// card must not start a second, animated ensureVisible that fights it.
+class HorizontalRowScope extends InheritedWidget {
+  const HorizontalRowScope({super.key, required super.child});
+  static bool of(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<HorizontalRowScope>() != null;
+  @override
+  bool updateShouldNotify(HorizontalRowScope oldWidget) => false;
+}
+
 class TvFocusable extends StatefulWidget {
   final Widget child;
   final FocusNode? focusNode;
@@ -110,7 +120,9 @@ class _TvFocusableState extends State<TvFocusable> {
         if (value == _focused) return;
         setState(() => _focused = value);
         widget.onFocusChange?.call(value);
-        if (value && widget.revealOnFocus) {
+        if (value &&
+            widget.revealOnFocus &&
+            !HorizontalRowScope.of(context)) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted || !_focused) return;
             Scrollable.ensureVisible(

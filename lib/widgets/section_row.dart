@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
+import 'tv_focusable.dart';
 
 class SectionHeader extends StatelessWidget {
   final String title;
@@ -116,9 +117,26 @@ class HorizontalRow extends StatelessWidget {
                     // Immediate reveal keeps lazy neighbours built even while
                     // the remote repeats faster than a scroll animation.
                     scrollable.position.ensureVisible(target, alignment: 0.5);
+                    // Vertical reveal (e.g. entering "Titoli simili" from
+                    // above) only when the card is off-screen, without
+                    // animation, so it never competes with the row scroll.
+                    final outer = Scrollable.maybeOf(scrollable.context);
+                    if (outer != null &&
+                        outer.position.axis == Axis.vertical) {
+                      outer.position.ensureVisible(
+                        target,
+                        alignmentPolicy:
+                            ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+                      );
+                      outer.position.ensureVisible(
+                        target,
+                        alignmentPolicy:
+                            ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+                      );
+                    }
                   });
                 },
-                child: child,
+                child: HorizontalRowScope(child: child),
               ),
             );
           },
