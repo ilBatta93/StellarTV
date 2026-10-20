@@ -1728,6 +1728,33 @@ class _PlayerScreenState extends State<PlayerScreen>
             ),
           ),
         ),
+      // Arrow seek with the controls hidden: a small time bubble only.
+      if (!_controlsVisible && _tvSeekTarget != null)
+        Positioned(
+          top: 40,
+          left: 0,
+          right: 0,
+          child: IgnorePointer(
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Text(
+                  '${_tvSeekTarget! >= session.value.position ? '»' : '«'}  '
+                  '${formatDuration(_tvSeekTarget!)} / ${formatDuration(session.value.duration)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       if (_onlineCues case final cues?)
         ListenableBuilder(
           listenable: session,
