@@ -9,6 +9,7 @@ import '../../services/device_type_service.dart';
 import 'player_format.dart';
 import 'tv_player_controls.dart' show TimeshiftBadge;
 import 'player_sheets.dart';
+import 'seek_time_bubble.dart';
 
 class PlayerControls extends StatelessWidget {
   final PlaybackSession session;
@@ -38,7 +39,6 @@ class PlayerControls extends StatelessWidget {
   final bool onlineSubsLoading;
   final VoidCallback? onLoadOnlineSubs;
   final VoidCallback? onDisableOnlineSubs;
-
 
   const PlayerControls({
     super.key,
@@ -452,33 +452,56 @@ class _ScrubBarState extends State<_ScrubBar> {
         children: [
           Text(formatDuration(shown), style: timeStyle),
           Expanded(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 3,
-                activeTrackColor: AppColors.primary,
-                inactiveTrackColor: AppColors.track,
-                secondaryActiveTrackColor: AppColors.bufferedTrack,
-                thumbColor: AppColors.primary,
-                overlayColor: AppColors.primary.withValues(alpha: 0.2),
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-              ),
-              child: Slider(
-                value: value,
-                secondaryTrackValue: frac(widget.buffered),
-                onChangeStart: (v) {
-                  widget.onInteraction();
-                  setState(() => _dragValue = v);
-                },
-                onChanged: total <= 0
-                    ? null
-                    : (v) {
+            child: LayoutBuilder(
+              builder: (context, box) => Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 3,
+                      activeTrackColor: AppColors.primary,
+                      inactiveTrackColor: AppColors.track,
+                      secondaryActiveTrackColor: AppColors.bufferedTrack,
+                      thumbColor: AppColors.primary,
+                      overlayColor: AppColors.primary.withValues(alpha: 0.2),
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 7,
+                      ),
+                    ),
+                    child: Slider(
+                      value: value,
+                      secondaryTrackValue: frac(widget.buffered),
+                      onChangeStart: (v) {
                         widget.onInteraction();
                         setState(() => _dragValue = v);
                       },
-                onChangeEnd: (v) {
-                  setState(() => _dragValue = null);
-                  widget.onSeek(Duration(milliseconds: (v * total).round()));
-                },
+                      onChanged: total <= 0
+                          ? null
+                          : (v) {
+                              widget.onInteraction();
+                              setState(() => _dragValue = v);
+                            },
+                      onChangeEnd: (v) {
+                        setState(() => _dragValue = null);
+                        widget.onSeek(
+                          Duration(milliseconds: (v * total).round()),
+                        );
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    // Slider track is inset by the 24 px overlay radius.
+                    left: SeekTimeBubble.leftFor(
+                      24 + (box.maxWidth - 48) * value,
+                      box.maxWidth,
+                    ),
+                    bottom: 40,
+                    child: SeekTimeBubble(
+                      time: shown,
+                      visible: _dragValue != null,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
