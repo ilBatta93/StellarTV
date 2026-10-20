@@ -181,6 +181,17 @@ class PersonalVault {
       DateTime.tryParse(object(v)['watched']?.toString() ?? '')
           ?.microsecondsSinceEpoch ??
       0;
+  /// The cloud copy keeps only the newest titles so every save stays small;
+  /// the full history always remains on the device.
+  static const cloudHistoryLimit = 500;
+  static Map<String, dynamic> capHistory(dynamic raw) {
+    final h = object(raw);
+    if (h.length <= cloudHistoryLimit) return h;
+    final entries = h.entries.toList()
+      ..sort((x, y) => _at(y.value).compareTo(_at(x.value)));
+    return Map.fromEntries(entries.take(cloudHistoryLimit));
+  }
+
   static Map<String, dynamic> mergeHistory(dynamic a, dynamic b) {
     final out = object(a);
     for (final e in object(b).entries) {
@@ -203,6 +214,9 @@ class PersonalVault {
     final profiles = object(a['profile_histories']);
     for (final e in object(b['profile_histories']).entries) {
       profiles[e.key] = mergeHistory(profiles[e.key], e.value);
+    }
+    for (final k in profiles.keys.toList()) {
+      if (k != favoriteLane) profiles[k] = capHistory(profiles[k]);
     }
     final ids = <String>{
       ...(a['favorite_ids'] as List).cast<String>(),
@@ -236,7 +250,7 @@ class PersonalVault {
     }
     return {
       'v': 4,
-      'history': mergeHistory(a['history'], b['history']),
+      'history': capHistory(mergeHistory(a['history'], b['history'])),
       'profile_histories': profiles,
       'favorite_ids': ids.toList(),
       'tmdb_favorites': items.values.toList(),
