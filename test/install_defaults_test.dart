@@ -24,8 +24,60 @@ void main() {
     expect(ui.homeTitles, isFalse);
     expect(ui.homeRecentTitles, isFalse);
     expect(ui.uiScalePercent, 100);
-    expect(ui.viewMode, CatalogViewMode.landscape);
     expect(ui.compact, isFalse);
+    expect(ui.showPosters, isTrue);
+    expect(ui.showTitles, isTrue);
+    expect(ui.showRatings, isTrue);
+    expect(ui.showQuality, isTrue);
+    expect(ui.startSection, AppSection.home);
+    ui.dispose();
+  });
+
+  test('Fresh install uses Poster catalog layout', () async {
+    final ui = UiSettings();
+    expect(ui.viewMode, CatalogViewMode.grid);
+    await ui.load();
+    expect(ui.viewMode, CatalogViewMode.grid);
+    ui.dispose();
+  });
+
+  test('Fresh install uses Grande catalog posters', () async {
+    final ui = UiSettings();
+    expect(ui.gridSize, 'grande');
+    await ui.load();
+    expect(ui.gridSize, 'grande');
+    ui.dispose();
+  });
+
+  test('Saved catalog preferences are not overwritten on upgrade', () async {
+    SharedPreferences.setMockInitialValues({
+      'ui_catalog_view': 'landscape',
+      'ui_grid_size': 'piccola',
+      'ui_watched_percent': 95,
+    });
+    final ui = UiSettings();
+    await ui.load();
+    expect(ui.viewMode, CatalogViewMode.landscape);
+    expect(ui.gridSize, 'piccola');
+    expect(ui.watchedPercent, 95);
+    ui.dispose();
+  });
+
+  test('Appearance reset restores Poster layout and Grande posters', () async {
+    SharedPreferences.setMockInitialValues({
+      'ui_catalog_view': 'landscape',
+      'ui_grid_size': 'piccola',
+      'player_settings_v1': 'local',
+    });
+    final ui = UiSettings();
+    await ui.load();
+    await ui.resetAppearance();
+    expect(ui.viewMode, CatalogViewMode.grid);
+    expect(ui.gridSize, 'grande');
+    expect(
+      (await SharedPreferences.getInstance()).getString('player_settings_v1'),
+      'local',
+    );
     ui.dispose();
   });
 

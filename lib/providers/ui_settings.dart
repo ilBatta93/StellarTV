@@ -227,11 +227,11 @@ class UiSettings extends ChangeNotifier {
   static const gridSizes = {'piccola': 120.0, 'media': 140.0, 'grande': 170.0};
 
   Color _accent = accents['arancio']!;
-  String _gridSize = 'media';
+  String _gridSize = 'grande';
   bool _showPosters = true;
   bool _animations = true;
   bool _compact = false;
-  CatalogViewMode _viewMode = CatalogViewMode.landscape;
+  CatalogViewMode _viewMode = CatalogViewMode.grid;
   String _textScale = 'normale';
   bool _showRatings = true;
   bool _showQuality = true;
@@ -295,13 +295,13 @@ class UiSettings extends ChangeNotifier {
     if (accentName != null && accents.containsKey(accentName)) {
       _accent = accents[accentName]!;
     }
-    _gridSize = prefs.getString(_gridSizeKey) ?? 'media';
+    _gridSize = prefs.getString(_gridSizeKey) ?? 'grande';
     _showPosters = prefs.getBool(_postersKey) ?? true;
     _animations = prefs.getBool(_animationsKey) ?? true;
     _compact = prefs.getBool(_compactKey) ?? false;
     _viewMode =
         CatalogViewMode.values.asNameMap()[prefs.getString(_viewModeKey)] ??
-        CatalogViewMode.landscape;
+        CatalogViewMode.grid;
     _sectionOrder = _parseSectionOrder(prefs.getStringList(sectionOrderKey));
     _startSection =
         _parseSection(prefs.getString(startSectionKey)) ?? AppSection.home;
