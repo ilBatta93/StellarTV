@@ -1205,7 +1205,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!_isLive) {
       _resumeTimer = Timer.periodic(
         const Duration(seconds: 10),
-        (_) => _saveResume(),
+        (_) => _saveResume(periodic: true),
       );
     }
   }
@@ -1358,7 +1358,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
-  Future<void> _saveResume() async {
+  Future<void> _saveResume({bool periodic = false}) async {
     final session = _session;
     if (session == null || _isLive || widget.archivePlayback) return;
     final v = session.value;
@@ -1372,7 +1372,13 @@ class _PlayerScreenState extends State<PlayerScreen>
       _pendingResume = null;
     }
     await _progressWriter.save(() async {
-      await _history.updatePosition(widget.channel.id, v.position, v.duration);
+      await _history.updatePosition(
+        widget.channel.id,
+        v.position,
+        v.duration,
+        // A paused video syncs at once so another device resumes exactly.
+        periodic: periodic && v.isPlaying,
+      );
       if (_settings?.resumePlayback != true) return;
       final remaining = v.duration - v.position;
       final keep =
