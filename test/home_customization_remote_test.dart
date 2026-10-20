@@ -189,11 +189,15 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 500));
-      // TV settings open on the first macro area: enter "Aspetto e Home".
-      await tester.tap(find.text('Aspetto e Home'));
+      // TV settings open on the first macro area: move focus down to "Aspetto e Home".
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump(const Duration(milliseconds: 500));
       final field = find.text('Forma locandine consigliati e Top');
-      await tester.drag(find.byKey(const ValueKey(1)), const Offset(0, -1200));
+      final pane = find.byType(ListView).last;
+      for (var i = 0; i < 6 && !tester.any(field); i++) {
+        await tester.drag(pane, const Offset(0, -400));
+        await tester.pump(const Duration(milliseconds: 300));
+      }
       await tester.pump(const Duration(milliseconds: 500));
       await tester.ensureVisible(field);
       await tester.pump(const Duration(milliseconds: 500));
