@@ -480,8 +480,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> updatePosition(
     String contentId,
     Duration position,
-    Duration duration,
-  ) async {
+    Duration duration, {
+    bool periodic = false,
+  }) async {
     if (duration <= Duration.zero) return;
     await _loadFuture;
     final index = _entries.indexWhere((e) => e.contentId == contentId);
@@ -498,8 +499,21 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
         lastWatchedAt: DateTime.now(),
       );
     _notify();
+    // Local copy is always immediate. While a video keeps playing the
+    // periodic progress tick reaches the cloud at most once per
+    // [progressCloudInterval]; pause, exit, app background and every
+    // explicit action still sync at once.
+    final now = DateTime.now();
+    if (periodic && now.difference(_lastProgressPush) < progressCloudInterval) {
+      await _sync.saveLocalHistory(_localMap(), profileId: _profileId);
+      return;
+    }
+    _lastProgressPush = now;
     await _persistLocal();
   }
+
+  static const progressCloudInterval = Duration(seconds: 60);
+  DateTime _lastProgressPush = DateTime(2000);
 
   /// Removes a title from the history together with everything tied to it:
   /// for a series episode every episode of that series (watched marks and
