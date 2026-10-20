@@ -23,6 +23,7 @@ class _TvHomeRowsState extends State<TvHomeRows> {
   double _extent = 0;
   int _active = 0;
   bool _restoring = false;
+  int _sectionCount = -1;
   @override
   void initState() {
     super.initState();
@@ -60,6 +61,10 @@ class _TvHomeRowsState extends State<TvHomeRows> {
 
   @override
   Widget build(BuildContext context) {
+    if (_sectionCount != widget.sections.length) {
+      _sectionCount = widget.sections.length;
+      _selected.clear();
+    }
     while (_rows.length < widget.sections.length) {
       _rows.add(FocusNode(debugLabel: 'home-row-${_rows.length}'));
     }
@@ -116,9 +121,10 @@ class _TvHomeRowsState extends State<TvHomeRows> {
                     selectors.first;
               } else {
                 target =
-                    saved != null &&
-                        saved.context != null &&
-                        saved.canRequestFocus
+                    // Rows shift when Home gains a section (e.g. after
+                    // watching a film): a remembered poster may now live in
+                    // another row, which hid the focus offscreen.
+                    saved != null && stops.contains(saved)
                     ? saved
                     : stops.firstOrNull;
               }
