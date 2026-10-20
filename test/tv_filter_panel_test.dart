@@ -73,7 +73,10 @@ void main() {
           // Hardware Back and a duplicate system dispatch must be consumed once.
           await tester.tap(find.byTooltip(tooltip));
           await tester.pumpAndSettle();
-          await tester.sendKeyEvent(LogicalKeyboardKey.goBack);
+          await tester.sendKeyEvent(
+            LogicalKeyboardKey.goBack,
+            physicalKey: PhysicalKeyboardKey.escape,
+          );
           await tester.binding.handlePopRoute();
           await tester.pumpAndSettle();
           expect(opener?.hasFocus, isTrue);
