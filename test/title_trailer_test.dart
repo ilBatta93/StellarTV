@@ -32,7 +32,15 @@ void main() {
    return http.Response(jsonEncode({'results': lang == 'en-US' ? [video('abcDEF12345','en')] : []}), 200);
   }));
  });
- test('Unavailable trailer stays absent, unsafe keys and teasers are excluded', () {
-  expect(TitleTrailer.select({'results': [video('../unsafe','it'), video('abcDEF12345','en'), video('abcDEF12345','it',type: 'Teaser')]},'it'), isNull);
+ test('Unsafe keys, other languages and clips are excluded', () {
+  expect(TitleTrailer.select({'results': [video('../unsafe','it'), video('abcDEF12345','en'), video('abcDEF12345','it',type: 'Clip')]},'it'), isNull);
+ });
+ test('Italian teaser is used when no Italian trailer exists, trailer wins otherwise', () {
+  expect(TitleTrailer.select({'results': [video('teaserKEY01','it',type: 'Teaser')]},'it')?.key, 'teaserKEY01');
+  expect(TitleTrailer.select({'results': [video('teaserKEY01','it',type: 'Teaser'), video('trailerKEY1','it')]},'it')?.key, 'trailerKEY1');
+ });
+ test('English fallback is marked SUB ITA, Italian is ITA', () {
+  expect(const TitleTrailer(key: 'abcDEF12345', language: 'en').badge, 'SUB ITA');
+  expect(const TitleTrailer(key: 'abcDEF12345', language: 'it').badge, 'ITA');
  });
 }

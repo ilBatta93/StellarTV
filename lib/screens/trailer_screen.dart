@@ -54,14 +54,14 @@ class _TrailerScreenState extends State<TrailerScreen> {
       // inside the page: allow the API to start the video.
       platform.setMediaPlaybackRequiresUserGesture(false);
     }
-    _web.loadHtmlString(trailerHtml(key), baseUrl: 'https://stellartv.lovable.app');
+    _web.loadHtmlString(trailerHtml(key, subtitles: widget.trailer.italianSubtitles), baseUrl: 'https://stellartv.lovable.app');
     _scheduleHide();
   }
 
   /// YouTube IFrame API page: the player reports its state to Flutter and
   /// exposes play/pause/seek for the on-screen controls.
   @visibleForTesting
-  static String trailerHtml(String key) => '''
+  static String trailerHtml(String key, {bool subtitles = false}) => '''
 <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#p{width:100%;height:100%}</style>
 </head><body><div id="p"></div>
@@ -71,14 +71,22 @@ var player;
 function send(s){try{Trailer.postMessage(s)}catch(e){}}
 function onYouTubeIframeAPIReady(){
   player=new YT.Player('p',{host:'https://www.youtube-nocookie.com',videoId:'$key',
-    playerVars:{autoplay:1,controls:0,rel:0,modestbranding:1,playsinline:1,hl:'it',fs:0,iv_load_policy:3},
+    playerVars:{autoplay:1,controls:0,rel:0,modestbranding:1,playsinline:1,hl:'it',fs:0,iv_load_policy:3,cc_lang_pref:'it',cc_load_policy:${subtitles ? 1 : 0}},
     events:{
       onReady:function(e){e.target.playVideo();},
+      onApiChange:function(e){if(${subtitles})italianCaptions();},
       onStateChange:function(e){
         if(e.data==1)send('playing');else if(e.data==2)send('paused');else if(e.data==0)send('ended');},
       onError:function(e){send('error');}
     }});
 }
+// Italian track when present, otherwise YouTube's Italian auto-translation.
+function italianCaptions(){try{player.loadModule('captions');
+  var list=player.getOption('captions','tracklist')||[];
+  var it=list.filter(function(t){return t.languageCode=='it'})[0];
+  player.setOption('captions','track',it?{languageCode:'it'}:
+    (list.length?{languageCode:list[0].languageCode,translationLanguage:{languageCode:'it'}}:{languageCode:'it'}));
+  }catch(e){}}
 function toggle(){if(!player)return;var s=player.getPlayerState();if(s==1){player.pauseVideo()}else{player.playVideo()}}
 function seekBy(d){if(!player)return;player.seekTo(Math.max(0,player.getCurrentTime()+d),true)}
 </script></body></html>''';

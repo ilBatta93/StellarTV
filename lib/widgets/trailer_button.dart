@@ -59,7 +59,7 @@ class _TrailerButtonState extends State<TrailerButton> {
         child: OutlinedButton.icon(
           onPressed: open,
           icon: const Icon(Icons.smart_display_outlined),
-          label: Text('Trailer · ${trailer.language == 'it' ? 'ITA' : 'ENG'}'),
+          label: Text('Trailer · ${trailer.badge}'),
         ),
       );
     },
