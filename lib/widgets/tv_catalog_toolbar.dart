@@ -490,7 +490,7 @@ class _FilterPill extends StatelessWidget {
     child: Text(
       label,
       maxLines: 1,
-      style: const TextStyle(
+      style: TextStyle(
         color: AppColors.primary,
         fontSize: 12,
         fontWeight: FontWeight.w600,
