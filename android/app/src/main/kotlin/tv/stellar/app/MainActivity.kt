@@ -4,6 +4,9 @@ import android.app.PictureInPictureParams
 import android.app.UiModeManager
 import android.content.Context
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.media.AudioManager
 import android.net.Uri
 import androidx.core.content.FileProvider
 import java.io.File
@@ -42,9 +45,44 @@ class MainActivity : FlutterActivity() {
     private var lastImeHeal = 0L
     private var editorProxy: View? = null
 
+    // Screen off, device sleep or TV switched off (HDMI unplugged): the app
+    // tells Flutter so every provider stream is closed at once.
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val off = when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> true
+                AudioManager.ACTION_HDMI_AUDIO_PLUG ->
+                    intent.getIntExtra(AudioManager.EXTRA_AUDIO_PLUG_STATE, 1) == 0 &&
+                        !isInitialStickyBroadcast
+                else -> false
+            }
+            if (off) channel?.invokeMethod("screenOff", null)
+        }
+    }
+    private var screenReceiverRegistered = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (isTelevision()) installTextEditorProxy()
+        try {
+            val filter = IntentFilter(Intent.ACTION_SCREEN_OFF).apply {
+                addAction(AudioManager.ACTION_HDMI_AUDIO_PLUG)
+            }
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(screenReceiver, filter)
+            }
+            screenReceiverRegistered = true
+        } catch (_: Exception) {}
+    }
+
+    override fun onDestroy() {
+        if (screenReceiverRegistered) {
+            try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
+            screenReceiverRegistered = false
+        }
+        super.onDestroy()
     }
 
     // Many Google TV / Android TV devices (low-RAM overlay, e.g. Chromecast

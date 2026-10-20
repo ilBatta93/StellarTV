@@ -13,6 +13,7 @@ import '../services/catalog_builder.dart';
 import '../services/recent_live_channels.dart';
 import '../services/xtream_service.dart';
 import '../services/xtream_catchup.dart';
+import '../services/native_player_bridge.dart';
 import '../widgets/player/video_surface.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
@@ -72,6 +73,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   int _previewGeneration = 0;
   Future<void> _releaseQueue = Future<void>.value();
   late final AppProvider _app;
+  StreamSubscription<void>? _screenOffSub;
 
   @override
   void didUpdateWidget(covariant LivePage oldWidget) {
@@ -659,6 +661,8 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     _recentLive.addListener(_recentChanged);
     unawaited(_recentLive.load());
     WidgetsBinding.instance.addObserver(this);
+    // TV switched off or screen off: the preview connection closes at once.
+    _screenOffSub = NativePlayerBridge.instance.screenOff.listen((_) => _routeChanged());
     OpenRoutesObserver.instance.changes.addListener(_routeChanged);
     // Keep "now on" and progress bars current.
     _tick = Timer.periodic(const Duration(seconds: 60), (_) {
@@ -670,6 +674,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   void dispose() {
     _searchController.dispose();
     _recentLive.removeListener(_recentChanged);
+    _screenOffSub?.cancel();
     _tick?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     OpenRoutesObserver.instance.changes.removeListener(_routeChanged);

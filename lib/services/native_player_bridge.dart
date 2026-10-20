@@ -21,6 +21,8 @@ class NativePlayerBridge {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'pipChanged') {
         _pipController.add(call.arguments == true);
+      } else if (call.method == 'screenOff') {
+        _screenOffController.add(null);
       }
     });
   }
@@ -31,6 +33,12 @@ class NativePlayerBridge {
   final _pipController = StreamController<bool>.broadcast();
 
   Stream<bool> get pipChanges => _pipController.stream;
+
+  final _screenOffController = StreamController<void>.broadcast();
+
+  /// Android: the display turned off, the device went to sleep or the HDMI
+  /// output was unplugged/turned off (TV switched off with the remote).
+  Stream<void> get screenOff => _screenOffController.stream;
 
   Future<T?> _call<T>(String method, [Map<String, Object?>? args]) async {
     try {

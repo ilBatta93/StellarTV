@@ -974,6 +974,23 @@ class PlaybackSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _streamStopped = false;
+  bool get streamStopped => _streamStopped;
+
+  /// Closes the provider connection at once (TV off, app in background),
+  /// without waiting for the widget tree: background apps draw no frames, so
+  /// waiting for dispose would keep the stream open while nobody watches.
+  /// Aborts any pending open or retry. Safe to call more than once.
+  void stopStream() {
+    if (_disposed || _streamStopped) return;
+    _streamStopped = true;
+    _firstPictureTimer?.cancel();
+    _diagnosticTimer?.cancel();
+    _delayTick?.cancel();
+    _generation++;
+    unawaited(_releaseCurrent());
+  }
+
   @override
   void dispose() {
     _disposed = true;

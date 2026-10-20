@@ -115,6 +115,31 @@ class _FakeEngine extends PlaybackEngine {
 const _xtream = 'http://tv.example.com/live/user/pass/42.m3u8';
 
 void main() {
+  test('stopStream closes the provider connection without dispose', () async {
+    final engines = <_FakeEngine>[];
+    final session = PlaybackSession(
+      url: _xtream,
+      isLive: true,
+      settings: PlayerSettings(primaryEngine: PlayerEngineType.exo),
+      engineFactory: (type) {
+        final engine = _FakeEngine(type, _xtream, succeed: true);
+        engines.add(engine);
+        return engine;
+      },
+    );
+    await session.start();
+    expect(session.engine, isNotNull);
+    session.stopStream();
+    session.stopStream();
+    await session.released;
+    expect(session.engine, isNull);
+    expect(engines.single.disposed, isTrue);
+    expect(session.streamStopped, isTrue);
+    session.dispose();
+    await session.released;
+    expect(engines.length, 1);
+  });
+
   test(
     'a disposal longer than four seconds never opens another decoder',
     () async {

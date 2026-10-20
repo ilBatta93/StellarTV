@@ -10,6 +10,7 @@ import '../models/player_settings.dart';
 import '../player/playback_session.dart';
 import '../player/playback_engine.dart';
 import '../player/multiview_audio.dart';
+import '../services/native_player_bridge.dart';
 import '../providers/app_provider.dart';
 import '../providers/ui_settings.dart';
 import '../services/device_type_service.dart';
@@ -143,6 +144,8 @@ class _MultiViewScreenState extends State<MultiViewScreen>
     _app.addListener(_checkAllowed);
     _watchdog = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     WidgetsBinding.instance.addObserver(this);
+    _screenOffSub =
+        NativePlayerBridge.instance.screenOff.listen((_) => _closeAllStreams());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final channel = widget.initialChannel;
@@ -297,12 +300,42 @@ class _MultiViewScreenState extends State<MultiViewScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _background = state != AppLifecycleState.resumed;
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      _closeAllStreams();
+      return;
+    }
     _syncAudio();
     for (final slot in _slots) {
       if (_background) {
         slot.session.engine?.pause();
       } else {
         slot.session.engine?.play();
+      }
+    }
+  }
+
+  StreamSubscription<void>? _screenOffSub;
+
+  /// Closes every provider connection at once (app in background or TV
+  /// switched off) and leaves MultiView: background apps draw no frames, so
+  /// the streams are stopped directly instead of waiting for dispose.
+  void _closeAllStreams() {
+    if (_closed || !mounted) return;
+    _closed = true;
+    _watchdog?.cancel();
+    for (final slot in _slots) {
+      slot.session.engine?.pause();
+      slot.session.stopStream();
+    }
+    final route = ModalRoute.of(context);
+    if (route != null && route.isActive) {
+      final nav = Navigator.of(context);
+      if (route.isCurrent) {
+        nav.pop();
+      } else {
+        nav.removeRoute(route);
       }
     }
   }
@@ -568,6 +601,7 @@ class _MultiViewScreenState extends State<MultiViewScreen>
   void dispose() {
     _closed = true;
     _watchdog?.cancel();
+    _screenOffSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _app.removeListener(_checkAllowed);
     _audio.dispose();

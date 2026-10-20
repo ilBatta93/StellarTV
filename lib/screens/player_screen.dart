@@ -142,6 +142,15 @@ class _PlayerScreenState extends State<PlayerScreen>
     WidgetsBinding.instance.addObserver(this);
     _history = context.read<HistoryProvider>();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _screenOffSub = _bridge.screenOff.listen((_) {
+      // Phones may keep on-demand audio with the screen off when allowed.
+      final s = _settings;
+      final keepAudio = s != null &&
+          s.backgroundAudio &&
+          !DeviceTypeService.isTv &&
+          !_isLive;
+      if (!keepAudio && !_inPip) _closeProviderStream();
+    });
     _pipSub = _bridge.pipChanges.listen((inPip) {
       if (!mounted) return;
       setState(() {
@@ -1348,13 +1357,55 @@ class _PlayerScreenState extends State<PlayerScreen>
         _applyOrientation(settings);
       }
     }
-    if (state == AppLifecycleState.paused && settings != null) {
+    if (state == AppLifecycleState.resumed) {
+      _backgroundStop?.cancel();
+      return;
+    }
+    if ((state == AppLifecycleState.paused ||
+            state == AppLifecycleState.hidden ||
+            state == AppLifecycleState.detached) &&
+        settings != null) {
       _saveResume();
-      if (settings.backgroundAudio) return;
+      if (state == AppLifecycleState.detached) {
+        _closeProviderStream();
+        return;
+      }
+      // Background audio keeps on-demand titles going on phones only; on TV
+      // and for live channels the provider connection is always closed.
+      final keepAudio =
+          settings.backgroundAudio && !DeviceTypeService.isTv && !_isLive;
+      if (keepAudio) return;
       // PiP also pauses the activity; give the PiP callback time to land.
-      Future<void>.delayed(const Duration(milliseconds: 600), () {
-        if (mounted && !_inPip) _session?.engine?.pause();
+      _backgroundStop?.cancel();
+      _backgroundStop = Timer(const Duration(milliseconds: 800), () {
+        if (mounted && !_inPip) _closeProviderStream();
       });
+    }
+  }
+
+  Timer? _backgroundStop;
+  StreamSubscription<void>? _screenOffSub;
+  bool _providerClosed = false;
+
+  /// Releases the player and the provider connection immediately, then
+  /// removes the player page. Used when the app leaves the screen or the TV
+  /// is switched off, so no stream stays open while nobody is watching.
+  void _closeProviderStream() {
+    if (_providerClosed || !mounted) return;
+    _providerClosed = true;
+    _backgroundStop?.cancel();
+    _saveResume();
+    _session?.engine?.pause();
+    _session?.stopStream();
+    _bridge.setKeepScreenOn(false);
+    final route = ModalRoute.of(context);
+    final nav = Navigator.of(context);
+    if (route != null && route.isActive) {
+      if (route.isCurrent) {
+        nav.pop();
+      } else {
+        nav.removeRoute(route);
+      }
     }
   }
 
@@ -1460,6 +1511,8 @@ class _PlayerScreenState extends State<PlayerScreen>
     _resumeTimer?.cancel();
     _noticeTimer?.cancel();
     _pipSub?.cancel();
+    _screenOffSub?.cancel();
+    _backgroundStop?.cancel();
     _session?.removeListener(_onSessionChanged);
     _session?.dispose();
     _bridge.setAutoPip(false);
