@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../channel_card.dart';
 import 'player_format.dart';
+import 'seek_time_bubble.dart';
 
 /// Rows of the TV player overlay, from top to bottom.
 enum TvPlayerRowKind { top, center, progress, bottom }
@@ -389,6 +390,7 @@ class _TvProgress extends StatelessWidget {
                 child: LayoutBuilder(
                   builder: (context, box) {
                     final w = box.maxWidth;
+                    final still = MediaQuery.disableAnimationsOf(context);
                     final height = selected ? 8.0 : 4.0;
                     final thumb = selected ? 18.0 : 0.0;
                     return SizedBox(
@@ -411,7 +413,11 @@ class _TvProgress extends StatelessWidget {
                               AppColors.onOverlay.withValues(alpha: 0.85),
                             ),
                           if (selected)
-                            Positioned(
+                            AnimatedPositioned(
+                              duration: still
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 180),
+                              curve: Curves.easeOutCubic,
                               left: (w * frac(shown) - thumb / 2).clamp(
                                 -thumb / 2,
                                 w - thumb / 2,
@@ -429,6 +435,18 @@ class _TvProgress extends StatelessWidget {
                                 ),
                               ),
                             ),
+                          AnimatedPositioned(
+                            duration: still
+                                ? Duration.zero
+                                : const Duration(milliseconds: 180),
+                            curve: Curves.easeOutCubic,
+                            left: SeekTimeBubble.leftFor(w * frac(shown), w),
+                            bottom: 22,
+                            child: SeekTimeBubble(
+                              time: shown,
+                              visible: selected || pendingSeek != null,
+                            ),
+                          ),
                         ],
                       ),
                     );
