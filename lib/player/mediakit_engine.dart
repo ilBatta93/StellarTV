@@ -47,7 +47,15 @@ class MediaKitEngine extends PlaybackEngine {
     _player.stream.completed.listen(_onCompleted);
     _player.stream.playing.listen((_) => _sync());
     _player.stream.buffering.listen((_) => _sync());
-    _player.stream.position.listen((_) => _sync());
+    // mpv reports position many times per second: rebuilding the player UI
+    // on each tick competed with frame presentation (micro-stutter). 4 Hz is
+    // plenty for the progress bar; state changes still sync immediately.
+    _player.stream.position.listen((_) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (now - _lastPositionSyncMs < 250) return;
+      _lastPositionSyncMs = now;
+      _sync();
+    });
     _player.stream.duration.listen((_) => _sync());
     _player.stream.track.listen((_) => _sync());
     _sync();
@@ -112,6 +120,12 @@ class MediaKitEngine extends PlaybackEngine {
         'hwdec-codecs': isLive ? 'hevc,vp9,av1' : 'h264,hevc,vp9,av1',
       if (isLive && !softwareDecode) 'deinterlace': 'auto',
       'cache-pause-initial': 'no',
+      // Film/series: let mpv queue frames ahead of the Android surface so a
+      // late vsync no longer stalls the decoder (visible micro-stutter);
+      // live keeps the default low-latency path.
+      if (!isLive && !previewMode) 'video-latency-hacks': 'no',
+      if (!isLive && !previewMode) 'opengl-swapinterval': '1',
+      if (!isLive && !previewMode) 'cache-secs': '30',
       // Auto threads oversubscribed entry-level quad-core TV CPUs and
       // starved the render thread; phones keep automatic detection.
       'vd-lavc-threads': DeviceTypeService.isTv ? '4' : '0',
@@ -126,6 +140,7 @@ class MediaKitEngine extends PlaybackEngine {
     }
   }
 
+  int _lastPositionSyncMs = 0;
   final bool isLive;
   final bool previewMode;
 
