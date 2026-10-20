@@ -166,7 +166,14 @@ class _StellarTvAppState extends State<StellarTvApp> {
     // Profiles created/edited on other devices show up automatically.
     _historyProvider.onAfterAutoPull = () =>
         _profileProvider.load(silent: true);
-    _historyProvider.startAutoSync();
+    // The first cloud pull is not needed to draw Home: start it right after
+    // the first frame so startup and the first scroll stay smooth. Pushes
+    // from user actions remain instant (schedulePush is independent).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) _historyProvider.startAutoSync();
+      });
+    });
     // Keep the cloud favorites table in step with the sync code: upload the
     // local list when a code is enabled/entered, stop mirroring when cleared.
     _syncProvider.onCodeReady = _appProvider.pushAllFavorites;
@@ -196,7 +203,14 @@ class _StellarTvAppState extends State<StellarTvApp> {
         MaterialPageRoute(builder: (_) => const AccountScreen()),
         (_) => false,
       );
-    })..start();
+    });
+    // Remote sign-out polling is a background check: start it after the
+    // first frame instead of competing with the initial Home build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(seconds: 6), () {
+        if (mounted) _remoteSignout.start();
+      });
+    });
   }
 
   late final RemoteSignoutService _remoteSignout;
