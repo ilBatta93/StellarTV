@@ -110,8 +110,26 @@ class ExoEngine extends PlaybackEngine {
   bool get audioOnly =>
       _window['tracksKnown'] == true && _window['hasVideoTrack'] == false;
 
+  /// Opt-in diagnostics: how much film is already in the player buffer.
+  /// ExoPlayer exposes no frame counter, so the read-ahead is the only
+  /// numeric signal this engine can give.
+  @override
+  Future<Map<String, Object?>> metrics() async {
+    if (_disposed) return const {};
+    final v = _controller.value;
+    if (!v.isInitialized) return const {};
+    final buffered = v.buffered.isEmpty ? Duration.zero : v.buffered.last.end;
+    final ahead = buffered - v.position;
+    return {
+      'cacheSeconds':
+          (ahead < Duration.zero ? Duration.zero : ahead).inMilliseconds /
+              1000.0,
+    };
+  }
+
   @override
   PlaybackSnapshot get value => _value;
+
 
   @override
   bool get supportsAudioTracks => _controller.isAudioTrackSupportAvailable();

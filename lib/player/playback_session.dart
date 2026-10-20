@@ -9,6 +9,10 @@ import '../services/stream_probe.dart';
 import '../services/live_diagnostics_service.dart';
 import '../services/live_diagnostics_tracker.dart';
 import '../services/live_diagnostics_log.dart';
+import '../services/vod_diagnostics_log.dart';
+import '../services/vod_diagnostics_service.dart';
+import '../services/vod_diagnostics_tracker.dart';
+
 import 'exo_engine.dart';
 import 'mediakit_engine.dart';
 import 'playback_engine.dart';
@@ -202,21 +206,37 @@ class PlaybackSession extends ChangeNotifier {
   }
 
   LiveDiagnosticsTracker? _diagnostics;
+  VodDiagnosticsTracker? _vod;
   Timer? _diagnosticTimer;
   bool _diagnosticListening = false;
   bool _diagnosticEnabled = false;
+
+  /// The record this session belongs to: channels write the live one, film
+  /// and series their own, so the two reports never mix.
+  ChangeNotifier get _diagnosticService =>
+      isLive
+      ? LiveDiagnosticsService.instance
+      : VodDiagnosticsService.instance;
+
+  bool get _diagnosticsEnabled =>
+      isLive
+      ? LiveDiagnosticsService.instance.enabled
+      : VodDiagnosticsService.instance.enabled;
+
   void _diagnosticPreference() {
     if (_disposed) return;
-    final enabled = LiveDiagnosticsService.instance.enabled;
+    final enabled = _diagnosticsEnabled;
     if (enabled == _diagnosticEnabled) return;
     _diagnosticEnabled = enabled;
     if (!enabled) {
       _diagnosticTimer?.cancel();
       _diagnosticTimer = null;
       _diagnostics = null;
+      _vod = null;
       return;
     }
-    _diagnostics ??= LiveDiagnosticsTracker();
+    _diagnostics ??= isLive ? LiveDiagnosticsTracker() : null;
+    _vod ??= isLive ? null : VodDiagnosticsTracker();
     final current = _engine;
     if (current != null) {
       _diagnostics?.begin(
@@ -226,20 +246,34 @@ class PlaybackSession extends ChangeNotifier {
         _softwareDecode,
         observed: true,
       );
+      _vod?.begin(
+        currentUrl,
+        current.type.name,
+        previewMode,
+        _softwareDecode,
+        observed: true,
+      );
     }
     _diagnosticTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
       final engine = _engine;
-      if (engine != null) _diagnostics?.sample(engine);
+      if (engine == null) return;
+      _diagnostics?.sample(engine);
+      _vod?.sample(engine);
     });
   }
 
   Future<void> start() async {
-    if (isLive && !_diagnosticListening) {
+    if (!_diagnosticListening) {
       _diagnosticListening = true;
-      LiveDiagnosticsService.instance.addListener(_diagnosticPreference);
-      unawaited(LiveDiagnosticsService.instance.initialize());
+      _diagnosticService.addListener(_diagnosticPreference);
+      unawaited(
+        isLive
+            ? LiveDiagnosticsService.instance.initialize()
+            : VodDiagnosticsService.instance.initialize(),
+      );
       _diagnosticPreference();
     }
+
     if (isLive) {
       try {
         await DecoderMemory.ensureLoaded();
@@ -308,7 +342,9 @@ class PlaybackSession extends ChangeNotifier {
     _firstPictureTimer?.cancel();
     if (old == null) return _releasing;
     _diagnostics?.end();
+    _vod?.end();
     _engine = null;
+
     old.removeListener(_onEngineChanged);
     _notify(); // the view unmounts on the next frame
     _releasing = _releasing.then((_) async {
@@ -345,6 +381,14 @@ class PlaybackSession extends ChangeNotifier {
       _softwareDecode,
       userAgent: _uaLabel,
     );
+    _vod?.begin(
+      attempt.url,
+      attempt.engine.name,
+      previewMode,
+      _softwareDecode,
+      userAgent: _uaLabel,
+    );
+
     _currentUrl = attempt.url;
     final engine = _create(attempt.engine, attempt.url);
     _engine = engine;
@@ -592,6 +636,15 @@ class PlaybackSession extends ChangeNotifier {
         if (status != null) 'httpStatus': status,
       },
     );
+    _vod?.event(
+      'error',
+      data: {
+        'category': VodDiagnosticsLog.errorKind(reason),
+        'midPlay': midPlay,
+        if (status != null) 'httpStatus': status,
+      },
+    );
+
     final since = _playingSince;
     if (midPlay &&
         since != null &&
@@ -876,7 +929,9 @@ class PlaybackSession extends ChangeNotifier {
     }
     if (engine.value.isEnded) {
       await engine.seekTo(Duration.zero);
+      _vod?.markSeek();
       await engine.play();
+
     } else if (engine.value.isPlaying) {
       await engine.pause();
     } else {
@@ -891,7 +946,10 @@ class PlaybackSession extends ChangeNotifier {
     var target = position < Duration.zero ? Duration.zero : position;
     if (max > Duration.zero && target > max) target = max;
     await engine.seekTo(target);
+    // The viewer moved the position: the next sample is not a stutter.
+    _vod?.markSeek();
   }
+
 
   Future<void> seekBy(Duration offset) => seekTo(value.position + offset);
 
@@ -997,8 +1055,10 @@ class PlaybackSession extends ChangeNotifier {
     _firstPictureTimer?.cancel();
     _diagnosticTimer?.cancel();
     _diagnostics?.end();
+    _vod?.end();
     if (_diagnosticListening)
-      LiveDiagnosticsService.instance.removeListener(_diagnosticPreference);
+      _diagnosticService.removeListener(_diagnosticPreference);
+
     _delayTick?.cancel();
     _generation++;
     unawaited(_releaseCurrent());

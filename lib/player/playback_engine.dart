@@ -68,8 +68,14 @@ abstract class PlaybackEngine extends ChangeNotifier {
   /// True only when the stream's tracks are known and none is video
   /// (radio channels): such streams never draw a picture by design.
   bool get audioOnly => false;
+
+  /// Opt-in diagnostics: numeric engine metrics (dropped pictures, read-ahead,
+  /// clock drift). No addresses, no titles, no player messages.
+  Future<Map<String, Object?>> metrics() async => const {};
+
   PlayerEngineType get type;
   PlaybackSnapshot get value;
+
 
   bool get supportsAudioTracks;
   bool get supportsSubtitleTracks;

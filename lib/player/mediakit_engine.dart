@@ -390,8 +390,43 @@ class MediaKitEngine extends PlaybackEngine {
           : 'auto-safe',
   };
 
+  /// Opt-in diagnostics: numeric mpv metrics only. Every property is read
+  /// under its own guard and with its own deadline, because a build without
+  /// one must not stop the others and a stalled read must never reach the
+  /// player. The values are raw mpv counters: the report keeps the numbers,
+  /// never the text mpv would print.
+  @override
+  Future<Map<String, Object?>> metrics() async {
+    final platform = _player.platform;
+    if (_disposed || platform is! NativePlayer) return const {};
+    final out = <String, Object?>{};
+    Future<void> read(String property, String key) async {
+      try {
+        final value = await platform
+            .getProperty(property)
+            .timeout(const Duration(milliseconds: 400));
+        if (value is num || value is String && value.length <= 32) {
+          out[key] = value;
+        }
+      } catch (_) {}
+    }
+
+    await Future.wait([
+      read('frame-drop-count', 'frameDropCount'),
+      read('decoder-frame-drop-count', 'decoderFrameDropCount'),
+      read('estimated-vf-fps', 'estimatedFps'),
+      read('demuxer-cache-duration', 'cacheSeconds'),
+      read('avsync', 'avSyncSeconds'),
+      read('cache-used', 'cacheKib'),
+      read('hwdec-current', 'hwdecCurrent'),
+      read('video-codec', 'videoCodec'),
+    ]);
+    return out;
+  }
+
   Timer? _blackWatch;
   bool _firstFrameRendered = false;
+
 
   /// True only when decoded frames really flow through mpv's video chain.
   /// The old check used the track resolution, which mpv reads from the

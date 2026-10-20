@@ -30,6 +30,8 @@ import 'section_layout_screen.dart';
 import 'downloads_screen.dart';
 import 'multiview_settings_screen.dart';
 import 'live_diagnostics_screen.dart';
+import 'vod_diagnostics_screen.dart';
+
 import '../services/app_update_service.dart';
 import 'category_manager_screen.dart';
 
@@ -515,6 +517,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
+              SettingsValueTile(
+                icon: Icons.movie_filter_outlined,
+                title: 'Diagnostica film e serie',
+                subtitle:
+                    'Fotogrammi scartati, buffer e scatti del lettore mpv/ExoPlayer',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const VodDiagnosticsScreen(),
+                  ),
+                ),
+              ),
+
               SettingsValueTile(
                 icon: Icons.dashboard_customize_outlined,
                 title: 'MultiView',
