@@ -98,3 +98,4 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - WatchCompletionPolicy validates the portable watched threshold; HistoryProvider projects the current preference onto entries without changing serialized progress, and UiSettings changes refresh every history consumer immediately.
 
 - Settings option pickers mount their bounded option list eagerly inside a scroll view, so the current offscreen value receives TV autofocus and arrow navigation starts from it.
+- Catalog panel Back resolves the visible same-route toolbar across focus transitions and consumes duplicate hardware/system dispatch within the closing frame, so genre/platform panels restore their own opener before the top menu handles a later Back.

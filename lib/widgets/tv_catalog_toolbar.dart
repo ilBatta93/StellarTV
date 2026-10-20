@@ -111,7 +111,28 @@ class TvCatalogToolbar extends StatefulWidget {
   static bool handleBack(FocusNode? focus) {
     final state = focus?.context
         ?.findAncestorStateOfType<_TvCatalogToolbarState>();
-    return state?._back() ?? false;
+    if (state?._back() ?? false) return true;
+    // System Back can arrive while primary focus is moving out of the panel.
+    // Look for the visible toolbar in the same route before Home takes over.
+    final focusContext = focus?.context;
+    if (focusContext == null) return false;
+    final route = ModalRoute.of(focusContext);
+    if (route == null || !route.isCurrent) return false;
+    final seen = <_TvCatalogToolbarState>{};
+    if (state != null) seen.add(state);
+    var scope = focus?.enclosingScope;
+    while (scope != null) {
+      for (final node in scope.traversalDescendants) {
+        if (!node.canRequestFocus) continue;
+        final candidate = node.context
+            ?.findAncestorStateOfType<_TvCatalogToolbarState>();
+        if (candidate == null || !seen.add(candidate) ||
+            ModalRoute.of(candidate.context) != route) continue;
+        if (candidate._back()) return true;
+      }
+      scope = scope.enclosingScope;
+    }
+    return false;
   }
 
   @override
@@ -122,6 +143,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   bool _expanded = false;
   bool _filtersOpen = false;
   bool _platformsOpen = false;
+  bool _backConsumedThisFrame = false;
   final _filterButton = FocusNode(debugLabel: 'catalogFilters');
   final _platformButton = FocusNode(debugLabel: 'catalogPlatforms');
   final _panel = FocusScopeNode(debugLabel: 'catalog panel');
@@ -164,6 +186,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   }
 
   bool _back() {
+    if (_backConsumedThisFrame) return true;
     if (_expanded) {
       if (TvTextField.dismissKeyboard(_field)) return true;
       _collapse();
@@ -171,14 +194,23 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
       return true;
     }
     if (_filtersOpen) {
+      _consumePanelBack();
       _toggleFilters();
       return true;
     }
     if (_platformsOpen) {
+      _consumePanelBack();
       _togglePlatforms();
       return true;
     }
     return false;
+  }
+
+  void _consumePanelBack() {
+    _backConsumedThisFrame = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _backConsumedThisFrame = false;
+    });
   }
 
   void _focusPanel() {
@@ -200,7 +232,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
     if (_platformsOpen) {
       _focusPanel();
     } else {
-      _platformButton.requestFocus();
+      _restoreOpener(_platformButton);
     }
   }
 
@@ -219,8 +251,17 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
         if (nodes.isNotEmpty) nodes.first.requestFocus();
       });
     } else {
-      _filterButton.requestFocus();
+      _restoreOpener(_filterButton);
     }
+  }
+
+  void _restoreOpener(FocusNode node) {
+    node.requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_filtersOpen && !_platformsOpen && !_expanded) {
+        node.requestFocus();
+      }
+    });
   }
 
   Future<void> _choose() async {
@@ -330,7 +371,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
                             event.logicalKey == LogicalKeyboardKey.escape ||
                             event.logicalKey ==
                                 LogicalKeyboardKey.browserBack)) {
-                      _platformsOpen ? _togglePlatforms() : _toggleFilters();
+                      _back();
                       return KeyEventResult.handled;
                     }
                     return KeyEventResult.ignored;

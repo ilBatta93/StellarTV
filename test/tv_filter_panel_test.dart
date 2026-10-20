@@ -19,6 +19,77 @@ void main() {
     await DeviceTypeService.initialize();
     debugDefaultTargetPlatformOverride = null;
   });
+  for (final section in ['Film', 'Serie TV']) {
+    for (final platform in [false, true]) {
+      testWidgets(
+        '$section ${platform ? 'platform' : 'genre'} Back restores opener without menu jump',
+        (tester) async {
+          final controller = TextEditingController();
+          final menu = FocusNode();
+          final tile = FocusNode();
+          var menuBacks = 0;
+          Widget panel(BuildContext _) => TvFilterPanel(options: [
+            TvFilterOption('Tutte', true, () {}),
+            TvFilterOption('Filtro', false, () {}),
+          ]);
+          await tester.pumpWidget(MaterialApp(home: PopScope(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              if (!didPop && !TvCatalogToolbar.handleBack(
+                FocusManager.instance.primaryFocus,
+              )) {
+                menuBacks++;
+                menu.requestFocus();
+              }
+            },
+            child: Scaffold(body: Column(children: [
+              TvFocusable(focusNode: menu, onPressed: () {},
+                child: const SizedBox(height: 40, child: Text('Menu'))),
+              TvCatalogToolbar(
+                controller: controller, hint: section,
+                onChanged: (_) {}, onSort: (_) {}, sort: null,
+                genresOnly: true, filters: panel,
+                platforms: platform ? panel : null,
+              ),
+              TvFocusable(focusNode: tile, onPressed: () {},
+                child: const SizedBox(height: 40, child: Text('Titolo'))),
+            ])),
+          )));
+          await tester.pumpAndSettle();
+          final tooltip = platform ? 'Piattaforme streaming' : 'Filtri per genere';
+          final opener = tester.widget<TvFocusable>(find.ancestor(
+            of: find.byTooltip(tooltip), matching: find.byType(TvFocusable),
+          )).focusNode;
+          await tester.tap(find.byTooltip(tooltip));
+          await tester.pumpAndSettle();
+          // Resolve system Back even with a focus reference outside the toolbar.
+          expect(TvCatalogToolbar.handleBack(tile), isTrue);
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+          expect(find.byType(TvFilterPanel), findsNothing);
+          expect(opener?.hasFocus, isTrue);
+          expect(menu.hasFocus, isFalse);
+          expect(menuBacks, 0);
+          // Hardware Back and a duplicate system dispatch must be consumed once.
+          await tester.tap(find.byTooltip(tooltip));
+          await tester.pumpAndSettle();
+          await tester.sendKeyEvent(LogicalKeyboardKey.goBack);
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+          expect(opener?.hasFocus, isTrue);
+          expect(menuBacks, 0);
+          // A new, subsequent Back retains the existing menu navigation.
+          await tester.binding.handlePopRoute();
+          await tester.pumpAndSettle();
+          expect(menu.hasFocus, isTrue);
+          expect(menuBacks, 1);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          controller.dispose(); menu.dispose(); tile.dispose();
+        },
+      );
+    }
+  }
   testWidgets(
     'Lazy inline filters navigate rows, restore tools and close on leaving',
     (tester) async {
