@@ -82,6 +82,7 @@ class AppProvider extends ChangeNotifier {
   bool _showAdult = false;
   static const _showAdultKey = 'show_adult_content';
   Map<String, Channel>? _channelIndex;
+  Map<String, Channel>? _seriesFolderIndex;
   Set<String> _favoriteIds = {};
   List<TmdbItem> _tmdbFavorites = [];
   Map<String, List<String>> _hiddenCategories = {};
@@ -136,6 +137,7 @@ class AppProvider extends ChangeNotifier {
     _favoritesCache = null;
     _titleIndex = null;
     _matchCache.clear();
+    _seriesFolderIndex = null;
   }
 
   List<Channel> channelsOf(ContentType type) => _byType[type] ??= _allChannels
@@ -327,6 +329,7 @@ class AppProvider extends ChangeNotifier {
         )
         .toList(growable: false);
     _channelIndex = null;
+    _seriesFolderIndex = null;
     _invalidateCaches();
   }
 
@@ -759,13 +762,24 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// Series folder for an episode's series key.
+  /// O(1) lookup: Home cards call this on every build.
   Channel? seriesFolderFor(String seriesKey) {
-    for (final type in [ContentType.series, ContentType.anime]) {
-      for (final c in catalogOf(type)) {
-        if (c.seriesKey == seriesKey || c.id == seriesKey) return c;
+    final index = _seriesFolderIndex ??= () {
+      final m = <String, Channel>{};
+      for (final type in [ContentType.series, ContentType.anime]) {
+        for (final c in catalogOf(type)) {
+          final k = c.seriesKey;
+          if (k != null && k.isNotEmpty) m.putIfAbsent(k, () => c);
+        }
       }
-    }
-    return null;
+      for (final type in [ContentType.series, ContentType.anime]) {
+        for (final c in catalogOf(type)) {
+          m.putIfAbsent(c.id, () => c);
+        }
+      }
+      return m;
+    }();
+    return index[seriesKey];
   }
 
   /// True when the TMDB title can actually be watched with the playlist.
