@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'services/app_foreground_service.dart';
+import 'services/foreground_http_client.dart';
+
 import 'navigation/app_routes.dart';
 
 import 'package:media_kit/media_kit.dart';
@@ -32,6 +35,7 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppForegroundService.instance.initialize();
   // A widget that throws during build would otherwise leave the whole app on a
   // blank white screen on a real device. Show a readable fallback instead.
   ErrorWidget.builder = (details) => _StartupErrorView(details: details);
@@ -56,6 +60,7 @@ Future<void> main() async {
   await Supabase.initialize(
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.anonKey,
+    httpClient: ForegroundHttpClient(),
     // Lets the account website name this device's sessions precisely.
     headers: {'User-Agent': DeviceIdentity.userAgent},
   );

@@ -1,13 +1,16 @@
+import 'foreground_http_client.dart';
+
 import 'dart:convert';
 
 import 'dart:io';
 
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_config.dart';
+
+final _foregroundHttp = ForegroundHttpClient();
 
 class SubtitleCue {
   final Duration start;
@@ -87,7 +90,7 @@ class SubtitlesService {
         if (movieHash != null && byteSize != null) 'bytesize': '$byteSize',
       },
     );
-    final res = await http
+    final res = await _foregroundHttp
         .get(uri, headers: _authHeaders())
         .timeout(const Duration(seconds: 30));
     if (res.statusCode == 401) {
@@ -129,7 +132,7 @@ class SubtitlesService {
         if (isEpisode) 'episode': '$episode',
       },
     );
-    final res = await http
+    final res = await _foregroundHttp
         .get(uri, headers: _authHeaders())
         .timeout(const Duration(seconds: 12));
     if (res.statusCode != 200) {
@@ -157,7 +160,7 @@ class SubtitlesService {
     if (cached != null) return cached;
     final uri = Uri.parse('${SupabaseConfig.apiBase}/opensubtitles')
         .replace(queryParameters: {'action': 'download', 'file_id': '$fileId'});
-    final res = await http
+    final res = await _foregroundHttp
         .get(uri, headers: _authHeaders())
         .timeout(const Duration(seconds: 15));
     if (res.statusCode != 200) {

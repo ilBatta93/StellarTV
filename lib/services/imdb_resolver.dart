@@ -1,8 +1,10 @@
+import 'foreground_http_client.dart';
+
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
 import '../config/supabase_config.dart';
+
+final _foregroundHttp = ForegroundHttpClient();
 
 /// Resolves the IMDb id of a series (needed by IntroDB) from a TMDB id or
 /// from the playlist title ("IT: Breaking Bad FHD S01E01" works too).
@@ -30,7 +32,9 @@ class ImdbResolver {
           'type': kind,
         },
       );
-      final res = await http.get(uri).timeout(const Duration(seconds: 10));
+      final res = await _foregroundHttp
+          .get(uri)
+          .timeout(const Duration(seconds: 10));
       String? id;
       if (res.statusCode == 200) {
         final v = (jsonDecode(res.body) as Map)['imdb_id'];

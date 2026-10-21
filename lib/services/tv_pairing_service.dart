@@ -1,12 +1,16 @@
+import 'foreground_http_client.dart';
+import 'foreground_policy.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_config.dart';
 import 'sync_service.dart';
+
+final _foregroundHttp = ForegroundHttpClient();
 
 /// One-shot TV pairing: the TV shows a code/QR, the user approves it from the
 /// website (stellartv.lovable.app/collega) and this device receives a
@@ -19,7 +23,7 @@ class TvPairingService {
   static const _base = '${SupabaseConfig.apiBase}/pair';
 
   Future<TvPairing> create({String deviceName = 'TV'}) async {
-    final res = await http
+    final res = await _foregroundHttp
         .post(
           Uri.parse(_base),
           headers: const {'content-type': 'application/json'},
@@ -41,10 +45,13 @@ class TvPairingService {
   /// Returns the magic-link token once the user approved the code on the
   /// website, null while still waiting. Throws when the code expired.
   Future<String?> pollToken(TvPairing pairing) async {
+    if (!ForegroundPolicy.instance.active) return null;
     final uri = Uri.parse(
       '$_base?code=${Uri.encodeComponent(pairing.code)}&secret=${pairing.secret}',
     );
-    final res = await http.get(uri).timeout(const Duration(seconds: 15));
+    final res = await _foregroundHttp
+        .get(uri)
+        .timeout(const Duration(seconds: 15));
     if (res.statusCode != 200) return null;
     final json = jsonDecode(res.body) as Map<String, dynamic>;
     final status = json['status'];

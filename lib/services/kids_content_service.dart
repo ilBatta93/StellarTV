@@ -1,9 +1,11 @@
+import 'foreground_http_client.dart';
+import 'playback_work_policy.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,9 +15,29 @@ import '../models/content_type.dart';
 import 'kids_policy.dart';
 import 'catalog_work_queue.dart';
 
+final _foregroundHttp = ForegroundHttpClient();
+
 /// Strict genre/category + age policy. Unknown titles stay hidden except
 /// explicitly labelled Animation/Kids groups; known safety vetoes win.
 class KidsContentService {
+  KidsContentService() {
+    PlaybackWorkPolicy.instance.addListener(_resume);
+  }
+  bool _resumePending = false;
+  void _resume() {
+    if (_running && !PlaybackWorkPolicy.instance.blocksGuide)
+      _resumePending = true;
+    if (!_running &&
+        _work.pending.isNotEmpty &&
+        !PlaybackWorkPolicy.instance.blocksGuide)
+      unawaited(_run());
+  }
+
+  void dispose() {
+    PlaybackWorkPolicy.instance.removeListener(_resume);
+    _saveTimer?.cancel();
+  }
+
   static const _cacheKey = 'kids_verdicts_v1';
   static const _genresKey = 'tmdb_genres_v1';
   static const _batchSize = 40;
@@ -138,7 +160,11 @@ class KidsContentService {
           _certifications.containsKey(key)) {
         continue;
       }
-      _work.add(key, '${key.split(':').first}\u0000${_titleOf(c)}', DateTime.now());
+      _work.add(
+        key,
+        '${key.split(':').first}\u0000${_titleOf(c)}',
+        DateTime.now(),
+      );
     }
     if (!_running) unawaited(_run());
   }
@@ -152,12 +178,13 @@ class KidsContentService {
     final all = keys.keys.toList();
     var changed = false;
     for (var i = 0; i < all.length; i += 1000) {
+      if (PlaybackWorkPolicy.instance.blocksGuide) return false;
       final chunk = all.sublist(
         i,
         i + 1000 > all.length ? all.length : i + 1000,
       );
       try {
-        final res = await http
+        final res = await _foregroundHttp
             .post(
               Uri.parse('${SupabaseConfig.apiBase}/kids-lookup'),
               headers: {'Content-Type': 'application/json'},
@@ -193,14 +220,18 @@ class KidsContentService {
   }
 
   Future<void> _run() async {
+    if (_running || PlaybackWorkPolicy.instance.blocksGuide) return;
     _running = true;
+    _resumePending = false;
     try {
       if (!await _cloudLookup()) {
+        if (PlaybackWorkPolicy.instance.blocksGuide) return;
         final failed = _work.take(_work.pending.length);
         _work.release(failed.keys, {}, DateTime.now());
         return;
       }
-      while (_work.pending.isNotEmpty) {
+      while (_work.pending.isNotEmpty &&
+          !PlaybackWorkPolicy.instance.blocksGuide) {
         final work = _work.take(_batchSize);
         final batch = work.values.toList();
         final resolved = <String>{};
@@ -209,7 +240,7 @@ class KidsContentService {
             {'type': b.split('\u0000').first, 'title': b.split('\u0000').last},
         ];
         try {
-          final res = await http
+          final res = await _foregroundHttp
               .post(
                 Uri.parse('${SupabaseConfig.apiBase}/kids-check'),
                 headers: {'Content-Type': 'application/json'},
@@ -244,10 +275,20 @@ class KidsContentService {
           await Future<void>.delayed(const Duration(seconds: 20));
         } finally {
           _work.release(work.keys, resolved, DateTime.now());
+          if (PlaybackWorkPolicy.instance.blocksGuide) {
+            for (final e in work.entries) {
+              if (!resolved.contains(e.key))
+                _work.pending.putIfAbsent(e.key, () => e.value);
+            }
+          }
         }
       }
     } finally {
       _running = false;
+      if (_resumePending) {
+        _resumePending = false;
+        _resume();
+      }
     }
   }
 

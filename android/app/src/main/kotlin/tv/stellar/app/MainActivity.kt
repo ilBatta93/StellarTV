@@ -16,6 +16,7 @@ import android.content.res.Configuration
 import android.media.MediaCodecList
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Rational
@@ -56,10 +57,32 @@ class MainActivity : FlutterActivity() {
                         !isInitialStickyBroadcast
                 else -> false
             }
-            if (off) channel?.invokeMethod("screenOff", null)
+            if (off) {
+                if (intent?.action == AudioManager.ACTION_HDMI_AUDIO_PLUG) hdmiUnavailable = true
+                displayAvailable = false
+                publishDisplay()
+                channel?.invokeMethod("screenOff", null)
+            } else if (intent?.action == Intent.ACTION_SCREEN_ON ||
+                (intent?.action == AudioManager.ACTION_HDMI_AUDIO_PLUG &&
+                 intent.getIntExtra(AudioManager.EXTRA_AUDIO_PLUG_STATE, 0) == 1)) {
+                if (intent?.action == AudioManager.ACTION_HDMI_AUDIO_PLUG) hdmiUnavailable = false
+                displayAvailable = !hdmiUnavailable && (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
+                publishDisplay()
+            }
         }
     }
     private var screenReceiverRegistered = false
+    private var displayAvailable = true
+    private var hdmiUnavailable = false
+
+    override fun onResume() {
+        super.onResume()
+        displayAvailable = !hdmiUnavailable && (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
+        publishDisplay()
+    }
+    private fun publishDisplay() {
+        channel?.invokeMethod("displayChanged", displayAvailable)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,6 +90,7 @@ class MainActivity : FlutterActivity() {
         try {
             val filter = IntentFilter(Intent.ACTION_SCREEN_OFF).apply {
                 addAction(AudioManager.ACTION_HDMI_AUDIO_PLUG)
+                addAction(Intent.ACTION_SCREEN_ON)
             }
             if (Build.VERSION.SDK_INT >= 33) {
                 registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -230,6 +254,8 @@ class MainActivity : FlutterActivity() {
         val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "stellartv/player")
         ch.setMethodCallHandler { call, result ->
             when (call.method) {
+                "isDisplayAvailable" -> result.success(displayAvailable &&
+                    (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive)
                 "isPipSupported" -> result.success(pipSupported())
                 "enterPip" -> {
                     updateRatio(call.argument<Int>("width"), call.argument<Int>("height"))

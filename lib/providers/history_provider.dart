@@ -14,6 +14,7 @@ import '../services/sync_service.dart';
 import '../services/personal_vault.dart';
 import '../services/recent_live_channels.dart';
 import '../services/playback_work_policy.dart';
+import '../services/foreground_policy.dart';
 import '../models/episode_watch_event.dart';
 
 /// Local-first watch history: entries are always saved on the device
@@ -22,6 +23,7 @@ import '../models/episode_watch_event.dart';
 class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   HistoryProvider(this._sync, [this._favorites, this._syncProvider]) {
     WidgetsBinding.instance.addObserver(this);
+    ForegroundPolicy.instance.addListener(_onForegroundChanged);
     _loadFuture = _loadLocal();
   }
 
@@ -534,12 +536,16 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !_loading) {
-      // Bring in changes made on other devices, then publish ours.
-      _autoPull();
-    } else if (state == AppLifecycleState.paused) {
-      _syncProvider?.pushNow(silent: true);
-    }
+    // Central visibility observer runs first. Background saves stay local.
+    if (state != AppLifecycleState.resumed) _periodic?.cancel();
+  }
+
+  bool _autoStarted = false;
+  bool _pulling = false;
+  void _onForegroundChanged() {
+    _periodic?.cancel();
+    _periodic = null;
+    if (ForegroundPolicy.instance.active && _autoStarted) startAutoSync();
   }
 
   DateTime? _lastAutoPull;
@@ -548,17 +554,24 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Pulls from the cloud when the app comes back to foreground and every
   /// few minutes while open (throttled), so all devices stay aligned.
   Future<void> _autoPull() async {
-    if (PlaybackWorkPolicy.instance.blocksGuide) return;
+    if (_pulling || PlaybackWorkPolicy.instance.blocksGuide) return;
     final now = DateTime.now();
     if (_lastAutoPull != null &&
         now.difference(_lastAutoPull!) < const Duration(seconds: 45)) {
       return;
     }
     _lastAutoPull = now;
-    if (await _sync.getStoredCode() == null) return;
-    final ok = await pullFromCloud();
-    if (ok) _syncProvider?.schedulePush();
-    await onAfterAutoPull?.call();
+    _pulling = true;
+    try {
+      if (await _sync.getStoredCode() == null ||
+          PlaybackWorkPolicy.instance.blocksGuide)
+        return;
+      final ok = await pullFromCloud();
+      if (ok) _syncProvider?.schedulePush();
+      if (ForegroundPolicy.instance.active) await onAfterAutoPull?.call();
+    } finally {
+      _pulling = false;
+    }
   }
 
   /// Called after each automatic pull (e.g. to refresh profiles).
@@ -566,7 +579,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Starts periodic background sync while the app is open.
   void startAutoSync() {
+    _autoStarted = true;
     _periodic?.cancel();
+    if (!ForegroundPolicy.instance.active) return;
     _periodic = Timer.periodic(const Duration(minutes: 5), (_) => _autoPull());
     _autoPull();
   }
@@ -620,7 +635,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     // Local copy is always immediate. While a video keeps playing the
     // periodic progress tick reaches the cloud at most once per
     // [progressCloudInterval]; pause, exit, app background and every
-    // explicit action still sync at once.
+    // explicit action sync when foreground is permitted; background stays local.
     final now = DateTime.now();
     if (periodic && now.difference(_lastProgressPush) < progressCloudInterval) {
       await _sync.saveLocalHistory(_localMap(), profileId: _profileId);
@@ -748,6 +763,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     _pushDebounce?.cancel();
     _periodic?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    ForegroundPolicy.instance.removeListener(_onForegroundChanged);
     super.dispose();
   }
 }

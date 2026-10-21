@@ -1,13 +1,22 @@
 import 'dart:math';
 
+import 'foreground_policy.dart';
+
 /// Shared by every session, including previews and MultiView. Opening and
 /// buffering block cloud work; only an explicit pause/end releases that gate.
 class PlaybackWorkPolicy {
+  PlaybackWorkPolicy() {
+    ForegroundPolicy.instance.addListener(_changed);
+  }
   static final instance = PlaybackWorkPolicy();
   final Map<Object, bool> _sessions = {};
   final Set<void Function()> _listeners = {};
-  bool get blocksGuide => _sessions.isNotEmpty;
-  bool get blocksCloud => _sessions.values.any((blocked) => blocked);
+  bool get hasPlayback => _sessions.isNotEmpty;
+  bool get blocksGuide =>
+      !ForegroundPolicy.instance.active || _sessions.isNotEmpty;
+  bool get blocksCloud =>
+      !ForegroundPolicy.instance.active ||
+      _sessions.values.any((blocked) => blocked);
   void addListener(void Function() listener) => _listeners.add(listener);
   void removeListener(void Function() listener) => _listeners.remove(listener);
   void update(Object owner, {required bool cloudBlocked}) {

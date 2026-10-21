@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'playback_work_policy.dart';
+import 'foreground_policy.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -403,6 +404,8 @@ class SyncService {
   ) async {
     final out = <Map<String, dynamic>>[];
     for (var offset = 0; ; offset += 500) {
+      if (!ForegroundPolicy.instance.active)
+        throw StateError('App non visibile');
       final page = await _client
           .from(table)
           .select(fields)
@@ -559,6 +562,7 @@ class SyncService {
           }
           rethrow;
         }
+        if (PlaybackWorkPolicy.instance.blocksCloud) return null;
         final check = await _client
             .from('personal_vaults')
             .select('envelope,revision')
@@ -600,7 +604,8 @@ class SyncService {
   }
 
   Future<(SyncPayload?, DateTime?)> pull(String code) async {
-    if (code != currentUserId) return (null, null);
+    if (!ForegroundPolicy.instance.active || code != currentUserId)
+      return (null, null);
     try {
       final recovery = await recoveryKey();
       if (recovery == null) return (null, null);
@@ -615,7 +620,8 @@ class SyncService {
         recovery,
         code,
       );
-      if (code != currentUserId) return (null, null);
+      if (!ForegroundPolicy.instance.active || code != currentUserId)
+        return (null, null);
       return (
         SyncPayload.fromJson(PersonalVault.merge({}, decoded)),
         DateTime.tryParse(row['updated_at'].toString()),

@@ -1,3 +1,5 @@
+import 'foreground_http_client.dart';
+
 import 'dart:convert';
 
 import 'title_logo_cache.dart';
@@ -9,6 +11,8 @@ import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
 import '../models/title_trailer.dart';
 import '../models/tmdb_person.dart';
+
+final _foregroundHttp = ForegroundHttpClient();
 
 class TmdbException implements Exception {
   final String message;
@@ -35,7 +39,7 @@ class TmdbService {
         .replace(queryParameters: {'path': path, ...params});
     final http.Response res;
     try {
-      res = await http
+      res = await _foregroundHttp
           .get(
             uri,
             headers: {
@@ -126,7 +130,7 @@ class TmdbService {
     final type = movies ? 'movie' : 'tv';
     // Shared cloud catalog first: one download serves every installation.
     try {
-      final res = await http
+      final res = await _foregroundHttp
           .get(
             Uri.parse('${SupabaseConfig.apiBase}/platform-catalog').replace(
               queryParameters: {
@@ -227,7 +231,7 @@ class TmdbService {
   /// the device.
   Future<TitleLogoEntry?> sharedLogo(TmdbItem item) async {
     try {
-      final res = await http
+      final res = await _foregroundHttp
           .post(
             Uri.parse('${SupabaseConfig.apiBase}/artwork'),
             headers: {'Content-Type': 'application/json'},

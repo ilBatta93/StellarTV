@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'foreground_policy.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum PlaylistRefreshInterval {
@@ -25,7 +27,16 @@ enum PlaylistRefreshInterval {
 /// never re-downloads it. When an update is due at start-up it is delayed a
 /// little, so the first navigation stays smooth.
 class PlaylistRefreshService {
-  PlaylistRefreshService(this._reload);
+  PlaylistRefreshService(this._reload) {
+    ForegroundPolicy.instance.addListener(_visibilityChanged);
+  }
+  bool _enabled = true;
+  int _epoch = 0;
+  void _visibilityChanged() {
+    _epoch++;
+    _timer?.cancel();
+    if (_enabled && ForegroundPolicy.instance.active) unawaited(schedule());
+  }
 
   final Future<void> Function() _reload;
   Timer? _timer;
@@ -81,15 +92,19 @@ class PlaylistRefreshService {
 
   /// Arms a single timer for the next update; it never runs immediately.
   Future<void> schedule() async {
+    _enabled = true;
     _timer?.cancel();
+    final epoch = ++_epoch;
     final remaining = await timeUntilDue();
+    if (epoch != _epoch || !ForegroundPolicy.instance.active || !_enabled)
+      return;
     if (remaining == null) return;
     final wait = remaining < startupDelay ? startupDelay : remaining;
     _timer = Timer(wait, _run);
   }
 
   Future<void> _run() async {
-    if (_running) return;
+    if (_running || !_enabled || !ForegroundPolicy.instance.active) return;
     _running = true;
     try {
       // The reload records the timestamp itself, only when every section
@@ -100,7 +115,8 @@ class PlaylistRefreshService {
       _running = false;
     }
     final remaining = await timeUntilDue();
-    if (remaining == null) return;
+    if (remaining == null || !_enabled || !ForegroundPolicy.instance.active)
+      return;
     _timer?.cancel();
     // Failed attempt: try again in 30 minutes instead of a full interval.
     _timer = Timer(
@@ -109,5 +125,14 @@ class PlaylistRefreshService {
     );
   }
 
-  void stop() => _timer?.cancel();
+  void stop() {
+    _enabled = false;
+    _epoch++;
+    _timer?.cancel();
+  }
+
+  void dispose() {
+    stop();
+    ForegroundPolicy.instance.removeListener(_visibilityChanged);
+  }
 }

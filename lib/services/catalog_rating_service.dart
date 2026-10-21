@@ -1,3 +1,6 @@
+import 'foreground_http_client.dart';
+import 'playback_work_policy.dart';
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -5,7 +8,6 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/channel.dart';
@@ -13,10 +15,18 @@ import '../models/content_type.dart';
 import '../config/supabase_config.dart';
 import 'tmdb_service.dart';
 
+final _foregroundHttp = ForegroundHttpClient();
+
 /// Shared TV presentation metadata: only two requests in flight, visible
 /// posters first, no network work in build, and a persistent device cache.
 class CatalogRatingService extends ChangeNotifier {
-  CatalogRatingService._();
+  CatalogRatingService._() {
+    PlaybackWorkPolicy.instance.addListener(_resume);
+  }
+  void _resume() {
+    if (!PlaybackWorkPolicy.instance.blocksGuide) _drain();
+  }
+
   static final instance = CatalogRatingService._();
   final _tmdb = TmdbService();
   final Map<String, double> _ratings = {};
@@ -90,6 +100,7 @@ class CatalogRatingService extends ChangeNotifier {
   /// Up to two requests in flight, each resolving a group of 40 titles from
   /// the shared cloud cache (direct TMDB only if the cloud is unreachable).
   void _drain({bool priority = false}) {
+    if (PlaybackWorkPolicy.instance.blocksGuide) return;
     if (_cloudDown &&
         _cloudDownAt != null &&
         DateTime.now().difference(_cloudDownAt!).inMinutes >= 5) {
@@ -121,7 +132,7 @@ class CatalogRatingService extends ChangeNotifier {
   Future<void> _fetchGroup(Map<String, Channel> group) async {
     final entries = group.entries.toList();
     try {
-      final res = await http
+      final res = await _foregroundHttp
           .post(
             Uri.parse('${SupabaseConfig.apiBase}/ratings'),
             headers: {'Content-Type': 'application/json'},
@@ -153,8 +164,10 @@ class CatalogRatingService extends ChangeNotifier {
       });
     } catch (_) {
       // Cloud unreachable: put the titles back and use direct TMDB lookups.
-      _cloudDown = true;
-      _cloudDownAt = DateTime.now();
+      if (!PlaybackWorkPolicy.instance.blocksGuide) {
+        _cloudDown = true;
+        _cloudDownAt = DateTime.now();
+      }
       for (final e in entries) {
         _queue[e.key] = e.value;
       }
@@ -170,6 +183,10 @@ class CatalogRatingService extends ChangeNotifier {
         c.displaySeriesName,
         isMovie: c.type == ContentType.movie,
       );
+      if (item == null && PlaybackWorkPolicy.instance.blocksGuide) {
+        _queue[key] = c;
+        return;
+      }
       _ratings[key] = item?.voteAverage ?? 0;
       _scheduleNotify();
       _saveTimer ??= Timer(const Duration(seconds: 10), () {
@@ -177,7 +194,11 @@ class CatalogRatingService extends ChangeNotifier {
         unawaited(_save());
       });
     } catch (_) {
-      _failed[key] = DateTime.now();
+      if (PlaybackWorkPolicy.instance.blocksGuide) {
+        _queue[key] = c;
+      } else {
+        _failed[key] = DateTime.now();
+      }
     } finally {
       _active.remove(key);
       _drain();

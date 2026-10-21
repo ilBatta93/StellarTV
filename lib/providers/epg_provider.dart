@@ -27,10 +27,19 @@ class EpgProvider extends ChangeNotifier {
   bool get _playbackBlocked =>
       _app.playbackActive || PlaybackWorkPolicy.instance.blocksGuide;
 
+  bool _wasBlocked = false;
   void _onPlaybackChanged() {
+    final resumed = _wasBlocked && !_playbackBlocked;
+    _wasBlocked = _playbackBlocked;
+    if (_playbackBlocked) {
+      _timer?.cancel();
+      return;
+    }
     if (_deferred && !_playbackBlocked && !_disposed) {
       _timer?.cancel();
       _timer = Timer(const Duration(seconds: 20), refresh);
+    } else if (resumed && !_disposed && _ready) {
+      _schedule();
     }
   }
 
@@ -104,7 +113,7 @@ class EpgProvider extends ChangeNotifier {
   void _schedule() {
     _timer?.cancel();
     _scheduledFor = _activeSources.join('|');
-    if (_activeSources.isEmpty) return;
+    if (_activeSources.isEmpty || _playbackBlocked) return;
     final due =
         _data.isEmpty ||
         _lastRun == null ||
@@ -131,7 +140,6 @@ class EpgProvider extends ChangeNotifier {
     if (_playbackBlocked) {
       _deferred = true;
       _timer?.cancel();
-      _timer = Timer(const Duration(seconds: 20), refresh);
       return;
     }
     _deferred = false;
@@ -161,7 +169,9 @@ class EpgProvider extends ChangeNotifier {
       _loading = false;
       if (!_disposed) notifyListeners();
       _timer?.cancel();
-      if (!_disposed && _deferred) {
+      if (!_disposed && _playbackBlocked) {
+        _deferred = true;
+      } else if (!_disposed && _deferred) {
         _timer = Timer(const Duration(seconds: 20), refresh);
       } else if (!_disposed && _intervalMinutes > 0) {
         _timer = Timer(Duration(minutes: _intervalMinutes), refresh);

@@ -13,6 +13,7 @@ import '../models/tmdb_item.dart';
 import '../services/catalog_builder.dart';
 import '../services/playlist_refresh_service.dart';
 import '../services/playback_work_policy.dart';
+import '../services/foreground_policy.dart';
 import '../services/tmdb_service.dart';
 import '../services/xtream_service.dart';
 import '../services/cloud_favorites_service.dart';
@@ -35,7 +36,21 @@ class AppProvider extends ChangeNotifier {
   }
 
   void _onPlaybackWorkChanged() {
-    final active = PlaybackWorkPolicy.instance.blocksGuide || _mainPlayerActive;
+    final active = PlaybackWorkPolicy.instance.hasPlayback || _mainPlayerActive;
+    if (!ForegroundPolicy.instance.active) {
+      _deferredRefreshTimer?.cancel();
+      _pendingTimer?.cancel();
+    } else if (!active && _refreshDeferred) {
+      _deferredRefreshTimer?.cancel();
+      _deferredRefreshTimer = Timer(const Duration(seconds: 20), () {
+        if (!ForegroundPolicy.instance.active ||
+            _playbackActive ||
+            !_refreshDeferred)
+          return;
+        _refreshDeferred = false;
+        unawaited(refreshPlaylist());
+      });
+    }
     if (active != _playbackActive) _setEffectivePlaybackActive(active);
   }
 
@@ -206,7 +221,10 @@ class AppProvider extends ChangeNotifier {
       // An automatic update was due during playback: run it only once the
       // player has been closed for a while, never while a video plays.
       _deferredRefreshTimer = Timer(const Duration(seconds: 20), () {
-        if (_playbackActive || !_refreshDeferred) return;
+        if (!ForegroundPolicy.instance.active ||
+            _playbackActive ||
+            !_refreshDeferred)
+          return;
         _refreshDeferred = false;
         refreshPlaylist();
       });
@@ -1030,7 +1048,7 @@ class AppProvider extends ChangeNotifier {
   /// touching auth state. Used by the automatic refresh scheduler.
   Future<void> refreshPlaylist() async {
     // Never start a playlist update while a video is playing.
-    if (_playbackActive) {
+    if (_playbackActive || !ForegroundPolicy.instance.active) {
       _refreshDeferred = true;
       return;
     }
@@ -1214,7 +1232,10 @@ class AppProvider extends ChangeNotifier {
   Future<void> retrySection(ContentType type) async {
     final section = type == ContentType.anime ? ContentType.series : type;
     final credentials = _xtreamCredentials;
-    if (credentials == null || catalogState(section).isPending) return;
+    if (!ForegroundPolicy.instance.active ||
+        credentials == null ||
+        catalogState(section).isPending)
+      return;
     _catalogStates[section] = CatalogLoadState(
       phase: CatalogLoadPhase.queued,
       hasContent: _hasSection(section),
@@ -1230,7 +1251,7 @@ class AppProvider extends ChangeNotifier {
   /// restarts the automatic-refresh timer from now.
   Future<void> refreshAllSections() async {
     if (_xtreamCredentials == null) return;
-    if (_playbackActive) return;
+    if (_playbackActive || !ForegroundPolicy.instance.active) return;
     await Future.wait([
       for (final t in const [
         ContentType.live,
@@ -1256,6 +1277,21 @@ class AppProvider extends ChangeNotifier {
     ContentType type,
     Map<String, String> credentials,
   ) async {
+    if (!ForegroundPolicy.instance.active) {
+      final done = Completer<void>();
+      void resumed() {
+        if (ForegroundPolicy.instance.active && !done.isCompleted)
+          done.complete();
+      }
+
+      ForegroundPolicy.instance.addListener(resumed);
+      try {
+        resumed();
+        await done.future;
+      } finally {
+        ForegroundPolicy.instance.removeListener(resumed);
+      }
+    }
     final server = credentials['server']!;
     final username = credentials['username']!;
     final password = credentials['password']!;
@@ -1419,6 +1455,8 @@ class AppProvider extends ChangeNotifier {
     _prewarmTimer?.cancel();
     _warmUpTimer?.cancel();
     _kidsRefresh?.cancel();
+    _kids.dispose();
+    _refreshService.dispose();
     super.dispose();
   }
 }

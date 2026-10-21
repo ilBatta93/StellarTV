@@ -1,6 +1,10 @@
 import 'dart:async';
+
+import 'foreground_policy.dart';
+
 import 'dart:convert';
 import 'dart:math';
+
 import 'package:cryptography/cryptography.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -39,12 +43,18 @@ class KeyHandoff {
   ) async {
     final shared = await _x.sharedSecretKey(
       keyPair: receiver,
-      remotePublicKey: SimplePublicKey(fromB64u(senderKey), type: KeyPairType.x25519),
+      remotePublicKey: SimplePublicKey(
+        fromB64u(senderKey),
+        type: KeyPairType.x25519,
+      ),
     );
     final ct = fromB64u(ciphertext);
     final plain = await _aes.decrypt(
-      SecretBox(ct.sublist(0, ct.length - 16),
-          nonce: fromB64u(nonce), mac: Mac(ct.sublist(ct.length - 16))),
+      SecretBox(
+        ct.sublist(0, ct.length - 16),
+        nonce: fromB64u(nonce),
+        mac: Mac(ct.sublist(ct.length - 16)),
+      ),
       secretKey: await _key(await shared.extractBytes(), code),
       aad: utf8.encode(code),
     );
@@ -53,6 +63,7 @@ class KeyHandoff {
 
   final SupabaseClient _client;
   KeyHandoff(this._client, {this.mode = ''});
+
   /// '' = recovery key, 'x' = Xtream list details.
   final String mode;
   SimpleKeyPair? _pair;
@@ -107,7 +118,8 @@ class KeyHandoff {
   /// Returns the key once the phone has sent it, null while waiting.
   Future<String?> poll() async {
     final id = _id, pair = _pair;
-    if (id == null || pair == null) return null;
+    if (!ForegroundPolicy.instance.active || id == null || pair == null)
+      return null;
     final row = await _client
         .from('key_handoffs')
         .select('sender_key, nonce, ciphertext')
@@ -116,8 +128,13 @@ class KeyHandoff {
     if (row == null) throw TimeoutException('Codice scaduto');
     if (row['ciphertext'] == null) return null;
     await cancel(); // one-shot: delete before using the key
-    return open(pair, code, row['sender_key'] as String,
-        row['nonce'] as String, row['ciphertext'] as String);
+    return open(
+      pair,
+      code,
+      row['sender_key'] as String,
+      row['nonce'] as String,
+      row['ciphertext'] as String,
+    );
   }
 
   Future<void> cancel() async {
@@ -144,8 +161,12 @@ class XtreamHandoff {
       final h = j['host'], u = j['username'], p = j['password'];
       if (h is! String || u is! String || p is! String) return null;
       final uri = Uri.tryParse(h);
-      if (uri == null || !['http', 'https'].contains(uri.scheme) ||
-          uri.host.isEmpty || u.isEmpty || p.isEmpty) return null;
+      if (uri == null ||
+          !['http', 'https'].contains(uri.scheme) ||
+          uri.host.isEmpty ||
+          u.isEmpty ||
+          p.isEmpty)
+        return null;
       return XtreamHandoff(h, u, p);
     } catch (_) {
       return null;
@@ -163,10 +184,14 @@ class BundleHandoff {
       final j = jsonDecode(raw);
       if (j is! Map || j['kind'] != 'bundle') return null;
       final x = j['xtream'] is Map
-          ? XtreamHandoff.parse(jsonEncode({...j['xtream'] as Map, 'kind': 'xtream'}))
+          ? XtreamHandoff.parse(
+              jsonEncode({...j['xtream'] as Map, 'kind': 'xtream'}),
+            )
           : null;
       final k = j['key'];
-      final key = k is String && RegExp(r'^STV1-', caseSensitive: false).hasMatch(k.trim())
+      final key =
+          k is String &&
+              RegExp(r'^STV1-', caseSensitive: false).hasMatch(k.trim())
           ? k.trim()
           : null;
       if (x == null && key == null) return null;

@@ -21,7 +21,10 @@ class NativePlayerBridge {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'pipChanged') {
         _pipController.add(call.arguments == true);
+      } else if (call.method == 'displayChanged') {
+        _displayController.add(call.arguments == true);
       } else if (call.method == 'screenOff') {
+        _displayController.add(false);
         _screenOffController.add(null);
       }
     });
@@ -35,6 +38,8 @@ class NativePlayerBridge {
   Stream<bool> get pipChanges => _pipController.stream;
 
   final _screenOffController = StreamController<void>.broadcast();
+  final _displayController = StreamController<bool>.broadcast();
+  Stream<bool> get displayChanges => _displayController.stream;
 
   /// Android: the display turned off, the device went to sleep or the HDMI
   /// output was unplugged/turned off (TV switched off with the remote).
@@ -50,6 +55,16 @@ class NativePlayerBridge {
     }
   }
 
+  Future<bool> isDisplayAvailable() async {
+    try {
+      return await _call<bool>('isDisplayAvailable')
+              .timeout(const Duration(seconds: 2)) ??
+          true;
+    } on TimeoutException {
+      return true;
+    }
+  }
+
   Future<bool> isPipSupported() async =>
       await _call<bool>('isPipSupported') ?? false;
 
@@ -58,8 +73,11 @@ class NativePlayerBridge {
       false;
 
   Future<void> setAutoPip(bool enabled, {int? width, int? height}) =>
-      _call<void>('setAutoPip',
-          {'enabled': enabled, 'width': width, 'height': height});
+      _call<void>('setAutoPip', {
+        'enabled': enabled,
+        'width': width,
+        'height': height,
+      });
 
   /// Android: 'landscape' (sensor), 'portrait' or 'sensor'.
   Future<void> setOrientation(String mode) =>

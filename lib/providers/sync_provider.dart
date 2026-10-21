@@ -14,7 +14,15 @@ class SyncProvider extends ChangeNotifier {
   }
 
   void _onPlaybackChanged() {
-    if (!PlaybackWorkPolicy.instance.blocksCloud && _autoPending) {
+    if (PlaybackWorkPolicy.instance.blocksCloud) {
+      if (_debounce != null || _retryTimer != null) _autoPending = true;
+      _debounce?.cancel();
+      _debounce = null;
+      _retryTimer?.cancel();
+      _retryTimer = null;
+      return;
+    }
+    if (_autoPending) {
       schedulePush();
     }
   }
@@ -112,6 +120,7 @@ class SyncProvider extends ChangeNotifier {
     _retryTimer?.cancel();
     _retryTimer = null;
     _failures = 0;
+    _retryAt = null;
     _autoPending = false;
     await _sync.signOut();
     _lastPush = null;
@@ -126,6 +135,15 @@ class SyncProvider extends ChangeNotifier {
     if (_code == null) return;
     if (PlaybackWorkPolicy.instance.blocksCloud) {
       _autoPending = true;
+      return;
+    }
+    final retryAt = _retryAt;
+    if (retryAt != null && retryAt.isAfter(DateTime.now())) {
+      _autoPending = true;
+      _retryTimer ??= Timer(retryAt.difference(DateTime.now()), () {
+        _retryTimer = null;
+        _autoPush();
+      });
       return;
     }
     // After a failed save the next attempt is already scheduled: the change
@@ -143,6 +161,7 @@ class SyncProvider extends ChangeNotifier {
   bool _autoPending = false;
   int _failures = 0;
   Timer? _retryTimer;
+  DateTime? _retryAt;
 
   /// Successful saves stay instant; only consecutive failures back off
   /// (5 s, 10 s, 20 s ... capped at 10 minutes).
@@ -176,13 +195,16 @@ class SyncProvider extends ChangeNotifier {
           _failures++;
           _autoPending = false;
           _retryTimer?.cancel();
-          _retryTimer = Timer(retryDelay(_failures), () {
+          final delay = retryDelay(_failures);
+          _retryAt = DateTime.now().add(delay);
+          _retryTimer = Timer(delay, () {
             _retryTimer = null;
             _autoPush();
           });
           break;
         }
         _failures = 0;
+        _retryAt = null;
       } while (_autoPending && !PlaybackWorkPolicy.instance.blocksCloud);
     } finally {
       _autoPushing = false;
