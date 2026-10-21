@@ -309,7 +309,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
     if (key == LogicalKeyboardKey.contextMenu ||
         key == LogicalKeyboardKey.info) {
-      _openMenu();
+      if (!_isLive) _showTvInfo();
       return;
     }
 
@@ -741,12 +741,6 @@ class _PlayerScreenState extends State<PlayerScreen>
             label: 'PiP',
             onPressed: _enterPip,
           ),
-        TvPlayerAction(
-          id: 'menu',
-          icon: Icons.tune_rounded,
-          label: 'Opzioni',
-          onPressed: _openMenu,
-        ),
       ]),
       TvPlayerRow(TvPlayerRowKind.center, [
         if (_isLive)
@@ -1654,26 +1648,6 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
-  void _openMenu() {
-    final session = _session;
-    if (session == null) return;
-    _hideTimer?.cancel();
-    showPlayerMenu(
-      context,
-      session,
-      statsVisible: _statsVisible,
-      onStatsChanged: (v) => setState(() => _statsVisible = v),
-      onlineSubsActive: _onlineCues != null,
-      onlineSubsLoading: _onlineSubsLoading,
-      onLoadOnlineSubs: _loadOnlineSubtitles,
-      onDisableOnlineSubs: _disableOnlineSubtitles,
-    ).whenComplete(() {
-      if (!mounted) return;
-      (DeviceTypeService.isTv ? _remoteFocus : _playFocus).requestFocus();
-      _scheduleHide();
-    });
-  }
-
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -1864,7 +1838,6 @@ class _PlayerScreenState extends State<PlayerScreen>
                 onEpisodes: _isEpisode ? _openEpisodes : null,
                 onMultiView: _isLive ? _openMultiView : null,
                 onPip: _enterPip,
-                onMenu: _openMenu,
                 onToggleLock: () {
                   setState(() => _locked = !_locked);
                   _scheduleHide();

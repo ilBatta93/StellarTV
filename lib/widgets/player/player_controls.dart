@@ -30,7 +30,6 @@ class PlayerControls extends StatelessWidget {
   final VoidCallback? onEpisodes;
   final VoidCallback? onMultiView;
   final VoidCallback onPip;
-  final VoidCallback onMenu;
   final VoidCallback onToggleLock;
   final VoidCallback onInteraction;
 
@@ -58,7 +57,6 @@ class PlayerControls extends StatelessWidget {
     this.onEpisodes,
     this.onMultiView,
     required this.onPip,
-    required this.onMenu,
     required this.onToggleLock,
     required this.onInteraction,
     this.onlineSubsActive = false,
@@ -206,11 +204,6 @@ class PlayerControls extends StatelessWidget {
               icon: Icons.picture_in_picture_alt_rounded,
               onPressed: onPip,
             ),
-          _TopButton(
-            tooltip: 'Opzioni',
-            icon: Icons.tune_rounded,
-            onPressed: onMenu,
-          ),
         ],
       ),
     );
