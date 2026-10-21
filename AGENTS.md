@@ -108,3 +108,5 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 
 - All PlaybackSession instances register shared background-work gates: guide/playlist work waits for closed sessions, cloud sends wait for explicit pause/end; pending local changes flush through the existing serialized sync.
 - Native device identity carries a stable cloud compatibility marker independent of release numbering; external vault gating must reject explicitly and preserve the existing validation/CAS function, never claim a discarded write succeeded.
+
+- Remote single-device signout and its background polling are retired; keep normal local/global Auth signout and token refresh unchanged to reduce recurring database traffic without weakening authentication.

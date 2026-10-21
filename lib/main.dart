@@ -20,8 +20,6 @@ import 'widgets/playlist_refresh_guard.dart';
 import 'services/profile_service.dart';
 import 'services/device_type_service.dart';
 import 'services/device_identity.dart';
-import 'services/remote_signout_service.dart';
-import 'screens/account_screen.dart';
 import 'services/expiry_reminder_service.dart';
 import 'services/tv_remote_keys.dart';
 import 'services/sync_service.dart';
@@ -202,23 +200,8 @@ class _StellarTvAppState extends State<StellarTvApp> {
       });
     });
     _syncProvider.load();
-    _remoteSignout = RemoteSignoutService(Supabase.instance.client, () async {
-      await _syncProvider.signOut();
-      appNavigatorKey.currentState?.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const AccountScreen()),
-        (_) => false,
-      );
-    });
-    // Remote sign-out polling is a background check: start it after the
-    // first frame instead of competing with the initial Home build.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(seconds: 6), () {
-        if (mounted) _remoteSignout.start();
-      });
-    });
+    // No remote-signout polling: account logout remains an explicit action.
   }
-
-  late final RemoteSignoutService _remoteSignout;
 
   String _uiSignature = '';
 
@@ -250,7 +233,6 @@ class _StellarTvAppState extends State<StellarTvApp> {
 
   @override
   void dispose() {
-    _remoteSignout.dispose();
     _appProvider.removeListener(_onAppChanged);
     _uiSettings.removeListener(_onUiSettingsChanged);
     _uiSettings.dispose();
