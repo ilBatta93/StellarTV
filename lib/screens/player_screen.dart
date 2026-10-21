@@ -1,6 +1,7 @@
 import '../services/playback_progress_writer.dart';
 
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1845,13 +1846,24 @@ class _PlayerScreenState extends State<PlayerScreen>
       right: 24,
       bottom: 96,
       child: SafeArea(
-        child: Container(
-          width: 320,
-          padding: const EdgeInsets.all(16),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+            child: Container(
+          width: 340,
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.82),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white24),
+            color: Colors.black.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 32,
+                offset: const Offset(0, 14),
+              ),
+            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1919,6 +1931,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                 ],
               ),
             ],
+          ),
+            ),
           ),
         ),
       ),
