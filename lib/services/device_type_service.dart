@@ -33,4 +33,9 @@ class DeviceTypeService {
       await SystemNavigator.pop();
     }
   }
+
+  /// Closes the app completely (used by the explicit "close" choice on Home).
+  static Future<void> closeApp() async {
+    await SystemNavigator.pop();
+  }
 }
