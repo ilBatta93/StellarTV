@@ -8,6 +8,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Playlist sections download in a background isolate with a streaming JSON parser (truncation-tolerant, bounded timeouts), run one at a time through a shared queue, publish and cache per section, and can be retried individually; pages are wrapped by a shared section frame that shows real progress, retry and saved-copy states on touch and TV, so huge playlists never block the UI or reload unrelated sections.
 - The playlist opens from the device copy at every start; only sections never saved are downloaded immediately, and a full refresh runs only when the chosen interval has elapsed since the last complete download.
 - Large derived caches (kids verdicts, playlist sections) are persisted to files through background isolates with batched writes, never to preferences or the main thread.
+- Kids scans deduplicate normalized pending/in-flight keys and cool down unresolved failures locally; unknown verdicts remain hidden and later requests can retry without a tight loop.
 
 - TV catalog boundary keys bubble through a non-focusable ancestor before geometric traversal; the Home-owned top menu links every stop explicitly across spacers, so Up returns to the active tab and lateral movement never selects a tab by itself.
 - Live completion flags never enter replay controls; explicit viewer pause cancels startup health deadlines and defers recovery until manual resume, so monitoring cannot restart a paused stream.
@@ -21,7 +22,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - TV player settings persist independent live and film/series scopes, initialized from legacy preferences; playback selects its content scope and touch continues using the shared legacy scope.
 
 - Xtream expiry reminders compute schedules in a pure planner from the provider's exp_date, deliver them as local notifications plus an in-app Home banner (Google TV hides notifications), and fire each threshold once per expiry date.
-- Cloud sync pushes on every change with zero delay; a single in-flight guard coalesces changes made during an upload into one follow-up push, and favorites pushes trigger only on real favorite changes.
+- Cloud sync pushes immediately, serializes every caller and compares each fresh decrypted remote merge before encrypting or writing; unchanged verified snapshots succeed without a revision increment, preserving cross-device CAS and real user changes.
 - Poster ratings resolve in groups through the backend's shared TMDB rating cache, falling back to direct TMDB lookups while the backend is unreachable.
 - Every network image goes through one shared disk cache manager and is decoded at display size.
 - Catalog grids memoize filtered lists by source instance, genre and metadata version so rebuilds reuse the same list and the sort cache keeps hitting.

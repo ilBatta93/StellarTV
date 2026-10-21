@@ -11,6 +11,7 @@ import '../config/supabase_config.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import 'kids_policy.dart';
+import 'catalog_work_queue.dart';
 
 /// Strict genre/category + age policy. Unknown titles stay hidden except
 /// explicitly labelled Animation/Kids groups; known safety vetoes win.
@@ -32,7 +33,7 @@ class KidsContentService {
 
   /// TMDB genre ids per title, filled by the same background scan.
   final Map<String, List<int>> _genres = {};
-  final Set<String> _pending = {};
+  final CatalogWorkQueue _work = CatalogWorkQueue();
   bool _loaded = false;
   bool _running = false;
   void Function()? onVerdicts;
@@ -137,7 +138,7 @@ class KidsContentService {
           _certifications.containsKey(key)) {
         continue;
       }
-      _pending.add('${key.split(':').first}\u0000${_titleOf(c)}');
+      _work.add(key, '${key.split(':').first}\u0000${_titleOf(c)}', DateTime.now());
     }
     if (!_running) unawaited(_run());
   }
@@ -147,17 +148,7 @@ class KidsContentService {
   /// False when the shared cache could not be read: the slow per-title
   /// check then waits for the next scan instead of flooding the server.
   Future<bool> _cloudLookup() async {
-    final keys = <String, String>{};
-    for (final b in _pending) {
-      final type = b.split('\u0000').first;
-      final norm = b
-          .split('\u0000')
-          .last
-          .toLowerCase()
-          .replaceAll(_nonWord, ' ')
-          .trim();
-      keys['$type:$norm'] = b;
-    }
+    final keys = Map<String, String>.from(_work.pending);
     final all = keys.keys.toList();
     var changed = false;
     for (var i = 0; i < all.length; i += 1000) {
@@ -187,8 +178,7 @@ class KidsContentService {
           _certifications[key] = r['certification'] as String;
           final g = r['genre_ids'];
           _genres[key] = g is List ? g.whereType<int>().toList() : const [];
-          final p = keys[key];
-          if (p != null) _pending.remove(p);
+          if (keys.containsKey(key)) _work.complete(key);
           changed = true;
         }
       } catch (_) {
@@ -206,12 +196,14 @@ class KidsContentService {
     _running = true;
     try {
       if (!await _cloudLookup()) {
-        _pending.clear();
+        final failed = _work.take(_work.pending.length);
+        _work.release(failed.keys, {}, DateTime.now());
         return;
       }
-      while (_pending.isNotEmpty) {
-        final batch = _pending.take(_batchSize).toList();
-        _pending.removeAll(batch);
+      while (_work.pending.isNotEmpty) {
+        final work = _work.take(_batchSize);
+        final batch = work.values.toList();
+        final resolved = <String>{};
         final items = [
           for (final b in batch)
             {'type': b.split('\u0000').first, 'title': b.split('\u0000').last},
@@ -244,11 +236,14 @@ class KidsContentService {
             _certifications[key] = r['certification'] as String;
             final g = r['genre_ids'];
             _genres[key] = g is List ? g.whereType<int>().toList() : const [];
+            resolved.add(key);
           }
           await _save();
           onVerdicts?.call();
         } catch (_) {
           await Future<void>.delayed(const Duration(seconds: 20));
+        } finally {
+          _work.release(work.keys, resolved, DateTime.now());
         }
       }
     } finally {

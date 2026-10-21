@@ -466,7 +466,14 @@ class SyncService {
   /// Short reason of the last failed encrypted save, for the settings UI.
   String? lastError;
 
-  Future<DateTime?> push(SyncPayload payload, String code) async {
+  Future<void> _cloudWrites = Future<void>.value();
+  Future<DateTime?> push(SyncPayload payload, String code) {
+    final next = _cloudWrites.then((_) => _push(payload, code));
+    _cloudWrites = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return next;
+  }
+
+  Future<DateTime?> _push(SyncPayload payload, String code) async {
     if (code != currentUserId) {
       lastError = 'account non collegato';
       return null;
@@ -504,6 +511,16 @@ class SyncService {
             ? PersonalVault.clean({})
             : await PersonalVault.decrypt(row['envelope'], recovery, code);
         final merged = PersonalVault.merge(remote, local);
+        if (code != currentUserId) return null;
+        // Fresh remote read remains mandatory: never suppress another
+        // device's changes using a cached local fingerprint.
+        if (row != null && PersonalVault.canonical(remote) == PersonalVault.canonical(merged)) {
+          lastError = null;
+          if (legacyOk) await prefs.setBool(marker, true);
+          final now = DateTime.now();
+          await prefs.setString(_lastPushKey, now.toIso8601String());
+          return now;
+        }
         final envelope = await PersonalVault.encrypt(merged, recovery, code);
         if (code != currentUserId) return null;
         dynamic revision;
