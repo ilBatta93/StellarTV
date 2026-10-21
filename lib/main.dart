@@ -16,6 +16,7 @@ import 'providers/profile_provider.dart';
 import 'providers/sync_provider.dart';
 import 'providers/ui_settings.dart';
 import 'screens/splash_screen.dart';
+import 'widgets/playlist_refresh_guard.dart';
 import 'services/profile_service.dart';
 import 'services/device_type_service.dart';
 import 'services/device_identity.dart';
@@ -295,8 +296,10 @@ class _StellarTvAppState extends State<StellarTvApp> {
             // "Dimensione testo" in Personalizzazione scales every label.
             builder: (context, child) {
               final factor = ui.textScaleFactor;
-              if (factor == 1.0 || child == null)
-                return child ?? const SizedBox();
+              final guarded = PlaylistRefreshGuard(
+                child: child ?? const SizedBox(),
+              );
+              if (factor == 1.0) return guarded;
               final mq = MediaQuery.of(context);
               return MediaQuery(
                 data: mq.copyWith(
@@ -304,7 +307,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
                     mq.textScaler.scale(1) * factor,
                   ),
                 ),
-                child: child,
+                child: guarded,
               );
             },
           );
