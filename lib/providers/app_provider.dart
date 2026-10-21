@@ -178,6 +178,8 @@ class AppProvider extends ChangeNotifier {
   bool get playbackActive => _playbackActive;
   final Map<ContentType, List<Channel>> _pendingSections = {};
   Timer? _pendingTimer;
+  bool _refreshDeferred = false;
+  Timer? _deferredRefreshTimer;
 
   /// Called by the player: while a video plays, background playlist updates
   /// keep downloading but heavy catalog rebuilds wait until it closes.
@@ -185,6 +187,16 @@ class AppProvider extends ChangeNotifier {
     if (value == _playbackActive) return;
     _playbackActive = value;
     _pendingTimer?.cancel();
+    _deferredRefreshTimer?.cancel();
+    if (!value && _refreshDeferred) {
+      // An automatic update was due during playback: run it only once the
+      // player has been closed for a while, never while a video plays.
+      _deferredRefreshTimer = Timer(const Duration(seconds: 20), () {
+        if (_playbackActive || !_refreshDeferred) return;
+        _refreshDeferred = false;
+        refreshPlaylist();
+      });
+    }
     if (!value && _pendingSections.isNotEmpty) {
       // Let the exit animation finish first.
       _pendingTimer = Timer(
@@ -1003,6 +1015,11 @@ class AppProvider extends ChangeNotifier {
   /// Reloads the playlist with the stored credentials or URL, without
   /// touching auth state. Used by the automatic refresh scheduler.
   Future<void> refreshPlaylist() async {
+    // Never start a playlist update while a video is playing.
+    if (_playbackActive) {
+      _refreshDeferred = true;
+      return;
+    }
     if (_authMethod == AuthMethod.xtream && _xtreamCredentials != null) {
       await loadFromXtream(
         server: _xtreamCredentials!['server']!,
@@ -1199,6 +1216,7 @@ class AppProvider extends ChangeNotifier {
   /// restarts the automatic-refresh timer from now.
   Future<void> refreshAllSections() async {
     if (_xtreamCredentials == null) return;
+    if (_playbackActive) return;
     await Future.wait([
       for (final t in const [
         ContentType.live,
@@ -1211,7 +1229,8 @@ class AppProvider extends ChangeNotifier {
     await _refreshService.schedule();
   }
 
-  bool get isRefreshingAny => _anyPending;
+  /// Never true during playback, so the wait screen cannot cover a video.
+  bool get isRefreshingAny => _anyPending && !_playbackActive;
 
   Future<void> _enqueue(ContentType type, Map<String, String> credentials) {
     final run = _sectionQueue.then((_) => _loadSection(type, credentials));
