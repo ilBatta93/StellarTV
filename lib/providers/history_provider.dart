@@ -13,6 +13,7 @@ import 'sync_provider.dart';
 import '../services/sync_service.dart';
 import '../services/personal_vault.dart';
 import '../services/recent_live_channels.dart';
+import '../models/episode_watch_event.dart';
 
 /// Local-first watch history: entries are always saved on the device
 /// immediately, and mirrored to the cloud sync profile when a pairing code
@@ -31,6 +32,8 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// synced with the history so a removed title is not brought back by an
   /// older cloud or device copy; a newer real view wins over the marker.
   final Map<String, DateTime> _deleted = {};
+  final Map<String, EpisodeWatchEvent> _watchEvents = {};
+  Future<void> _manualWrites = Future<void>.value();
   Future<void>? _loadFuture;
 
   /// Reloads the app after credentials were restored from the cloud.
@@ -46,12 +49,14 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Switches to the history of [profileId] (null = no profile selected).
   Future<void> switchProfile(String? profileId, {bool force = false}) async {
+    await _manualWrites;
     await _loadFuture;
     if (!force && profileId == _profileId) return;
     _profileEpoch++;
     _pushDebounce?.cancel();
     _profileId = profileId;
     _deleted.clear();
+    _watchEvents.clear();
     _entries = [];
     _notify();
     if (profileId != null) await _migrateLegacy(profileId);
@@ -86,7 +91,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   HistoryEntry _present(HistoryEntry entry) =>
-      entry.copyWith(watchedPercent: _watchedPercent);
+      entry.copyWith(watchedPercent: _watchedPercent, manualWatched: _eventFor(entry.contentId)?.watched);
   List<HistoryEntry> get entries => _entries.map(_present).toList();
   bool get isLoading => _loading;
   bool get hasLoaded => _loaded;
@@ -154,12 +159,66 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     return out;
   }
 
-  bool isWatched(String contentId) => entryFor(contentId)?.isWatched ?? false;
+  EpisodeWatchEvent? _eventFor(String id, {bool suggestion = false}) =>
+      _watchEvents[EpisodeWatchEvent(id, 3, DateTime(2000), suggestion: suggestion).key];
+  bool isWatched(String contentId) => _eventFor(contentId)?.watched ?? entryFor(contentId)?.isWatched ?? false;
+  bool? manualWatched(String id) => _eventFor(id)?.watched;
+  bool suggestionDismissed(String seriesId) => _eventFor(seriesId, suggestion: true)?.value == 2;
+
+  bool _readWatchEvent(Map<String, dynamic> row) {
+    if (row['type'] != EpisodeWatchEvent.kind) return false;
+    final event = EpisodeWatchEvent.parse(row);
+    if (event != null) {
+      final previous = _watchEvents[event.key];
+      if (previous == null || event.newerThan(previous)) _watchEvents[event.key] = event;
+    }
+    return true;
+  }
+
+  /// A single atomic local batch, no fake progress and no player resume writes.
+  Future<void> setManualWatched(Iterable<String> ids, bool? watched, {String? seriesId}) =>
+      _writeEvents(ids, watched == null ? 3 : watched ? 1 : 0, seriesId: seriesId);
+  Future<void> setSuggestionDismissed(String id, bool dismissed) =>
+      _writeEvents([id], dismissed ? 2 : 3, suggestion: true);
+  Future<void> _writeEvents(Iterable<String> ids, int value, {bool suggestion = false, String? seriesId}) {
+    final targets = ids.where((id) => id.isNotEmpty).toSet();
+    final profile = _profileId, epoch = _profileEpoch, account = _sync.currentUserId;
+    final next = _manualWrites.then((_) async {
+      await _loadFuture;
+      if (_disposed || epoch != _profileEpoch || account != _sync.currentUserId) return;
+      final before = Map<String, EpisodeWatchEvent>.from(_watchEvents);
+      var at = DateTime.now().toUtc();
+      for (final id in targets) {
+        final previous = _eventFor(id, suggestion: suggestion);
+        if (previous != null && !at.isAfter(previous.at)) at = previous.at.add(const Duration(microseconds: 1));
+        final event = EpisodeWatchEvent(id, value, at, suggestion: suggestion, seriesId: seriesId ?? previous?.seriesId);
+        _watchEvents[event.key] = event;
+      }
+      final snapshot = _localMap();
+      try {
+        await _sync.saveLocalHistory(snapshot, profileId: profile);
+        if (_disposed || epoch != _profileEpoch || account != _sync.currentUserId) return;
+        _notify();
+        _scheduleCloudPush();
+      } catch (_) {
+        if (epoch == _profileEpoch) { _watchEvents..clear()..addAll(before); _notify(); }
+        rethrow;
+      }
+    });
+    _manualWrites = next.catchError((Object _) {});
+    return next;
+  }
 
   /// Marks an item as fully watched (position = runtime), like Netflix.
   Future<void> markWatched(Channel channel, {Duration? duration}) async {
     await _loadFuture;
     final previous = entryFor(channel.id);
+    final event = _eventFor(channel.id);
+    if (event != null) {
+      final at = DateTime.now().toUtc();
+      final reset = EpisodeWatchEvent(channel.id, 3, at.isAfter(event.at) ? at : event.at.add(const Duration(microseconds: 1)));
+      _watchEvents[reset.key] = reset;
+    }
     var total = previous?.duration ?? Duration.zero;
     if (total <= Duration.zero) total = duration ?? Duration.zero;
     if (total <= Duration.zero) total = const Duration(minutes: 1);
@@ -207,8 +266,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     final local = await _sync.loadLocalHistory(profileId: _profileId);
     final entries = <HistoryEntry>[];
     _deleted.clear();
+    _watchEvents.clear();
     for (final value in local.values) {
       if (value is! Map<String, dynamic>) continue;
+      if (_readWatchEvent(value)) continue;
       _readTombstone(value);
       final entry = _entryFromLocal(value);
       if (entry != null) entries.add(entry);
@@ -266,6 +327,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     // Keep tombstones: a long-offline device must not resurrect removals.
     final live = {for (final e in _entries) e.contentId};
     return {
+      for (final event in _watchEvents.values) event.key: event.toJson(),
       for (final d in _deleted.entries)
         if (!live.contains(d.key))
           d.key: {
@@ -306,6 +368,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Pulls cloud state and merges it into local (newer `watched` wins for
   /// history; settings and credentials are filled in when missing locally).
   Future<bool> pullFromCloud() async {
+    await _manualWrites;
     // The local load is async and started in the constructor: never merge
     // against an empty in-memory list or this would overwrite the local
     // history with a stale cloud copy on every app start.
@@ -350,6 +413,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       };
       for (final value in remoteCurrent.values) {
         if (value is! Map<String, dynamic>) continue;
+        if (_readWatchEvent(value)) continue;
         _readTombstone(value);
       }
       for (final value in remoteCurrent.values) {
@@ -401,7 +465,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Reloads entries from local storage, then pulls any newer state from the
   /// cloud pairing code. Safe to call as a pull-to-refresh handler.
   Future<void> refresh() async {
-    await _loadLocal();
+    await _manualWrites;
+    _loadFuture = _loadLocal();
+    await _loadFuture;
     if (await _sync.getStoredCode() != null) {
       await pullFromCloud();
     }
@@ -521,6 +587,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// [cascade] false touches only [contentId] (used by "segna come non
   /// visto" on a single episode).
   Future<bool> remove(String contentId, {bool cascade = true}) async {
+    await _manualWrites;
     await _loadFuture;
     final before = _entries;
     final target = entryFor(contentId);
@@ -531,6 +598,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
             seriesKey.isNotEmpty &&
             (e.seriesKey == seriesKey || e.contentId == seriesKey));
     final removed = _entries.where(related).toList();
+    final beforeEvents = Map<String, EpisodeWatchEvent>.from(_watchEvents);
+    _resetManualStates({contentId, ...removed.map((e) => e.contentId),
+      if (cascade) ..._watchEvents.values.where((e) => !e.suggestion && e.seriesId != null && (e.seriesId == contentId || e.seriesId == seriesKey)).map((e) => e.target),
+    });
     _entries = _entries.where((e) => !related(e)).toList();
     final now = DateTime.now();
     _deleted[contentId] = now;
@@ -547,15 +618,20 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       return true;
     } catch (_) {
       _entries = before;
+      _watchEvents..clear()..addAll(beforeEvents);
       _notify();
       return false;
     }
   }
 
   Future<bool> clear() async {
+    await _manualWrites;
+    await _loadFuture;
     // "Cancella cronologia" also empties the Diretta recent channels.
     unawaited(RecentLiveChannels.instance.clear());
     final before = _entries;
+    final beforeEvents = Map<String, EpisodeWatchEvent>.from(_watchEvents);
+    _resetManualStates(_watchEvents.values.where((e) => !e.suggestion).map((e) => e.target).toSet());
     final now = DateTime.now();
     for (final e in _entries) {
       _deleted[e.contentId] = now;
@@ -568,8 +644,19 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       return true;
     } catch (_) {
       _entries = before;
+      _watchEvents..clear()..addAll(beforeEvents);
       _notify();
       return false;
+    }
+  }
+
+  void _resetManualStates(Set<String> targets) {
+    for (final id in targets) {
+      final previous = _eventFor(id);
+      if (previous == null) continue;
+      final now = DateTime.now().toUtc();
+      final event = EpisodeWatchEvent(id, 3, now.isAfter(previous.at) ? now : previous.at.add(const Duration(microseconds: 1)), seriesId: previous.seriesId);
+      _watchEvents[event.key] = event;
     }
   }
 

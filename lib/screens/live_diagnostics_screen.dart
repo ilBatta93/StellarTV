@@ -7,6 +7,8 @@ import '../widgets/apple_page_scaffold.dart';
 import '../widgets/settings_tiles.dart';
 import '../services/live_diagnostics_service.dart';
 import '../services/device_type_service.dart';
+import '../models/diagnostic_guide.dart';
+import '../widgets/diagnostic_guide_section.dart';
 
 class LiveDiagnosticsScreen extends StatefulWidget {
   const LiveDiagnosticsScreen({super.key});
@@ -18,6 +20,7 @@ class _LiveDiagnosticsScreenState extends State<LiveDiagnosticsScreen> {
   final service = LiveDiagnosticsService.instance;
   bool busy = false;
   String? message;
+  DiagnosticProblem? problem;
   @override
   void initState() {
     super.initState();
@@ -58,7 +61,7 @@ class _LiveDiagnosticsScreenState extends State<LiveDiagnosticsScreen> {
       () async {
         await client.from('live_diagnostic_reports').insert({
           'user_id': user.id,
-          'report': jsonDecode(await service.report()),
+          'report': jsonDecode(guidedDiagnosticReport(await service.report(), problem)),
         });
       },
       'Rapporto inviato. Lo trovi su stellartv.lovable.app → Il mio account → Log errori.',
@@ -73,6 +76,7 @@ class _LiveDiagnosticsScreenState extends State<LiveDiagnosticsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          DiagnosticGuideSection(selected: problem, onChanged: (value) => setState(() => problem = value)),
           SettingsSection(
             title: 'Registrazione',
             children: [
@@ -118,6 +122,7 @@ class _LiveDiagnosticsScreenState extends State<LiveDiagnosticsScreen> {
                               : null;
                           action(() async {
                             final file = await service.exportFile();
+                            if (problem != null) await file.writeAsString(guidedDiagnosticReport(await file.readAsString(), problem), flush: true);
                             await SharePlus.instance.share(
                               ShareParams(
                                 files: [XFile(file.path)],

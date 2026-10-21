@@ -24,6 +24,7 @@ import '../widgets/home_art.dart';
 import '../widgets/trailer_button.dart';
 import '../services/title_display.dart';
 import '../widgets/category_assign_button.dart';
+import '../widgets/series_watch_sheet.dart';
 
 class SeriesDetailScreen extends StatefulWidget {
   final Channel series;
@@ -45,6 +46,34 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   TmdbItem? _item;
   List<TmdbPerson> _cast = [];
   List<TmdbItem> _similar = [];
+  Future<void> _manageWatch() async {
+    final details = _details;
+    if (details == null) return;
+    await context.read<HistoryProvider>().setSuggestionDismissed(widget.series.id, false);
+    if (!mounted) return;
+    await showDialog<void>(context: context, builder: (_) => SeriesWatchSheet(details: details));
+  }
+  Widget _manageWatchButton() => TvFocusable(onPressed: () { if (_details != null) _manageWatch(); },
+    child: OutlinedButton.icon(onPressed: _details == null ? null : _manageWatch, icon: const Icon(Icons.checklist_rounded), label: const Text('Gestisci visione')));
+
+  Widget _watchSuggestion(HistoryProvider history) {
+    final all = _details?.allEpisodes ?? const <SeriesEpisode>[];
+    if (history.suggestionDismissed(widget.series.id)) return const SizedBox.shrink();
+    final started = all.where((e) => (history.entryFor(e.channel.id)?.position ?? Duration.zero) > const Duration(seconds: 5)).toList();
+    if (started.isEmpty) return const SizedBox.shrink();
+    started.sort((a, b) => a.season.compareTo(b.season));
+    final current = started.first.season;
+    final previous = all.where((e) => e.season > 0 && e.season < current).toList();
+    if (previous.isEmpty || previous.any((e) => history.isWatched(e.channel.id) || (history.entryFor(e.channel.id)?.position ?? Duration.zero) > Duration.zero)) return const SizedBox.shrink();
+    return Padding(padding: const EdgeInsets.symmetric(vertical: 16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Hai iniziato dalla stagione $current. Vuoi segnare viste le stagioni precedenti?'),
+      const SizedBox(height: 8),
+      Wrap(spacing: 8, children: [
+        TvFocusable(onPressed: () => history.setManualWatched(previous.map((e) => e.channel.id), true, seriesId: widget.series.seriesKey ?? widget.series.id), child: TextButton(onPressed: () => history.setManualWatched(previous.map((e) => e.channel.id), true, seriesId: widget.series.seriesKey ?? widget.series.id), child: const Text('Segna come viste'))),
+        TvFocusable(onPressed: () => history.setSuggestionDismissed(widget.series.id, true), child: TextButton(onPressed: () => history.setSuggestionDismissed(widget.series.id, true), child: const Text('Non ora'))),
+      ]),
+    ]));
+  }
 
   @override
   void initState() {
@@ -213,6 +242,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                   const SizedBox(height: 16),
                 ] else ...[
                   _buildPlaybackButton(context),
+                  _manageWatchButton(),
                   const SizedBox(height: 16),
                 ],
                 if (!DeviceTypeService.isTv && item != null)
@@ -232,6 +262,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
           ),
         ),
         SliverToBoxAdapter(child: CastRow(cast: _cast)),
+        SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _watchSuggestion(context.watch<HistoryProvider>()))),
         const SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
@@ -326,13 +357,13 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                 return EpisodeCard(
                   episode: ep,
                   progress: entry?.isWatched == true ? null : entry?.progress,
-                  watched: entry?.isWatched ?? false,
+                  watched: history.isWatched(ep.channel.id),
                   onToggleWatched: () {
                     final h = context.read<HistoryProvider>();
-                    if (entry?.isWatched ?? false) {
-                      h.markUnwatched(ep.channel.id);
+                    if (h.isWatched(ep.channel.id)) {
+                      h.setManualWatched([ep.channel.id], false, seriesId: widget.series.seriesKey ?? widget.series.id);
                     } else {
-                      h.markWatched(ep.channel, duration: ep.duration);
+                      h.setManualWatched([ep.channel.id], true, seriesId: widget.series.seriesKey ?? widget.series.id);
                     }
                   },
                   onPlay: () => playChannel(
@@ -368,16 +399,17 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   SeriesEpisode? _resumeEpisode(HistoryProvider history) {
     final all = _details?.allEpisodes ?? const <SeriesEpisode>[];
     if (all.isEmpty) return null;
+    final hasManual = all.any((e) => history.manualWatched(e.channel.id) != null);
     var lastWatched = -1;
     for (final (i, e) in all.indexed) {
+      if (history.isWatched(e.channel.id)) { lastWatched = i; continue; }
       final entry = history.entryFor(e.channel.id);
       if (entry == null) continue;
-      if (entry.isWatched) {
-        lastWatched = i;
-      } else if ((entry.resumePosition ?? Duration.zero) > Duration.zero) {
+      if ((entry.resumePosition ?? Duration.zero) > Duration.zero) {
         return e;
       }
     }
+    if (hasManual) return all.where((e) => !history.isWatched(e.channel.id)).firstOrNull ?? all.first;
     return lastWatched + 1 < all.length ? all[lastWatched + 1] : all.first;
   }
 
@@ -423,6 +455,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       runSpacing: 12,
       children: [
         _buildPlaybackButton(context),
+        _manageWatchButton(),
         TvFocusable(
           onPressed: () => app.toggleFavorite(widget.series),
           child: OutlinedButton.icon(

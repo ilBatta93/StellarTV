@@ -16,6 +16,7 @@ class HistoryEntry {
     this.seriesName = '',
     this.seriesPoster = '',
     this.watchedPercent = WatchCompletionPolicy.defaultPercent,
+    this.manualWatched,
   });
 
   final String contentId;
@@ -34,6 +35,9 @@ class HistoryEntry {
   final String seriesName;
   final String seriesPoster;
   final int watchedPercent;
+  final bool? manualWatched;
+  bool get isAutomaticallyWatched => !isLive && duration > Duration.zero &&
+      position.inMilliseconds * 100 >= duration.inMilliseconds * WatchCompletionPolicy.normalize(watchedPercent);
 
   bool get isLive => type == ContentType.live;
 
@@ -46,10 +50,8 @@ class HistoryEntry {
 
   /// Completion is derived from real progress, never by changing the position.
   bool get isWatched {
-    if (isLive || duration <= Duration.zero) return false;
-    return position.inMilliseconds * 100 >=
-        duration.inMilliseconds *
-            WatchCompletionPolicy.normalize(watchedPercent);
+    if (isLive) return false;
+    return manualWatched ?? isAutomaticallyWatched;
   }
 
   /// Actual time left, rounded up so a partial minute never shows zero.
@@ -68,7 +70,7 @@ class HistoryEntry {
       position > Duration.zero ? remainingMinutes : null;
 
   Duration? get resumePosition {
-    if (isLive || duration <= Duration.zero || isWatched) return null;
+    if (isLive || duration <= Duration.zero || isAutomaticallyWatched) return null;
     if (position <= const Duration(seconds: 5)) {
       return null;
     }
@@ -81,6 +83,7 @@ class HistoryEntry {
     Duration? duration,
     DateTime? lastWatchedAt,
     int? watchedPercent,
+    bool? manualWatched,
   }) {
     return HistoryEntry(
       contentId: contentId,
@@ -96,6 +99,7 @@ class HistoryEntry {
       seriesName: seriesName,
       seriesPoster: seriesPoster,
       watchedPercent: watchedPercent ?? this.watchedPercent,
+      manualWatched: manualWatched ?? this.manualWatched,
     );
   }
 

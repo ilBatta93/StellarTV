@@ -228,6 +228,7 @@ class SyncService {
       await _client.auth.signOut(scope: SignOutScope.local);
     } catch (_) {}
     await FavoritesService.drainPendingWrites();
+    await _historyWrites;
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
   }
@@ -247,12 +248,29 @@ class SyncService {
     return decoded is Map<String, dynamic> ? decoded : {};
   }
 
+  Future<void> _historyWrites = Future<void>.value();
   Future<void> saveLocalHistory(
     Map<String, dynamic> history, {
     String? profileId,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(historyKeyFor(profileId), jsonEncode(history));
+  }) {
+    final account = currentUserId;
+    final snapshot = Map<String, dynamic>.from(history);
+    final next = _historyWrites.then((_) async {
+      if (account != currentUserId) throw StateError('Account cambiato');
+      final prefs = await SharedPreferences.getInstance();
+      final key = historyKeyFor(profileId);
+      final raw = jsonDecode(prefs.getString(key) ?? '{}');
+      final controls = <String, dynamic>{
+        for (final e in PersonalVault.object(raw).entries)
+          if (PersonalVault.object(e.value)['type'] == '__stellar_seen_v1') e.key: e.value,
+      };
+      // Late playback snapshots must never erase a newer manual choice.
+      final merged = PersonalVault.mergeHistory(controls, snapshot);
+      if (account != currentUserId) throw StateError('Account cambiato');
+      if (!await prefs.setString(key, jsonEncode(merged))) throw StateError('Salvataggio non riuscito');
+    });
+    _historyWrites = next.catchError((Object _) {});
+    return next;
   }
 
   /// Every per-profile history stored on this device.

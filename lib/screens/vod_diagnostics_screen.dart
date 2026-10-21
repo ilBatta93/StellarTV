@@ -9,6 +9,8 @@ import '../services/device_type_service.dart';
 import '../services/vod_diagnostics_service.dart';
 import '../widgets/apple_page_scaffold.dart';
 import '../widgets/settings_tiles.dart';
+import '../models/diagnostic_guide.dart';
+import '../widgets/diagnostic_guide_section.dart';
 
 class VodDiagnosticsScreen extends StatefulWidget {
   const VodDiagnosticsScreen({super.key});
@@ -20,6 +22,7 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
   final service = VodDiagnosticsService.instance;
   bool busy = false;
   String? message;
+  DiagnosticProblem? problem;
 
   @override
   void initState() {
@@ -61,7 +64,7 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
       () async {
         await client.from('live_diagnostic_reports').insert({
           'user_id': user.id,
-          'report': jsonDecode(await service.report()),
+          'report': jsonDecode(guidedDiagnosticReport(await service.report(), problem)),
         });
       },
       'Rapporto inviato. Lo trovi su stellartv.lovable.app → Il mio account → Log errori.',
@@ -76,6 +79,7 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          DiagnosticGuideSection(selected: problem, onChanged: (value) => setState(() => problem = value)),
           SettingsSection(
             title: 'Registrazione',
             children: [
@@ -121,6 +125,7 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
                               : null;
                           action(() async {
                             final file = await service.exportFile();
+                            if (problem != null) await file.writeAsString(guidedDiagnosticReport(await file.readAsString(), problem), flush: true);
                             await SharePlus.instance.share(
                               ShareParams(
                                 files: [XFile(file.path)],

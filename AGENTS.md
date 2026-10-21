@@ -99,6 +99,8 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Subtitle source selection is session-owned across engine replacements; external cues listen directly to playback time and use interval-aware lookup, with local per-content delay and bounded alternative downloads to avoid device-specific timing sync.
 - HistoryEntry owns completion classification and remaining-time calculations from actual saved progress; Home metadata and detail actions reuse that policy, and series action countdowns target the same resume episode as playback, without a new sync wire format.
 - WatchCompletionPolicy validates the portable watched threshold; HistoryProvider projects the current preference onto entries without changing serialized progress, and UiSettings changes refresh every history consumer immediately.
+- Manual episode completion and suggestion dismissals use versioned timestamped control records inside encrypted profile histories, separate from playback and its cap; SyncService serializes writes and preserves newer controls against late playback snapshots. Series management never invents position or changes automatic next playback.
+- Guided diagnostics adds only an enumerated optional problem to explicit exports/uploads; original technical evidence and player behavior remain unchanged.
 
 - Settings option pickers mount their bounded option list eagerly inside a scroll view, so the current offscreen value receives TV autofocus and arrow navigation starts from it.
 - Catalog panel Back resolves the visible same-route toolbar across focus transitions and consumes duplicate hardware/system dispatch within the closing frame, so genre/platform panels restore their own opener before the top menu handles a later Back.

@@ -186,20 +186,21 @@ class PersonalVault {
   static const cloudHistoryLimit = 500;
   static Map<String, dynamic> capHistory(dynamic raw) {
     final h = object(raw);
-    if (h.length <= cloudHistoryLimit) return h;
-    final entries = h.entries.toList()
+    final controls = h.entries.where((e) => object(e.value)['type'] == '__stellar_seen_v1');
+    final entries = h.entries.where((e) => object(e.value)['type'] != '__stellar_seen_v1').toList()
       ..sort((x, y) => _at(y.value).compareTo(_at(x.value)));
-    return Map.fromEntries(entries.take(cloudHistoryLimit));
+    return Map.fromEntries([...controls, ...entries.take(cloudHistoryLimit)]);
   }
 
   static Map<String, dynamic> mergeHistory(dynamic a, dynamic b) {
     final out = object(a);
     for (final e in object(b).entries) {
       final old = out[e.key];
+      final control = object(e.value)['type'] == '__stellar_seen_v1' && object(old)['type'] == '__stellar_seen_v1';
       if (old == null ||
           _at(e.value) > _at(old) ||
           _at(e.value) == _at(old) &&
-              (object(e.value)['deleted'] == true ||
+              (control ? ((object(e.value)['pos'] as num?) ?? 3) < ((object(old)['pos'] as num?) ?? 3) : object(e.value)['deleted'] == true ||
                   object(old)['deleted'] != true))
         out[e.key] = e.value;
     }
