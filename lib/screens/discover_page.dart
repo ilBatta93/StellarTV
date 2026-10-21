@@ -18,6 +18,7 @@ import '../widgets/expiry_banner.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/history_entry.dart';
+import '../models/series_details.dart';
 import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
 import '../navigation/app_routes.dart';
@@ -745,7 +746,10 @@ class _HistoryCard extends StatelessWidget {
       channelTitle: channel.name,
     );
     final minutesLeft = entry.remainingMovieMinutes;
-    final trailing = isEpisode
+    final finished = isEpisode && entry.isWatched;
+    final trailing = finished
+        ? 'Prossimo'
+        : isEpisode
         ? code
         : minutesLeft == null
         ? null
@@ -765,16 +769,65 @@ class _HistoryCard extends StatelessWidget {
       builder: (image) => HomeLandscapeCard(
         title: title,
         image: image,
-        progress: progress,
+        progress: finished ? 0.0 : progress,
         trailing: trailing,
         onFocus: onFocus,
-        onTap: () => playChannel(
-          context,
-          playable,
-          startAt: entry.resumePosition ?? entry.position,
-        ),
+        onTap: () => finished
+            ? _playNextEpisode(context, entry, channel, folder)
+            : playChannel(
+                context,
+                playable,
+                startAt: entry.resumePosition ?? entry.position,
+              ),
       ),
     );
+  }
+}
+
+/// Plays the episode after a finished one; opens the series page when the
+/// next episode cannot be resolved (end of series or details unavailable).
+Future<void> _playNextEpisode(
+  BuildContext context,
+  HistoryEntry entry,
+  Channel channel,
+  Channel? folder,
+) async {
+  if (folder == null) {
+    openChannel(context, channel);
+    return;
+  }
+  final app = context.read<AppProvider>();
+  final history = context.read<HistoryProvider>();
+  try {
+    final details = await app.loadSeriesDetails(folder);
+    if (!context.mounted) return;
+    final all = details.allEpisodes;
+    final i = all.indexWhere((e) => e.channel.id == entry.contentId);
+    final s = channel.season, n = channel.episode;
+    final idx = i >= 0
+        ? i
+        : (s == null || n == null)
+        ? -1
+        : all.indexWhere((e) => e.season == s && e.number == n);
+    SeriesEpisode? next;
+    for (final e in idx >= 0 ? all.skip(idx + 1) : const <SeriesEpisode>[]) {
+      if (!history.isWatched(e.channel.id)) {
+        next = e;
+        break;
+      }
+    }
+    if (next == null) {
+      openChannel(context, folder);
+      return;
+    }
+    final ch = next.channel;
+    playChannel(
+      context,
+      ch.seriesKey == null ? ch.copyWith(seriesKey: folder.seriesKey ?? folder.id) : ch,
+      startAt: history.entryFor(ch.id)?.resumePosition,
+    );
+  } catch (_) {
+    if (context.mounted) openChannel(context, folder);
   }
 }
 

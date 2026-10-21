@@ -44,9 +44,11 @@ void main() {
           const Duration(minutes: 60),
         );
         expect(history.isWatched(channel.id), isTrue);
+        // Finished movies leave; finished episodes keep their series for
+        // the next episode.
         expect(
           history.continueWatching.any((e) => e.contentId == channel.id),
-          isFalse,
+          type == ContentType.series,
         );
       }
       final stored = await sync.loadLocalHistory(profileId: 'viewer');
@@ -61,7 +63,7 @@ void main() {
         expect(history.isWatched(id), isTrue);
         expect(history.entryFor(id)?.position, const Duration(minutes: 57));
       }
-      expect(history.continueWatching, isEmpty);
+      expect(history.continueWatching.map((e) => e.contentId), ['series']);
       history.dispose();
       client.auth.stopAutoRefresh();
     },
@@ -111,7 +113,11 @@ void main() {
       );
       expect(history.entryFor('ep1')?.progress, 1.0);
       expect(history.isWatched('ep1'), isTrue);
+      expect(history.continueWatching.map((e) => e.contentId), ['ep1']);
+      await history.remove('ep1');
       expect(history.continueWatching, isEmpty);
+      await history.recordStart(episode);
+      await history.markWatched(episode, duration: const Duration(minutes: 20));
       expect(await settings.getResumePosition(episode.url), isNull);
       final stored = await sync.loadLocalHistory(profileId: 'alberto');
       expect((stored['ep1'] as Map)['pos'], 1200);

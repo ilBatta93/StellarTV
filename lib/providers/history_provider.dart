@@ -111,8 +111,32 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   List<HistoryEntry> get continueWatching => onePerSeries(entries).where((e) {
     if (e.isLive || e.position < const Duration(seconds: 5)) return false;
     if (e.duration <= Duration.zero) return true;
+    // A finished episode keeps its series here: Home offers the next one
+    // until the whole series is removed from the history.
+    if (e.type == ContentType.series || e.type == ContentType.anime) {
+      return true;
+    }
     return !e.isWatched;
   }).toList();
+
+  /// Every history entry of the same series as [e], newest first.
+  List<HistoryEntry> episodesOfSeries(HistoryEntry e) {
+    final keys = seriesKeysOf(e).toSet();
+    if (keys.isEmpty) return [e];
+    final out = entries.where((x) => seriesKeysOf(x).any(keys.contains)).toList()
+      ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
+    return out;
+  }
+
+  /// Removes every entry of [e]'s series, including ones matched by name.
+  Future<bool> removeSeries(HistoryEntry e) async {
+    var ok = true;
+    for (final x in episodesOfSeries(e)) {
+      if (entryFor(x.contentId) == null) continue;
+      ok = await remove(x.contentId) && ok;
+    }
+    return ok;
+  }
 
   /// History with episodes collapsed to the latest one of each series.
   List<HistoryEntry> get entriesOnePerSeries => onePerSeries(entries);

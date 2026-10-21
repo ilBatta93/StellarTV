@@ -248,7 +248,12 @@ class XtreamService {
     final info = _asMap(data['info']);
     final overview = (info['plot'] ?? info['description'] ?? series.plot ?? '')
         .toString();
-    final cover = (info['cover'] ?? series.logo).toString();
+    final cover = cleanImageUrl(info['cover']).isNotEmpty
+        ? cleanImageUrl(info['cover'])
+        : cleanImageUrl(series.logo);
+    // Landscape artwork fits 16:9 episode cards better than the 2:3 cover.
+    final rawBackdrops = info['backdrop_path'];
+    final backdrops = rawBackdrops is List ? rawBackdrops : [rawBackdrops];
     final user = Uri.encodeComponent(username);
     final pass = Uri.encodeComponent(password);
 
@@ -268,9 +273,13 @@ class XtreamService {
       final title =
           (episodeJson['title'] ?? episodeInfo['name'] ?? 'Episodio $number')
               .toString();
-      final image =
-          (episodeInfo['movie_image'] ?? episodeJson['cover'] ?? cover)
-              .toString();
+      final image = [
+        episodeInfo['movie_image'],
+        episodeInfo['cover_big'],
+        episodeJson['cover'],
+        ...backdrops,
+        cover,
+      ].map(cleanImageUrl).firstWhere((u) => u.isNotEmpty, orElse: () => '');
       final channel = Channel(
         id: 'episode_$streamId',
         name:
@@ -445,4 +454,22 @@ _LenientJson _decodeLenient(Uint8List bytes) {
     salvaged: false,
     diagnostic: 'ricevuti ${bytes.length ~/ 1024} KB non leggibili',
   );
+}
+
+/// Normalizes provider artwork: drops empty/"null" values, completes bare
+/// TMDB paths and protocol-relative URLs, and encodes spaces.
+String cleanImageUrl(Object? raw) {
+  if (raw == null) return '';
+  var u = raw.toString().trim();
+  if (u.isEmpty || u == 'null' || u == 'false' || u == '0') return '';
+  if (u.startsWith('//')) u = 'https:$u';
+  if (u.startsWith('/') && RegExp(r'^/[A-Za-z0-9]+\.(jpg|jpeg|png|webp)$', caseSensitive: false).hasMatch(u)) {
+    u = 'https://image.tmdb.org/t/p/w780$u';
+  }
+  if (!u.startsWith('http://') && !u.startsWith('https://')) return '';
+  try {
+    return Uri.encodeFull(Uri.decodeFull(u));
+  } catch (_) {
+    return u.replaceAll(' ', '%20');
+  }
 }

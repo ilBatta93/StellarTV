@@ -186,7 +186,16 @@ class _HistorySettingsScreenState extends State<HistorySettingsScreen> {
               );
             }
             final entry = shown[i - 2];
-            return _HistoryTile(key: ValueKey(entry.contentId), entry: entry);
+            final isSeries = entry.type == ContentType.series ||
+                entry.type == ContentType.anime;
+            if (!isSeries) {
+              return _HistoryTile(key: ValueKey(entry.contentId), entry: entry);
+            }
+            return _SeriesGroup(
+              key: ValueKey('series-${entry.contentId}'),
+              entry: entry,
+              episodes: history.episodesOfSeries(entry),
+            );
           },
         ),
       ),
@@ -269,9 +278,85 @@ class _Header extends StatelessWidget {
   }
 }
 
+/// One series row (removes the whole series) with an expandable list of its
+/// watched episodes, each removable on its own.
+class _SeriesGroup extends StatefulWidget {
+  final HistoryEntry entry;
+  final List<HistoryEntry> episodes;
+  const _SeriesGroup({super.key, required this.entry, required this.episodes});
+
+  @override
+  State<_SeriesGroup> createState() => _SeriesGroupState();
+}
+
+class _SeriesGroupState extends State<_SeriesGroup> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final e = widget.entry;
+    final name = e.seriesName.isNotEmpty ? e.seriesName : e.title;
+    final n = widget.episodes.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _HistoryTile(
+          entry: e,
+          titleOverride: name,
+          series: true,
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 16, top: 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: TvFocusable(
+              onPressed: () => setState(() => _open = !_open),
+              borderRadius: BorderRadius.circular(20),
+              child: TextButton.icon(
+                onPressed: () => setState(() => _open = !_open),
+                icon: Icon(
+                  _open
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                ),
+                label: Text(
+                  _open
+                      ? 'Nascondi episodi'
+                      : n == 1
+                      ? 'Mostra 1 episodio'
+                      : 'Mostra $n episodi',
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (_open)
+          for (final ep in widget.episodes)
+            Padding(
+              padding: const EdgeInsets.only(left: 32, top: 8),
+              child: _HistoryTile(
+                key: ValueKey('ep-${ep.contentId}'),
+                entry: ep,
+                episodeOnly: true,
+              ),
+            ),
+      ],
+    );
+  }
+}
+
 class _HistoryTile extends StatelessWidget {
   final HistoryEntry entry;
-  const _HistoryTile({super.key, required this.entry});
+  final String? titleOverride;
+  final bool series;
+  final bool episodeOnly;
+  const _HistoryTile({
+    super.key,
+    required this.entry,
+    this.titleOverride,
+    this.series = false,
+    this.episodeOnly = false,
+  });
 
   static String _typeLabel(ContentType t) {
     switch (t) {
@@ -343,7 +428,10 @@ class _HistoryTile extends StatelessWidget {
   }
 
   Future<void> _remove(BuildContext context) async {
-    final ok = await context.read<HistoryProvider>().remove(entry.contentId);
+    final history = context.read<HistoryProvider>();
+    final ok = series
+        ? await history.removeSeries(entry)
+        : await history.remove(entry.contentId, cascade: !episodeOnly);
     if (!ok && context.mounted) {
       _showMessage(context, 'Impossibile rimuovere "${entry.title}"');
     }
@@ -354,12 +442,13 @@ class _HistoryTile extends StatelessWidget {
     final isLive = entry.isLive;
     final progress = entry.progress;
     final subtitle = [
-      _typeLabel(entry.type),
-      if (entry.group.isNotEmpty) entry.group,
+      if (episodeOnly) 'Episodio' else _typeLabel(entry.type),
+      if (series) 'Ultimo: ${entry.title}'
+      else if (!episodeOnly && entry.group.isNotEmpty) entry.group,
     ].join(' · ');
 
     return Dismissible(
-      key: ValueKey('dismiss-${entry.contentId}'),
+      key: ValueKey('dismiss-${series ? 's' : episodeOnly ? 'e' : 'x'}-${entry.contentId}'),
       direction: DismissDirection.endToStart,
       onDismissed: (_) => _remove(context),
       background: Container(
@@ -408,7 +497,9 @@ class _HistoryTile extends StatelessWidget {
                               width: isLive ? 96 : 56,
                               height: 80,
                               child: PosterImage(
-                                url: entry.posterUrl,
+                                url: series && entry.seriesPoster.isNotEmpty
+                                    ? entry.seriesPoster
+                                    : entry.posterUrl,
                                 fit: isLive ? BoxFit.contain : BoxFit.cover,
                                 fallbackIcon: isLive
                                     ? Icons.live_tv_rounded
@@ -422,7 +513,7 @@ class _HistoryTile extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  entry.title,
+                                  titleOverride ?? entry.title,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -484,7 +575,11 @@ class _HistoryTile extends StatelessWidget {
                           ),
                           if (!DeviceTypeService.isTv)
                             IconButton(
-                              tooltip: 'Rimuovi dalla cronologia',
+                              tooltip: series
+                      ? 'Rimuovi serie dalla cronologia'
+                      : episodeOnly
+                      ? 'Rimuovi episodio'
+                      : 'Rimuovi dalla cronologia',
                               icon: const Icon(
                                 Icons.close_rounded,
                                 color: AppColors.textSecondary,
@@ -504,7 +599,11 @@ class _HistoryTile extends StatelessWidget {
                 onPressed: () => _remove(context),
                 borderRadius: BorderRadius.circular(24),
                 child: IconButton(
-                  tooltip: 'Rimuovi dalla cronologia',
+                  tooltip: series
+                      ? 'Rimuovi serie dalla cronologia'
+                      : episodeOnly
+                      ? 'Rimuovi episodio'
+                      : 'Rimuovi dalla cronologia',
                   icon: const Icon(
                     Icons.close_rounded,
                     color: AppColors.textSecondary,
