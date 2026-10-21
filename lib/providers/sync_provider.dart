@@ -99,6 +99,9 @@ class SyncProvider extends ChangeNotifier {
     _busy = true;
     notifyListeners();
     _debounce?.cancel();
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _failures = 0;
     await _sync.signOut();
     _lastPush = null;
     _lastPull = null;
@@ -110,6 +113,12 @@ class SyncProvider extends ChangeNotifier {
   /// Queues an automatic push (debounced by a few seconds).
   void schedulePush() {
     if (_code == null) return;
+    // After a failed save the next attempt is already scheduled: the change
+    // is kept locally and included then, instead of hammering the cloud.
+    if (_retryTimer != null) {
+      _autoPending = true;
+      return;
+    }
     _debounce?.cancel();
     // Instant: Duration.zero only coalesces changes from the same frame.
     _debounce = Timer(Duration.zero, _autoPush);
@@ -117,6 +126,15 @@ class SyncProvider extends ChangeNotifier {
 
   bool _autoPushing = false;
   bool _autoPending = false;
+  int _failures = 0;
+  Timer? _retryTimer;
+
+  /// Successful saves stay instant; only consecutive failures back off
+  /// (5 s, 10 s, 20 s ... capped at 10 minutes).
+  static Duration retryDelay(int failures) {
+    final seconds = 5 * (1 << (failures - 1).clamp(0, 7));
+    return Duration(seconds: seconds > 600 ? 600 : seconds);
+  }
 
   /// One automatic push at a time; a change during it triggers exactly one
   /// follow-up push, so nothing is lost and requests never overlap.
@@ -129,7 +147,18 @@ class SyncProvider extends ChangeNotifier {
     try {
       do {
         _autoPending = false;
-        await pushNow(silent: true);
+        final ok = await pushNow(silent: true);
+        if (!ok) {
+          _failures++;
+          _autoPending = false;
+          _retryTimer?.cancel();
+          _retryTimer = Timer(retryDelay(_failures), () {
+            _retryTimer = null;
+            _autoPush();
+          });
+          break;
+        }
+        _failures = 0;
       } while (_autoPending);
     } finally {
       _autoPushing = false;
@@ -219,6 +248,7 @@ class SyncProvider extends ChangeNotifier {
   @override
   void dispose() {
     _debounce?.cancel();
+    _retryTimer?.cancel();
     super.dispose();
   }
 }
@@ -235,4 +265,3 @@ class SnapshotPart {
     required this.tmdbFavorites,
   });
 }
-
