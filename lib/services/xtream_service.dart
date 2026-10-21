@@ -8,6 +8,8 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/series_details.dart';
 import 'xtream_downloader.dart';
+import 'image_url.dart';
+export 'image_url.dart' show cleanImageUrl;
 
 export 'xtream_downloader.dart' show CatalogProgress;
 
@@ -248,9 +250,12 @@ class XtreamService {
     final info = _asMap(data['info']);
     final overview = (info['plot'] ?? info['description'] ?? series.plot ?? '')
         .toString();
-    final cover = cleanImageUrl(info['cover']).isNotEmpty
-        ? cleanImageUrl(info['cover'])
-        : cleanImageUrl(series.logo);
+    final cover = firstImageUrl([
+      info['cover'],
+      info['cover_big'],
+      info['poster_path'],
+      series.logo,
+    ]);
     // Landscape artwork fits 16:9 episode cards better than the 2:3 cover.
     final rawBackdrops = info['backdrop_path'];
     final backdrops = rawBackdrops is List ? rawBackdrops : [rawBackdrops];
@@ -273,13 +278,15 @@ class XtreamService {
       final title =
           (episodeJson['title'] ?? episodeInfo['name'] ?? 'Episodio $number')
               .toString();
-      final image = [
+      final image = firstImageUrl([
         episodeInfo['movie_image'],
+        episodeInfo['still_path'],
+        episodeInfo['screenshot_uri'],
         episodeInfo['cover_big'],
         episodeJson['cover'],
         ...backdrops,
         cover,
-      ].map(cleanImageUrl).firstWhere((u) => u.isNotEmpty, orElse: () => '');
+      ]);
       final channel = Channel(
         id: 'episode_$streamId',
         name:
@@ -456,20 +463,3 @@ _LenientJson _decodeLenient(Uint8List bytes) {
   );
 }
 
-/// Normalizes provider artwork: drops empty/"null" values, completes bare
-/// TMDB paths and protocol-relative URLs, and encodes spaces.
-String cleanImageUrl(Object? raw) {
-  if (raw == null) return '';
-  var u = raw.toString().trim();
-  if (u.isEmpty || u == 'null' || u == 'false' || u == '0') return '';
-  if (u.startsWith('//')) u = 'https:$u';
-  if (u.startsWith('/') && RegExp(r'^/[A-Za-z0-9]+\.(jpg|jpeg|png|webp)$', caseSensitive: false).hasMatch(u)) {
-    u = 'https://image.tmdb.org/t/p/w780$u';
-  }
-  if (!u.startsWith('http://') && !u.startsWith('https://')) return '';
-  try {
-    return Uri.encodeFull(Uri.decodeFull(u));
-  } catch (_) {
-    return u.replaceAll(' ', '%20');
-  }
-}

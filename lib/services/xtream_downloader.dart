@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import '../models/channel.dart';
+import 'image_url.dart';
 import '../models/content_type.dart';
 
 /// Live download progress of one playlist section.
@@ -503,7 +504,7 @@ class _ChannelMapper {
           id: 'live_$id',
           name: item['name']?.toString() ?? 'Sconosciuto',
           url: '$base/live/$_user/$_pass/$id.m3u8',
-          logo: item['stream_icon']?.toString() ?? '',
+          logo: cleanImageUrl(item['stream_icon']),
           group: _group(item),
           type: ContentType.live,
           tvgId: item['epg_channel_id']?.toString(),
@@ -521,7 +522,13 @@ class _ChannelMapper {
           name: item['name']?.toString() ?? 'Sconosciuto',
           url:
               '$base/movie/$_user/$_pass/$id.${item['container_extension'] ?? 'mp4'}',
-          logo: item['stream_icon']?.toString() ?? '',
+          logo: firstImageUrl([
+            item['stream_icon'],
+            item['cover_big'],
+            item['movie_image'],
+            item['cover'],
+            item['poster_path'],
+          ]),
           group: _group(item),
           type: ContentType.movie,
           addedAt: int.tryParse(item['added']?.toString() ?? '') ?? 0,
@@ -533,7 +540,12 @@ class _ChannelMapper {
           id: 'series_$seriesId',
           name: item['name']?.toString() ?? 'Sconosciuto',
           url: '',
-          logo: (item['cover'] ?? item['stream_icon'])?.toString() ?? '',
+          logo: firstImageUrl([
+            item['cover'],
+            item['cover_big'],
+            item['stream_icon'],
+            item['poster_path'],
+          ]),
           group: _group(item),
           type: ContentType.series,
           seriesKey: 'series_$seriesId',
