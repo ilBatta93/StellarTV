@@ -17,6 +17,7 @@ import 'multiview_screen.dart';
 import '../providers/epg_provider.dart';
 import '../player/playback_session.dart';
 import '../player/playback_engine.dart';
+import '../player/tv_playback_shortcuts.dart';
 import '../providers/history_provider.dart';
 import '../services/imdb_resolver.dart';
 import '../services/introdb_service.dart';
@@ -37,6 +38,8 @@ import '../widgets/player/player_stats.dart';
 import '../widgets/player/subtitle_overlay.dart';
 import '../widgets/player/tv_player_controls.dart';
 import '../widgets/player/video_surface.dart';
+import '../widgets/player/tv_playback_info.dart';
+import '../widgets/player/tv_quick_playback_sheet.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/tv_focusable.dart';
 
@@ -102,6 +105,10 @@ class _PlayerScreenState extends State<PlayerScreen>
   Timer? _resumeTimer;
   Timer? _noticeTimer;
   bool _controlsVisible = false;
+  bool _tvInfoVisible = false;
+  bool _tvQuickPanelOpen = false;
+  bool _tvTogglePending = false;
+  Timer? _tvInfoTimer;
   bool _introWasActive = false;
   bool _wasPlaying = false;
   bool _locked = false;
@@ -220,6 +227,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     final route = _route;
     if (route != null && !route.isCurrent) return KeyEventResult.ignored;
     final key = event.logicalKey;
+    if (_tvQuickPanelOpen) return KeyEventResult.ignored;
     if (_isBackKey(key)) {
       if (event is KeyDownEvent) _handleTvBack();
       // Key up is swallowed too, so Android never adds a second "back".
@@ -229,6 +237,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (session == null) return KeyEventResult.ignored;
     // The error page uses normal buttons and focus.
     if (session.status == SessionStatus.failed) return KeyEventResult.ignored;
+    if (_advancing || _exiting) return KeyEventResult.handled;
     final ours = _isOkKey(key) || _isArrowKey(key) || _mediaKeys.contains(key);
     if (!ours) return KeyEventResult.ignored;
     if (event is KeyUpEvent) return KeyEventResult.handled;
@@ -252,6 +261,10 @@ class _PlayerScreenState extends State<PlayerScreen>
     required bool repeat,
   }) {
     final step = Duration(seconds: _settings?.seekStepSeconds ?? 10);
+    // Native pause may finish after the key release; no second transport
+    // command may race it, including media buttons or progress-row OK.
+    if (_tvTogglePending) return;
+    if (repeat && (_isOkKey(key) || _mediaKeys.contains(key))) return;
 
     // Dedicated remote buttons work in every state.
     if (key == LogicalKeyboardKey.mediaPlayPause) {
@@ -318,27 +331,45 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     if (!_controlsVisible) {
       final outro = _outroActive && _next != null;
-      if (ok) {
-        if (_introActive(session)) {
-          _skipIntro();
-        } else if (outro) {
-          if (_tvOutroCol == 0) {
-            _outroTimer?.cancel();
-            playNextEpisode();
-          } else {
-            _watchCredits();
-          }
-        } else {
-          _showTvControls(TvPlayerRowKind.center);
+      if (ok || up || down) {
+        final action = tvHiddenAction(
+          ok
+              ? TvHiddenKey.ok
+              : up
+              ? TvHiddenKey.up
+              : TvHiddenKey.down,
+          live: _isLive,
+          repeat: repeat,
+          intro: _introActive(session),
+          outro: outro,
+        );
+        switch (action) {
+          case TvHiddenAction.skipIntro:
+            _skipIntro();
+          case TvHiddenAction.outro:
+            if (_tvOutroCol == 0) {
+              _outroTimer?.cancel();
+              playNextEpisode();
+            } else {
+              _watchCredits();
+            }
+          case TvHiddenAction.pauseAndControls:
+            _pauseAndShowTvControls(session);
+          case TvHiddenAction.previousChannel:
+            _playLiveChannel(_adjacentLiveChannel(-1));
+          case TvHiddenAction.nextChannel:
+            _playLiveChannel(_adjacentLiveChannel(1));
+          case TvHiddenAction.info:
+            _showTvInfo();
+          case TvHiddenAction.quickPanel:
+            _openTvQuickPanel(session);
+          case TvHiddenAction.none:
+            break;
         }
         return;
       }
       if (outro && (left || right)) {
         setState(() => _tvOutroCol = right ? 1 : 0);
-        return;
-      }
-      if (_isLive && (up || down)) {
-        _playLiveChannel(_adjacentLiveChannel(up ? -1 : 1));
         return;
       }
       // Left on a live channel opens the channel list over the picture
@@ -437,6 +468,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   void _showTvControls(TvPlayerRowKind row) {
+    _dismissTvInfo();
     final session = _session;
     setState(() {
       _controlsVisible = true;
@@ -502,6 +534,10 @@ class _PlayerScreenState extends State<PlayerScreen>
       return;
     }
     _lastBackAt = now;
+    if (_tvInfoVisible) {
+      _dismissTvInfo();
+      return;
+    }
     if (_exiting) return;
     if (_session?.status == SessionStatus.failed) {
       _exitPlayer();
@@ -567,6 +603,68 @@ class _PlayerScreenState extends State<PlayerScreen>
       _remoteFocus.requestFocus();
       _scheduleHide();
     });
+  }
+
+  Future<void> _pauseAndShowTvControls(PlaybackSession session) async {
+    if (_tvTogglePending) return;
+    _tvTogglePending = true;
+    _showTvControls(TvPlayerRowKind.center);
+    try {
+      // Do not accidentally resume a video that was already paused.
+      if (session.value.isPlaying) await session.togglePlay();
+    } catch (_) {
+      // Native playback errors continue through the existing session UI.
+    } finally {
+      _tvTogglePending = false;
+    }
+  }
+
+  void _dismissTvInfo() {
+    _tvInfoTimer?.cancel();
+    if (_tvInfoVisible && mounted) setState(() => _tvInfoVisible = false);
+  }
+
+  void _showTvInfo() {
+    _tvInfoTimer?.cancel();
+    setState(() => _tvInfoVisible = true);
+    _tvInfoTimer = Timer(const Duration(seconds: 6), _dismissTvInfo);
+  }
+
+  Future<void> _openTvQuickPanel(PlaybackSession session) async {
+    if (_tvQuickPanelOpen || _advancing) return;
+    _dismissTvInfo();
+    _hideTimer?.cancel();
+    _tvQuickPanelOpen = true;
+    try {
+      final choice = await showTvQuickPlaybackSheet(
+        context,
+        episodes: _isEpisode,
+      );
+      if (!mounted || _session != session || _advancing) return;
+      switch (choice) {
+        case TvQuickPlaybackChoice.audio:
+          await showAudioSheet(context, session);
+        case TvQuickPlaybackChoice.subtitles:
+          await showSubtitleSheet(
+            context,
+            session,
+            onlineActive: _onlineCues != null,
+            onlineLoading: _onlineSubsLoading,
+            onLoadOnline: _loadOnlineSubtitles,
+            onDisableOnline: _disableOnlineSubtitles,
+          );
+        case TvQuickPlaybackChoice.episodes:
+          await _openEpisodes();
+        case null:
+          break;
+      }
+    } finally {
+      _tvQuickPanelOpen = false;
+      if (mounted && !_advancing) {
+        _remoteFocus.requestFocus();
+        if (_controlsVisible) _scheduleHide();
+      }
+    }
   }
 
   /// Commands of the TV overlay, row by row.
@@ -689,7 +787,9 @@ class _PlayerScreenState extends State<PlayerScreen>
               ? 'Pausa'
               : 'Riproduci',
           primary: true,
-          onPressed: session.togglePlay,
+          onPressed: () {
+            if (!_tvTogglePending) session.togglePlay();
+          },
         ),
         if (_isLive && session.canTimeshift)
           TvPlayerAction(
@@ -919,7 +1019,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         current: widget.channel,
         entryFor: _history.entryFor,
         load: () async {
-          await _resolveQueue();
+          if (_queue == null) await _resolveQueue();
           final app = _app;
           return (_queue ?? const <Channel>[])
               .where((c) => !app.kidsMode || app.isKidsContent(c))
@@ -1405,7 +1505,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       _lastPositionBuild = now;
       return true;
     }
-    final showsPosition = _controlsVisible || _statsVisible;
+    final showsPosition = _controlsVisible || _statsVisible || _tvInfoVisible;
     if (!showsPosition) return false;
     const gap = 500;
     if (now.difference(_lastPositionBuild).inMilliseconds < gap) return false;
@@ -1580,6 +1680,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _saveResume();
     _hideTimer?.cancel();
     _resumeTimer?.cancel();
+    _tvInfoTimer?.cancel();
     _noticeTimer?.cancel();
     _pipSub?.cancel();
     _screenOffSub?.cancel();
@@ -1686,6 +1787,17 @@ class _PlayerScreenState extends State<PlayerScreen>
           onInteraction: _onInteraction,
         ),
       if (connecting) _ConnectingView(session: session),
+      if (DeviceTypeService.isTv && _tvInfoVisible && !_controlsVisible)
+        TvPlaybackInfo(
+          title: widget.channel.name,
+          plot:
+              widget.channel.plot ??
+              _app.seriesFolderFor(widget.channel.seriesKey ?? '')?.plot,
+          duration: session.value.duration,
+          position: session.value.position,
+          speed: session.speed,
+          playing: session.value.isPlaying,
+        ),
       if (DeviceTypeService.isTv)
         ExcludeFocus(
           child: IgnorePointer(

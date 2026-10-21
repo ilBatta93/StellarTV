@@ -34,6 +34,8 @@ class SeekEngine extends PlaybackEngine {
   Completer<void>? releaseGate;
   Duration? sought;
   bool defaultLiveSought = false;
+  int pauses = 0;
+  int plays = 0;
   @override
   bool get supportsTimeshift => _value.nativeLiveSeekable;
   void liveWindow() {
@@ -82,9 +84,27 @@ class SeekEngine extends PlaybackEngine {
   @override
   Widget buildView(double boxRatio) => const SizedBox();
   @override
-  Future<void> play() async {}
+  Future<void> play() async {
+    plays++;
+    _setPlaying(true);
+  }
+
   @override
-  Future<void> pause() async {}
+  Future<void> pause() async {
+    pauses++;
+    _setPlaying(false);
+  }
+
+  void _setPlaying(bool playing) {
+    _value = PlaybackSnapshot(
+      isReady: true,
+      isPlaying: playing,
+      position: _value.position,
+      duration: _value.duration,
+    );
+    notifyListeners();
+  }
+
   @override
   Future<void> seekTo(Duration position) async {
     sought = position;
@@ -193,6 +213,19 @@ void main() {
 
       expect(DeviceTypeService.isTv, true);
       expect(engine.value.isPlaying, true);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      expect(engine.value.isPlaying, true);
+      await tester.sendKeyEvent(LogicalKeyboardKey.goBack);
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(engine.disposed, false);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      expect(engine.value.isPlaying, true);
+      await tester.sendKeyEvent(LogicalKeyboardKey.goBack);
+      await tester.pumpAndSettle();
+      expect(engine.disposed, false);
       expect(
         find.byType(TvPlayerControls, skipOffstage: false),
         findsOneWidget,
@@ -226,9 +259,20 @@ void main() {
       await tester.pump(const Duration(milliseconds: 701));
       expect(engine.sought, const Duration(seconds: 120));
       expect(opacity(), 0);
-      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.select);
       await tester.pump(const Duration(milliseconds: 200));
       expect(opacity(), 1);
+      expect(engine.pauses, 1);
+      expect(engine.value.isPlaying, false);
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.select);
+      await tester.pump();
+      expect(engine.pauses, 1);
+      expect(engine.plays, 0);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.select);
+      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      await tester.pump();
+      expect(engine.plays, 1);
+      expect(engine.value.isPlaying, true);
       // Down selects the progress row: arrows seek but do not close the panel.
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();

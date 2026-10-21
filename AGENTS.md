@@ -95,7 +95,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - HomePresentation scopes validated layout preferences to Home cards and keeps image/caption bounds inside the existing TV snap rows, preserving focus reveal and catalog defaults.
 - UiScale wraps presentation shells only, never the navigator or player surfaces; logical layout and hit testing scale together while root text scaling remains single-owned.
 
-- PlayerScreen forwards an optional engine factory to PlaybackSession for remote-input tests; hidden-control seeking preserves overlay visibility while explicit OK and visible-control navigation keep their original behavior.
+- PlayerScreen forwards an optional engine factory to PlaybackSession for remote-input tests; hidden OK pauses through the existing session and reveals Play, with intro/outro priority and repeat suppression. Hidden VOD vertical shortcuts use a local timed info overlay and a modal chooser dispatching existing audio/subtitle/episode panels, preserving decoder ownership and avoiding metadata requests.
 
 - Subtitle source selection is session-owned across engine replacements; external cues listen directly to playback time and use interval-aware lookup, with local per-content delay and bounded alternative downloads to avoid device-specific timing sync.
 - HistoryEntry owns completion classification and remaining-time calculations from actual saved progress; Home metadata and detail actions reuse that policy, and series action countdowns target the same resume episode as playback, without a new sync wire format.
