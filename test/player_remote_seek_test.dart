@@ -216,14 +216,14 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
       await tester.pump();
       expect(engine.value.isPlaying, true);
-      await tester.sendKeyEvent(LogicalKeyboardKey.goBack);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.binding.handlePopRoute();
       await tester.pump();
       expect(engine.disposed, false);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pumpAndSettle();
       expect(engine.value.isPlaying, true);
-      await tester.sendKeyEvent(LogicalKeyboardKey.goBack);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(engine.disposed, false);
       expect(
