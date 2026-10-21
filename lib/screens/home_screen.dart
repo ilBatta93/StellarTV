@@ -315,7 +315,41 @@ class _HomeScreenState extends State<HomeScreen> {
       _tabNodes[homeIndex].requestFocus();
       return;
     }
-    DeviceTypeService.moveToBackground();
+    _confirmExit();
+  }
+
+  // Back on the Home tab asks how to leave: background (default) or close.
+  void _confirmExit() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        title: const Text('Chiudere StellarTV?'),
+        content: const Text(
+          'Puoi lasciarla in background, pronta da riprendere, oppure chiuderla del tutto.',
+        ),
+        actions: [
+          TextButton(
+            autofocus: true,
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              DeviceTypeService.moveToBackground();
+            },
+            child: const Text('Lascia in background'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              DeviceTypeService.closeApp();
+            },
+            child: const Text('Chiudi completamente'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildTv(BuildContext context) {
