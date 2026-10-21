@@ -301,8 +301,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return KeyEventResult.handled;
   }
 
-  // Back on TV: content -> top menu -> Home tab -> app to background (it keeps
-  // running, like other TV apps, instead of closing).
+  // Back on TV: content -> top menu -> Home tab -> background-or-close choice.
   void _onTvBack() {
     if (TvCatalogToolbar.handleBack(FocusManager.instance.primaryFocus)) return;
     if (!_tvNavScope.hasFocus) {
