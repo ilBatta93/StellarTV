@@ -27,6 +27,7 @@ import 'services/sync_service.dart';
 import 'services/download_service.dart';
 import 'services/tmdb_service.dart';
 import 'services/app_update_service.dart';
+import 'services/app_migration_service.dart';
 import 'services/sync_hooks.dart';
 import 'theme/app_theme.dart';
 
@@ -36,6 +37,9 @@ Future<void> main() async {
   // blank white screen on a real device. Show a readable fallback instead.
   ErrorWidget.builder = (details) => _StartupErrorView(details: details);
   MediaKit.ensureInitialized();
+  // Post-update safety net: once per installed build, clears only rebuildable
+  // derived caches. Never touches user data and never blocks startup.
+  await AppMigrationService.run();
   await DeviceTypeService.initialize();
   if (DeviceTypeService.isTv) {
     // TV boxes have little RAM: cap decoded images to avoid being killed.
