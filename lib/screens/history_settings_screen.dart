@@ -304,15 +304,15 @@ class _SeriesGroupState extends State<_SeriesGroup> {
           entry: e,
           titleOverride: name,
           series: true,
+          episodesOpen: _open,
+          onToggleEpisodes: () => setState(() => _open = !_open),
         ),
+        if (!DeviceTypeService.isTv)
         Padding(
           padding: const EdgeInsets.only(left: 16, top: 4),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: TvFocusable(
-              onPressed: () => setState(() => _open = !_open),
-              borderRadius: BorderRadius.circular(20),
-              child: TextButton.icon(
+            child: TextButton.icon(
                 onPressed: () => setState(() => _open = !_open),
                 icon: Icon(
                   _open
@@ -327,7 +327,6 @@ class _SeriesGroupState extends State<_SeriesGroup> {
                       : 'Mostra $n episodi',
                 ),
               ),
-            ),
           ),
         ),
         if (_open)
@@ -350,7 +349,11 @@ class _HistoryTile extends StatelessWidget {
   final String? titleOverride;
   final bool series;
   final bool episodeOnly;
+  final bool episodesOpen;
+  final VoidCallback? onToggleEpisodes;
   const _HistoryTile({
+    this.episodesOpen = false,
+    this.onToggleEpisodes,
     super.key,
     required this.entry,
     this.titleOverride,
@@ -437,6 +440,42 @@ class _HistoryTile extends StatelessWidget {
     }
   }
 
+  /// TV: long-press OK opens the actions, so each row is one D-Pad stop.
+  Future<void> _actions(BuildContext context) async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(titleOverride ?? entry.title),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'open'),
+            child: const Text('Apri'),
+          ),
+          if (onToggleEpisodes != null)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, 'toggle'),
+              child: Text(episodesOpen ? 'Nascondi episodi' : 'Mostra episodi'),
+            ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'remove'),
+            child: Text(
+              series
+                  ? 'Rimuovi serie dalla cronologia'
+                  : episodeOnly
+                  ? 'Rimuovi episodio'
+                  : 'Rimuovi dalla cronologia',
+              style: const TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted) return;
+    if (choice == 'open') _open(context);
+    if (choice == 'toggle') onToggleEpisodes?.call();
+    if (choice == 'remove') await _remove(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLive = entry.isLive;
@@ -445,6 +484,8 @@ class _HistoryTile extends StatelessWidget {
       if (episodeOnly) 'Episodio' else _typeLabel(entry.type),
       if (series) 'Ultimo: ${entry.title}'
       else if (!episodeOnly && entry.group.isNotEmpty) entry.group,
+      if (DeviceTypeService.isTv && series)
+        episodesOpen ? 'Tieni premuto OK: opzioni' : 'Tieni premuto OK: episodi e opzioni',
     ].join(' · ');
 
     return Dismissible(
@@ -473,13 +514,13 @@ class _HistoryTile extends StatelessWidget {
           ],
         ),
       ),
-      child: FocusTraversalGroup(
-        policy: OrderedTraversalPolicy(),
-        child: Row(
+      child: Row(
           children: [
             Expanded(
               child: TvFocusable(
                 onPressed: () => _open(context),
+                onLongPress: () => _actions(context),
+                focusedScale: 1,
                 child: Material(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(12),
@@ -593,28 +634,8 @@ class _HistoryTile extends StatelessWidget {
                 ),
               ),
             ),
-            if (DeviceTypeService.isTv) ...[
-              const SizedBox(width: 8),
-              TvFocusable(
-                onPressed: () => _remove(context),
-                borderRadius: BorderRadius.circular(24),
-                child: IconButton(
-                  tooltip: series
-                      ? 'Rimuovi serie dalla cronologia'
-                      : episodeOnly
-                      ? 'Rimuovi episodio'
-                      : 'Rimuovi dalla cronologia',
-                  icon: const Icon(
-                    Icons.close_rounded,
-                    color: AppColors.textSecondary,
-                  ),
-                  onPressed: () => _remove(context),
-                ),
-              ),
-            ],
           ],
         ),
-      ),
     );
   }
 }
