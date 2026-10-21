@@ -66,6 +66,40 @@ class DiscoverPage extends StatefulWidget {
 }
 
 class _DiscoverPageState extends State<DiscoverPage> {
+  /// Finished series episodes already checked for a following unwatched
+  /// episode (contentId -> has next). Checked one at a time, only for
+  /// entries whose latest episode is complete, so the catalog is never
+  /// rescanned on every frame.
+  final Map<String, bool> _hasNext = {};
+  final List<(HistoryEntry, Channel)> _pendingNext = [];
+  bool _checkingNext = false;
+
+  void _queueNextCheck(HistoryEntry e, Channel folder) {
+    if (_hasNext.containsKey(e.contentId) ||
+        _pendingNext.any((p) => p.$1.contentId == e.contentId)) {
+      return;
+    }
+    _pendingNext.add((e, folder));
+    if (!_checkingNext) _drainNextChecks();
+  }
+
+  Future<void> _drainNextChecks() async {
+    _checkingNext = true;
+    while (_pendingNext.isNotEmpty && mounted) {
+      final (entry, folder) = _pendingNext.removeAt(0);
+      try {
+        final next = await _findNextEpisode(context, entry, folder);
+        if (!mounted) break;
+        _hasNext[entry.contentId] = next != null;
+        if (next == null) setState(() {});
+      } catch (_) {
+        // Unknown: keep the series visible.
+        _hasNext[entry.contentId] = true;
+      }
+    }
+    _checkingNext = false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -133,8 +167,23 @@ class _DiscoverPageState extends State<DiscoverPage> {
                         seriesName: e.seriesName.isEmpty ? null : e.seriesName,
                       ))
             case final c?)
-          if (!app.kidsMode || app.isKidsContent(c)) (e, c),
+          if ((!app.kidsMode || app.isKidsContent(c)) &&
+              // Series whose every following episode is watched leave the row.
+              _hasNext[e.contentId] != false)
+            (e, c),
     ];
+    for (final (e, c) in started) {
+      final isEp = e.type == ContentType.series || e.type == ContentType.anime;
+      if (!isEp || !e.isWatched || _hasNext.containsKey(e.contentId)) continue;
+      final folder = e.seriesKey.isNotEmpty
+          ? app.seriesFolderFor(e.seriesKey)
+          : (c.isSeriesFolder ? c : null);
+      if (folder != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _queueNextCheck(e, folder);
+        });
+      }
+    }
     // "Continua a guardare" rows show at most 50 titles each.
     final startedMovies = <ResumeItem>[
       for (final it in started)
@@ -784,6 +833,33 @@ class _HistoryCard extends StatelessWidget {
   }
 }
 
+/// First unwatched episode after [entry] in [folder], or null when every
+/// following episode is watched (or [entry] is the last one).
+Future<SeriesEpisode?> _findNextEpisode(
+  BuildContext context,
+  HistoryEntry entry,
+  Channel folder,
+) async {
+  final app = context.read<AppProvider>();
+  final history = context.read<HistoryProvider>();
+  final details = await app.loadSeriesDetails(folder);
+  final all = details.allEpisodes;
+  final i = all.indexWhere((e) => e.channel.id == entry.contentId);
+  final ch = app.channelById(entry.contentId);
+  final s = ch?.season, n = ch?.episode;
+  final idx = i >= 0
+      ? i
+      : (s == null || n == null)
+      ? -1
+      : all.indexWhere((e) => e.season == s && e.number == n);
+  // Position unknown: never treat the series as finished.
+  if (idx < 0) throw StateError('episode not found in series details');
+  for (final e in all.skip(idx + 1)) {
+    if (!history.isWatched(e.channel.id)) return e;
+  }
+  return null;
+}
+
 /// Plays the episode after a finished one; opens the series page when the
 /// next episode cannot be resolved (end of series or details unavailable).
 Future<void> _playNextEpisode(
@@ -796,26 +872,10 @@ Future<void> _playNextEpisode(
     openChannel(context, channel);
     return;
   }
-  final app = context.read<AppProvider>();
   final history = context.read<HistoryProvider>();
   try {
-    final details = await app.loadSeriesDetails(folder);
+    final next = await _findNextEpisode(context, entry, folder);
     if (!context.mounted) return;
-    final all = details.allEpisodes;
-    final i = all.indexWhere((e) => e.channel.id == entry.contentId);
-    final s = channel.season, n = channel.episode;
-    final idx = i >= 0
-        ? i
-        : (s == null || n == null)
-        ? -1
-        : all.indexWhere((e) => e.season == s && e.number == n);
-    SeriesEpisode? next;
-    for (final e in idx >= 0 ? all.skip(idx + 1) : const <SeriesEpisode>[]) {
-      if (!history.isWatched(e.channel.id)) {
-        next = e;
-        break;
-      }
-    }
     if (next == null) {
       openChannel(context, folder);
       return;
