@@ -20,6 +20,7 @@ import '../player/playback_engine.dart';
 import '../providers/history_provider.dart';
 import '../services/imdb_resolver.dart';
 import '../services/introdb_service.dart';
+import '../services/playback_work_policy.dart';
 import '../services/native_player_bridge.dart';
 import '../services/player_settings_service.dart';
 import '../services/movie_hash.dart';
@@ -46,6 +47,7 @@ class PlayerScreen extends StatefulWidget {
 
   /// Optional engine seam for deterministic remote-input tests.
   final PlaybackEngine Function(PlayerEngineType)? engineFactory;
+  final Future<EpisodeSegments> Function()? segmentsSource;
 
   /// Ordered episodes of the series being watched (null for films/live).
   final List<Channel>? queue;
@@ -56,6 +58,7 @@ class PlayerScreen extends StatefulWidget {
     this.startAt,
     this.archivePlayback = false,
     this.engineFactory,
+    this.segmentsSource,
     this.queue,
   });
 
@@ -98,7 +101,9 @@ class _PlayerScreenState extends State<PlayerScreen>
   Timer? _hideTimer;
   Timer? _resumeTimer;
   Timer? _noticeTimer;
-  bool _controlsVisible = true;
+  bool _controlsVisible = false;
+  bool _introWasActive = false;
+  bool _wasPlaying = false;
   bool _locked = false;
   bool _inPip = false;
   bool _pipSupported = false;
@@ -147,10 +152,8 @@ class _PlayerScreenState extends State<PlayerScreen>
     _screenOffSub = _bridge.screenOff.listen((_) {
       // Phones may keep on-demand audio with the screen off when allowed.
       final s = _settings;
-      final keepAudio = s != null &&
-          s.backgroundAudio &&
-          !DeviceTypeService.isTv &&
-          !_isLive;
+      final keepAudio =
+          s != null && s.backgroundAudio && !DeviceTypeService.isTv && !_isLive;
       if (!keepAudio && !_inPip) _closeProviderStream();
     });
     _pipSub = _bridge.pipChanges.listen((inPip) {
@@ -253,17 +256,17 @@ class _PlayerScreenState extends State<PlayerScreen>
     // Dedicated remote buttons work in every state.
     if (key == LogicalKeyboardKey.mediaPlayPause) {
       session.togglePlay();
-      _onInteraction();
+      if (_controlsVisible) _scheduleHide();
       return;
     }
     if (key == LogicalKeyboardKey.mediaPlay) {
       if (!session.value.isPlaying) session.togglePlay();
-      _onInteraction();
+      if (_controlsVisible) _scheduleHide();
       return;
     }
     if (key == LogicalKeyboardKey.mediaPause) {
       if (session.value.isPlaying) session.togglePlay();
-      _onInteraction();
+      if (_controlsVisible) _scheduleHide();
       return;
     }
     if (key == LogicalKeyboardKey.mediaFastForward ||
@@ -356,7 +359,6 @@ class _PlayerScreenState extends State<PlayerScreen>
         _tvSeekBy(left ? -step : step, repeat, revealControls: false);
         return;
       }
-      _showTvControls(TvPlayerRowKind.center);
       return;
     }
 
@@ -392,7 +394,10 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
     // Holding Left/Right anywhere in the controls scrubs like dragging the
     // bar: the selection jumps to the progress row and the seek accelerates.
-    if ((left || right) && repeat && !_isLive && _canSeek(session) &&
+    if ((left || right) &&
+        repeat &&
+        !_isLive &&
+        _canSeek(session) &&
         rows.any((r) => r.kind == TvPlayerRowKind.progress)) {
       if (_tvRow != TvPlayerRowKind.progress) {
         setState(() => _tvRow = TvPlayerRowKind.progress);
@@ -696,9 +701,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 : null,
           ),
         if (_isLive &&
-            (session.isBehindLive ||
-                !v.isPlaying ||
-                session.liveResumePending))
+            (session.isBehindLive || !v.isPlaying || session.liveResumePending))
           TvPlayerAction(
             id: 'goLive',
             icon: Icons.sensors_rounded,
@@ -951,13 +954,24 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// IntroDB: resolve the IMDb id of the series, then fetch intro/outro.
   /// Any failure is ignored silently and playback continues normally.
   Future<void> _loadSegments() async {
+    final source = widget.segmentsSource;
+    if (source != null) {
+      final segments = await source();
+      if (!mounted) return;
+      setState(() => _segments = segments);
+      _onSessionChanged();
+      return;
+    }
     final c = widget.channel;
     if (!_isEpisode || c.season == null || c.episode == null) return;
     final title = c.seriesName?.isNotEmpty == true ? c.seriesName! : c.name;
     final imdbId = await ImdbResolver.getImdbId(title: title);
     if (imdbId == null) return;
     final segments = await IntroDbService.fetch(imdbId, c.season!, c.episode!);
-    if (mounted) setState(() => _segments = segments);
+    if (mounted) {
+      setState(() => _segments = segments);
+      _onSessionChanged();
+    }
   }
 
   /// Cerca e scarica i sottotitoli in italiano da OpenSubtitles (via cloud).
@@ -1048,8 +1062,10 @@ class _PlayerScreenState extends State<PlayerScreen>
   void _skipIntro() {
     final intro = _segments.intro;
     if (intro == null) return;
+    _hideTimer?.cancel();
+    setState(() => _controlsVisible = false);
     _session?.seekTo(intro.end);
-    _onInteraction();
+    if (DeviceTypeService.isTv) _remoteFocus.requestFocus();
   }
 
   void _checkOutro(Duration position) {
@@ -1293,6 +1309,23 @@ class _PlayerScreenState extends State<PlayerScreen>
     final settings = _settings;
     if (session == null || settings == null || !mounted) return;
     final v = session.value;
+    final introActive = _introActive(session);
+    if (introActive && !_introWasActive) {
+      _hideTimer?.cancel();
+      _controlsVisible = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && DeviceTypeService.isTv && _route?.isCurrent == true) {
+          _remoteFocus.requestFocus();
+        }
+      });
+    }
+    _introWasActive = introActive;
+    if (_wasPlaying &&
+        (!v.isPlaying || v.isEnded) &&
+        !PlaybackWorkPolicy.instance.blocksCloud) {
+      _saveResume();
+    }
+    _wasPlaying = v.isPlaying;
 
     if (v.hasVideoSize) {
       if (!DeviceTypeService.isTv &&
@@ -1742,7 +1775,10 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: IgnorePointer(
             child: Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(22),
@@ -1851,87 +1887,87 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: BackdropFilter(
             filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
             child: Container(
-          width: 340,
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.55),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
-                blurRadius: 32,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Prossimo episodio tra $_outroCountdown...',
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '$label · ${next.name}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 10),
-              LinearProgressIndicator(
-                value: (5 - _outroCountdown) / 5,
-                color: AppColors.primary,
-                backgroundColor: Colors.white12,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _tvHighlight(
-                      selected:
-                          DeviceTypeService.isTv &&
-                          !_controlsVisible &&
-                          _tvOutroCol == 0,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.skip_next_rounded),
-                        label: const Text('Prossimo Episodio'),
-                        onPressed: () {
-                          _outroTimer?.cancel();
-                          playNextEpisode();
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _tvHighlight(
-                    selected:
-                        DeviceTypeService.isTv &&
-                        !_controlsVisible &&
-                        _tvOutroCol == 1,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white38),
-                      ),
-                      onPressed: _watchCredits,
-                      child: const Text('Guarda Crediti'),
-                    ),
+              width: 340,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 32,
+                    offset: const Offset(0, 14),
                   ),
                 ],
               ),
-            ],
-          ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Prossimo episodio tra $_outroCountdown...',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '$label · ${next.name}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  LinearProgressIndicator(
+                    value: (5 - _outroCountdown) / 5,
+                    color: AppColors.primary,
+                    backgroundColor: Colors.white12,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _tvHighlight(
+                          selected:
+                              DeviceTypeService.isTv &&
+                              !_controlsVisible &&
+                              _tvOutroCol == 0,
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.skip_next_rounded),
+                            label: const Text('Prossimo Episodio'),
+                            onPressed: () {
+                              _outroTimer?.cancel();
+                              playNextEpisode();
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _tvHighlight(
+                        selected:
+                            DeviceTypeService.isTv &&
+                            !_controlsVisible &&
+                            _tvOutroCol == 1,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white38),
+                          ),
+                          onPressed: _watchCredits,
+                          child: const Text('Guarda Crediti'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -13,7 +13,7 @@ void main() {
         platform: 'Fire TV',
         model: 'Amazon AFTKA;)',
       ),
-      'StellarTV/3.3.11 (kind=tv; platform=Fire TV; model=Amazon AFTKA)',
+      'StellarTV/3.3.11 (kind=tv; platform=Fire TV; model=Amazon AFTKA; cloud=2)',
     );
   });
 

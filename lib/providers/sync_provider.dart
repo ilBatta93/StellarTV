@@ -3,12 +3,21 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../services/sync_service.dart';
+import '../services/playback_work_policy.dart';
 
 /// Exposes the pairing-code sync to the settings UI: status, code display,
 /// manual code entry, push and pull. When a code is set, every local change
 /// is pushed to the cloud automatically (debounced).
 class SyncProvider extends ChangeNotifier {
-  SyncProvider(this._sync);
+  SyncProvider(this._sync) {
+    PlaybackWorkPolicy.instance.addListener(_onPlaybackChanged);
+  }
+
+  void _onPlaybackChanged() {
+    if (!PlaybackWorkPolicy.instance.blocksCloud && _autoPending) {
+      schedulePush();
+    }
+  }
 
   final SyncService _sync;
 
@@ -44,7 +53,8 @@ class SyncProvider extends ChangeNotifier {
 
   Future<String?> recoveryKey() => _sync.recoveryKey();
   Future<bool> hasCloudVault() => _sync.hasCloudVault();
-  Future<void> authorizeVault(String recovery) => _sync.authorizeVault(recovery);
+  Future<void> authorizeVault(String recovery) =>
+      _sync.authorizeVault(recovery);
   String? get lastPushError => _sync.lastError;
   Future<void> forgetVaultKey() => _sync.forgetVaultKey();
 
@@ -102,6 +112,7 @@ class SyncProvider extends ChangeNotifier {
     _retryTimer?.cancel();
     _retryTimer = null;
     _failures = 0;
+    _autoPending = false;
     await _sync.signOut();
     _lastPush = null;
     _lastPull = null;
@@ -113,6 +124,10 @@ class SyncProvider extends ChangeNotifier {
   /// Queues an automatic push (debounced by a few seconds).
   void schedulePush() {
     if (_code == null) return;
+    if (PlaybackWorkPolicy.instance.blocksCloud) {
+      _autoPending = true;
+      return;
+    }
     // After a failed save the next attempt is already scheduled: the change
     // is kept locally and included then, instead of hammering the cloud.
     if (_retryTimer != null) {
@@ -139,6 +154,11 @@ class SyncProvider extends ChangeNotifier {
   /// One automatic push at a time; a change during it triggers exactly one
   /// follow-up push, so nothing is lost and requests never overlap.
   Future<void> _autoPush() async {
+    _debounce = null;
+    if (PlaybackWorkPolicy.instance.blocksCloud) {
+      _autoPending = true;
+      return;
+    }
     if (_autoPushing) {
       _autoPending = true;
       return;
@@ -149,6 +169,10 @@ class SyncProvider extends ChangeNotifier {
         _autoPending = false;
         final ok = await pushNow(silent: true);
         if (!ok) {
+          if (PlaybackWorkPolicy.instance.blocksCloud) {
+            _autoPending = true;
+            break;
+          }
           _failures++;
           _autoPending = false;
           _retryTimer?.cancel();
@@ -159,7 +183,7 @@ class SyncProvider extends ChangeNotifier {
           break;
         }
         _failures = 0;
-      } while (_autoPending);
+      } while (_autoPending && !PlaybackWorkPolicy.instance.blocksCloud);
     } finally {
       _autoPushing = false;
     }
@@ -168,18 +192,27 @@ class SyncProvider extends ChangeNotifier {
   Future<bool> pushNow({bool silent = false}) async {
     final code = _code;
     if (code == null) return false;
+    if (PlaybackWorkPolicy.instance.blocksCloud) {
+      _autoPending = true;
+      return false;
+    }
     if (!silent) {
       _busy = true;
       _message = null;
       notifyListeners();
     }
     try {
-      final part = await snapshotSource?.call() ??
+      final part =
+          await snapshotSource?.call() ??
           (const SnapshotPart(history: {}, favoriteIds: [], tmdbFavorites: []));
       final payload = await _sync.collectSnapshot(
         favoriteIds: part.favoriteIds,
         tmdbFavorites: part.tmdbFavorites,
       );
+      if (PlaybackWorkPolicy.instance.blocksCloud) {
+        _autoPending = true;
+        return false;
+      }
       final ok = await _sync.push(payload, code);
       if (ok != null) {
         _lastPush = ok;
@@ -192,7 +225,8 @@ class SyncProvider extends ChangeNotifier {
       if (!silent) {
         _success = false;
         final why = _sync.lastError;
-        _message = 'Invio non riuscito. Verifica connessione e chiave in Dati cifrati.'
+        _message =
+            'Invio non riuscito. Verifica connessione e chiave in Dati cifrati.'
             '${why == null ? '' : ' (dettaglio: ${why.length > 120 ? why.substring(0, 120) : why})'}';
       }
       return false;
@@ -247,6 +281,7 @@ class SyncProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    PlaybackWorkPolicy.instance.removeListener(_onPlaybackChanged);
     _debounce?.cancel();
     _retryTimer?.cancel();
     super.dispose();

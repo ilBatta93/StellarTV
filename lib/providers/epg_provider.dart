@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/channel.dart';
 import '../models/epg_program.dart';
 import '../services/epg_service.dart';
+import '../services/playback_work_policy.dart';
 import 'app_provider.dart';
 
 /// TV guide for the live channels. The playlist guide (Xtream xmltv.php) is
@@ -13,12 +14,25 @@ import 'app_provider.dart';
 class EpgProvider extends ChangeNotifier {
   EpgProvider(this._app) {
     _app.addListener(_onAppChanged);
+    PlaybackWorkPolicy.instance.addListener(_onPlaybackChanged);
     _start();
   }
 
   final AppProvider _app;
   final EpgService _service = EpgService();
   Timer? _timer;
+  bool _deferred = false;
+  bool _disposed = false;
+  bool _ready = false;
+  bool get _playbackBlocked =>
+      _app.playbackActive || PlaybackWorkPolicy.instance.blocksGuide;
+
+  void _onPlaybackChanged() {
+    if (_deferred && !_playbackBlocked && !_disposed) {
+      _timer?.cancel();
+      _timer = Timer(const Duration(seconds: 20), refresh);
+    }
+  }
 
   EpgData _data = const EpgData();
   bool _loading = false;
@@ -55,21 +69,26 @@ class EpgProvider extends ChangeNotifier {
   }
 
   List<String> get _activeSources => [
-        if (_usePlaylist && playlistSource != null) playlistSource!,
-        ..._manual,
-      ];
+    if (_usePlaylist && playlistSource != null) playlistSource!,
+    ..._manual,
+  ];
 
   Future<void> _start() async {
     _usePlaylist = await _service.usePlaylistGuide();
     _manual = await _service.manualSources();
     _intervalMinutes = await _service.intervalMinutes();
     _lastRun = await _service.lastRun();
-    _setData(await _service.loadCache());
+    final cached = await _service.loadCache();
+    if (_disposed) return;
+    _ready = true;
+    _setData(cached);
     notifyListeners();
     _schedule();
   }
 
   void _onAppChanged() {
+    if (!_ready || _disposed) return;
+    _onPlaybackChanged();
     // Credentials can arrive after startup (login or cloud restore).
     final signature = _activeSources.join('|');
     if (signature != _scheduledFor) _schedule();
@@ -86,7 +105,8 @@ class EpgProvider extends ChangeNotifier {
     _timer?.cancel();
     _scheduledFor = _activeSources.join('|');
     if (_activeSources.isEmpty) return;
-    final due = _data.isEmpty ||
+    final due =
+        _data.isEmpty ||
         _lastRun == null ||
         (_intervalMinutes > 0 &&
             DateTime.now().difference(_lastRun!) >=
@@ -94,7 +114,8 @@ class EpgProvider extends ChangeNotifier {
     if (due) {
       refresh();
     } else if (_intervalMinutes > 0) {
-      final wait = Duration(minutes: _intervalMinutes) -
+      final wait =
+          Duration(minutes: _intervalMinutes) -
           DateTime.now().difference(_lastRun!);
       _timer = Timer(wait, refresh);
     }
@@ -102,8 +123,19 @@ class EpgProvider extends ChangeNotifier {
 
   /// Downloads the guide now.
   Future<void> refresh() async {
+    if (_disposed || !_ready) return;
+    if (_loading) {
+      _deferred = true;
+      return;
+    }
+    if (_playbackBlocked) {
+      _deferred = true;
+      _timer?.cancel();
+      _timer = Timer(const Duration(seconds: 20), refresh);
+      return;
+    }
+    _deferred = false;
     final sources = _activeSources;
-    if (_loading) return;
     if (sources.isEmpty) {
       _error = 'Nessuna fonte EPG: attiva la guida della playlist o aggiungi un indirizzo.';
       notifyListeners();
@@ -113,16 +145,25 @@ class EpgProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      _setData(await _service.fetch(sources));
+      final data = await _service.fetch(sources);
+      if (_disposed) return;
+      if (_playbackBlocked || sources.join('|') != _activeSources.join('|')) {
+        throw EpgRefreshDeferred();
+      }
+      _setData(data);
       await _service.markRun();
       _lastRun = DateTime.now();
+    } on EpgRefreshDeferred {
+      _deferred = true;
     } catch (e) {
       _error = e.toString().replaceFirst('Exception: ', '');
     } finally {
       _loading = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       _timer?.cancel();
-      if (_intervalMinutes > 0) {
+      if (!_disposed && _deferred) {
+        _timer = Timer(const Duration(seconds: 20), refresh);
+      } else if (!_disposed && _intervalMinutes > 0) {
         _timer = Timer(Duration(minutes: _intervalMinutes), refresh);
       }
     }
@@ -184,7 +225,8 @@ class EpgProvider extends ChangeNotifier {
         for (final e in _data.displayNames.entries) _norm(e.value): e.key,
         for (final k in _data.programmes.keys) _norm(k): k,
       };
-      id = index[_norm(channel.tvgName ?? channel.name)] ??
+      id =
+          index[_norm(channel.tvgName ?? channel.name)] ??
           index[_norm(channel.name)];
     }
     _channelMatch[channel.id] = id;
@@ -215,6 +257,8 @@ class EpgProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    PlaybackWorkPolicy.instance.removeListener(_onPlaybackChanged);
     _timer?.cancel();
     _app.removeListener(_onAppChanged);
     super.dispose();

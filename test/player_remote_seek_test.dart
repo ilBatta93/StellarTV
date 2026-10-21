@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:stellar_tv/services/introdb_service.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -173,6 +175,13 @@ void main() {
                 type: ContentType.movie,
               ),
               engineFactory: (_) => engine,
+              segmentsSource: () async => const EpisodeSegments(
+                intro: SkipSegment(
+                  'intro',
+                  Duration(seconds: 190),
+                  Duration(seconds: 220),
+                ),
+              ),
             ),
           ),
         ),
@@ -181,7 +190,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 150));
       });
       await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(seconds: 5));
+
       expect(DeviceTypeService.isTv, true);
       expect(engine.value.isPlaying, true);
       expect(
@@ -228,6 +237,14 @@ void main() {
       expect(engine.sought, const Duration(seconds: 130));
       expect(opacity(), 1);
       expect(tester.takeException(), isNull);
+      await engine.seekTo(const Duration(seconds: 195));
+      await tester.pump();
+      expect(opacity(), 0);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(engine.sought, const Duration(seconds: 220));
+      expect(opacity(), 0);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 1));
       app.dispose();

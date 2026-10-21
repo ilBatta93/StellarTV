@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
+
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
+
+import 'playback_work_policy.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -262,12 +266,14 @@ class SyncService {
       final raw = jsonDecode(prefs.getString(key) ?? '{}');
       final controls = <String, dynamic>{
         for (final e in PersonalVault.object(raw).entries)
-          if (PersonalVault.object(e.value)['type'] == '__stellar_seen_v1') e.key: e.value,
+          if (PersonalVault.object(e.value)['type'] == '__stellar_seen_v1')
+            e.key: e.value,
       };
       // Late playback snapshots must never erase a newer manual choice.
       final merged = PersonalVault.mergeHistory(controls, snapshot);
       if (account != currentUserId) throw StateError('Account cambiato');
-      if (!await prefs.setString(key, jsonEncode(merged))) throw StateError('Salvataggio non riuscito');
+      if (!await prefs.setString(key, jsonEncode(merged)))
+        throw StateError('Salvataggio non riuscito');
     });
     _historyWrites = next.catchError((Object _) {});
     return next;
@@ -469,11 +475,18 @@ class SyncService {
   Future<void> _cloudWrites = Future<void>.value();
   Future<DateTime?> push(SyncPayload payload, String code) {
     final next = _cloudWrites.then((_) => _push(payload, code));
-    _cloudWrites = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _cloudWrites = next.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
     return next;
   }
 
   Future<DateTime?> _push(SyncPayload payload, String code) async {
+    if (PlaybackWorkPolicy.instance.blocksCloud) {
+      lastError = 'invio rinviato durante la riproduzione';
+      return null;
+    }
     if (code != currentUserId) {
       lastError = 'account non collegato';
       return null;
@@ -502,6 +515,7 @@ class SyncService {
       if (code != currentUserId) return null;
       final local = PersonalVault.merge(legacy, payload.toJson());
       for (var attempt = 0; attempt < 4; attempt++) {
+        if (PlaybackWorkPolicy.instance.blocksCloud) return null;
         final row = await _client
             .from('personal_vaults')
             .select('envelope,revision')
@@ -514,15 +528,19 @@ class SyncService {
         if (code != currentUserId) return null;
         // Fresh remote read remains mandatory: never suppress another
         // device's changes using a cached local fingerprint.
-        if (row != null && PersonalVault.canonical(remote) == PersonalVault.canonical(merged)) {
+        if (row != null &&
+            PersonalVault.canonical(remote) ==
+                PersonalVault.canonical(merged)) {
           lastError = null;
           if (legacyOk) await prefs.setBool(marker, true);
           final now = DateTime.now();
           await prefs.setString(_lastPushKey, now.toIso8601String());
           return now;
         }
+        if (PlaybackWorkPolicy.instance.blocksCloud) return null;
         final envelope = await PersonalVault.encrypt(merged, recovery, code);
-        if (code != currentUserId) return null;
+        if (code != currentUserId || PlaybackWorkPolicy.instance.blocksCloud)
+          return null;
         dynamic revision;
         try {
           revision = await _client.rpc(
@@ -533,7 +551,12 @@ class SyncService {
             },
           );
         } on PostgrestException catch (e) {
-          if (e.code == '40001') continue;
+          if (e.code == '40001' && attempt < 3) {
+            await Future<void>.delayed(
+              PlaybackWorkPolicy.conflictDelay(Random()),
+            );
+            continue;
+          }
           rethrow;
         }
         final check = await _client
@@ -547,7 +570,13 @@ class SyncService {
           code,
         );
         if (code != currentUserId) return null;
-        if (check['revision'].toString() != revision.toString()) continue;
+        if (check['revision'].toString() != revision.toString()) {
+          if (attempt < 3)
+            await Future<void>.delayed(
+              PlaybackWorkPolicy.conflictDelay(Random()),
+            );
+          continue;
+        }
         // AES-GCM already authenticates the stored copy; a byte-level
         // comparison wrongly rejected saves whose numbers or ordering
         // changed in transit. Only require that the essentials survived.

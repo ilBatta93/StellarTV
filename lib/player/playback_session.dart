@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/player_settings.dart';
 import 'decoder_memory.dart';
+import '../services/playback_work_policy.dart';
 import '../services/stream_probe.dart';
 import '../services/live_diagnostics_service.dart';
 import '../services/live_diagnostics_tracker.dart';
@@ -214,12 +215,9 @@ class PlaybackSession extends ChangeNotifier {
   /// The record this session belongs to: channels write the live one, film
   /// and series their own, so the two reports never mix.
   ChangeNotifier get _diagnosticService =>
-      isLive
-      ? LiveDiagnosticsService.instance
-      : VodDiagnosticsService.instance;
+      isLive ? LiveDiagnosticsService.instance : VodDiagnosticsService.instance;
 
-  bool get _diagnosticsEnabled =>
-      isLive
+  bool get _diagnosticsEnabled => isLive
       ? LiveDiagnosticsService.instance.enabled
       : VodDiagnosticsService.instance.enabled;
 
@@ -262,7 +260,11 @@ class PlaybackSession extends ChangeNotifier {
     });
   }
 
+  bool _cloudPaused = false;
+
   Future<void> start() async {
+    if (_disposed || _streamStopped) return;
+    PlaybackWorkPolicy.instance.update(this, cloudBlocked: true);
     if (!_diagnosticListening) {
       _diagnosticListening = true;
       _diagnosticService.addListener(_diagnosticPreference);
@@ -939,7 +941,16 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> togglePlay() async {
     final engine = _engine;
     if (engine == null) return;
-    if (isLive && _deferredLiveFailure) return _resumeDeferredLive();
+    if (isLive && _deferredLiveFailure) {
+      _cloudPaused = false;
+      PlaybackWorkPolicy.instance.update(this, cloudBlocked: true);
+      return _resumeDeferredLive();
+    }
+    final pausing = engine.value.isPlaying;
+    if (!pausing) {
+      _cloudPaused = false;
+      PlaybackWorkPolicy.instance.update(this, cloudBlocked: true);
+    }
     if (isLive) {
       _userPausedLive = engine.value.isPlaying;
       if (_userPausedLive) {
@@ -952,6 +963,8 @@ class PlaybackSession extends ChangeNotifier {
       _liveStartedAt ??= DateTime.now();
       if (engine.value.isPlaying) {
         await engine.pause();
+        _cloudPaused = true;
+        PlaybackWorkPolicy.instance.update(this, cloudBlocked: false);
         _pausedAt = DateTime.now();
       } else {
         _foldPause();
@@ -965,12 +978,14 @@ class PlaybackSession extends ChangeNotifier {
       await engine.seekTo(Duration.zero);
       _vod?.markSeek();
       await engine.play();
-
     } else if (engine.value.isPlaying) {
       await engine.pause();
+      _cloudPaused = true;
+      PlaybackWorkPolicy.instance.update(this, cloudBlocked: false);
     } else {
       await engine.play();
     }
+    _notify();
   }
 
   Future<void> seekTo(Duration position) async {
@@ -983,7 +998,6 @@ class PlaybackSession extends ChangeNotifier {
     // The viewer moved the position: the next sample is not a stutter.
     _vod?.markSeek();
   }
-
 
   Future<void> seekBy(Duration offset) => seekTo(value.position + offset);
 
@@ -1063,6 +1077,12 @@ class PlaybackSession extends ChangeNotifier {
   void _notify() {
     if (_disposed) return;
     if (isLive) _syncDelayTickSafe();
+    if (!_streamStopped) {
+      PlaybackWorkPolicy.instance.update(
+        this,
+        cloudBlocked: !_cloudPaused && !value.isEnded,
+      );
+    }
     notifyListeners();
   }
 
@@ -1080,7 +1100,11 @@ class PlaybackSession extends ChangeNotifier {
     _diagnosticTimer?.cancel();
     _delayTick?.cancel();
     _generation++;
-    unawaited(_releaseCurrent());
+    unawaited(
+      _releaseCurrent().whenComplete(() {
+        PlaybackWorkPolicy.instance.remove(this);
+      }),
+    );
   }
 
   @override
@@ -1095,7 +1119,11 @@ class PlaybackSession extends ChangeNotifier {
 
     _delayTick?.cancel();
     _generation++;
-    unawaited(_releaseCurrent());
+    unawaited(
+      _releaseCurrent().whenComplete(() {
+        PlaybackWorkPolicy.instance.remove(this);
+      }),
+    );
     super.dispose();
   }
 }

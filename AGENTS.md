@@ -105,3 +105,6 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 
 - Settings option pickers mount their bounded option list eagerly inside a scroll view, so the current offscreen value receives TV autofocus and arrow navigation starts from it.
 - Catalog panel Back resolves the visible same-route toolbar across focus transitions and consumes duplicate hardware/system dispatch within the closing frame, so genre/platform panels restore their own opener before the top menu handles a later Back.
+
+- All PlaybackSession instances register shared background-work gates: guide/playlist work waits for closed sessions, cloud sends wait for explicit pause/end; pending local changes flush through the existing serialized sync.
+- Native device identity carries a stable cloud compatibility marker independent of release numbering; external vault gating must reject explicitly and preserve the existing validation/CAS function, never claim a discarded write succeeded.

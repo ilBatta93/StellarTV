@@ -13,6 +13,7 @@ import 'sync_provider.dart';
 import '../services/sync_service.dart';
 import '../services/personal_vault.dart';
 import '../services/recent_live_channels.dart';
+import '../services/playback_work_policy.dart';
 import '../models/episode_watch_event.dart';
 
 /// Local-first watch history: entries are always saved on the device
@@ -90,8 +91,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     _notify();
   }
 
-  HistoryEntry _present(HistoryEntry entry) =>
-      entry.copyWith(watchedPercent: _watchedPercent, manualWatched: _eventFor(entry.contentId)?.watched);
+  HistoryEntry _present(HistoryEntry entry) => entry.copyWith(
+    watchedPercent: _watchedPercent,
+    manualWatched: _eventFor(entry.contentId)?.watched,
+  );
   List<HistoryEntry> get entries => _entries.map(_present).toList();
   bool get isLoading => _loading;
   bool get hasLoaded => _loaded;
@@ -160,48 +163,90 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   EpisodeWatchEvent? _eventFor(String id, {bool suggestion = false}) =>
-      _watchEvents[EpisodeWatchEvent(id, 3, DateTime(2000), suggestion: suggestion).key];
-  bool isWatched(String contentId) => _eventFor(contentId)?.watched ?? entryFor(contentId)?.isWatched ?? false;
+      _watchEvents[EpisodeWatchEvent(
+        id,
+        3,
+        DateTime(2000),
+        suggestion: suggestion,
+      ).key];
+  bool isWatched(String contentId) =>
+      _eventFor(contentId)?.watched ?? entryFor(contentId)?.isWatched ?? false;
   bool? manualWatched(String id) => _eventFor(id)?.watched;
-  bool suggestionDismissed(String seriesId) => _eventFor(seriesId, suggestion: true)?.value == 2;
+  bool suggestionDismissed(String seriesId) =>
+      _eventFor(seriesId, suggestion: true)?.value == 2;
 
   bool _readWatchEvent(Map<String, dynamic> row) {
     if (row['type'] != EpisodeWatchEvent.kind) return false;
     final event = EpisodeWatchEvent.parse(row);
     if (event != null) {
       final previous = _watchEvents[event.key];
-      if (previous == null || event.newerThan(previous)) _watchEvents[event.key] = event;
+      if (previous == null || event.newerThan(previous))
+        _watchEvents[event.key] = event;
     }
     return true;
   }
 
   /// A single atomic local batch, no fake progress and no player resume writes.
-  Future<void> setManualWatched(Iterable<String> ids, bool? watched, {String? seriesId}) =>
-      _writeEvents(ids, watched == null ? 3 : watched ? 1 : 0, seriesId: seriesId);
+  Future<void> setManualWatched(
+    Iterable<String> ids,
+    bool? watched, {
+    String? seriesId,
+  }) => _writeEvents(
+    ids,
+    watched == null
+        ? 3
+        : watched
+        ? 1
+        : 0,
+    seriesId: seriesId,
+  );
   Future<void> setSuggestionDismissed(String id, bool dismissed) =>
       _writeEvents([id], dismissed ? 2 : 3, suggestion: true);
-  Future<void> _writeEvents(Iterable<String> ids, int value, {bool suggestion = false, String? seriesId}) {
+  Future<void> _writeEvents(
+    Iterable<String> ids,
+    int value, {
+    bool suggestion = false,
+    String? seriesId,
+  }) {
     final targets = ids.where((id) => id.isNotEmpty).toSet();
-    final profile = _profileId, epoch = _profileEpoch, account = _sync.currentUserId;
+    final profile = _profileId,
+        epoch = _profileEpoch,
+        account = _sync.currentUserId;
     final next = _manualWrites.then((_) async {
       await _loadFuture;
-      if (_disposed || epoch != _profileEpoch || account != _sync.currentUserId) return;
+      if (_disposed || epoch != _profileEpoch || account != _sync.currentUserId)
+        return;
       final before = Map<String, EpisodeWatchEvent>.from(_watchEvents);
       var at = DateTime.now().toUtc();
       for (final id in targets) {
         final previous = _eventFor(id, suggestion: suggestion);
-        if (previous != null && !at.isAfter(previous.at)) at = previous.at.add(const Duration(microseconds: 1));
-        final event = EpisodeWatchEvent(id, value, at, suggestion: suggestion, seriesId: seriesId ?? previous?.seriesId);
+        if (previous != null && !at.isAfter(previous.at))
+          at = previous.at.add(const Duration(microseconds: 1));
+        final event = EpisodeWatchEvent(
+          id,
+          value,
+          at,
+          suggestion: suggestion,
+          seriesId: seriesId ?? previous?.seriesId,
+        );
         _watchEvents[event.key] = event;
       }
       final snapshot = _localMap();
       try {
         await _sync.saveLocalHistory(snapshot, profileId: profile);
-        if (_disposed || epoch != _profileEpoch || account != _sync.currentUserId) return;
+        if (_disposed ||
+            epoch != _profileEpoch ||
+            account != _sync.currentUserId)
+          return;
         _notify();
         _scheduleCloudPush();
       } catch (_) {
-        if (epoch == _profileEpoch) { _watchEvents..clear()..addAll(before); _notify(); }
+        if (epoch == _profileEpoch) {
+          _watchEvents
+            ..clear()
+            ..addAll(before);
+          _notify();
+        }
         rethrow;
       }
     });
@@ -216,7 +261,13 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     final event = _eventFor(channel.id);
     if (event != null) {
       final at = DateTime.now().toUtc();
-      final reset = EpisodeWatchEvent(channel.id, 3, at.isAfter(event.at) ? at : event.at.add(const Duration(microseconds: 1)));
+      final reset = EpisodeWatchEvent(
+        channel.id,
+        3,
+        at.isAfter(event.at)
+            ? at
+            : event.at.add(const Duration(microseconds: 1)),
+      );
       _watchEvents[reset.key] = reset;
     }
     var total = previous?.duration ?? Duration.zero;
@@ -497,6 +548,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Pulls from the cloud when the app comes back to foreground and every
   /// few minutes while open (throttled), so all devices stay aligned.
   Future<void> _autoPull() async {
+    if (PlaybackWorkPolicy.instance.blocksGuide) return;
     final now = DateTime.now();
     if (_lastAutoPull != null &&
         now.difference(_lastAutoPull!) < const Duration(seconds: 45)) {
@@ -599,8 +651,18 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
             (e.seriesKey == seriesKey || e.contentId == seriesKey));
     final removed = _entries.where(related).toList();
     final beforeEvents = Map<String, EpisodeWatchEvent>.from(_watchEvents);
-    _resetManualStates({contentId, ...removed.map((e) => e.contentId),
-      if (cascade) ..._watchEvents.values.where((e) => !e.suggestion && e.seriesId != null && (e.seriesId == contentId || e.seriesId == seriesKey)).map((e) => e.target),
+    _resetManualStates({
+      contentId,
+      ...removed.map((e) => e.contentId),
+      if (cascade)
+        ..._watchEvents.values
+            .where(
+              (e) =>
+                  !e.suggestion &&
+                  e.seriesId != null &&
+                  (e.seriesId == contentId || e.seriesId == seriesKey),
+            )
+            .map((e) => e.target),
     });
     _entries = _entries.where((e) => !related(e)).toList();
     final now = DateTime.now();
@@ -618,7 +680,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       return true;
     } catch (_) {
       _entries = before;
-      _watchEvents..clear()..addAll(beforeEvents);
+      _watchEvents
+        ..clear()
+        ..addAll(beforeEvents);
       _notify();
       return false;
     }
@@ -631,7 +695,12 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     unawaited(RecentLiveChannels.instance.clear());
     final before = _entries;
     final beforeEvents = Map<String, EpisodeWatchEvent>.from(_watchEvents);
-    _resetManualStates(_watchEvents.values.where((e) => !e.suggestion).map((e) => e.target).toSet());
+    _resetManualStates(
+      _watchEvents.values
+          .where((e) => !e.suggestion)
+          .map((e) => e.target)
+          .toSet(),
+    );
     final now = DateTime.now();
     for (final e in _entries) {
       _deleted[e.contentId] = now;
@@ -644,7 +713,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       return true;
     } catch (_) {
       _entries = before;
-      _watchEvents..clear()..addAll(beforeEvents);
+      _watchEvents
+        ..clear()
+        ..addAll(beforeEvents);
       _notify();
       return false;
     }
@@ -655,7 +726,14 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       final previous = _eventFor(id);
       if (previous == null) continue;
       final now = DateTime.now().toUtc();
-      final event = EpisodeWatchEvent(id, 3, now.isAfter(previous.at) ? now : previous.at.add(const Duration(microseconds: 1)), seriesId: previous.seriesId);
+      final event = EpisodeWatchEvent(
+        id,
+        3,
+        now.isAfter(previous.at)
+            ? now
+            : previous.at.add(const Duration(microseconds: 1)),
+        seriesId: previous.seriesId,
+      );
       _watchEvents[event.key] = event;
     }
   }

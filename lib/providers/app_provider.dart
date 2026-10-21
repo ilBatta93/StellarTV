@@ -12,6 +12,7 @@ import '../models/series_details.dart';
 import '../models/tmdb_item.dart';
 import '../services/catalog_builder.dart';
 import '../services/playlist_refresh_service.dart';
+import '../services/playback_work_policy.dart';
 import '../services/tmdb_service.dart';
 import '../services/xtream_service.dart';
 import '../services/cloud_favorites_service.dart';
@@ -29,7 +30,14 @@ enum AuthMethod { none, xtream }
 class AppProvider extends ChangeNotifier {
   AppProvider({XtreamService? xtreamService, CatalogCacheService? catalogCache})
     : _xtreamService = xtreamService ?? XtreamService(),
-      _catalogCache = catalogCache ?? CatalogCacheService();
+      _catalogCache = catalogCache ?? CatalogCacheService() {
+    PlaybackWorkPolicy.instance.addListener(_onPlaybackWorkChanged);
+  }
+
+  void _onPlaybackWorkChanged() {
+    final active = PlaybackWorkPolicy.instance.blocksGuide || _mainPlayerActive;
+    if (active != _playbackActive) _setEffectivePlaybackActive(active);
+  }
 
   final XtreamService _xtreamService;
   final _favoritesService = FavoritesService();
@@ -175,6 +183,7 @@ class AppProvider extends ChangeNotifier {
 
   // ---- Playback guard ----------------------------------------------------
   bool _playbackActive = false;
+  bool _mainPlayerActive = false;
   bool get playbackActive => _playbackActive;
   final Map<ContentType, List<Channel>> _pendingSections = {};
   Timer? _pendingTimer;
@@ -184,6 +193,11 @@ class AppProvider extends ChangeNotifier {
   /// Called by the player: while a video plays, background playlist updates
   /// keep downloading but heavy catalog rebuilds wait until it closes.
   void setPlaybackActive(bool value) {
+    _mainPlayerActive = value;
+    _onPlaybackWorkChanged();
+  }
+
+  void _setEffectivePlaybackActive(bool value) {
     if (value == _playbackActive) return;
     _playbackActive = value;
     _pendingTimer?.cancel();
@@ -420,9 +434,9 @@ class AppProvider extends ChangeNotifier {
       _groupedCache[type] ??= () {
         final base = CatalogBuilder.groupsOf(
           _visibleChannels(type),
-          categoryOrderOf(
-            type,
-          ).where((g) => !hiddenCategoriesOf(type).contains(g)).toList(),
+          categoryOrderOf(type)
+              .where((g) => !hiddenCategoriesOf(type).contains(g))
+              .toList(),
         );
         final customs = customCategoriesOf(type);
         final byLabel = <String, CatalogGroup>{};
@@ -1399,6 +1413,9 @@ class AppProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    PlaybackWorkPolicy.instance.removeListener(_onPlaybackWorkChanged);
+    _pendingTimer?.cancel();
+    _deferredRefreshTimer?.cancel();
     _prewarmTimer?.cancel();
     _warmUpTimer?.cancel();
     _kidsRefresh?.cancel();

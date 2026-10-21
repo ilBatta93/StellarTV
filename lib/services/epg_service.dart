@@ -6,7 +6,11 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'sync_hooks.dart';
+import 'playback_work_policy.dart';
+
 import '../models/epg_program.dart';
+
+class EpgRefreshDeferred implements Exception {}
 
 /// Parsed guide: programmes grouped by XMLTV channel id, plus the
 /// display names of each channel (used when the playlist has no tvg-id).
@@ -34,14 +38,16 @@ class EpgData {
         final items = <EpgProgram>[];
         for (final e in list) {
           if (e is! List || e.length < 4) continue;
-          items.add(EpgProgram(
-            id: '${id}_${e[0]}',
-            channelId: id.toString(),
-            title: e[2].toString(),
-            description: e[3].toString(),
-            startTime: DateTime.fromMillisecondsSinceEpoch(e[0] as int),
-            endTime: DateTime.fromMillisecondsSinceEpoch(e[1] as int),
-          ));
+          items.add(
+            EpgProgram(
+              id: '${id}_${e[0]}',
+              channelId: id.toString(),
+              title: e[2].toString(),
+              description: e[3].toString(),
+              startTime: DateTime.fromMillisecondsSinceEpoch(e[0] as int),
+              endTime: DateTime.fromMillisecondsSinceEpoch(e[1] as int),
+            ),
+          );
         }
         progs[id.toString()] = items;
       });
@@ -95,7 +101,8 @@ class EpgService {
   }
 
   Future<DateTime?> lastRun() async => DateTime.tryParse(
-      (await SharedPreferences.getInstance()).getString(_lastRunKey) ?? '');
+    (await SharedPreferences.getInstance()).getString(_lastRunKey) ?? '',
+  );
 
   Future<void> markRun() async => (await SharedPreferences.getInstance())
       .setString(_lastRunKey, DateTime.now().toIso8601String());
@@ -122,42 +129,79 @@ class EpgService {
   /// Downloads every source and merges them (first source wins per channel).
   /// Returns the merged guide; throws when no source could be read.
   Future<EpgData> fetch(List<String> urls) async {
-    final merged = <String, dynamic>{'p': <String, dynamic>{}, 'n': <String, dynamic>{}};
-    Object? lastError;
-    var ok = 0;
-    for (final url in urls) {
-      try {
-        final res = await http
-            .get(Uri.parse(url))
-            .timeout(const Duration(seconds: 180));
-        if (res.statusCode != 200) {
-          throw HttpException('HTTP ${res.statusCode}');
-        }
-        final bytes = res.bodyBytes;
-        final parsed = await Isolate.run(() => _parseXmltv(bytes));
-        (parsed['p'] as Map<String, dynamic>).forEach((k, v) {
-          (merged['p'] as Map<String, dynamic>).putIfAbsent(k, () => v);
-        });
-        (parsed['n'] as Map<String, dynamic>).forEach((k, v) {
-          (merged['n'] as Map<String, dynamic>).putIfAbsent(k, () => v);
-        });
-        ok++;
-      } catch (e) {
-        lastError = e;
+    final policy = PlaybackWorkPolicy.instance;
+    final client = http.Client();
+    var canceled = false;
+    void guard() {
+      if (policy.blocksGuide || canceled) {
+        client.close();
+        throw EpgRefreshDeferred();
       }
     }
-    if (ok == 0) {
-      throw Exception(lastError == null
-          ? 'Nessuna fonte EPG configurata'
-          : 'Impossibile scaricare la guida TV');
+
+    void cancelForPlayback() {
+      if (policy.blocksGuide) {
+        canceled = true;
+        client.close();
+      }
     }
-    merged['t'] = DateTime.now().toIso8601String();
-    final text = jsonEncode(merged);
+
+    policy.addListener(cancelForPlayback);
     try {
-      await _cacheFile.writeAsString(text);
-    } catch (_) {}
-    return Isolate.run(() => EpgData.fromJson(
-        jsonDecode(text) as Map<String, dynamic>));
+      guard();
+      final merged = <String, dynamic>{
+        'p': <String, dynamic>{},
+        'n': <String, dynamic>{},
+      };
+      Object? lastError;
+      var ok = 0;
+      for (final url in urls) {
+        try {
+          guard();
+          final res = await client
+              .get(Uri.parse(url))
+              .timeout(const Duration(seconds: 180));
+          if (res.statusCode != 200) {
+            throw HttpException('HTTP ${res.statusCode}');
+          }
+          guard();
+          final bytes = res.bodyBytes;
+          final parsed = await Isolate.run(() => _parseXmltv(bytes));
+          guard();
+          (parsed['p'] as Map<String, dynamic>).forEach((k, v) {
+            (merged['p'] as Map<String, dynamic>).putIfAbsent(k, () => v);
+          });
+          (parsed['n'] as Map<String, dynamic>).forEach((k, v) {
+            (merged['n'] as Map<String, dynamic>).putIfAbsent(k, () => v);
+          });
+          ok++;
+        } catch (e) {
+          if (e is EpgRefreshDeferred || policy.blocksGuide)
+            throw EpgRefreshDeferred();
+          lastError = e;
+        }
+      }
+      if (ok == 0) {
+        throw Exception(
+          lastError == null
+              ? 'Nessuna fonte EPG configurata'
+              : 'Impossibile scaricare la guida TV',
+        );
+      }
+      guard();
+      merged['t'] = DateTime.now().toIso8601String();
+      final text = jsonEncode(merged);
+      try {
+        await _cacheFile.writeAsString(text);
+      } catch (_) {}
+      guard();
+      return Isolate.run(
+        () => EpgData.fromJson(jsonDecode(text) as Map<String, dynamic>),
+      );
+    } finally {
+      policy.removeListener(cancelForPlayback);
+      client.close();
+    }
   }
 }
 
@@ -175,21 +219,28 @@ Map<String, dynamic> _parseXmltv(List<int> rawBytes) {
 
   final names = <String, dynamic>{};
   final channelRe = RegExp(
-      r'<channel\s+id="([^"]*)"[^>]*>([\s\S]*?)</channel>',
-      caseSensitive: false);
-  final nameRe = RegExp(r'<display-name[^>]*>([\s\S]*?)</display-name>',
-      caseSensitive: false);
+    r'<channel\s+id="([^"]*)"[^>]*>([\s\S]*?)</channel>',
+    caseSensitive: false,
+  );
+  final nameRe = RegExp(
+    r'<display-name[^>]*>([\s\S]*?)</display-name>',
+    caseSensitive: false,
+  );
   for (final m in channelRe.allMatches(xml)) {
     final name = nameRe.firstMatch(m.group(2)!)?.group(1);
     if (name != null) names[_unescape(m.group(1)!)] = _unescape(name.trim());
   }
 
   final progs = <String, dynamic>{};
-  final progRe = RegExp(r'<programme\b([^>]*)>([\s\S]*?)</programme>',
-      caseSensitive: false);
+  final progRe = RegExp(
+    r'<programme\b([^>]*)>([\s\S]*?)</programme>',
+    caseSensitive: false,
+  );
   final attrRe = RegExp(r'(\w+)="([^"]*)"');
-  final titleRe =
-      RegExp(r'<title[^>]*>([\s\S]*?)</title>', caseSensitive: false);
+  final titleRe = RegExp(
+    r'<title[^>]*>([\s\S]*?)</title>',
+    caseSensitive: false,
+  );
   final descRe = RegExp(r'<desc[^>]*>([\s\S]*?)</desc>', caseSensitive: false);
   for (final m in progRe.allMatches(xml)) {
     final attrs = <String, String>{
@@ -220,8 +271,9 @@ Map<String, dynamic> _parseXmltv(List<int> rawBytes) {
 /// XMLTV time: "20261004120000 +0200" (offset optional).
 int? _parseTime(String? raw) {
   if (raw == null) return null;
-  final m = RegExp(r'^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*([+-]\d{4})?')
-      .firstMatch(raw.trim());
+  final m = RegExp(
+    r'^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})?\s*([+-]\d{4})?',
+  ).firstMatch(raw.trim());
   if (m == null) return null;
   final utc = DateTime.utc(
     int.parse(m.group(1)!),
@@ -235,10 +287,9 @@ int? _parseTime(String? raw) {
   if (offset == null) return utc.millisecondsSinceEpoch;
   final sign = offset.startsWith('-') ? -1 : 1;
   final minutes =
-      int.parse(offset.substring(1, 3)) * 60 + int.parse(offset.substring(3, 5));
-  return utc
-      .subtract(Duration(minutes: sign * minutes))
-      .millisecondsSinceEpoch;
+      int.parse(offset.substring(1, 3)) * 60 +
+      int.parse(offset.substring(3, 5));
+  return utc.subtract(Duration(minutes: sign * minutes)).millisecondsSinceEpoch;
 }
 
 String _unescape(String s) => s

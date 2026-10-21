@@ -9,10 +9,13 @@ import 'device_type_service.dart';
 class DeviceIdentity {
   DeviceIdentity._();
 
-  static String userAgent = 'StellarTV';
+  static const cloudProtocol = 2;
+  static String userAgent = 'StellarTV (cloud=$cloudProtocol)';
 
-  static String sanitize(String value) =>
-      value.replaceAll(RegExp(r'[^A-Za-z0-9 ._+-]'), '').trim().replaceAll(RegExp(r'\s+'), ' ');
+  static String sanitize(String value) => value
+      .replaceAll(RegExp(r'[^A-Za-z0-9 ._+-]'), '')
+      .trim()
+      .replaceAll(RegExp(r'\s+'), ' ');
 
   /// Format parsed by the website: StellarTV/<ver> (kind=..; platform=..; model=..)
   static String format({
@@ -24,7 +27,7 @@ class DeviceIdentity {
     final m = model == null ? '' : sanitize(model);
     final cut = m.length > 40 ? m.substring(0, 40) : m;
     return 'StellarTV/${sanitize(version)} (kind=$kind; platform=${sanitize(platform)}'
-        '${cut.isEmpty ? '' : '; model=$cut'})';
+        '${cut.isEmpty ? '' : '; model=$cut'}; cloud=$cloudProtocol)';
   }
 
   static Future<void> initialize() async {
