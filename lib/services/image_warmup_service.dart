@@ -163,6 +163,7 @@ class TvImageMemoryGuard with WidgetsBindingObserver {
   TvImageMemoryGuard._();
   static final _instance = TvImageMemoryGuard._();
   static bool _installed = false;
+  static final reducedRendering = ValueNotifier<bool>(false);
   static void install() {
     if (_installed) return;
     _installed = true;
@@ -171,6 +172,7 @@ class TvImageMemoryGuard with WidgetsBindingObserver {
 
   @override
   void didHaveMemoryPressure() {
+    if (DeviceTypeService.isTv) reducedRendering.value = true;
     final cache = PaintingBinding.instance.imageCache;
     cache.maximumSize = 80;
     cache.maximumSizeBytes = 24 << 20;

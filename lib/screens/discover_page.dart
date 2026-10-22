@@ -11,6 +11,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../services/image_warmup_service.dart';
+import '../services/tv_render_policy.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -1108,7 +1109,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
     _debounce = Timer(const Duration(milliseconds: 400), () {
       if (mounted) {
         _heroNote.value = null;
-        _hero.value = item;
+        if (_hero.value?.key != item.key) _hero.value = item;
       }
     });
   }
@@ -1266,7 +1267,16 @@ class _TvDiscoverState extends State<_TvDiscover> {
               Positioned.fill(
                 child: ValueListenableBuilder<TmdbItem?>(
                   valueListenable: _hero,
-                  builder: (_, item, _) => _TvHeroBackdrop(item: item),
+                  builder: (_, item, _) => ValueListenableBuilder<bool>(
+                    valueListenable: TvImageMemoryGuard.reducedRendering,
+                    builder: (_, pressure, _) =>
+                        TvRenderPolicy.backdropAllowed(
+                          isTv: true,
+                          memoryPressure: pressure,
+                        )
+                        ? _TvHeroBackdrop(item: item)
+                        : const ColoredBox(color: AppColors.background),
+                  ),
                 ),
               ),
               Column(

@@ -15,3 +15,6 @@
 - Sfondo aggiornato dopo una pausa della selezione, senza sovrapporre animazioni a schermo intero.
 - Ordinamenti elaborati separatamente dalla navigazione e risultati obsoleti scartati.
 - Controlli aggiuntivi per righe che cambiano durante l’uso del telecomando.
+
+- Selezione TV più leggera, senza ombre animate; rimossi riempimenti grafici duplicati.
+- Passaggio iniziale TV senza dissolvenza e sfondo semplificato quando il sistema segnala memoria scarsa.

@@ -125,6 +125,8 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Live guide is one shared proportional time window (past range bounded) with a theme-coloured now line; past cells replay only via XtreamCatchup, so the grid never invents archive support.
 - Frame telemetry records aggregates only during an explicit session (auto-stop) and uploads through the same owner-scoped diagnostic reports table, so no extra polling or tables exist.
 
-- TV Home decodes posters on demand, keeps one vertical neighbour and bounded horizontal neighbours, and swaps the settled backdrop without overlapping full-screen fades; this limits raster work without changing touch presentation or disk caching.
+- TV Home decodes posters on demand, retains one complete vertical neighbour and bounded horizontal neighbours for D-Pad traversal, and swaps only changed settled artwork; native memory pressure suppresses the decorative backdrop until process restart through TvRenderPolicy, never hiding selectable cards or deleting disk/user data.
 - TV decoded-image memory shrinks on native memory-pressure signals; speculative image work checks playback/visibility and reuses cached files, never deleting user data or disk images.
 - Catalog sort logic is browser/native-independent in catalog_sort.dart; a top-level isolate boundary receives only catalog entries and rating snapshots, while recent/filter list identities are cached to avoid repeated UI-thread sorts.
+
+- TV focus uses a static lift and theme ring without animated blurred shadows; duplicate decorative poster fills and the custom splash fade are touch-only, reducing raster work while retaining the same controls.

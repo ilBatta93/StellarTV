@@ -120,9 +120,7 @@ class _TvFocusableState extends State<TvFocusable> {
         if (value == _focused) return;
         setState(() => _focused = value);
         widget.onFocusChange?.call(value);
-        if (value &&
-            widget.revealOnFocus &&
-            !HorizontalRowScope.of(context)) {
+        if (value && widget.revealOnFocus && !HorizontalRowScope.of(context)) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted || !_focused) return;
             Scrollable.ensureVisible(
@@ -138,37 +136,17 @@ class _TvFocusableState extends State<TvFocusable> {
       },
       child: ExcludeFocus(
         child: RepaintBoundary(
-          // tvOS-style focus: the item lifts with a soft shadow and a glow
-          // in the StellarTV accent, instead of a flat thick frame.
-          child: AnimatedScale(
+          // A static lift and accent ring preserve focus visibility without
+          // rasterising blurred shadows on every frame of remote movement.
+          child: Transform.scale(
             scale: _focused && motion ? widget.focusedScale : 1,
-            duration: duration,
-            curve: Curves.easeOutCubic,
-            child: AnimatedContainer(
-              duration: duration,
-              curve: Curves.easeOutCubic,
-              decoration: BoxDecoration(
-                borderRadius: widget.borderRadius,
-                boxShadow: _focused
-                    ? [
-                        BoxShadow(
-                          color: AppColors.overlay,
-                          blurRadius: 16,
-                          offset: const Offset(0, 12),
-                        ),
-                        if (glow)
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.28),
-                            blurRadius: 10,
-                            spreadRadius: 1,
-                          ),
-                      ]
-                    : const [],
-              ),
+            child: Container(
               foregroundDecoration: BoxDecoration(
                 borderRadius: widget.borderRadius,
                 border: Border.all(
-                  color: _focused ? AppColors.textPrimary : AppColors.clear,
+                  color: _focused
+                      ? (glow ? AppColors.primary : AppColors.textPrimary)
+                      : AppColors.clear,
                   width: 2.5,
                 ),
               ),

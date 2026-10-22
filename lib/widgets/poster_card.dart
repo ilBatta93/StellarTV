@@ -11,6 +11,7 @@ import '../models/tmdb_item.dart';
 import '../providers/ui_settings.dart';
 import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
+import '../services/tv_render_policy.dart';
 import 'tv_focusable.dart';
 import 'tv_home_layout.dart';
 
@@ -46,6 +47,8 @@ class PosterImage extends StatelessWidget {
     if (url == null || url!.isEmpty) return fallback;
     // Decode images at their on-screen size: full-size decoding of every
     // poster exhausts memory on TV boxes and makes the app close.
+    // Pressure bounds apply on the next natural card build: do not reload all
+    // visible images simultaneously during a native memory-pressure event.
     return LayoutBuilder(
       builder: (context, c) {
         int? cacheWidth;
@@ -53,7 +56,10 @@ class PosterImage extends StatelessWidget {
           final px = c.maxWidth * MediaQuery.devicePixelRatioOf(context);
           cacheWidth = ((px / 64).ceil() * 64).clamp(
             64,
-            DeviceTypeService.isTv ? 960 : 1280,
+            TvRenderPolicy.decodeLimit(
+              isTv: DeviceTypeService.isTv,
+              memoryPressure: TvImageMemoryGuard.reducedRendering.value,
+            ),
           );
           if (rememberWidth) PosterMemoryWarmup.noteWidth(cacheWidth);
         }
@@ -62,6 +68,9 @@ class PosterImage extends StatelessWidget {
           imageUrl: tmdbSizedUrl(url!, cacheWidth),
           fit: fit,
           memCacheWidth: cacheWidth,
+          filterQuality: DeviceTypeService.isTv
+              ? FilterQuality.low
+              : FilterQuality.medium,
           fadeInDuration: DeviceTypeService.isTv
               ? Duration.zero
               : const Duration(milliseconds: 200),

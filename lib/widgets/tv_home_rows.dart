@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'tv_focusable.dart';
 import '../services/image_warmup_service.dart';
+import '../services/tv_render_policy.dart';
 
 /// Full-height TV sections own vertical focus and keep each horizontal selection.
 class TvHomeRows extends StatefulWidget {
@@ -134,7 +135,11 @@ class _TvHomeRowsState extends State<TvHomeRows> {
           itemExtent: _extent,
           // Neighbouring rows only: building every row offscreen decoded all
           // posters at once and exhausted TV memory under load.
-          cacheExtent: _extent,
+          cacheExtent:
+              _extent *
+              TvRenderPolicy.rowCacheFraction(
+                memoryPressure: TvImageMemoryGuard.reducedRendering.value,
+              ),
           itemCount: widget.sections.length,
           itemBuilder: (context, index) => Focus(
             focusNode: _rows[index],

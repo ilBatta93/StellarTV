@@ -83,6 +83,7 @@ jobs:
           dart run test/foreground_policy_check.dart
           dart run test/foreground_http_check.dart
           dart run test/tv_playback_shortcuts_check.dart
+          dart run test/tv_render_policy_check.dart
 
       - name: Verify Home and episode completion
         # Also exercise the shared watched/remaining-time policy.

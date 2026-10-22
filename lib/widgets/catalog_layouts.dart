@@ -36,7 +36,8 @@ class CatalogLandscapeCard extends StatelessWidget {
         children: [
           // Blurred-looking fill plus the full poster on the left: posters
           // are vertical, so they are framed instead of cropped badly.
-          Opacity(opacity: 0.35, child: PosterImage(url: channel.logo)),
+          if (!tv)
+            Opacity(opacity: 0.35, child: PosterImage(url: channel.logo)),
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -137,7 +138,7 @@ class CatalogSpotlightHeader extends StatelessWidget {
     return SizedBox(
       height: height,
       child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
+        duration: tv ? Duration.zero : const Duration(milliseconds: 220),
         child: e == null
             ? const SizedBox.shrink()
             : _SpotlightBody(key: ValueKey(e.primary.id), entry: e, tv: tv),
@@ -168,7 +169,8 @@ class _SpotlightBody extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Opacity(opacity: 0.18, child: PosterImage(url: channel.logo)),
+          if (!tv)
+            Opacity(opacity: 0.18, child: PosterImage(url: channel.logo)),
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(

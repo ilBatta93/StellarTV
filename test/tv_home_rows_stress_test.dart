@@ -80,6 +80,42 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('pressure mode retains every vertical remote destination', (
+    tester,
+  ) async {
+    TvImageMemoryGuard.reducedRendering.value = true;
+    addTearDown(() => TvImageMemoryGuard.reducedRendering.value = false);
+    await tester.pumpWidget(const _Host());
+    await tester.pumpAndSettle();
+    for (var i = 1; i < 8; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      final focusedContext = FocusManager.instance.primaryFocus?.context;
+      expect(focusedContext, isNotNull);
+      if (focusedContext == null) return;
+      final label = find.descendant(
+        of: find.byWidget(focusedContext.widget),
+        matching: find.text('$i-0'),
+      );
+      expect(label, findsOneWidget);
+    }
+    for (var i = 6; i >= 0; i--) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pumpAndSettle();
+      final focusedContext = FocusManager.instance.primaryFocus?.context;
+      expect(focusedContext, isNotNull);
+      if (focusedContext == null) return;
+      expect(
+        find.descendant(
+          of: find.byWidget(focusedContext.widget),
+          matching: find.text('$i-0'),
+        ),
+        findsOneWidget,
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   test('background image work yields while the remote is moving', () async {
     RemoteNavigation.note();
     expect(RemoteNavigation.moving, isTrue);
