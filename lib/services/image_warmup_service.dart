@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart' show ModalRoute;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'image_cache_service.dart';
+import 'device_type_service.dart';
+import 'playback_work_policy.dart';
 
 /// Downloads the posters of the first visible catalog titles in the
 /// background, a few at a time, so opening a section does not wait on the
@@ -36,13 +39,13 @@ class ImageWarmupService {
 
   static final _seen = <String>{};
   static bool _running = false;
-  static const _maxPerRun = 120;
+  static const _maxPerRun = 12;
 
   static void warm(Iterable<String?> urls) {
-    if (_running) return;
+    if (_running || PlaybackWorkPolicy.instance.blocksGuide) return;
     final pending = <String>[];
     for (final u in urls) {
-      if (u == null || u.isEmpty || !_seen.add(u)) continue;
+      if (u == null || u.isEmpty || _seen.contains(u)) continue;
       pending.add(u);
       if (pending.length >= _maxPerRun) break;
     }
@@ -53,15 +56,16 @@ class ImageWarmupService {
 
   static Future<void> _drain(List<String> pending) async {
     try {
-      for (var i = 0; i < pending.length; i += 4) {
+      for (var i = 0; i < pending.length; i++) {
         await RemoteNavigation.idle();
-        await Future.wait([
-          for (final u in pending.skip(i).take(4))
-            AppImageCache.manager
-                .downloadFile(u)
-                .then((_) {})
-                .catchError((_) {}),
-        ]);
+        if (RemoteNavigation.moving || PlaybackWorkPolicy.instance.blocksGuide)
+          return;
+        final u = pending[i];
+        try {
+          await AppImageCache.manager.getSingleFile(u);
+          if (_seen.length >= 512) _seen.clear();
+          _seen.add(u);
+        } catch (_) {}
         // Yield between batches so scrolling stays fluid.
         await Future<void>.delayed(const Duration(milliseconds: 250));
       }
@@ -107,7 +111,12 @@ class PosterMemoryWarmup {
 
   static void warm(BuildContext context, Iterable<String?> urls) {
     final w = _width;
-    if (w == null || _running) return;
+    // TV cards decode on demand, not all neighbouring rows at launch.
+    if (DeviceTypeService.isTv ||
+        w == null ||
+        _running ||
+        PlaybackWorkPolicy.instance.blocksGuide)
+      return;
     final pending = <String>[];
     for (final u in urls) {
       if (u == null || u.isEmpty || !_seen.add('$w|$u')) continue;
@@ -115,12 +124,17 @@ class PosterMemoryWarmup {
       if (pending.length >= 10) break;
     }
     if (pending.isEmpty) return;
+    if (_seen.length > 512) _seen.clear();
     _running = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         for (var i = 0; i < pending.length; i += 3) {
           await RemoteNavigation.idle();
-          if (!context.mounted) return;
+          if (!context.mounted ||
+              RemoteNavigation.moving ||
+              PlaybackWorkPolicy.instance.blocksGuide ||
+              ModalRoute.of(context)?.isCurrent == false)
+            return;
           await Future.wait([
             for (final u in pending.skip(i).take(3))
               precacheImage(
@@ -141,5 +155,27 @@ class PosterMemoryWarmup {
         _running = false;
       }
     });
+  }
+}
+
+/// Memory pressure retires rebuildable decoded images, never disk/user data.
+class TvImageMemoryGuard with WidgetsBindingObserver {
+  TvImageMemoryGuard._();
+  static final _instance = TvImageMemoryGuard._();
+  static bool _installed = false;
+  static void install() {
+    if (_installed) return;
+    _installed = true;
+    WidgetsBinding.instance.addObserver(_instance);
+  }
+
+  @override
+  void didHaveMemoryPressure() {
+    final cache = WidgetsBinding.instance.imageCache;
+    cache.maximumSize = 80;
+    cache.maximumSizeBytes = 24 << 20;
+    cache.clear();
+    ImageWarmupService._seen.clear();
+    PosterMemoryWarmup._seen.clear();
   }
 }

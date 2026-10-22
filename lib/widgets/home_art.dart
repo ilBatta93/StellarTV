@@ -26,10 +26,14 @@ class HomeTitleArt extends StatefulWidget {
 
 /// Resolves only a small adjacent set after display, never a catalog scan.
 void warmTitleLogos(BuildContext context, Iterable<TmdbItem> items) {
+  // Visible title art owns TV loading; speculative logo decodes competed
+  // with every focus frame on low-memory devices.
+  if (DeviceTypeService.isTv) return;
   final tmdb = context.read<DiscoverProvider>().tmdb;
   final selected = items.take(3).toList();
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     for (final item in selected) {
+      if (!context.mounted) return;
       final url = await tmdb.titleLogo(item);
       if (!context.mounted) return;
       if (url != null) {

@@ -68,8 +68,9 @@ Future<void> main() async {
   if (DeviceTypeService.isTv) {
     // TV boxes have little RAM: cap decoded images to avoid being killed.
     PaintingBinding.instance.imageCache
-      ..maximumSize = 250
-      ..maximumSizeBytes = 80 << 20;
+      ..maximumSize = 120
+      ..maximumSizeBytes = 40 << 20;
+    TvImageMemoryGuard.install();
     TvRemoteKeys.install();
   } else {
     // Phones: generous but bounded decoded-image memory.

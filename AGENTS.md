@@ -124,3 +124,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Home title availability and series folders are indexed once per playlist in a background isolate (lib/services/catalog_index_builder.dart); Home lookups are non-blocking (wait: false) while user actions keep the synchronous fallback, so launch never freezes the remote. The index stays device-local and is never synced to the cloud.
 - Live guide is one shared proportional time window (past range bounded) with a theme-coloured now line; past cells replay only via XtreamCatchup, so the grid never invents archive support.
 - Frame telemetry records aggregates only during an explicit session (auto-stop) and uploads through the same owner-scoped diagnostic reports table, so no extra polling or tables exist.
+
+- TV Home decodes posters on demand, keeps one vertical neighbour and bounded horizontal neighbours, and swaps the settled backdrop without overlapping full-screen fades; this limits raster work without changing touch presentation or disk caching.
+- TV decoded-image memory shrinks on native memory-pressure signals; speculative image work checks playback/visibility and reuses cached files, never deleting user data or disk images.
+- Catalog sort logic is browser/native-independent in catalog_sort.dart; a top-level isolate boundary receives only catalog entries and rating snapshots, while recent/filter list identities are cached to avoid repeated UI-thread sorts.

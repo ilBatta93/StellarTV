@@ -50,6 +50,8 @@ class _TvHomeRowsState extends State<TvHomeRows> {
 
   void _show(int index) {
     if (!mounted || !_scroll.hasClients || !_extent.isFinite) return;
+    if (widget.sections.isEmpty) return;
+    index = index.clamp(0, widget.sections.length - 1);
     _active = index;
     try {
       final max = _scroll.position.maxScrollExtent;
@@ -73,7 +75,9 @@ class _TvHomeRowsState extends State<TvHomeRows> {
     final primary = FocusManager.instance.primaryFocus;
     if (primary != null && primary.context != null) _selected[index] = primary;
     final stops = _rows[next].traversalDescendants
-        .where((n) => n.canRequestFocus && n.context != null && n.context!.mounted)
+        .where(
+          (n) => n.canRequestFocus && n.context != null && n.context!.mounted,
+        )
         .toList(growable: false);
     final selectors = stops.whereType<TvHomeSelectorNode>().toList();
     final saved = _selected[next];
@@ -113,6 +117,9 @@ class _TvHomeRowsState extends State<TvHomeRows> {
     if (_sectionCount != widget.sections.length) {
       _sectionCount = widget.sections.length;
       _selected.clear();
+      _active = widget.sections.isEmpty
+          ? 0
+          : _active.clamp(0, widget.sections.length - 1);
     }
     while (_rows.length < widget.sections.length) {
       _rows.add(FocusNode(debugLabel: 'home-row-${_rows.length}'));
@@ -127,7 +134,7 @@ class _TvHomeRowsState extends State<TvHomeRows> {
           itemExtent: _extent,
           // Neighbouring rows only: building every row offscreen decoded all
           // posters at once and exhausted TV memory under load.
-          cacheExtent: _extent * 2,
+          cacheExtent: _extent,
           itemCount: widget.sections.length,
           itemBuilder: (context, index) => Focus(
             focusNode: _rows[index],
@@ -153,12 +160,14 @@ class _TvHomeRowsState extends State<TvHomeRows> {
               } catch (error, stack) {
                 // Sections changed while the key was handled (background
                 // index ready, history update): never let it close the app.
-                FlutterError.reportError(FlutterErrorDetails(
-                  exception: error,
-                  stack: stack,
-                  library: 'tv_home_rows',
-                  silent: true,
-                ));
+                FlutterError.reportError(
+                  FlutterErrorDetails(
+                    exception: error,
+                    stack: stack,
+                    library: 'tv_home_rows',
+                    silent: true,
+                  ),
+                );
                 return KeyEventResult.handled;
               }
             },

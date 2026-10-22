@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../services/catalog_sort.dart' show sortCatalogBackground;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -306,6 +307,19 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 
   CatalogSort? _sort = CatalogSort.dateDesc;
+  bool _sorting = false;
+  List<CatalogEntry>? _requestedSortSource;
+  List<CatalogEntry>? _recentSnapshot;
+  Object? _recentGroups;
+  List<CatalogEntry> _recent(AppProvider app) {
+    final groups = app.groupedCatalog(widget.type);
+    if (!identical(groups, _recentGroups)) {
+      _recentGroups = groups;
+      _recentSnapshot = app.recentEntries(widget.type);
+    }
+    return _recentSnapshot ?? const [];
+  }
+
   List<CatalogEntry>? _sortedSource;
   List<CatalogEntry>? _sortedEntries;
   CatalogSort? _sortedOrder;
@@ -383,9 +397,8 @@ class _CatalogPageState extends State<CatalogPage> {
     return _platformIds = ids;
   }
 
-  static bool _is4k(CatalogEntry e) => e.variants.any(
-    (c) => CatalogBuilder.qualityLabel(c.name) == '4K',
-  );
+  static bool _is4k(CatalogEntry e) =>
+      e.variants.any((c) => CatalogBuilder.qualityLabel(c.name) == '4K');
 
   List<String> get _activeFilterLabels => [
     if (_genreId != null && _genreNames[_genreId] != null)
@@ -547,7 +560,7 @@ class _CatalogPageState extends State<CatalogPage> {
       drawer: DeviceTypeService.isTv
           ? TvCategoryPanel(
               categories: {
-                _recentLabel: app.recentEntries(widget.type).length,
+                _recentLabel: _recent(app).length,
                 _watchedLabel: watched.length,
                 _allLabel: app.allEntries(widget.type).length,
                 for (final g in groups)
@@ -563,7 +576,7 @@ class _CatalogPageState extends State<CatalogPage> {
             )
           : _CategoryDrawer(
               categories: {
-                _recentLabel: app.recentEntries(widget.type).length,
+                _recentLabel: _recent(app).length,
                 _watchedLabel: watched.length,
                 _allLabel: app.allEntries(widget.type).length,
                 for (final g in groups)
@@ -587,7 +600,10 @@ class _CatalogPageState extends State<CatalogPage> {
               category: _selectedCategory ?? _recentLabel,
               onChanged: (v) => setState(() => _query = v),
               sort: _sort,
-              onSort: (value) => setState(() => _sort = value),
+              onSort: (value) {
+                if (_sort == value) return;
+                setState(() => _sort = value);
+              },
               viewMode: context.watch<UiSettings>().viewMode,
               onViewMode: (mode) =>
                   context.read<UiSettings>().setCatalogViewMode(mode),
@@ -642,7 +658,9 @@ class _CatalogPageState extends State<CatalogPage> {
                   if (widget.type != ContentType.live)
                     IconButton(
                       tooltip: 'Piattaforme streaming',
-                      color: _platform != null || _only4k ? AppColors.primary : null,
+                      color: _platform != null || _only4k
+                          ? AppColors.primary
+                          : null,
                       icon: const Icon(Icons.connected_tv_rounded),
                       onPressed: _pickPlatformMobile,
                     ),
@@ -827,7 +845,14 @@ class _CatalogPageState extends State<CatalogPage> {
 
   Widget _buildRecentGrid(AppProvider app) {
     final entries = _ordered(
-      _genreId != null || _platform != null || _only4k ? _allOfGenre(app) : app.recentEntries(widget.type),
+      _genreId != null || _platform != null || _only4k
+          ? _filtered(
+              app,
+              app.groupedCatalog(widget.type),
+              'recent:filtered-all',
+              () => _allOfGenre(app),
+            )
+          : _recent(app),
     );
     if (entries.isEmpty) {
       return EmptyState(
@@ -1001,7 +1026,8 @@ class _CatalogPageState extends State<CatalogPage> {
   Widget _buildSearchResults(AppProvider app) {
     final q = _query.toLowerCase();
     final groups = app.groupedCatalog(widget.type);
-    final key = '${identityHashCode(groups)}|$q|$_selectedCategory|$_genreId|'
+    final key =
+        '${identityHashCode(groups)}|$q|$_selectedCategory|$_genreId|'
         '$_platform|$_only4k|${app.titleInfoVersion}';
     if (_lowerNames.length > 200000) _lowerNames.clear();
     if (_searchKey == key && _searchResult != null) {
@@ -1089,19 +1115,67 @@ class _CatalogPageState extends State<CatalogPage> {
   List<CatalogEntry> _ordered(List<CatalogEntry> entries) {
     if (!DeviceTypeService.isTv || _sort == null) return entries;
     final service = CatalogRatingService.instance;
-    if (_sort == CatalogSort.rating &&
-        (!identical(entries, _sortedSource) || _sortedOrder != _sort)) {
-      service.request(entries.map((e) => e.primary));
-    }
+    _requestedSortSource = entries;
     if (identical(entries, _sortedSource) &&
         _sort == _sortedOrder &&
         (_sort != CatalogSort.rating || _sortedVersion == service.version)) {
       return _sortedEntries ?? entries;
     }
-    _sortedSource = entries;
-    _sortedOrder = _sort;
-    _sortedVersion = service.version;
-    return _sortedEntries = sortCatalog(entries, _sort, (e) => e.primary);
+    if (!_sorting) {
+      _sorting = true;
+      if (_sort == CatalogSort.rating)
+        service.request(entries.map((e) => e.primary));
+      final order = _sort;
+      final version = service.version;
+      // No provider, context or native object enters the isolate.
+      unawaited(() async {
+        List<CatalogEntry>? result;
+        try {
+          final ratings = <String, double>{};
+          if (order == CatalogSort.rating) {
+            for (var i = 0; i < entries.length; i++) {
+              final c = entries[i].primary;
+              ratings[c.id] = service.ratingOf(c) ?? 0;
+              if (i % 200 == 199) {
+                await Future<void>.delayed(Duration.zero);
+                if (!mounted) return;
+              }
+            }
+          }
+          result = await sortCatalogBackground(entries, order, ratings);
+        } catch (error, stack) {
+          result = entries;
+          FlutterError.reportError(
+            FlutterErrorDetails(
+              exception: error,
+              stack: stack,
+              library: 'catalog_sort',
+            ),
+          );
+        } finally {
+          // Wait for a real pause in remote input before publishing.
+          while (mounted && RemoteNavigation.moving) {
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+          }
+          _sorting = false;
+          if (mounted)
+            setState(() {
+              if (result != null &&
+                  order == _sort &&
+                  identical(entries, _requestedSortSource) &&
+                  (order != CatalogSort.rating || version == service.version)) {
+                _sortedSource = entries;
+                _sortedOrder = order;
+                _sortedVersion = version;
+                _sortedEntries = result;
+              }
+            });
+        }
+      }());
+    }
+    return identical(entries, _sortedSource) && _sort == _sortedOrder
+        ? _sortedEntries ?? entries
+        : entries;
   }
 
   Widget _gridItem(AppProvider app, CatalogEntry entry, int index) =>

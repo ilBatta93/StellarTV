@@ -105,6 +105,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final discover = context.read<DiscoverProvider>();
       if (!discover.hasData) discover.load();
     });
@@ -122,7 +123,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final reactions = context.watch<ReactionsProvider>();
     // Episodes may not be indexed after a restart: rebuild them from the
     // history entry so watched series still feed "Serie consigliate".
-    final watched = history.entries
+    final entries = history.entries;
+    final watched = entries
         .map(
           (e) =>
               app.channelById(e.contentId) ??
@@ -246,7 +248,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       return _TvDiscover(
         profileId: context.watch<ProfileProvider>().selected?.id,
         banner: banner,
-        initialHistory: latestHistoryResume(history.entries, app),
+        initialHistory: latestHistoryResume(entries, app),
         startedMovies: startedMovies,
         startedSeries: startedSeries,
         forYou: discover.forYou
@@ -577,7 +579,7 @@ class _Top10BannerState extends State<_Top10Banner> {
     super.initState();
     _controller = PageController();
     _timer = Timer.periodic(const Duration(seconds: 6), (_) {
-      if (!mounted || widget.items.isEmpty) return;
+      if (!mounted || !_controller.hasClients || widget.items.isEmpty) return;
       final next = (_page + 1) % widget.items.length;
       _controller.animateToPage(
         next,
@@ -782,7 +784,7 @@ class _HistoryCard extends StatelessWidget {
     final seriesKey =
         channel.seriesKey ?? (entry.seriesKey.isEmpty ? null : entry.seriesKey);
     final folder = isEpisode && seriesKey != null
-        ? app.seriesFolderFor(seriesKey)
+        ? app.seriesFolderFor(seriesKey, wait: false)
         : null;
     // Series show the standard series poster, not the episode still.
     final poster = [
@@ -890,7 +892,9 @@ Future<void> _playNextEpisode(
     final ch = next.channel;
     playChannel(
       context,
-      ch.seriesKey == null ? ch.copyWith(seriesKey: folder.seriesKey ?? folder.id) : ch,
+      ch.seriesKey == null
+          ? ch.copyWith(seriesKey: folder.seriesKey ?? folder.id)
+          : ch,
       startAt: history.entryFor(ch.id)?.resumePosition,
     );
   } catch (_) {
@@ -1101,9 +1105,8 @@ class _TvDiscoverState extends State<_TvDiscover> {
     _userFocused = true;
     _heroRequest++;
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 100), () {
+    _debounce = Timer(const Duration(milliseconds: 400), () {
       if (mounted) {
-        warmTitleLogos(context, [item]);
         _heroNote.value = null;
         _hero.value = item;
       }
@@ -1131,32 +1134,29 @@ class _TvDiscoverState extends State<_TvDiscover> {
     final request = ++_heroRequest;
     final tmdb = context.read<DiscoverProvider>().tmdb;
     _debounce?.cancel();
-    _debounce = Timer(
-      initial ? Duration.zero : const Duration(milliseconds: 100),
-      () async {
-        final item = _historyInfo.containsKey(key)
-            ? _historyInfo[key]
-            : await tmdb
-                  .findByTitle(title, isMovie: movie)
-                  .catchError((_) => null);
-        if (!mounted || request != _heroRequest) return;
-        _historyInfo[key] = item;
-        _heroNote.value = _historyNote(resume);
-        _hero.value =
-            item ??
-            TmdbItem(
-              id: -channel.id.hashCode.abs(),
-              mediaType: movie ? 'movie' : 'tv',
-              title: title,
-              overview: channel.group,
-              posterPath: null,
-              backdropPath: null,
-              voteAverage: 0,
-              popularity: 0,
-              releaseDate: '',
-            );
-      },
-    );
+    _debounce = Timer(const Duration(milliseconds: 400), () async {
+      final item = _historyInfo.containsKey(key)
+          ? _historyInfo[key]
+          : await tmdb
+                .findByTitle(title, isMovie: movie)
+                .catchError((_) => null);
+      if (!mounted || request != _heroRequest) return;
+      _historyInfo[key] = item;
+      _heroNote.value = _historyNote(resume);
+      _hero.value =
+          item ??
+          TmdbItem(
+            id: -channel.id.hashCode.abs(),
+            mediaType: movie ? 'movie' : 'tv',
+            title: title,
+            overview: channel.group,
+            posterPath: null,
+            backdropPath: null,
+            voteAverage: 0,
+            popularity: 0,
+            releaseDate: '',
+          );
+    });
   }
 
   /// Episode coordinates or minutes left, plus progress, for the hero banner.
@@ -1190,6 +1190,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
   }
 
   Widget _historySection(String title, List<ResumeItem> items) => Builder(
+    key: ValueKey(title),
     builder: (rowContext) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1207,7 +1208,9 @@ class _TvDiscoverState extends State<_TvDiscover> {
 
   Widget _row(String title, List<TmdbItem> items, {String? subtitle}) {
     return Builder(
-      builder: (rowContext) => _posterRow(title, items, rowContext, subtitle: subtitle),
+      key: ValueKey(title),
+      builder: (rowContext) =>
+          _posterRow(title, items, rowContext, subtitle: subtitle),
     );
   }
 
@@ -1237,7 +1240,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
             onTap: () => openTmdbItem(context, items[i]),
             onFocus: () {
               _focus(items[i]);
-              warmTitleLogos(context, items.skip(i + 1));
+              // Only the settled banner loads its logo; no adjacent predecode.
               _revealHeading(rowContext);
             },
           ),
@@ -1320,7 +1323,11 @@ class _TvDiscoverState extends State<_TvDiscover> {
                                       '${displayTitle(widget.forYouSeriesSource ?? "")}',
                           ),
                         for (final t in widget.tops)
-                          _TvTopRow(spec: t, onFocusItem: _focus),
+                          _TvTopRow(
+                            key: ValueKey(t.$1),
+                            spec: t,
+                            onFocusItem: _focus,
+                          ),
                       ],
                     ),
                   ),
@@ -1341,7 +1348,7 @@ class _TvTopRow extends StatefulWidget {
   final TvTopSpec spec;
   final ValueChanged<TmdbItem> onFocusItem;
 
-  const _TvTopRow({required this.spec, required this.onFocusItem});
+  const _TvTopRow({super.key, required this.spec, required this.onFocusItem});
 
   @override
   State<_TvTopRow> createState() => _TvTopRowState();
@@ -1490,7 +1497,7 @@ class _TvTopRowState extends State<_TvTopRow> {
                     onTap: () => openTmdbItem(context, items[i]),
                     onFocus: () {
                       widget.onFocusItem(items[i]);
-                      warmTitleLogos(context, items.skip(i + 1));
+                      // Only the settled banner loads its logo; no adjacent predecode.
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         final heading = _headingKey.currentContext;
                         if (mounted && heading != null)
@@ -1602,8 +1609,7 @@ class _TvHeroBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     // Full-screen artwork; scrims keep the menu, the text and the rows
     // readable without cropping the image into a corner.
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 350),
+    return RepaintBoundary(
       child: item == null
           ? const SizedBox.expand()
           : Stack(

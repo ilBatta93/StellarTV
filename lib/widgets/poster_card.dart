@@ -51,7 +51,10 @@ class PosterImage extends StatelessWidget {
         int? cacheWidth;
         if (c.maxWidth.isFinite && c.maxWidth > 0) {
           final px = c.maxWidth * MediaQuery.devicePixelRatioOf(context);
-          cacheWidth = ((px / 64).ceil() * 64).clamp(64, 1280);
+          cacheWidth = ((px / 64).ceil() * 64).clamp(
+            64,
+            DeviceTypeService.isTv ? 960 : 1280,
+          );
           if (rememberWidth) PosterMemoryWarmup.noteWidth(cacheWidth);
         }
         return CachedNetworkImage(
@@ -59,7 +62,9 @@ class PosterImage extends StatelessWidget {
           imageUrl: tmdbSizedUrl(url!, cacheWidth),
           fit: fit,
           memCacheWidth: cacheWidth,
-          fadeInDuration: const Duration(milliseconds: 200),
+          fadeInDuration: DeviceTypeService.isTv
+              ? Duration.zero
+              : const Duration(milliseconds: 200),
           placeholder: (_, _) => Container(color: AppColors.card),
           errorWidget: (_, _, _) => fallback,
         );

@@ -85,7 +85,7 @@ class HorizontalRow extends StatelessWidget {
         onKeyEvent: _keepInRow,
         child: ListView.separated(
           // Neighbours are pre-built so Right always finds the next card.
-          cacheExtent: DeviceTypeService.isTv ? 1200 : null,
+          cacheExtent: DeviceTypeService.isTv ? 400 : null,
           scrollDirection: Axis.horizontal,
           padding: EdgeInsets.symmetric(
             horizontal: DeviceTypeService.isTv ? 32 : 16,
@@ -141,10 +141,12 @@ class HorizontalRow extends StatelessWidget {
                       }
                       if (delta != 0) {
                         final position = outer.position;
-                        final next = (position.pixels + delta).clamp(
-                          position.minScrollExtent,
-                          position.maxScrollExtent,
-                        ).toDouble();
+                        final next = (position.pixels + delta)
+                            .clamp(
+                              position.minScrollExtent,
+                              position.maxScrollExtent,
+                            )
+                            .toDouble();
                         position.jumpTo(next);
                       }
                     }
