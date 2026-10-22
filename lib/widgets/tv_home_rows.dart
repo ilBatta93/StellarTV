@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'tv_focusable.dart';
+import '../services/image_warmup_service.dart';
 
 /// Full-height TV sections own vertical focus and keep each horizontal selection.
 class TvHomeRows extends StatefulWidget {
@@ -42,12 +43,60 @@ class _TvHomeRowsState extends State<TvHomeRows> {
     });
   }
 
+  /// Last vertical move: held arrows repeat faster than a TV box can lay
+  /// out a full-height row, so extra repeats are absorbed instead of queued.
+  DateTime _lastMove = DateTime.fromMillisecondsSinceEpoch(0);
+  static const _repeatGap = Duration(milliseconds: 140);
+
   void _show(int index) {
+    if (!mounted || !_scroll.hasClients || !_extent.isFinite) return;
     _active = index;
-    if (_scroll.hasClients)
-      _scroll.jumpTo(
-        (index * _extent).clamp(0.0, _scroll.position.maxScrollExtent),
-      );
+    try {
+      final max = _scroll.position.maxScrollExtent;
+      _scroll.jumpTo((index * _extent).clamp(0.0, max < 0 ? 0.0 : max));
+    } catch (_) {
+      // Layout changed between key press and frame: next frame realigns.
+    }
+  }
+
+  KeyEventResult _move(int index, KeyEvent event) {
+    final key = event.logicalKey;
+    final count = widget.sections.length;
+    final next = index + (key == LogicalKeyboardKey.arrowDown ? 1 : -1);
+    if (next < 0) return KeyEventResult.ignored;
+    if (next >= count || next >= _rows.length) return KeyEventResult.handled;
+    final now = DateTime.now();
+    if (event is KeyRepeatEvent && now.difference(_lastMove) < _repeatGap) {
+      return KeyEventResult.handled;
+    }
+    _lastMove = now;
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary != null && primary.context != null) _selected[index] = primary;
+    final stops = _rows[next].traversalDescendants
+        .where((n) => n.canRequestFocus && n.context != null && n.context!.mounted)
+        .toList(growable: false);
+    final selectors = stops.whereType<TvHomeSelectorNode>().toList();
+    final saved = _selected[next];
+    final fromSelectorUp =
+        key == LogicalKeyboardKey.arrowUp && primary is TvHomeSelectorNode;
+    final FocusNode? target;
+    if (fromSelectorUp) {
+      target = stops.where((n) => n is! TvHomeSelectorNode).firstOrNull;
+    } else if (selectors.isNotEmpty) {
+      target =
+          selectors.where((n) => n.selected).firstOrNull ?? selectors.first;
+    } else {
+      // Rows shift when Home gains a section (e.g. after watching a film):
+      // a remembered poster may now live in another row.
+      target = saved != null && stops.contains(saved)
+          ? saved
+          : stops.firstOrNull;
+    }
+    if (target != null) {
+      _show(next);
+      target.requestFocus();
+    }
+    return KeyEventResult.handled;
   }
 
   @override
@@ -76,7 +125,9 @@ class _TvHomeRowsState extends State<TvHomeRows> {
           physics: const _NoImplicitScroll(),
           padding: EdgeInsets.zero,
           itemExtent: _extent,
-          cacheExtent: _extent * widget.sections.length,
+          // Neighbouring rows only: building every row offscreen decoded all
+          // posters at once and exhausted TV memory under load.
+          cacheExtent: _extent * 2,
           itemCount: widget.sections.length,
           itemBuilder: (context, index) => Focus(
             focusNode: _rows[index],
@@ -96,43 +147,20 @@ class _TvHomeRowsState extends State<TvHomeRows> {
               if (key != LogicalKeyboardKey.arrowDown &&
                   key != LogicalKeyboardKey.arrowUp)
                 return KeyEventResult.ignored;
-              final next =
-                  index + (key == LogicalKeyboardKey.arrowDown ? 1 : -1);
-              if (next < 0) return KeyEventResult.ignored;
-              if (next >= widget.sections.length) return KeyEventResult.handled;
-              final primary = FocusManager.instance.primaryFocus;
-              if (primary != null) _selected[index] = primary;
-              final stops = _rows[next].traversalDescendants
-                  .where((n) => n.canRequestFocus && n.context != null)
-                  .toList();
-              final selectors = stops.whereType<TvHomeSelectorNode>().toList();
-              final saved = _selected[next];
-              final fromSelectorUp =
-                  key == LogicalKeyboardKey.arrowUp &&
-                  primary is TvHomeSelectorNode;
-              final FocusNode? target;
-              if (fromSelectorUp) {
-                target = stops
-                    .where((n) => n is! TvHomeSelectorNode)
-                    .firstOrNull;
-              } else if (selectors.isNotEmpty) {
-                target =
-                    selectors.where((n) => n.selected).firstOrNull ??
-                    selectors.first;
-              } else {
-                target =
-                    // Rows shift when Home gains a section (e.g. after
-                    // watching a film): a remembered poster may now live in
-                    // another row, which hid the focus offscreen.
-                    saved != null && stops.contains(saved)
-                    ? saved
-                    : stops.firstOrNull;
+              RemoteNavigation.note();
+              try {
+                return _move(index, event);
+              } catch (error, stack) {
+                // Sections changed while the key was handled (background
+                // index ready, history update): never let it close the app.
+                FlutterError.reportError(FlutterErrorDetails(
+                  exception: error,
+                  stack: stack,
+                  library: 'tv_home_rows',
+                  silent: true,
+                ));
+                return KeyEventResult.handled;
               }
-              if (target != null) {
-                _show(next);
-                target.requestFocus();
-              }
-              return KeyEventResult.handled;
             },
             child: Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 4),

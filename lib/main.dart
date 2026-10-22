@@ -1,3 +1,5 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 import 'services/image_warmup_service.dart';
 
@@ -40,6 +42,18 @@ Future<void> main() async {
   // A widget that throws during build would otherwise leave the whole app on a
   // blank white screen on a real device. Show a readable fallback instead.
   ErrorWidget.builder = (details) => _StartupErrorView(details: details);
+  // Last-resort guards: an uncaught async error (focus, layout or a late
+  // callback while the catalog is being prepared) is logged, never fatal.
+  final previousOnError = FlutterError.onError;
+  FlutterError.onError = (details) {
+    try {
+      previousOnError?.call(details);
+    } catch (_) {}
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('StellarTV uncaught: $error');
+    return true;
+  };
   MediaKit.ensureInitialized();
   // Post-update safety net: once per installed build, clears only rebuildable
   // derived caches. Never touches user data and never blocks startup.

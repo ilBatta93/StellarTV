@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'device_type_service.dart';
+import 'image_warmup_service.dart';
 
 /// TV only: lets the D-Pad leave any text field (search bars, dialogs, forms).
 ///
@@ -49,6 +50,13 @@ class TvRemoteKeys {
   static KeyEventResult _onKey(KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
+    }
+    final arrow = event.logicalKey;
+    if (arrow == LogicalKeyboardKey.arrowUp ||
+        arrow == LogicalKeyboardKey.arrowDown ||
+        arrow == LogicalKeyboardKey.arrowLeft ||
+        arrow == LogicalKeyboardKey.arrowRight) {
+      RemoteNavigation.note();
     }
     final primary = FocusManager.instance.primaryFocus;
     final editable = primary?.context

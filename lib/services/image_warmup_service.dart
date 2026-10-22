@@ -11,6 +11,26 @@ import 'image_cache_service.dart';
 /// network. Files land in the shared disk cache (60 days), so they are
 /// already there at the next app start; URLs already fetched in this run
 /// are skipped.
+/// Remote D-Pad activity. Background image work yields while the user is
+/// moving, so the CPU and GPU of a TV box stay on the focus animation.
+class RemoteNavigation {
+  RemoteNavigation._();
+  static int _lastMs = 0;
+  static const quiet = Duration(milliseconds: 400);
+
+  static void note() => _lastMs = DateTime.now().millisecondsSinceEpoch;
+
+  static bool get moving =>
+      DateTime.now().millisecondsSinceEpoch - _lastMs < quiet.inMilliseconds;
+
+  /// Waits (bounded to ~3 s) until the remote has been still for [quiet].
+  static Future<void> idle() async {
+    for (var i = 0; i < 30 && moving; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+  }
+}
+
 class ImageWarmupService {
   ImageWarmupService._();
 
@@ -34,6 +54,7 @@ class ImageWarmupService {
   static Future<void> _drain(List<String> pending) async {
     try {
       for (var i = 0; i < pending.length; i += 4) {
+        await RemoteNavigation.idle();
         await Future.wait([
           for (final u in pending.skip(i).take(4))
             AppImageCache.manager
@@ -98,6 +119,7 @@ class PosterMemoryWarmup {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         for (var i = 0; i < pending.length; i += 3) {
+          await RemoteNavigation.idle();
           if (!context.mounted) return;
           await Future.wait([
             for (final u in pending.skip(i).take(3))
