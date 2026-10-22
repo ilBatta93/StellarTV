@@ -11,6 +11,7 @@ import '../widgets/player/player_format.dart';
 import '../widgets/player/video_surface.dart';
 import '../widgets/settings_tiles.dart';
 import '../widgets/tv_focusable.dart';
+import '../widgets/player/provider_check_button.dart';
 
 class PlayerSettingsScreen extends StatefulWidget {
   const PlayerSettingsScreen({super.key, this.scope});
@@ -178,6 +179,14 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     SettingsSection(
       title: 'Riproduzione',
       children: [
+        if (!_live)
+          SettingsSwitchTile(
+            icon: Icons.skip_next_rounded,
+            title: 'Passa automaticamente al prossimo episodio',
+            subtitle: 'Disattiva per scegliere manualmente quando proseguire. Vale su questo dispositivo.',
+            value: s.autoNextEpisode,
+            onChanged: (v) => _update((s) => s.autoNextEpisode = v),
+          ),
         if (!_tvProfile || !_live)
           SettingsValueTile(
             icon: Icons.speed_rounded,
@@ -509,9 +518,9 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
         SettingsValueTile(
           icon: Icons.badge_outlined,
           title: 'User agent personalizzato',
-          subtitle:
-              'Alcuni servizi richiedono un identificativo specifico',
-          value: effectiveStreamUserAgent(s.userAgent) == kDefaultStreamUserAgent
+          subtitle: 'Alcuni servizi richiedono un identificativo specifico',
+          value:
+              effectiveStreamUserAgent(s.userAgent) == kDefaultStreamUserAgent
               ? 'Predefinito (VLC)'
               : s.userAgent,
           onTap: _editUserAgent,
@@ -524,6 +533,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     SettingsSection(
       title: 'Sistema',
       children: [
+        const ProviderCheckButton(),
         SettingsSwitchTile(
           icon: Icons.picture_in_picture_alt_rounded,
           title: 'Picture-in-Picture automatico',
@@ -1011,9 +1021,7 @@ class _ProfileCard extends StatelessWidget {
             ],
             const SizedBox(height: 16),
             if (settings == null)
-              Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
-              )
+              Center(child: CircularProgressIndicator(color: AppColors.primary))
             else
               for (final (k, v) in lines)
                 Container(

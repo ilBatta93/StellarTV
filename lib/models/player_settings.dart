@@ -145,6 +145,7 @@ class PlayerSettings {
   VideoFitMode fitMode;
   PlayerOrientation orientation;
   bool resumePlayback;
+  bool autoNextEpisode;
   int seekStepSeconds;
   int controlsHideSeconds;
   bool gesturesEnabled;
@@ -182,6 +183,7 @@ class PlayerSettings {
     this.fitMode = VideoFitMode.fit,
     this.orientation = PlayerOrientation.landscape,
     this.resumePlayback = true,
+    this.autoNextEpisode = true,
     this.seekStepSeconds = 10,
     this.controlsHideSeconds = 4,
     this.gesturesEnabled = true,
@@ -257,6 +259,7 @@ class PlayerSettings {
         d.orientation,
       ),
       resumePlayback: b('resumePlayback', d.resumePlayback),
+      autoNextEpisode: b('autoNextEpisode', d.autoNextEpisode),
       seekStepSeconds: i('seekStepSeconds', d.seekStepSeconds),
       controlsHideSeconds: i('controlsHideSeconds', d.controlsHideSeconds),
       gesturesEnabled: b('gesturesEnabled', d.gesturesEnabled),
@@ -298,6 +301,7 @@ class PlayerSettings {
     'fitMode': fitMode.name,
     'orientation': orientation.name,
     'resumePlayback': resumePlayback,
+    'autoNextEpisode': autoNextEpisode,
     'seekStepSeconds': seekStepSeconds,
     'controlsHideSeconds': controlsHideSeconds,
     'gesturesEnabled': gesturesEnabled,

@@ -73,9 +73,11 @@ abstract class PlaybackEngine extends ChangeNotifier {
   /// clock drift). No addresses, no titles, no player messages.
   Future<Map<String, Object?>> metrics() async => const {};
 
+  /// Optional local container chapters; unsupported engines return empty.
+  Future<List<Map<String, Object?>>> chapters() async => const [];
+
   PlayerEngineType get type;
   PlaybackSnapshot get value;
-
 
   bool get supportsAudioTracks;
   bool get supportsSubtitleTracks;

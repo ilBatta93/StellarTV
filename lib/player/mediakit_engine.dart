@@ -390,15 +390,15 @@ class MediaKitEngine extends PlaybackEngine {
   /// automatically when zero-copy cannot start. Live keeps copy only.
   static String _hwdec(HardwareDecoding mode, {bool vod = false}) =>
       switch (mode) {
-    HardwareDecoding.disabled => 'no',
-    // "mediacodec" exists only on Android: on iPhone it decoded audio with
-    // a black picture. VideoToolbox is Apple's hardware decoder.
-    _ =>
-      Platform.isIOS || Platform.isMacOS
-          ? 'videotoolbox-copy'
-          : Platform.isAndroid
-          ? (vod ? 'mediacodec,mediacodec-copy' : 'mediacodec-copy')
-          : 'auto-safe',
+        HardwareDecoding.disabled => 'no',
+        // "mediacodec" exists only on Android: on iPhone it decoded audio with
+        // a black picture. VideoToolbox is Apple's hardware decoder.
+        _ =>
+          Platform.isIOS || Platform.isMacOS
+              ? 'videotoolbox-copy'
+              : Platform.isAndroid
+              ? (vod ? 'mediacodec,mediacodec-copy' : 'mediacodec-copy')
+              : 'auto-safe',
       };
 
   /// Opt-in diagnostics: numeric mpv metrics only. Every property is read
@@ -435,9 +435,42 @@ class MediaKitEngine extends PlaybackEngine {
     return out;
   }
 
+  @override
+  Future<List<Map<String, Object?>>> chapters() async {
+    final platform = _player.platform;
+    if (_disposed || isLive || previewMode || platform is! NativePlayer)
+      return const [];
+    try {
+      final deadline = Stopwatch()..start();
+      Future<String> read(String property) {
+        final remaining = 800 - deadline.elapsedMilliseconds;
+        if (_disposed || remaining <= 0)
+          throw TimeoutException('Chapter read deadline');
+        return platform
+            .getProperty(property)
+            .timeout(Duration(milliseconds: remaining));
+      }
+
+      return await (() async {
+        final count = int.tryParse(await read('chapter-list/count')) ?? 0;
+        if (count <= 0 || count > 40 || _disposed)
+          return <Map<String, Object?>>[];
+        final result = <Map<String, Object?>>[];
+        for (var i = 0; i < count; i++) {
+          if (_disposed) return <Map<String, Object?>>[];
+          final title = await read('chapter-list/$i/title');
+          final time = double.tryParse(await read('chapter-list/$i/time'));
+          result.add({'title': title, 'time': time});
+        }
+        return result;
+      })().timeout(const Duration(milliseconds: 800));
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Timer? _blackWatch;
   bool _firstFrameRendered = false;
-
 
   /// True only when decoded frames really flow through mpv's video chain.
   /// The old check used the track resolution, which mpv reads from the

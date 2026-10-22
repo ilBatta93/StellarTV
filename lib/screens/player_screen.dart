@@ -21,6 +21,9 @@ import '../player/tv_playback_shortcuts.dart';
 import '../providers/history_provider.dart';
 import '../services/imdb_resolver.dart';
 import '../services/introdb_service.dart';
+import '../services/playback_assistance.dart';
+import '../services/foreground_policy.dart';
+import '../widgets/player/provider_check_button.dart';
 import '../services/playback_work_policy.dart';
 import '../services/native_player_bridge.dart';
 import '../services/player_settings_service.dart';
@@ -134,6 +137,9 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   // IntroDB skip segments (empty when unavailable: no buttons are shown).
   EpisodeSegments _segments = EpisodeSegments.empty;
+  EpisodeSegments _chapterSegments = EpisodeSegments.empty;
+  PlaybackEngine? _chaptersReadFor;
+  bool _outroVerified = false;
   bool _outroDisabled = false;
   bool _outroActive = false;
   int _outroCountdown = 5;
@@ -246,7 +252,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   bool _introActive(PlaybackSession session) {
-    final intro = _segments.intro;
+    final intro = _effectiveSegments.intro;
     return session.status == SessionStatus.playing &&
         intro != null &&
         intro.contains(session.value.position);
@@ -1059,7 +1065,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     final c = widget.channel;
     if (!_isEpisode || c.season == null || c.episode == null) return;
     final title = c.seriesName?.isNotEmpty == true ? c.seriesName! : c.name;
-    final imdbId = await ImdbResolver.getImdbId(title: title);
+    final imdbId = await ImdbResolver.getImdbId(
+      title: segmentLookupTitle(title),
+    );
     if (imdbId == null) return;
     final segments = await IntroDbService.fetch(imdbId, c.season!, c.episode!);
     if (mounted) {
@@ -1153,8 +1161,45 @@ class _PlayerScreenState extends State<PlayerScreen>
     setState(() => _onlineCues = null);
   }
 
+  EpisodeSegments get _effectiveSegments {
+    final duration = _session?.value.duration ?? Duration.zero;
+    final remote = validSegments(_segments, duration);
+    final local = validSegments(_chapterSegments, duration);
+    return EpisodeSegments(
+      intro: remote.intro ?? local.intro,
+      outro: remote.outro ?? local.outro,
+    );
+  }
+
+  Future<void> _readLocalChapters(PlaybackSession session) async {
+    final engine = session.engine;
+    if (!_isEpisode ||
+        engine == null ||
+        identical(engine, _chaptersReadFor) ||
+        !session.value.isReady ||
+        session.value.duration <= Duration.zero)
+      return;
+    _chaptersReadFor = engine;
+    try {
+      final chapters = await engine.chapters();
+      if (!mounted ||
+          !identical(_session, session) ||
+          !identical(session.engine, engine))
+        return;
+      setState(
+        () => _chapterSegments = chapterSegments(
+          chapters,
+          session.value.duration,
+        ),
+      );
+      _onSessionChanged();
+    } catch (_) {
+      /* Local chapter support is optional. */
+    }
+  }
+
   void _skipIntro() {
-    final intro = _segments.intro;
+    final intro = _effectiveSegments.intro;
     if (intro == null) return;
     _hideTimer?.cancel();
     setState(() => _controlsVisible = false);
@@ -1163,22 +1208,34 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   void _checkOutro(Duration position) {
-    final outro = _segments.outro;
-    if (outro == null || _next == null || _outroDisabled || _advancing) return;
-    final inOutro = position >= outro.start;
+    final session = _session;
+    final outro = _effectiveSegments.outro;
+    if (session == null || _next == null || _outroDisabled || _advancing)
+      return;
+    final inOutro = outro != null
+        ? position >= outro.start
+        : suggestNext(position: position, duration: session.value.duration);
+    _outroVerified = outro != null;
     if (inOutro && !_outroActive) {
       _outroActive = true;
       _outroCountdown = 5;
       _outroTimer?.cancel();
-      _outroTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-        if (!mounted) return t.cancel();
-        if (_outroCountdown <= 1) {
-          t.cancel();
-          playNextEpisode();
-        } else {
-          setState(() => _outroCountdown--);
-        }
-      });
+      if (_settings?.autoNextEpisode == true && _outroVerified)
+        _outroTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+          if (!mounted || _settings?.autoNextEpisode != true) return t.cancel();
+          final current = _session;
+          if (current == null ||
+              !current.value.isPlaying ||
+              !ForegroundPolicy.instance.active ||
+              _route?.isCurrent != true)
+            return;
+          if (_outroCountdown <= 1) {
+            t.cancel();
+            playNextEpisode();
+          } else {
+            setState(() => _outroCountdown--);
+          }
+        });
     } else if (!inOutro && _outroActive) {
       // The user seeked back before the credits.
       _outroActive = false;
@@ -1195,7 +1252,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     });
   }
 
-  void playNextEpisode() => _playNext(completeCurrent: true);
+  void playNextEpisode() => _playNext(completeCurrent: _outroVerified);
 
   Future<void> _playNext({bool completeCurrent = false}) async {
     final next = _next;
@@ -1403,6 +1460,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     final settings = _settings;
     if (session == null || settings == null || !mounted) return;
     final v = session.value;
+    unawaited(_readLocalChapters(session));
     final introActive = _introActive(session);
     if (introActive && !_introWasActive) {
       _hideTimer?.cancel();
@@ -1441,9 +1499,22 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!_isLive) _checkOutro(v.position);
 
     // Netflix-style: at the end of an episode go straight to the next one.
-    if (!_isLive && v.isEnded && _next != null && !_nextDismissed) {
+    if (!_isLive &&
+        settings.autoNextEpisode &&
+        v.isEnded &&
+        _next != null &&
+        !_nextDismissed &&
+        !_advancing &&
+        ForegroundPolicy.instance.active &&
+        _route?.isCurrent == true) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _playNext();
+        if (mounted &&
+            !_nextDismissed &&
+            _settings?.autoNextEpisode == true &&
+            _session?.value.isEnded == true &&
+            ForegroundPolicy.instance.active &&
+            _route?.isCurrent == true)
+          _playNext();
       });
     }
 
@@ -1744,6 +1815,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       return [
         _FailureView(
           session: session,
+          playbackUrl: widget.channel.url,
           onBack: () => Navigator.pop(context),
           retryFocus: DeviceTypeService.isTv ? _failureFocus : null,
         ),
@@ -1893,8 +1965,7 @@ class _PlayerScreenState extends State<PlayerScreen>
           ),
         ),
       if (status == SessionStatus.playing &&
-          _segments.intro != null &&
-          _segments.intro!.contains(session.value.position))
+          _effectiveSegments.intro?.contains(session.value.position) == true)
         Positioned(
           right: 24,
           bottom: 96,
@@ -1991,7 +2062,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Prossimo episodio tra $_outroCountdown...',
+                    _settings?.autoNextEpisode == true && _outroVerified
+                        ? 'Prossimo episodio tra $_outroCountdown...'
+                        : 'Prossimo episodio disponibile',
                     style: TextStyle(
                       color: AppColors.primary,
                       fontSize: 12,
@@ -2010,11 +2083,12 @@ class _PlayerScreenState extends State<PlayerScreen>
                     ),
                   ),
                   const SizedBox(height: 10),
-                  LinearProgressIndicator(
-                    value: (5 - _outroCountdown) / 5,
-                    color: AppColors.primary,
-                    backgroundColor: Colors.white12,
-                  ),
+                  if (_settings?.autoNextEpisode == true && _outroVerified)
+                    LinearProgressIndicator(
+                      value: (5 - _outroCountdown) / 5,
+                      color: AppColors.primary,
+                      backgroundColor: Colors.white12,
+                    ),
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -2135,10 +2209,12 @@ class _NoticeBanner extends StatelessWidget {
 
 class _FailureView extends StatelessWidget {
   final PlaybackSession session;
+  final String playbackUrl;
   final VoidCallback onBack;
   final FocusNode? retryFocus;
   const _FailureView({
     required this.session,
+    required this.playbackUrl,
     required this.onBack,
     this.retryFocus,
   });
@@ -2180,6 +2256,11 @@ class _FailureView extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
+                ),
+                ProviderCheckButton(
+                  playbackUrl: playbackUrl,
+                  playbackFailed: true,
+                  automatic: true,
                 ),
                 if (session.error != null) ...[
                   const SizedBox(height: 8),

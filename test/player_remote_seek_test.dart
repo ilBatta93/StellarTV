@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:stellar_tv/services/introdb_service.dart';
 
@@ -50,6 +53,17 @@ class SeekEngine extends PlaybackEngine {
   }
 
   PlaybackSnapshot _value = const PlaybackSnapshot();
+
+  void progress(Duration position, {bool ended = false}) {
+    _value = PlaybackSnapshot(
+      isReady: true,
+      isPlaying: !ended,
+      isEnded: ended,
+      position: position,
+      duration: const Duration(minutes: 10),
+    );
+    notifyListeners();
+  }
 
   void emitError(String message) {
     _value = PlaybackSnapshot(isReady: true, error: message);
@@ -158,6 +172,119 @@ class SeekEngine extends PlaybackEngine {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   remote.mainSetupForRemote();
+  for (final autoplay in [true, false]) {
+    for (final verified in [true, false]) {
+      testWidgets(
+        'outro obeys autoplay=$autoplay, verified=$verified and pause',
+        (tester) async {
+          SharedPreferences.setMockInitialValues({
+            'player_settings_tv_vod_v1': jsonEncode(
+              (PlayerSettings()..autoNextEpisode = autoplay).toJson(),
+            ),
+          });
+          tester.view.physicalSize = const Size(1280, 720);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final client = SupabaseClient(
+            'https://example.invalid',
+            'test',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          );
+          final app = remote.TestApp();
+          final history = HistoryProvider(SyncService(client));
+          final first = Channel(
+            id: 'episode1',
+            name: 'Episode 1',
+            url: 'https://example.invalid/1.mp4',
+            logo: '',
+            group: '',
+            type: ContentType.series,
+            seriesKey: 'test',
+            season: 1,
+            episode: 1,
+          );
+          final second = Channel(
+            id: 'episode2',
+            name: 'Episode 2',
+            url: 'https://example.invalid/2.mp4',
+            logo: '',
+            group: '',
+            type: ContentType.series,
+            seriesKey: 'test',
+            season: 1,
+            episode: 2,
+          );
+          final engine = SeekEngine(
+            PlayerEngineType.mediakit,
+            first.url,
+            succeed: true,
+          );
+          await tester.pumpWidget(
+            MultiProvider(
+              providers: [
+                ChangeNotifierProvider<AppProvider>.value(value: app),
+                ChangeNotifierProvider<HistoryProvider>.value(value: history),
+              ],
+              child: MaterialApp(
+                home: PlayerScreen(
+                  channel: first,
+                  queue: [first, second],
+                  engineFactory: (_) => engine,
+                  segmentsSource: () async => verified
+                      ? const EpisodeSegments(
+                          outro: SkipSegment(
+                            'outro',
+                            Duration(seconds: 540),
+                            Duration(seconds: 600),
+                          ),
+                        )
+                      : EpisodeSegments.empty,
+                ),
+              ),
+            ),
+          );
+          await tester.runAsync(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 150));
+          });
+          await tester.pump(const Duration(milliseconds: 100));
+          engine.progress(const Duration(seconds: 550));
+          await tester.pump();
+          await engine.pause();
+          await tester.pump(const Duration(seconds: 7));
+          expect(
+            engine.disposed,
+            false,
+          ); // no countdown can advance while paused
+          if (!autoplay || !verified) {
+            await engine.play();
+            await tester.pump(const Duration(seconds: 7));
+            expect(
+              engine.disposed,
+              false,
+            ); // off or estimated credits never auto-skip
+          }
+          if (!autoplay) {
+            engine.progress(const Duration(seconds: 600), ended: true);
+            await tester.pump();
+            await tester.pump(const Duration(seconds: 2));
+            expect(
+              engine.disposed,
+              false,
+            ); // natural end obeys same off preference
+          }
+          await tester.pumpWidget(const SizedBox());
+          await tester.pump();
+          await tester.runAsync(() async {
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+          });
+          history.dispose();
+          app.dispose();
+          client.dispose();
+        },
+      );
+    }
+  }
   for (final type in PlayerEngineType.values) {
     testWidgets('Remote seek stays hidden on $type, OK still opens commands', (
       tester,

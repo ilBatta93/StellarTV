@@ -112,3 +112,6 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - ForegroundPolicy combines resumed lifecycle and best-effort native display hints; one guarded cloud HTTP transport and suspended schedulers preserve local writes without account leases or background heartbeats. Playback ownership stays separate from visibility so foreground return cannot release a playing session.
 
 - Remote single-device signout and its background polling are retired; keep normal local/global Auth signout and token refresh unchanged to reduce recurring database traffic without weakening authentication.
+
+- Playback assistance is device-local: automatic episode transitions obey the player preference at both credits and natural end; unknown credits only suggest manual continuation. Local chapter reads are one-shot per engine and bounded, with validated segment coordinates and cached remote lookups.
+- Service diagnosis uses one bounded local account request only on manual action or final playback failure, no stream probes, polling or database; reports uncertainty and refuses mismatched playback accounts.

@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'foreground_http_client.dart';
 
 class SkipSegment {
   final String type;
@@ -22,16 +22,47 @@ class EpisodeSegments {
 /// Intro / recap / credits timestamps from IntroDB (api.introdb.app).
 /// Any error, 404 or empty answer returns [EpisodeSegments.empty].
 class IntroDbService {
+  static final _cache = <String, EpisodeSegments>{};
+  static final _pending = <String, Future<EpisodeSegments>>{};
+  static final _http = ForegroundHttpClient();
   static Future<EpisodeSegments> fetch(
-      String imdbId, int season, int episode) async {
+    String imdbId,
+    int season,
+    int episode,
+  ) async {
+    final key = '$imdbId:$season:$episode';
+    final saved = _cache[key];
+    if (saved != null) return saved;
+    final pending = _pending[key];
+    if (pending != null) return pending;
+    final future = _fetch(imdbId, season, episode);
+    _pending[key] = future;
+    try {
+      final value = await future;
+      if (value.all.isNotEmpty) {
+        if (_cache.length >= 128) _cache.remove(_cache.keys.first);
+        _cache[key] = value;
+      }
+      return value;
+    } finally {
+      _pending.remove(key);
+    }
+  }
+
+  static Future<EpisodeSegments> _fetch(
+    String imdbId,
+    int season,
+    int episode,
+  ) async {
     try {
       final uri = Uri.parse('https://api.introdb.app/segments').replace(
-          queryParameters: {
-            'imdb_id': imdbId,
-            'season': '$season',
-            'episode': '$episode',
-          });
-      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+        queryParameters: {
+          'imdb_id': imdbId,
+          'season': '$season',
+          'episode': '$episode',
+        },
+      );
+      final res = await _http.get(uri).timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return EpisodeSegments.empty;
       return parse(jsonDecode(res.body));
     } catch (_) {
@@ -41,11 +72,24 @@ class IntroDbService {
 
   static SkipSegment? _segment(String type, Object? raw) {
     if (raw is! Map) return null;
-    final s = raw['start_sec'] ?? (raw['start_ms'] is num ? raw['start_ms'] / 1000 : null);
-    final e = raw['end_sec'] ?? (raw['end_ms'] is num ? raw['end_ms'] / 1000 : null);
-    if (s is! num || e is! num || e <= s) return null;
-    return SkipSegment(type, Duration(milliseconds: (s * 1000).round()),
-        Duration(milliseconds: (e * 1000).round()));
+    final s =
+        raw['start_sec'] ??
+        (raw['start_ms'] is num ? raw['start_ms'] / 1000 : null);
+    final e =
+        raw['end_sec'] ?? (raw['end_ms'] is num ? raw['end_ms'] / 1000 : null);
+    if (s is! num ||
+        e is! num ||
+        !s.isFinite ||
+        !e.isFinite ||
+        s < 0 ||
+        e <= s ||
+        e > 86400)
+      return null;
+    return SkipSegment(
+      type,
+      Duration(milliseconds: (s * 1000).round()),
+      Duration(milliseconds: (e * 1000).round()),
+    );
   }
 
   /// Supports both the object form ({intro, recap, outro}) and an array of
@@ -59,10 +103,13 @@ class IntroDbService {
 
     final list = body is List
         ? body
-        : (body is Map && body['segments'] is List ? body['segments'] as List : null);
+        : (body is Map && body['segments'] is List
+              ? body['segments'] as List
+              : null);
     if (list != null) {
       for (final r in list) {
-        if (r is Map) add('${r['segment_type'] ?? r['type'] ?? ''}', r);
+        if (r is Map)
+          add('${r['segment_type'] ?? r['type'] ?? ''}'.toLowerCase(), r);
       }
     } else if (body is Map) {
       for (final t in ['recap', 'intro', 'outro', 'post_credits']) {
