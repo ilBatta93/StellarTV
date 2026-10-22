@@ -2,6 +2,7 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'services/image_warmup_service.dart';
+import 'services/frame_telemetry_service.dart';
 
 import 'services/app_foreground_service.dart';
 import 'services/foreground_http_client.dart';
@@ -38,6 +39,8 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final perf = FrameTelemetryService.instance;
+  await perf.startIfAutoEnabled();
   await AppForegroundService.instance.initialize();
   // A widget that throws during build would otherwise leave the whole app on a
   // blank white screen on a real device. Show a readable fallback instead.
@@ -55,10 +58,13 @@ Future<void> main() async {
     return true;
   };
   MediaKit.ensureInitialized();
+  perf.mark('media');
   // Post-update safety net: once per installed build, clears only rebuildable
   // derived caches. Never touches user data and never blocks startup.
   await AppMigrationService.run();
+  perf.mark('migrazione');
   await DeviceTypeService.initialize();
+  perf.mark('tipo dispositivo');
   if (DeviceTypeService.isTv) {
     // TV boxes have little RAM: cap decoded images to avoid being killed.
     PaintingBinding.instance.imageCache
@@ -72,7 +78,9 @@ Future<void> main() async {
       ..maximumSizeBytes = 150 << 20;
   }
   await PosterMemoryWarmup.load();
+  perf.mark('locandine in memoria');
   await DeviceIdentity.initialize();
+  perf.mark('identità dispositivo');
   await Supabase.initialize(
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.anonKey,
@@ -80,9 +88,11 @@ Future<void> main() async {
     // Lets the account website name this device's sessions precisely.
     headers: {'User-Agent': DeviceIdentity.userAgent},
   );
+  perf.mark('account');
   final savedKids = await ProfileProvider.savedSelectionIsKids(
     ProfileService(Supabase.instance.client),
   );
+  perf.mark('profilo');
   runApp(StellarTvApp(initialKids: savedKids));
 }
 
@@ -294,7 +304,10 @@ class _StellarTvAppState extends State<StellarTvApp> {
             ),
             themeMode: ThemeMode.dark,
             navigatorKey: appNavigatorKey,
-            navigatorObservers: [OpenRoutesObserver.instance],
+            navigatorObservers: [
+              OpenRoutesObserver.instance,
+              FrameTelemetryService.instance.observer,
+            ],
             home: const SplashScreen(),
             // "Dimensione testo" in Personalizzazione scales every label.
             builder: (context, child) {
