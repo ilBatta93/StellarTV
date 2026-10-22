@@ -989,11 +989,34 @@ class _CatalogPageState extends State<CatalogPage> {
     return _buildEntries(app, entries);
   }
 
+  // Search results are cached per query/filters: focus moves and rating
+  // batches rebuild the page but never rescan the whole catalog.
+  final Map<String, String> _lowerNames = {};
+  String? _searchKey;
+  List<CatalogEntry>? _searchResult;
+
+  String _lowerName(CatalogEntry e) =>
+      _lowerNames[e.primary.name] ??= e.primary.name.toLowerCase();
+
   Widget _buildSearchResults(AppProvider app) {
     final q = _query.toLowerCase();
+    final groups = app.groupedCatalog(widget.type);
+    final key = '${identityHashCode(groups)}|$q|$_selectedCategory|$_genreId|'
+        '$_platform|$_only4k|${app.titleInfoVersion}';
+    if (_lowerNames.length > 200000) _lowerNames.clear();
+    if (_searchKey == key && _searchResult != null) {
+      final cached = _ordered(_searchResult!);
+      return cached.isEmpty
+          ? EmptyState(
+              icon: Icons.search_off_rounded,
+              title: 'Nessun risultato',
+              message: 'Prova con un altro titolo o categoria.',
+            )
+          : _buildEntries(app, cached);
+    }
     var matches = <CatalogEntry>[];
     final seen = <String>{};
-    for (final g in app.groupedCatalog(widget.type)) {
+    for (final g in groups) {
       if (DeviceTypeService.isTv &&
           _selectedCategory != null &&
           _selectedCategory != _allLabel &&
@@ -1002,14 +1025,14 @@ class _CatalogPageState extends State<CatalogPage> {
         continue;
       }
       for (final e in g.entries) {
-        if (!e.primary.name.toLowerCase().contains(q)) continue;
+        if (!_lowerName(e).contains(q)) continue;
         if (!_matchesGenre(app, e)) continue;
-        final key = e.primary.id;
-        if (seen.contains(key)) continue;
-        seen.add(key);
+        if (!seen.add(e.primary.id)) continue;
         matches.add(e);
       }
     }
+    _searchKey = key;
+    _searchResult = matches;
     matches = _ordered(matches);
     if (matches.isEmpty) {
       return EmptyState(
