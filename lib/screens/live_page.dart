@@ -118,14 +118,6 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     }
   }
 
-  /// Guide row currently scrolled in time and its first visible programme.
-  String? _epgRow;
-  int _epgOffset = 0;
-
-  List<EpgProgram> _upcoming(EpgProvider epg, Channel c) => epg
-      .programmesFor(c)
-      .where((p) => p.endTime.isAfter(DateTime.now()))
-      .toList();
 
   Future<void> _confirmClearRecent() async {
     final ok = await showDialog<bool>(
@@ -173,10 +165,6 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
 
   void _select(Channel channel, [EpgProgram? program]) {
     final same = _selectedChannel?.id == channel.id;
-    if (_epgRow != channel.id) {
-      _epgRow = channel.id;
-      _epgOffset = 0;
-    }
     setState(() {
       _selectedChannel = channel;
       _selectedProgram = program;
@@ -229,14 +217,248 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     if (mounted && widget.active) playChannel(context, channel);
   }
 
-  List<String> _headerTimes(EpgProvider epg, Channel? selected) {
-    final visible = selected == null
-        ? const <EpgProgram>[]
-        : _upcoming(epg, selected).skip(_epgOffset).take(3).toList();
-    return [
-      for (var i = 0; i < 3; i++)
-        i < visible.length ? _hm(visible[i].startTime) : '',
+  // Proportional guide: one shared time window for every channel row, with
+  // a "now" line and a bounded past range that can be replayed when the
+  // channel offers an archive.
+  static const _epgSpan = Duration(hours: 2);
+  static const _epgPast = Duration(hours: 6);
+  DateTime? _epgStart;
+  String? _epgFocus;
+
+  DateTime _floor30(DateTime t) =>
+      DateTime(t.year, t.month, t.day, t.hour, t.minute < 30 ? 0 : 30);
+
+  DateTime get _epgMin => _floor30(DateTime.now().subtract(_epgPast));
+
+  DateTime get _windowStart =>
+      _epgStart ??
+      _floor30(DateTime.now().subtract(const Duration(minutes: 30)));
+
+  double _epgX(DateTime t, DateTime start, double width) =>
+      t.difference(start).inSeconds / _epgSpan.inSeconds * width;
+
+  Widget _timelineHeader(double width) {
+    final start = _windowStart;
+    final nowX = _epgX(DateTime.now(), start, width);
+    return Stack(
+      clipBehavior: Clip.hardEdge,
+      children: [
+        for (var i = 0; i < 4; i++)
+          Positioned(
+            left: width * i / 4,
+            top: 0,
+            child: Text(
+              _hm(start.add(Duration(minutes: 30 * i))),
+              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+            ),
+          ),
+        if (nowX >= 0 && nowX <= width)
+          Positioned(
+            left: (nowX - 4).clamp(0.0, width - 8),
+            top: 5,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  KeyEventResult _epgKey(
+    KeyEvent event,
+    Channel c,
+    EpgProgram? p,
+    List<EpgProgram> all,
+    List<EpgProgram> visible,
+  ) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    final right = key == LogicalKeyboardKey.arrowRight;
+    if (!right && key != LogicalKeyboardKey.arrowLeft) {
+      return KeyEventResult.ignored;
+    }
+    final start = _windowStart;
+    final end = start.add(_epgSpan);
+    if (p != null) {
+      final i = visible.indexOf(p);
+      if (right ? i < visible.length - 1 : i > 0) {
+        return KeyEventResult.ignored;
+      }
+    }
+    EpgProgram? target;
+    if (p != null &&
+        (right ? p.endTime.isAfter(end) : p.startTime.isBefore(start))) {
+      target = p;
+    } else if (p == null) {
+      target = right
+          ? all.where((x) => !x.startTime.isBefore(end)).firstOrNull
+          : all.where((x) => !x.endTime.isAfter(start)).lastOrNull;
+    } else {
+      final k = all.indexOf(p) + (right ? 1 : -1);
+      target = k >= 0 && k < all.length ? all[k] : null;
+    }
+    if (target == null) return KeyEventResult.ignored;
+    var next = right
+        ? start.add(const Duration(minutes: 30))
+        : start.subtract(const Duration(minutes: 30));
+    if (!identical(target, p)) {
+      final aligned = _floor30(target.startTime);
+      if (right ? aligned.isAfter(next) : aligned.isBefore(next)) {
+        next = aligned;
+      }
+    }
+    final min = _epgMin;
+    if (next.isBefore(min)) next = min;
+    if (right ? !next.isAfter(start) : !next.isBefore(start)) {
+      return KeyEventResult.ignored;
+    }
+    final chosen = target;
+    setState(() {
+      _epgStart = next;
+      _epgFocus = '${c.id}|${chosen.startTime.millisecondsSinceEpoch}';
+    });
+    _select(c, chosen);
+    return KeyEventResult.handled;
+  }
+
+  Widget _timelineRow(Channel c, EpgProvider epg, double width) {
+    final start = _windowStart;
+    final end = start.add(_epgSpan);
+    final min = _epgMin;
+    final now = DateTime.now();
+    final all = epg
+        .programmesFor(c)
+        .where((p) => p.endTime.isAfter(min) && p.endTime.isAfter(p.startTime))
+        .toList();
+    final visible = [
+      for (final p in all)
+        if (p.endTime.isAfter(start) && p.startTime.isBefore(end)) p,
     ];
+    final nowX = _epgX(now, start, width);
+    final cells = <Widget>[];
+    for (final p in visible) {
+      final l = _epgX(p.startTime.isBefore(start) ? start : p.startTime, start, width);
+      final r = _epgX(p.endTime.isAfter(end) ? end : p.endTime, start, width);
+      final w = (r - l - 6).clamp(4.0, width);
+      final id = '${c.id}|${p.startTime.millisecondsSinceEpoch}';
+      cells.add(
+        Positioned(
+          key: ValueKey(id),
+          left: l,
+          width: w,
+          top: 0,
+          bottom: 0,
+          child: Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            onKeyEvent: (_, e) => _epgKey(e, c, p, all, visible),
+            child: _EpgCell(
+              program: p,
+              compact: w < 44,
+              catchup: XtreamCatchup.available(c, p, now),
+              focus: _epgFocus == id,
+              onFocused: () {
+                if (_epgFocus == id) _epgFocus = null;
+                _select(c, p);
+              },
+              onPressed: () => _openProgram(c, p),
+            ),
+          ),
+        ),
+      );
+    }
+    return RepaintBoundary(
+      child: Stack(
+        clipBehavior: Clip.hardEdge,
+        children: [
+          if (visible.isEmpty)
+            Positioned.fill(
+              child: Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onKeyEvent: (_, e) => _epgKey(e, c, null, all, visible),
+                child: TvFocusable(
+                  focusedScale: 1,
+                  onFocusChange: (focus) {
+                    if (focus) _select(c);
+                  },
+                  onPressed: () => _watch(c),
+                  child: Container(
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Text(
+                      all.isEmpty
+                          ? 'Programmazione non disponibile'
+                          : 'Nessun programma in questa fascia',
+                      style: const TextStyle(color: AppColors.textMuted),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ...cells,
+          if (nowX >= 0 && nowX <= width)
+            Positioned(
+              left: nowX - 1,
+              width: 2,
+              top: 0,
+              bottom: 0,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.5),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openProgram(Channel c, EpgProgram p) async {
+    final now = DateTime.now();
+    if (p.isNow) return _watch(c);
+    if (p.endTime.isAfter(now)) {
+      _stopPreview();
+      setState(() {});
+      await _releaseQueue;
+      if (!mounted || !widget.active) return;
+      await showChannelGuide(context, c);
+      return;
+    }
+    if (!XtreamCatchup.available(c, p, now)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Rivedi non disponibile per questo programma.'),
+        ),
+      );
+      return;
+    }
+    _stopPreview();
+    setState(() {});
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    await _releaseQueue;
+    if (!mounted || !widget.active) return;
+    await playArchiveProgramme(context, c, p);
   }
 
   Widget _tvGuide(List<Channel> channels, EpgProvider epg, AppProvider app) {
@@ -271,15 +493,15 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                               ),
                             ),
                           ),
-                          for (final title in _headerTimes(epg, selected))
-                            Expanded(
-                              child: Text(
-                                title,
-                                style: const TextStyle(
-                                  color: AppColors.textMuted,
-                                ),
+                          Expanded(
+                            child: SizedBox(
+                              height: 18,
+                              child: LayoutBuilder(
+                                builder: (context, b) =>
+                                    _timelineHeader(b.maxWidth),
                               ),
                             ),
+                          ),
                         ],
                       ),
                     ),
@@ -294,14 +516,6 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                         ),
                         itemBuilder: (context, i) {
                           final c = channels[i];
-                          final all = _upcoming(epg, c);
-                          final offset = c.id == _epgRow
-                              ? _epgOffset.clamp(
-                                  0,
-                                  all.isEmpty ? 0 : all.length - 1,
-                                )
-                              : 0;
-                          final programs = all.skip(offset).take(3).toList();
                           return TvCatalogItem(
                             index: i,
                             columns: 1,
@@ -365,139 +579,15 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                if (programs.isEmpty)
-                                  Expanded(
-                                    child: TvFocusable(
-                                      focusedScale: 1,
-                                      onFocusChange: (focus) {
-                                        if (focus) _select(c);
-                                      },
-                                      onPressed: () => _watch(c),
-                                      child: ListTile(
-                                        title: const Text(
-                                          'Programmazione non disponibile',
-                                        ),
-                                        onTap: () => _watch(c),
-                                      ),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 92,
+                                    child: LayoutBuilder(
+                                      builder: (context, b) =>
+                                          _timelineRow(c, epg, b.maxWidth),
                                     ),
-                                  )
-                                else
-                                  for (final (slot, p) in programs.indexed)
-                                    Expanded(
-                                      child: Focus(
-                                        canRequestFocus: false,
-                                        skipTraversal: true,
-                                        onKeyEvent: (node, event) {
-                                          if (event is! KeyDownEvent &&
-                                              event is! KeyRepeatEvent) {
-                                            return KeyEventResult.ignored;
-                                          }
-                                          final key = event.logicalKey;
-                                          if (key ==
-                                                  LogicalKeyboardKey
-                                                      .arrowRight &&
-                                              slot == programs.length - 1 &&
-                                              offset + programs.length <
-                                                  all.length) {
-                                            _epgRow = c.id;
-                                            _epgOffset = offset + 1;
-                                            _select(c, all[offset + slot + 1]);
-                                            return KeyEventResult.handled;
-                                          }
-                                          if (key ==
-                                                  LogicalKeyboardKey
-                                                      .arrowLeft &&
-                                              slot == 0 &&
-                                              offset > 0) {
-                                            _epgRow = c.id;
-                                            _epgOffset = offset - 1;
-                                            _select(c, all[offset - 1]);
-                                            return KeyEventResult.handled;
-                                          }
-                                          return KeyEventResult.ignored;
-                                        },
-                                        child: Padding(
-                                          padding: const EdgeInsets.only(
-                                            right: 6,
-                                          ),
-                                          child: TvFocusable(
-                                            focusedScale: 1,
-                                            onFocusChange: (focus) {
-                                              if (focus) _select(c, p);
-                                            },
-                                            onPressed: () async {
-                                              _stopPreview();
-                                              setState(() {});
-                                              await _releaseQueue;
-                                              if (!context.mounted ||
-                                                  !widget.active)
-                                                return;
-                                              showChannelGuide(context, c);
-                                            },
-                                            child: Container(
-                                              height: 92,
-                                              padding: const EdgeInsets.all(10),
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    p.startTime.isBefore(
-                                                      DateTime.now(),
-                                                    )
-                                                    ? AppColors.card
-                                                    : AppColors.surface,
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                border: Border.all(
-                                                  color: AppColors.border,
-                                                ),
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    p.title,
-                                                    maxLines: 2,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: const TextStyle(
-                                                      fontSize: 13,
-                                                      height: 1.2,
-                                                    ),
-                                                  ),
-                                                  const Spacer(),
-                                                  FittedBox(
-                                                    fit: BoxFit.scaleDown,
-                                                    alignment:
-                                                        Alignment.centerLeft,
-                                                    child: Text(
-                                                      '${_hm(p.startTime)} – ${_hm(p.endTime)}',
-                                                      style: const TextStyle(
-                                                        color:
-                                                            AppColors.textMuted,
-                                                        fontSize: 11,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 7),
-                                                  LinearProgressIndicator(
-                                                    value:
-                                                        p.startTime.isBefore(
-                                                          DateTime.now(),
-                                                        )
-                                                        ? _progressOf(p)
-                                                        : 0,
-                                                    minHeight: 2,
-                                                    color: AppColors.primary,
-                                                    backgroundColor:
-                                                        AppColors.border,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           );
@@ -1442,4 +1532,189 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
       );
     },
   );
+}
+
+/// Starts a past programme from the channel archive, when available.
+Future<void> playArchiveProgramme(
+  BuildContext context,
+  Channel channel,
+  EpgProgram p,
+) async {
+  final credentials = context.read<AppProvider>().xtreamCredentials;
+  final server = credentials?['server'];
+  final user = credentials?['username'];
+  final password = credentials?['password'];
+  void fail() {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Recupero non disponibile: controlla il supporto archivio del provider.',
+        ),
+      ),
+    );
+  }
+
+  if (server == null || user == null || password == null) return fail();
+  try {
+    final info = await XtreamService().accountInfo(
+      server: server,
+      username: user,
+      password: password,
+    );
+    final zone = (info['server_info'] as Map?)?['timezone']?.toString();
+    final archive = zone == null
+        ? null
+        : XtreamCatchup.url(
+            channel.copyWith(
+              url:
+                  '${server.replaceAll(RegExp(r'/+$'), '')}/live/${Uri.encodeComponent(user)}/${Uri.encodeComponent(password)}/${Uri.parse(channel.url).pathSegments.last}',
+            ),
+            p,
+            now: DateTime.now(),
+            timezone: zone,
+          );
+    if (!context.mounted) return;
+    if (archive == null) return fail();
+    playChannel(
+      context,
+      channel.copyWith(url: archive),
+      startAt: Duration.zero,
+      queue: const [],
+      archivePlayback: true,
+    );
+  } catch (_) {
+    fail();
+  }
+}
+
+class _EpgCell extends StatefulWidget {
+  final EpgProgram program;
+  final bool compact;
+  final bool catchup;
+  final bool focus;
+  final VoidCallback onFocused;
+  final VoidCallback onPressed;
+  const _EpgCell({
+    required this.program,
+    required this.compact,
+    required this.catchup,
+    required this.focus,
+    required this.onFocused,
+    required this.onPressed,
+  });
+
+  @override
+  State<_EpgCell> createState() => _EpgCellState();
+}
+
+class _EpgCellState extends State<_EpgCell> {
+  final _node = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _claim();
+  }
+
+  @override
+  void didUpdateWidget(covariant _EpgCell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _claim();
+  }
+
+  void _claim() {
+    if (!widget.focus) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_node.hasFocus) _node.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _node.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.program;
+    final live = p.isNow;
+    final past = !p.endTime.isAfter(DateTime.now());
+    return RepaintBoundary(
+      child: TvFocusable(
+        focusNode: _node,
+        focusedScale: 1,
+        borderRadius: BorderRadius.circular(8),
+        onFocusChange: (focus) {
+          if (focus) widget.onFocused();
+        },
+        onPressed: widget.onPressed,
+        child: GestureDetector(
+          onTap: widget.onPressed,
+          child: Container(
+            padding: widget.compact
+                ? EdgeInsets.zero
+                : const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: live
+                  ? AppColors.primary.withValues(alpha: 0.12)
+                  : AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: live
+                    ? AppColors.primary.withValues(alpha: 0.7)
+                    : AppColors.border,
+              ),
+            ),
+            child: widget.compact
+                ? const SizedBox.expand()
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        children: [
+                          if (widget.catchup && past) ...[
+                            Icon(
+                              Icons.replay_rounded,
+                              size: 13,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          Expanded(
+                            child: Text(
+                              p.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                height: 1.2,
+                                fontWeight: FontWeight.w600,
+                                color: past
+                                    ? AppColors.textMuted
+                                    : AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_hm(p.startTime)} – ${_hm(p.endTime)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.clip,
+                        style: const TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -32,6 +32,7 @@ import 'downloads_screen.dart';
 import 'multiview_settings_screen.dart';
 import 'live_diagnostics_screen.dart';
 import 'vod_diagnostics_screen.dart';
+import 'performance_diagnostics_screen.dart';
 
 import '../services/app_update_service.dart';
 import 'category_manager_screen.dart';
@@ -506,7 +507,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     (Icons.palette_rounded, 'Aspetto e Home', 'Colori, testo, locandine, banner e cataloghi'),
     (Icons.play_circle_fill_rounded, 'Riproduzione', 'Player, sottotitoli, MultiView e cronologia'),
     (Icons.video_library_rounded, 'Contenuti', 'Categorie, aggiornamento e guida TV'),
-    (Icons.monitor_heart_rounded, 'Diagnostica', 'Rapporti di dirette, film e serie'),
+    (Icons.monitor_heart_rounded, 'Diagnostica', 'Rapporti di dirette, film, serie e fluidità'),
     (Icons.info_rounded, 'Informazioni', 'Versione e aggiornamenti'),
   ];
 
@@ -705,6 +706,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => const VodDiagnosticsScreen(),
+                  ),
+                ),
+              ),
+              SettingsValueTile(
+                icon: Icons.speed_rounded,
+                title: 'Prestazioni e fluidità',
+                subtitle: 'FPS, fotogrammi lenti, tempi di calcolo e disegno',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const PerformanceDiagnosticsScreen(),
                   ),
                 ),
               ),

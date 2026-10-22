@@ -122,3 +122,5 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Watch management uses one remote focus stop per season/episode and separate choice dialogs for bulk changes, avoiding ambiguous inline action grids.
 
 - Home title availability and series folders are indexed once per playlist in a background isolate (lib/services/catalog_index_builder.dart); Home lookups are non-blocking (wait: false) while user actions keep the synchronous fallback, so launch never freezes the remote. The index stays device-local and is never synced to the cloud.
+- Live guide is one shared proportional time window (past range bounded) with a theme-coloured now line; past cells replay only via XtreamCatchup, so the grid never invents archive support.
+- Frame telemetry records aggregates only during an explicit session (auto-stop) and uploads through the same owner-scoped diagnostic reports table, so no extra polling or tables exist.
