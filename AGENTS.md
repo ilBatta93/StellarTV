@@ -130,3 +130,5 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Catalog sort logic is browser/native-independent in catalog_sort.dart; a top-level isolate boundary receives only catalog entries and rating snapshots, while recent/filter list identities are cached to avoid repeated UI-thread sorts.
 
 - TV focus uses a static lift and theme ring without animated blurred shadows; duplicate decorative poster fills and the custom splash fade are touch-only, reducing raster work while retaining the same controls.
+
+- Update dialogs own a bounded notes scroll controller and explicit TV focus nodes: initial Update focus, Up enters notes from the top, Down at the end restores Update, and horizontal keys select actions; touch keeps native buttons and scrolling.

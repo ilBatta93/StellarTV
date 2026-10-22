@@ -18,3 +18,7 @@
 
 - Selezione TV più leggera, senza ombre animate; rimossi riempimenti grafici duplicati.
 - Passaggio iniziale TV senza dissolvenza e sfondo semplificato quando il sistema segnala memoria scarsa.
+
+## Aggiornamenti
+
+- Note dell’aggiornamento scorribili con il telecomando; selezione iniziale su Aggiorna e ritorno ai pulsanti dopo la lettura.
