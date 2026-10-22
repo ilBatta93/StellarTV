@@ -171,7 +171,7 @@ class TvImageMemoryGuard with WidgetsBindingObserver {
 
   @override
   void didHaveMemoryPressure() {
-    final cache = WidgetsBinding.instance.imageCache;
+    final cache = PaintingBinding.instance.imageCache;
     cache.maximumSize = 80;
     cache.maximumSizeBytes = 24 << 20;
     cache.clear();
