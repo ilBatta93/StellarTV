@@ -6,6 +6,7 @@ import '../widgets/tv_home_layout.dart';
 import '../services/history_episode_label.dart';
 import '../widgets/tv_home_rows.dart';
 import '../services/title_display.dart';
+import '../services/series_resume_policy.dart';
 
 import 'dart:async';
 
@@ -68,35 +69,69 @@ class DiscoverPage extends StatefulWidget {
 }
 
 class _DiscoverPageState extends State<DiscoverPage> {
-  /// Finished series episodes already checked for a following unwatched
+  /// Finished series episodes already checked for a following sequential
   /// episode (contentId -> has next). Checked one at a time, only for
   /// entries whose latest episode is complete, so the catalog is never
   /// rescanned on every frame.
-  final Map<String, bool> _hasNext = {};
-  final List<(HistoryEntry, Channel)> _pendingNext = [];
+  final Map<SeriesReplayKey, bool> _hasNext = {};
+  final List<(HistoryEntry, Channel, SeriesReplayKey)> _pendingNext = [];
   bool _checkingNext = false;
+  AppProvider? _nextApp;
+  int _nextGeneration = 0;
+  Set<SeriesReplayKey> _activeReplayKeys = {};
+
+  void _catalogChanged() {
+    _nextGeneration++;
+    _hasNext.clear();
+    _pendingNext.clear();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final app = context.read<AppProvider>();
+    if (identical(app, _nextApp)) return;
+    _nextApp?.removeListener(_catalogChanged);
+    _nextApp = app;
+    app.addListener(_catalogChanged);
+    _catalogChanged();
+  }
+
+  @override
+  void dispose() {
+    _nextApp?.removeListener(_catalogChanged);
+    _nextGeneration++;
+    _pendingNext.clear();
+    super.dispose();
+  }
 
   void _queueNextCheck(HistoryEntry e, Channel folder) {
-    if (_hasNext.containsKey(e.contentId) ||
-        _pendingNext.any((p) => p.$1.contentId == e.contentId)) {
+    final key = seriesReplayKey(context.read<HistoryProvider>().profileId, e);
+    if (!_activeReplayKeys.contains(key)) return;
+    if (_hasNext.containsKey(key) ||
+        _pendingNext.any((p) => p.$3 == key)) {
       return;
     }
-    _pendingNext.add((e, folder));
+    _pendingNext.add((e, folder, key));
     if (!_checkingNext) _drainNextChecks();
   }
 
   Future<void> _drainNextChecks() async {
     _checkingNext = true;
     while (_pendingNext.isNotEmpty && mounted) {
-      final (entry, folder) = _pendingNext.removeAt(0);
+      final (entry, folder, key) = _pendingNext.removeAt(0);
+      final generation = _nextGeneration;
       try {
         final next = await _findNextEpisode(context, entry, folder);
         if (!mounted) break;
-        _hasNext[entry.contentId] = next != null;
+        if (generation != _nextGeneration || !_activeReplayKeys.contains(key)) continue;
+        _hasNext[key] = next != null;
         if (next == null) setState(() {});
       } catch (_) {
+        if (!mounted) break;
+        if (generation != _nextGeneration || !_activeReplayKeys.contains(key)) continue;
         // Unknown: keep the series visible.
-        _hasNext[entry.contentId] = true;
+        _hasNext[key] = true;
       }
     }
     _checkingNext = false;
@@ -122,6 +157,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final discover = context.watch<DiscoverProvider>();
     final history = context.watch<HistoryProvider>();
     final reactions = context.watch<ReactionsProvider>();
+    _activeReplayKeys = {
+      for (final entry in history.continueWatching) seriesReplayKey(history.profileId, entry),
+    };
+    _hasNext.removeWhere((key, _) => !_activeReplayKeys.contains(key));
     // Episodes may not be indexed after a restart: rebuild them from the
     // history entry so watched series still feed "Serie consigliate".
     final entries = history.entries;
@@ -172,19 +211,22 @@ class _DiscoverPageState extends State<DiscoverPage> {
                       ))
             case final c?)
           if ((!app.kidsMode || app.isKidsContent(c)) &&
-              // Series whose every following episode is watched leave the row.
-              _hasNext[e.contentId] != false)
+              // Partial replays stay visible; only the actual final episode ends the sequence.
+              (!replayEpisodeComplete(e) ||
+                  _hasNext[seriesReplayKey(history.profileId, e)] != false))
             (e, c),
     ];
     for (final (e, c) in started) {
       final isEp = e.type == ContentType.series || e.type == ContentType.anime;
-      if (!isEp || !e.isWatched || _hasNext.containsKey(e.contentId)) continue;
+      if (!isEp || !replayEpisodeComplete(e) ||
+          _hasNext.containsKey(seriesReplayKey(history.profileId, e))) continue;
       final folder = e.seriesKey.isNotEmpty
           ? app.seriesFolderFor(e.seriesKey, wait: false)
           : (c.isSeriesFolder ? c : null);
       if (folder != null) {
+        final generation = _nextGeneration;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _queueNextCheck(e, folder);
+          if (mounted && generation == _nextGeneration) _queueNextCheck(e, folder);
         });
       }
     }
@@ -805,7 +847,7 @@ class _HistoryCard extends StatelessWidget {
       channelTitle: channel.name,
     );
     final minutesLeft = entry.remainingMovieMinutes;
-    final finished = isEpisode && entry.isWatched;
+    final finished = isEpisode && replayEpisodeComplete(entry);
     final trailing = finished
         ? 'Prossimo'
         : isEpisode
@@ -843,31 +885,17 @@ class _HistoryCard extends StatelessWidget {
   }
 }
 
-/// First unwatched episode after [entry] in [folder], or null when every
-/// following episode is watched (or [entry] is the last one).
+/// Immediate next episode, including previously watched ones; null only at the end.
 Future<SeriesEpisode?> _findNextEpisode(
   BuildContext context,
   HistoryEntry entry,
   Channel folder,
 ) async {
   final app = context.read<AppProvider>();
-  final history = context.read<HistoryProvider>();
   final details = await app.loadSeriesDetails(folder);
   final all = details.allEpisodes;
-  final i = all.indexWhere((e) => e.channel.id == entry.contentId);
   final ch = app.channelById(entry.contentId);
-  final s = ch?.season, n = ch?.episode;
-  final idx = i >= 0
-      ? i
-      : (s == null || n == null)
-      ? -1
-      : all.indexWhere((e) => e.season == s && e.number == n);
-  // Position unknown: never treat the series as finished.
-  if (idx < 0) throw StateError('episode not found in series details');
-  for (final e in all.skip(idx + 1)) {
-    if (!history.isWatched(e.channel.id)) return e;
-  }
-  return null;
+  return nextEpisodeInSequence(all, entry.contentId, season: ch?.season, number: ch?.episode);
 }
 
 /// Plays the episode after a finished one; opens the series page when the

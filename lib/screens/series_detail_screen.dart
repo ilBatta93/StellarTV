@@ -23,6 +23,7 @@ import '../widgets/episode_card.dart';
 import '../widgets/home_art.dart';
 import '../widgets/trailer_button.dart';
 import '../services/title_display.dart';
+import '../services/series_resume_policy.dart';
 import '../widgets/category_assign_button.dart';
 import '../widgets/series_watch_sheet.dart';
 
@@ -399,6 +400,8 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   SeriesEpisode? _resumeEpisode(HistoryProvider history) {
     final all = _details?.allEpisodes ?? const <SeriesEpisode>[];
     if (all.isEmpty) return null;
+    final replay = latestSeriesReplay(all, history.entries);
+    if (replay != null) return replay;
     final hasManual = all.any((e) => history.manualWatched(e.channel.id) != null);
     var lastWatched = -1;
     for (final (i, e) in all.indexed) {

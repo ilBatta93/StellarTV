@@ -7,6 +7,7 @@
 - Passaggio automatico sincronizzato come preferenza comune; impostazioni tecniche mantenute locali.
 - Verifica servizio spostata nella Diagnostica, sempre disponibile anche dopo un errore finale.
 - Guida e controlli dopo aggiornamento allineati alle funzioni attive.
+- Ripresa dalla visione più recente anche nelle raccolte già completate; avanzamento sequenziale senza cancellare gli altri stati di visione.
 
 ## Stabilità dell’interfaccia
 
