@@ -8,17 +8,24 @@ import 'tv_focusable.dart';
 import '../theme/app_theme.dart';
 import 'tv_text_field.dart';
 
-/// Date means the provider's addition date, not the theatrical release date.
+/// "Aggiunto" uses the provider's addition date; "Uscita" uses the real
+/// release date of the title (VOD catalogs only).
 enum CatalogSort {
   provider('Predefinito'),
   nameAsc('A–Z'),
   nameDesc('Z–A'),
   dateAsc('Primo aggiunto'),
   dateDesc('Ultimo aggiunto'),
+  releaseDesc('Uscita più recente'),
+  releaseAsc('Uscita meno recente'),
   rating('Voto');
 
   const CatalogSort(this.label);
   final String label;
+
+  /// Options meaningful only for films and series.
+  bool get vodOnly =>
+      this == rating || this == releaseDesc || this == releaseAsc;
 }
 
 List<T> sortCatalog<T>(
@@ -37,6 +44,14 @@ List<T> sortCatalog<T>(
     c.id,
     () => ratingOf?.call(c) ?? CatalogRatingService.instance.ratingOf(c) ?? 0,
   );
+  final releases = <String, int>{};
+  int release(Channel c) => releases.putIfAbsent(c.id, () => c.releaseKey);
+  int byRelease(Channel a, Channel b, bool newest) {
+    final ra = release(a), rb = release(b);
+    if (ra == 0 || rb == 0) return ra == rb ? 0 : (ra == 0 ? 1 : -1);
+    return newest ? rb.compareTo(ra) : ra.compareTo(rb);
+  }
+
   list.sort((a, b) {
     final ca = channel(a), cb = channel(b);
     final alpha = name(ca).compareTo(name(cb));
@@ -49,6 +64,8 @@ List<T> sortCatalog<T>(
             ? (ca.addedAt == 0 ? 1 : -1)
             : ca.addedAt.compareTo(cb.addedAt),
       CatalogSort.dateDesc => cb.addedAt.compareTo(ca.addedAt),
+      CatalogSort.releaseDesc => byRelease(ca, cb, true),
+      CatalogSort.releaseAsc => byRelease(ca, cb, false),
       CatalogSort.rating => rating(cb).compareTo(rating(ca)),
     };
     if (ca.addedAt == 0 && cb.addedAt == 0 && order == CatalogSort.dateAsc) {
@@ -275,7 +292,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
             mainAxisSize: MainAxisSize.min,
             children: [
               for (final order in CatalogSort.values)
-                if (widget.allowRating || order != CatalogSort.rating)
+                if (widget.allowRating || !order.vodOnly)
                   TvFocusable(
                     autofocus: order == (widget.sort ?? CatalogSort.provider),
                     focusedScale: 1,

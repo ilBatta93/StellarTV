@@ -43,6 +43,27 @@ void main() {
     expect(source.map((c) => c.id), ['b', 'a', 'c']);
   });
 
+  test('Sort by real release date, title year fallback, unknown last', () {
+    Channel c(String id, String name, int release) => Channel(
+      id: id, name: name, url: 'u', logo: '', group: 'g',
+      type: ContentType.movie, releaseDate: release,
+    );
+    final source = [
+      c('old', 'Vecchio', 19950610),
+      c('none', 'Senza data', 0),
+      c('new', 'Nuovo', 20240301),
+      c('title', 'Film (2010)', 0),
+    ];
+    List<String> ids(CatalogSort o) =>
+        sortCatalog(source, o, (x) => x).map((x) => x.id).toList();
+    expect(ids(CatalogSort.releaseDesc), ['new', 'title', 'old', 'none']);
+    expect(ids(CatalogSort.releaseAsc), ['old', 'title', 'new', 'none']);
+    expect(Channel.parseReleaseDate('2019-05-21'), 20190521);
+    expect(Channel.parseReleaseDate('21/05/2019'), 20190521);
+    expect(Channel.parseReleaseDate('2019'), 20190101);
+    expect(Channel.parseReleaseDate(''), 0);
+  });
+
   testWidgets('TV search starts hidden, opens on OK, and sort returns focus', (
     tester,
   ) async {

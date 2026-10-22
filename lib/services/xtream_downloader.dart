@@ -532,6 +532,9 @@ class _ChannelMapper {
           group: _group(item),
           type: ContentType.movie,
           addedAt: int.tryParse(item['added']?.toString() ?? '') ?? 0,
+          releaseDate: Channel.parseReleaseDate(
+            item['releasedate'] ?? item['releaseDate'] ?? item['release_date'] ?? item['year'],
+          ),
         );
       default:
         final seriesId = item['series_id']?.toString() ?? '';
@@ -557,6 +560,9 @@ class _ChannelMapper {
                 (item['last_modified'] ?? item['added'])?.toString() ?? '',
               ) ??
               0,
+          releaseDate: Channel.parseReleaseDate(
+            item['releaseDate'] ?? item['release_date'] ?? item['releasedate'] ?? item['year'],
+          ),
         );
     }
   }

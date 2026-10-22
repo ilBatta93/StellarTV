@@ -21,6 +21,10 @@ class Channel {
 
   /// Unix seconds when the provider added the item (0 when unknown).
   final int addedAt;
+
+  /// Real release date as yyyymmdd (0 when unknown). Comes from the provider
+  /// metadata, falling back to a year written in the title.
+  final int releaseDate;
   final int archiveDays;
 
   Channel({
@@ -42,8 +46,41 @@ class Channel {
     this.isSeriesFolder = false,
     this.episodeCount = 0,
     this.addedAt = 0,
+    this.releaseDate = 0,
     this.archiveDays = 0,
   });
+
+  static final RegExp _titleYear = RegExp(r'(?:^|[^0-9])((?:19|20)[0-9]{2})(?![0-9])');
+
+  /// Release key used for sorting: stored date or the year in the title.
+  int get releaseKey {
+    if (releaseDate > 0) return releaseDate;
+    final m = _titleYear.allMatches(displaySeriesName).lastOrNull;
+    final y = m == null ? 0 : int.parse(m.group(1)!);
+    return y > 1900 && y <= DateTime.now().year + 2 ? y * 10000 + 101 : 0;
+  }
+
+  /// Parses provider dates such as "2019-05-21", "2019" or Unix seconds.
+  static int parseReleaseDate(Object? raw) {
+    final s = raw?.toString().trim() ?? '';
+    if (s.isEmpty) return 0;
+    final iso = RegExp(r'^((?:19|20)[0-9]{2})(?:[-/.]([0-9]{1,2})(?:[-/.]([0-9]{1,2}))?)?').firstMatch(s);
+    if (iso != null) {
+      final y = int.parse(iso.group(1)!);
+      final mo = int.tryParse(iso.group(2) ?? '') ?? 1;
+      final d = int.tryParse(iso.group(3) ?? '') ?? 1;
+      if (mo < 1 || mo > 12 || d < 1 || d > 31) return y * 10000 + 101;
+      return y * 10000 + mo * 100 + d;
+    }
+    final dmy = RegExp(r'^([0-9]{1,2})[-/.]([0-9]{1,2})[-/.]((?:19|20)[0-9]{2})').firstMatch(s);
+    if (dmy != null) {
+      final d = int.parse(dmy.group(1)!), mo = int.parse(dmy.group(2)!);
+      final y = int.parse(dmy.group(3)!);
+      if (mo < 1 || mo > 12 || d < 1 || d > 31) return y * 10000 + 101;
+      return y * 10000 + mo * 100 + d;
+    }
+    return 0;
+  }
 
   bool get isPlayable => url.isNotEmpty && !isSeriesFolder;
 
@@ -75,6 +112,7 @@ class Channel {
       isSeriesFolder: map['is_series_folder'] == true,
       episodeCount: (map['episode_count'] as num?)?.toInt() ?? 0,
       addedAt: (map['added_at'] as num?)?.toInt() ?? 0,
+      releaseDate: (map['release_date'] as num?)?.toInt() ?? 0,
       archiveDays: (map['archive_days'] as num?)?.toInt() ?? 0,
     );
   }
@@ -99,6 +137,7 @@ class Channel {
       'is_series_folder': isSeriesFolder,
       'episode_count': episodeCount,
       'added_at': addedAt,
+      'release_date': releaseDate,
       'archive_days': archiveDays,
     };
   }
@@ -122,6 +161,7 @@ class Channel {
     bool? isSeriesFolder,
     int? episodeCount,
     int? addedAt,
+    int? releaseDate,
     int? archiveDays,
   }) {
     return Channel(
@@ -143,6 +183,7 @@ class Channel {
       isSeriesFolder: isSeriesFolder ?? this.isSeriesFolder,
       episodeCount: episodeCount ?? this.episodeCount,
       addedAt: addedAt ?? this.addedAt,
+      releaseDate: releaseDate ?? this.releaseDate,
       archiveDays: archiveDays ?? this.archiveDays,
     );
   }
