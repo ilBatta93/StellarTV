@@ -61,6 +61,7 @@ class PersonalVault {
     'ui_home_recent_titles',
     'ui_scale',
     'ui_watched_percent',
+    'ui_auto_next_episode',
   };
   static const _fields = {
     'id',
@@ -181,14 +182,20 @@ class PersonalVault {
       DateTime.tryParse(object(v)['watched']?.toString() ?? '')
           ?.microsecondsSinceEpoch ??
       0;
+
   /// The cloud copy keeps only the newest titles so every save stays small;
   /// the full history always remains on the device.
   static const cloudHistoryLimit = 500;
   static Map<String, dynamic> capHistory(dynamic raw) {
     final h = object(raw);
-    final controls = h.entries.where((e) => object(e.value)['type'] == '__stellar_seen_v1');
-    final entries = h.entries.where((e) => object(e.value)['type'] != '__stellar_seen_v1').toList()
-      ..sort((x, y) => _at(y.value).compareTo(_at(x.value)));
+    final controls = h.entries.where(
+      (e) => object(e.value)['type'] == '__stellar_seen_v1',
+    );
+    final entries =
+        h.entries
+            .where((e) => object(e.value)['type'] != '__stellar_seen_v1')
+            .toList()
+          ..sort((x, y) => _at(y.value).compareTo(_at(x.value)));
     return Map.fromEntries([...controls, ...entries.take(cloudHistoryLimit)]);
   }
 
@@ -196,12 +203,17 @@ class PersonalVault {
     final out = object(a);
     for (final e in object(b).entries) {
       final old = out[e.key];
-      final control = object(e.value)['type'] == '__stellar_seen_v1' && object(old)['type'] == '__stellar_seen_v1';
+      final control =
+          object(e.value)['type'] == '__stellar_seen_v1' &&
+          object(old)['type'] == '__stellar_seen_v1';
       if (old == null ||
           _at(e.value) > _at(old) ||
           _at(e.value) == _at(old) &&
-              (control ? ((object(e.value)['pos'] as num?) ?? 3) < ((object(old)['pos'] as num?) ?? 3) : object(e.value)['deleted'] == true ||
-                  object(old)['deleted'] != true))
+              (control
+                  ? ((object(e.value)['pos'] as num?) ?? 3) <
+                        ((object(old)['pos'] as num?) ?? 3)
+                  : object(e.value)['deleted'] == true ||
+                        object(old)['deleted'] != true))
         out[e.key] = e.value;
     }
     return out;

@@ -604,11 +604,12 @@ class SyncService {
   }
 
   Future<(SyncPayload?, DateTime?)> pull(String code) async {
-    if (!ForegroundPolicy.instance.active || code != currentUserId)
+    if (PlaybackWorkPolicy.instance.blocksGuide || code != currentUserId)
       return (null, null);
     try {
       final recovery = await recoveryKey();
-      if (recovery == null) return (null, null);
+      if (recovery == null || PlaybackWorkPolicy.instance.blocksGuide)
+        return (null, null);
       final row = await _client
           .from('personal_vaults')
           .select('envelope,updated_at')
@@ -620,7 +621,7 @@ class SyncService {
         recovery,
         code,
       );
-      if (!ForegroundPolicy.instance.active || code != currentUserId)
+      if (PlaybackWorkPolicy.instance.blocksGuide || code != currentUserId)
         return (null, null);
       return (
         SyncPayload.fromJson(PersonalVault.merge({}, decoded)),

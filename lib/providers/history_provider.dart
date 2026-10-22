@@ -123,8 +123,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   List<HistoryEntry> episodesOfSeries(HistoryEntry e) {
     final keys = seriesKeysOf(e).toSet();
     if (keys.isEmpty) return [e];
-    final out = entries.where((x) => seriesKeysOf(x).any(keys.contains)).toList()
-      ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
+    final out =
+        entries.where((x) => seriesKeysOf(x).any(keys.contains)).toList()
+          ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
     return out;
   }
 
@@ -645,6 +646,15 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     final index = _entries.indexWhere((e) => e.contentId == contentId);
     if (index < 0) return;
     final current = _entries[index];
+    position = position < Duration.zero
+        ? Duration.zero
+        : position > duration
+        ? duration
+        : position;
+    final nowAt = DateTime.now();
+    final at = nowAt.isAfter(current.lastWatchedAt)
+        ? nowAt
+        : current.lastWatchedAt.add(const Duration(microseconds: 1));
     if (current.position.inSeconds == position.inSeconds &&
         current.duration.inSeconds == duration.inSeconds) {
       return;
@@ -653,7 +663,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       ..[index] = current.copyWith(
         position: position,
         duration: duration,
-        lastWatchedAt: DateTime.now(),
+        lastWatchedAt: at,
       );
     _notify();
     // Local copy is always immediate. While a video keeps playing the

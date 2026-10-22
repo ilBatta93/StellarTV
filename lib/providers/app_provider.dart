@@ -90,6 +90,15 @@ class AppProvider extends ChangeNotifier {
   List<CustomCategory> _customCategories = [];
   bool _isLoading = false;
   bool _initialized = false;
+  bool _startupLoading = false;
+  bool _disposed = false;
+  int _startupEpoch = 0;
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
   String? _error;
   AuthMethod _authMethod = AuthMethod.none;
   Map<String, String>? _xtreamCredentials;
@@ -1116,35 +1125,49 @@ class AppProvider extends ChangeNotifier {
     _initialized = true;
     notifyListeners();
 
-    final credentials = _xtreamCredentials;
-    if (_authMethod == AuthMethod.xtream && credentials != null) {
-      final missing = [
-        for (final type in _playlistTypes)
-          if (!saved.contains(type)) type,
-      ];
-      if (missing.length == _playlistTypes.length) {
-        // Nothing saved on this device yet: full first download.
-        await loadFromXtream(
-          server: credentials['server']!,
-          username: credentials['username']!,
-          password: credentials['password']!,
-        );
-      } else if (missing.isNotEmpty) {
-        // Only the sections never saved are downloaded; the others open
-        // instantly from the device copy.
-        await _loadSections(missing, credentials);
+    unawaited(_finishStartup(saved).catchError((Object _) {}));
+  }
+
+  Future<void> _finishStartup(Set<ContentType> saved) async {
+    final epoch = ++_startupEpoch;
+    final startupKey = _currentKey;
+    _startupLoading = true;
+    try {
+      final credentials = _xtreamCredentials;
+      if (_authMethod == AuthMethod.xtream && credentials != null) {
+        final missing = [
+          for (final type in _playlistTypes)
+            if (!saved.contains(type)) type,
+        ];
+        if (missing.length == _playlistTypes.length) {
+          // Nothing saved on this device yet: full first download.
+          await loadFromXtream(
+            server: credentials['server']!,
+            username: credentials['username']!,
+            password: credentials['password']!,
+          );
+        } else if (missing.isNotEmpty) {
+          // Only the sections never saved are downloaded; the others open
+          // instantly from the device copy.
+          await _loadSections(missing, credentials);
+        } else {
+          _isLoading = false;
+          _error = null;
+          notifyListeners();
+        }
       } else {
         _isLoading = false;
-        _error = null;
         notifyListeners();
       }
-    } else {
-      _isLoading = false;
+      // Automatic update only when the chosen interval has elapsed since the
+      // last complete download.
+      if (!_disposed && epoch == _startupEpoch && startupKey == _currentKey) {
+        await _refreshService.schedule();
+      }
+    } finally {
+      if (epoch == _startupEpoch) _startupLoading = false;
       notifyListeners();
     }
-    // Automatic update only when the chosen interval has elapsed since the
-    // last complete download.
-    await _refreshService.schedule();
   }
 
   /// Downloads some sections only (missing from the device copy).
@@ -1279,7 +1302,8 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// Never true during playback, so the wait screen cannot cover a video.
-  bool get isRefreshingAny => _anyPending && !_playbackActive;
+  bool get isRefreshingAny =>
+      _anyPending && !_playbackActive && !_startupLoading;
 
   Future<void> _enqueue(ContentType type, Map<String, String> credentials) {
     final run = _sectionQueue.then((_) => _loadSection(type, credentials));
@@ -1291,6 +1315,18 @@ class AppProvider extends ChangeNotifier {
     ContentType type,
     Map<String, String> credentials,
   ) async {
+    if (_disposed) return;
+    if (_playbackActive) {
+      _refreshDeferred = true;
+      _catalogStates[type] = CatalogLoadState(
+        phase: _hasSection(type)
+            ? CatalogLoadPhase.cached
+            : CatalogLoadPhase.idle,
+        hasContent: _hasSection(type),
+      );
+      notifyListeners();
+      return;
+    }
     if (!ForegroundPolicy.instance.active) {
       final done = Completer<void>();
       void resumed() {
@@ -1310,7 +1346,7 @@ class AppProvider extends ChangeNotifier {
     final username = credentials['username']!;
     final password = credentials['password']!;
     final key = _cacheKey(credentials);
-    if (key != _currentKey) return; // account changed while queued
+    if (_disposed || key != _currentKey) return; // account changed while queued
     _catalogStates[type] = CatalogLoadState(
       phase: CatalogLoadPhase.loading,
       hasContent: _hasSection(type),
@@ -1339,8 +1375,8 @@ class AppProvider extends ChangeNotifier {
           onProgress: onProgress,
         ),
       };
-      if (key != _currentKey) return;
-      if (_playbackActive && _hasSection(type)) {
+      if (_disposed || key != _currentKey) return;
+      if (_playbackActive) {
         // A video is playing: swapping the catalog now re-filters and
         // rebuilds every page under the player, freezing the picture and
         // the remote. Keep the fresh section aside and apply it once the
@@ -1360,7 +1396,7 @@ class AppProvider extends ChangeNotifier {
       );
       unawaited(_catalogCache.writeSection(key, type, channels));
     } catch (e) {
-      if (key != _currentKey) return;
+      if (_disposed || key != _currentKey) return;
       final message = e.toString().replaceFirst('Exception: ', '');
       _loadFailures.add(message);
       if (!_hasSection(type)) {
@@ -1437,6 +1473,8 @@ class AppProvider extends ChangeNotifier {
       '${credentials['server'] ?? ''}|${credentials['username'] ?? ''}';
 
   Future<void> logout() async {
+    _startupEpoch++;
+    _startupLoading = false;
     await _settingsService.clearCredentials();
     _refreshService.stop();
     // A new account must download its playlist completely the first time.
@@ -1463,6 +1501,8 @@ class AppProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _startupEpoch++;
     PlaybackWorkPolicy.instance.removeListener(_onPlaybackWorkChanged);
     _pendingTimer?.cancel();
     _deferredRefreshTimer?.cancel();

@@ -11,6 +11,7 @@ import '../widgets/apple_page_scaffold.dart';
 import '../widgets/settings_tiles.dart';
 import '../models/diagnostic_guide.dart';
 import '../widgets/diagnostic_guide_section.dart';
+import '../widgets/player/provider_check_button.dart';
 
 class VodDiagnosticsScreen extends StatefulWidget {
   const VodDiagnosticsScreen({super.key});
@@ -64,7 +65,9 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
       () async {
         await client.from('live_diagnostic_reports').insert({
           'user_id': user.id,
-          'report': jsonDecode(guidedDiagnosticReport(await service.report(), problem)),
+          'report': jsonDecode(
+            guidedDiagnosticReport(await service.report(), problem),
+          ),
         });
       },
       'Rapporto inviato. Lo trovi su stellartv.lovable.app → Il mio account → Log errori.',
@@ -79,7 +82,14 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          DiagnosticGuideSection(selected: problem, onChanged: (value) => setState(() => problem = value)),
+          const SettingsSection(
+            title: 'Verifica servizio',
+            children: [ProviderCheckButton()],
+          ),
+          DiagnosticGuideSection(
+            selected: problem,
+            onChanged: (value) => setState(() => problem = value),
+          ),
           SettingsSection(
             title: 'Registrazione',
             children: [
@@ -91,8 +101,7 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
                   () => service.setEnabled(v),
                   v ? 'Registrazione attiva' : 'Registrazione disattivata',
                 ),
-                subtitle:
-                    'Solo su questo dispositivo. Rapporti con modello, sistema, versione app e dati del lettore; senza password o indirizzi IPTV.',
+                subtitle: 'Solo su questo dispositivo. Rapporti con modello, sistema, versione app e dati del lettore; senza password o indirizzi IPTV.',
               ),
               ListTile(
                 title: Text('${service.log.events.length} eventi salvati'),
@@ -108,8 +117,7 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
               SettingsValueTile(
                 icon: Icons.cloud_upload_outlined,
                 title: 'Invia al mio account',
-                subtitle:
-                    'Disponibile sul sito solo dopo il tuo invio, nel tuo account.',
+                subtitle: 'Disponibile sul sito solo dopo il tuo invio, nel tuo account.',
                 onTap: busy ? null : upload,
               ),
               if (!DeviceTypeService.isTv)
@@ -125,7 +133,14 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
                               : null;
                           action(() async {
                             final file = await service.exportFile();
-                            if (problem != null) await file.writeAsString(guidedDiagnosticReport(await file.readAsString(), problem), flush: true);
+                            if (problem != null)
+                              await file.writeAsString(
+                                guidedDiagnosticReport(
+                                  await file.readAsString(),
+                                  problem,
+                                ),
+                                flush: true,
+                              );
                             await SharePlus.instance.share(
                               ShareParams(
                                 files: [XFile(file.path)],

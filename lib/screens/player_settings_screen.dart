@@ -11,7 +11,6 @@ import '../widgets/player/player_format.dart';
 import '../widgets/player/video_surface.dart';
 import '../widgets/settings_tiles.dart';
 import '../widgets/tv_focusable.dart';
-import '../widgets/player/provider_check_button.dart';
 
 class PlayerSettingsScreen extends StatefulWidget {
   const PlayerSettingsScreen({super.key, this.scope});
@@ -183,9 +182,12 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           SettingsSwitchTile(
             icon: Icons.skip_next_rounded,
             title: 'Passa automaticamente al prossimo episodio',
-            subtitle: 'Disattiva per scegliere manualmente quando proseguire. Vale su questo dispositivo.',
+            subtitle: 'Disattiva per scegliere manualmente quando proseguire. Si sincronizza con le preferenze comuni.',
             value: s.autoNextEpisode,
-            onChanged: (v) => _update((s) => s.autoNextEpisode = v),
+            onChanged: (v) {
+              _update((s) => s.autoNextEpisode = v);
+              _service.setAutoNextEpisode(v);
+            },
           ),
         if (!_tvProfile || !_live)
           SettingsValueTile(
@@ -533,7 +535,6 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     SettingsSection(
       title: 'Sistema',
       children: [
-        const ProviderCheckButton(),
         SettingsSwitchTile(
           icon: Icons.picture_in_picture_alt_rounded,
           title: 'Picture-in-Picture automatico',

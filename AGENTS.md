@@ -115,3 +115,8 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 
 - Playback assistance is device-local: automatic episode transitions obey the player preference at both credits and natural end; unknown credits only suggest manual continuation. Local chapter reads are one-shot per engine and bounded, with validated segment coordinates and cached remote lookups.
 - Service diagnosis uses one bounded local account request only on manual action or final playback failure, no stream probes, polling or database; reports uncertainty and refuses mismatched playback accounts.
+
+- Automatic next is stored in one portable boolean outside technical player blobs; loads project it into VOD settings while live settings never overwrite it.
+- Startup publishes the device catalog before detached missing-section loading; configured devices restore cloud data without gating Home. Full refresh keeps the input guard and catalog publication waits for closed playback.
+- Episode progress follows the latest actual seek or playback sample, not the greatest past progress; explicit completion remains terminal only within that player session.
+- Watch management uses one remote focus stop per season/episode and separate choice dialogs for bulk changes, avoiding ambiguous inline action grids.

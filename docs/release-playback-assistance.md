@@ -1,9 +1,9 @@
-# Riproduzione e assistenza
+# Reattività e controllo della visione
 
-- Scelta locale del passaggio automatico alla riproduzione successiva.
-- Verifica del servizio su richiesta o dopo un errore finale, senza controlli periodici.
-- Messaggi che distinguono limiti di accesso, stato non attivo e problemi di raggiungibilità, segnalando i casi incerti.
-- Riconoscimento migliorato delle sigle e delle code con intervalli verificati e capitoli locali dove disponibili.
-- Suggerimento manuale vicino alla fine quando non esistono intervalli verificati, senza salti anticipati automatici.
-- Conto alla rovescia sospeso durante pausa, pannelli e app non visibile.
-- Guida aggiornata e controlli automatici per preferenze, diagnosi e riproduzione col telecomando.
+- Apertura dai dati locali senza attendere il recupero cloud; primo caricamento con indicatori di sezione.
+- Protezioni conservate durante aggiornamenti completi e riproduzione.
+- Cronologia aggiornata all’ultima posizione effettiva, anche tornando indietro o ripartendo, senza alterare le altre voci.
+- Gestione visione con una riga per elemento, stato chiaro e scelta Visto, Non visto o Automatico dal progresso.
+- Passaggio automatico sincronizzato come preferenza comune; impostazioni tecniche mantenute locali.
+- Verifica servizio spostata nella Diagnostica, sempre disponibile anche dopo un errore finale.
+- Guida e controlli dopo aggiornamento allineati alle funzioni attive.

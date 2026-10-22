@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -12,8 +13,12 @@ import 'package:stellar_tv/services/xtream_service.dart';
 import 'package:stellar_tv/widgets/catalog_status_indicator.dart';
 
 Channel channel(ContentType type) => Channel(
-  id: type.name, name: 'Test ${type.name}', url: '', logo: '',
-  group: 'Test', type: type,
+  id: type.name,
+  name: 'Test ${type.name}',
+  url: '',
+  logo: '',
+  group: 'Test',
+  type: type,
 );
 
 class FakeXtream extends XtreamService {
@@ -23,21 +28,30 @@ class FakeXtream extends XtreamService {
   Completer<List<Channel>>? nextMovies;
   int liveCalls = 0;
   @override
-  Future<List<Channel>> getLiveChannels({required String server,
-    required String username, required String password,
-    void Function(CatalogProgress progress)? onProgress}) {
+  Future<List<Channel>> getLiveChannels({
+    required String server,
+    required String username,
+    required String password,
+    void Function(CatalogProgress progress)? onProgress,
+  }) {
     liveCalls++;
     return live.future;
   }
+
   @override
-  Future<List<Channel>> getVodChannels({required String server,
-    required String username, required String password,
-    void Function(CatalogProgress progress)? onProgress}) =>
-      (nextMovies ?? movies).future;
+  Future<List<Channel>> getVodChannels({
+    required String server,
+    required String username,
+    required String password,
+    void Function(CatalogProgress progress)? onProgress,
+  }) => (nextMovies ?? movies).future;
   @override
-  Future<List<Channel>> getSeriesChannels({required String server,
-    required String username, required String password,
-    void Function(CatalogProgress progress)? onProgress}) => series.future;
+  Future<List<Channel>> getSeriesChannels({
+    required String server,
+    required String username,
+    required String password,
+    void Function(CatalogProgress progress)? onProgress,
+  }) => series.future;
 }
 
 class FakeCache extends CatalogCacheService {
@@ -48,65 +62,147 @@ class FakeCache extends CatalogCacheService {
   @override
   Future<void> write(String accountKey, List<Channel> channels) async {}
   @override
-  Future<void> writeSection(String accountKey, ContentType type,
-    List<Channel> channels) async {}
+  Future<void> writeSection(
+    String accountKey,
+    ContentType type,
+    List<Channel> channels,
+  ) async {}
 }
 
 Future<void> tick() => Future<void>.delayed(Duration.zero);
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({
-    'kids_verdicts_v1': '{"movie:test movie":false,"tv:test series":false}',
-    'tmdb_genres_v1': '{"movie:test movie":[],"tv:test series":[]}',
-  }));
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(
+    () => SharedPreferences.setMockInitialValues({
+      'kids_verdicts_v1': '{"movie:test movie":false,"tv:test series":false}',
+      'tmdb_genres_v1': '{"movie:test movie":[],"tv:test series":[]}',
+    }),
+  );
 
-  test('Sections become ready independently before global completion', () async {
-    final api = FakeXtream();
-    final app = AppProvider(xtreamService: api, catalogCache: FakeCache());
-    final loading = app.loadFromXtream(server: 'test', username: '', password: '');
-    await tick();
-    expect(app.catalogState(ContentType.live).phase, CatalogLoadPhase.loading);
-    expect(app.catalogState(ContentType.movie).phase, CatalogLoadPhase.queued);
-    api.live.complete([channel(ContentType.live)]);
-    await tick();
-    expect(app.catalogState(ContentType.live).phase, CatalogLoadPhase.ready);
-    expect(app.channelsOf(ContentType.live), hasLength(1));
-    expect(app.catalogState(ContentType.movie).phase, CatalogLoadPhase.loading);
-    expect(app.isLoading, true);
-    api.movies.complete([]);
-    await tick();
-    expect(app.catalogState(ContentType.movie).phase, CatalogLoadPhase.ready);
-    expect(app.catalogState(ContentType.movie).hasContent, false);
-    expect(app.catalogState(ContentType.series).phase, CatalogLoadPhase.loading);
-    api.series.complete([]);
-    await loading;
-    expect(app.isLoading, false);
-    expect(app.catalogState(ContentType.anime).phase, CatalogLoadPhase.ready);
-  });
+  test(
+    'cached startup completes without waiting for missing network sections',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'auth_method': 'xtream',
+        'xtream_server': 'test',
+        'xtream_username': '',
+        'xtream_password': '',
+        'playlist_refresh_minutes': 0,
+      });
+      final api = FakeXtream();
+      final app = AppProvider(
+        xtreamService: api,
+        catalogCache: FakeCache([channel(ContentType.live)]),
+      );
+      await app.init().timeout(const Duration(seconds: 2));
+      expect(app.isInitialized, true);
+      expect(app.isAuthenticated, true);
+      expect(app.channelsOf(ContentType.live), hasLength(1));
+      expect(api.liveCalls, 0);
+      await tick();
+      expect(app.isRefreshingAny, false);
+      expect(app.catalogState(ContentType.movie).isPending, true);
+      api.movies.complete([channel(ContentType.movie)]);
+      api.series.complete([channel(ContentType.series)]);
+      for (var i = 0; i < 10; i++) {
+        await tick();
+      }
+      expect(app.channelsOf(ContentType.series), hasLength(1));
+      final refresh = app.refreshAllSections();
+      await tick();
+      expect(app.isRefreshingAny, true);
+      api.live.complete([channel(ContentType.live)]);
+      await refresh;
+      app.dispose();
+    },
+  );
 
-  test('Failure uses cache without marking unrelated sections failed', () async {
-    final api = FakeXtream();
-    final app = AppProvider(xtreamService: api,
-      catalogCache: FakeCache([channel(ContentType.movie)]));
-    final loading = app.loadFromXtream(server: 'test', username: '', password: '');
-    api.live.complete([]);
-    await tick();
-    api.movies.completeError(Exception('offline'));
-    await tick();
-    expect(app.catalogState(ContentType.movie).phase, CatalogLoadPhase.cached);
-    expect(app.catalogState(ContentType.movie).hasContent, true);
-    expect(app.channelsOf(ContentType.movie), hasLength(1));
-    api.series.completeError(Exception('offline'));
-    await loading;
-    expect(app.catalogState(ContentType.series).phase, CatalogLoadPhase.failed);
-    expect(app.catalogState(ContentType.live).phase, CatalogLoadPhase.ready);
-    expect(app.catalogState(ContentType.series).isPending, false);
-  });
+  test(
+    'Sections become ready independently before global completion',
+    () async {
+      final api = FakeXtream();
+      final app = AppProvider(xtreamService: api, catalogCache: FakeCache());
+      final loading = app.loadFromXtream(
+        server: 'test',
+        username: '',
+        password: '',
+      );
+      await tick();
+      expect(
+        app.catalogState(ContentType.live).phase,
+        CatalogLoadPhase.loading,
+      );
+      expect(
+        app.catalogState(ContentType.movie).phase,
+        CatalogLoadPhase.queued,
+      );
+      api.live.complete([channel(ContentType.live)]);
+      await tick();
+      expect(app.catalogState(ContentType.live).phase, CatalogLoadPhase.ready);
+      expect(app.channelsOf(ContentType.live), hasLength(1));
+      expect(
+        app.catalogState(ContentType.movie).phase,
+        CatalogLoadPhase.loading,
+      );
+      expect(app.isLoading, true);
+      api.movies.complete([]);
+      await tick();
+      expect(app.catalogState(ContentType.movie).phase, CatalogLoadPhase.ready);
+      expect(app.catalogState(ContentType.movie).hasContent, false);
+      expect(
+        app.catalogState(ContentType.series).phase,
+        CatalogLoadPhase.loading,
+      );
+      api.series.complete([]);
+      await loading;
+      expect(app.isLoading, false);
+      expect(app.catalogState(ContentType.anime).phase, CatalogLoadPhase.ready);
+    },
+  );
+
+  test(
+    'Failure uses cache without marking unrelated sections failed',
+    () async {
+      final api = FakeXtream();
+      final app = AppProvider(
+        xtreamService: api,
+        catalogCache: FakeCache([channel(ContentType.movie)]),
+      );
+      final loading = app.loadFromXtream(
+        server: 'test',
+        username: '',
+        password: '',
+      );
+      api.live.complete([]);
+      await tick();
+      api.movies.completeError(Exception('offline'));
+      await tick();
+      expect(
+        app.catalogState(ContentType.movie).phase,
+        CatalogLoadPhase.cached,
+      );
+      expect(app.catalogState(ContentType.movie).hasContent, true);
+      expect(app.channelsOf(ContentType.movie), hasLength(1));
+      api.series.completeError(Exception('offline'));
+      await loading;
+      expect(
+        app.catalogState(ContentType.series).phase,
+        CatalogLoadPhase.failed,
+      );
+      expect(app.catalogState(ContentType.live).phase, CatalogLoadPhase.ready);
+      expect(app.catalogState(ContentType.series).isPending, false);
+    },
+  );
 
   test('Retrying one section leaves the others untouched', () async {
     final api = FakeXtream();
     final app = AppProvider(xtreamService: api, catalogCache: FakeCache());
-    final loading = app.loadFromXtream(server: 'test', username: '', password: '');
+    final loading = app.loadFromXtream(
+      server: 'test',
+      username: '',
+      password: '',
+    );
     api.live.complete([channel(ContentType.live)]);
     await tick();
     api.movies.completeError(Exception('offline'));
@@ -131,17 +227,35 @@ void main() {
     expect(app.isLoading, false);
   });
 
-  testWidgets('Mobile and TV indicators are fixed-size and passive', (tester) async {
+  testWidgets('Mobile and TV indicators are fixed-size and passive', (
+    tester,
+  ) async {
     final api = FakeXtream();
     final app = AppProvider(xtreamService: api, catalogCache: FakeCache());
-    final loading = app.loadFromXtream(server: 'test', username: '', password: '');
-    await tester.pumpWidget(ChangeNotifierProvider.value(value: app,
-      child: const MaterialApp(home: Scaffold(body: Row(children: [
-        CatalogNavigationIcon(icon: Icons.live_tv, type: ContentType.live),
-        CatalogStatusIndicator(type: ContentType.movie),
-        CatalogStatusIndicator(type: ContentType.series),
-      ]))),
-    ));
+    final loading = app.loadFromXtream(
+      server: 'test',
+      username: '',
+      password: '',
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: app,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: Row(
+              children: [
+                CatalogNavigationIcon(
+                  icon: Icons.live_tv,
+                  type: ContentType.live,
+                ),
+                CatalogStatusIndicator(type: ContentType.movie),
+                CatalogStatusIndicator(type: ContentType.series),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
     await tester.pump();
     final before = tester.getSize(find.byType(Row).first);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/app_provider.dart';
 import '../providers/history_provider.dart';
 import '../providers/profile_provider.dart';
@@ -80,8 +81,14 @@ class _SplashScreenState extends State<SplashScreen>
     if (!_cloudChecked) {
       _cloudChecked = true;
       if (sync.code != null) {
-        _restoreFromCloud(history, app);
-        return;
+        if (app.isAuthenticated) {
+          // A configured device opens locally; the existing guarded restore
+          // updates data independently without holding navigation.
+          history.pullFromCloud().catchError((Object _) => false);
+        } else {
+          _restoreFromCloud(history, app);
+          return;
+        }
       }
     }
 

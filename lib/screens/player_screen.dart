@@ -124,6 +124,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// Resume point not yet reached: progress is not saved until the seek
   /// lands, so a slow start never overwrites the saved position with 0.
   Duration? _pendingResume;
+  bool _initialProgressSaved = false;
   DateTime _openedAt = DateTime.now();
   List<Channel>? _queue;
   Channel? _next;
@@ -1406,6 +1407,11 @@ class _PlayerScreenState extends State<PlayerScreen>
       settings: settings,
       startAt: startAt,
       engineFactory: widget.engineFactory,
+      onPositionCommitted: (position) {
+        _pendingResume = position;
+        _openedAt = DateTime.now();
+        return _saveResume(position: position);
+      },
     )..addListener(_onSessionChanged);
 
     setState(() {
@@ -1472,6 +1478,15 @@ class _PlayerScreenState extends State<PlayerScreen>
       });
     }
     _introWasActive = introActive;
+    if (!_initialProgressSaved &&
+        v.isReady &&
+        v.duration > Duration.zero &&
+        (_pendingResume == null ||
+            (v.position - (_pendingResume ?? Duration.zero)).abs() <=
+                const Duration(seconds: 10))) {
+      _initialProgressSaved = true;
+      unawaited(_saveResume(periodic: true));
+    }
     if (_wasPlaying &&
         (!v.isPlaying || v.isEnded) &&
         !PlaybackWorkPolicy.instance.blocksCloud) {
@@ -1645,14 +1660,16 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
-  Future<void> _saveResume({bool periodic = false}) async {
+  Future<void> _saveResume({bool periodic = false, Duration? position}) async {
     final session = _session;
     if (session == null || _isLive || widget.archivePlayback) return;
     final v = session.value;
-    if (v.duration <= Duration.zero) return;
+    if (!v.isReady || v.duration <= Duration.zero) return;
+    final actualPosition = position ?? v.position;
     final pending = _pendingResume;
-    if (pending != null) {
-      final landed = v.position >= pending - const Duration(seconds: 10);
+    if (pending != null && position == null) {
+      final landed =
+          (v.position - pending).abs() <= const Duration(seconds: 10);
       final gaveUp =
           DateTime.now().difference(_openedAt) > const Duration(seconds: 40);
       if (!landed && !gaveUp) return;
@@ -1661,19 +1678,19 @@ class _PlayerScreenState extends State<PlayerScreen>
     await _progressWriter.save(() async {
       await _history.updatePosition(
         widget.channel.id,
-        v.position,
+        actualPosition,
         v.duration,
         // A paused video syncs at once so another device resumes exactly.
         periodic: periodic && v.isPlaying,
       );
       if (_settings?.resumePlayback != true) return;
-      final remaining = v.duration - v.position;
+      final remaining = v.duration - actualPosition;
       final keep =
-          v.position > const Duration(seconds: 5) &&
+          actualPosition > Duration.zero &&
           remaining > const Duration(minutes: 1);
       await _settingsService.saveResumePosition(
         widget.channel.url,
-        keep ? v.position : null,
+        keep ? actualPosition : null,
       );
     });
   }

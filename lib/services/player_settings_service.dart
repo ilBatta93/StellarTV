@@ -10,6 +10,7 @@ enum PlayerSettingsScope { shared, liveTv, filmSeriesTv }
 
 class PlayerSettingsService {
   static const _settingsKey = 'player_settings_v1';
+  static const autoNextKey = 'ui_auto_next_episode';
   static const _resumeKey = 'player_resume_positions';
   static const _maxResumeEntries = 200;
 
@@ -30,7 +31,7 @@ class PlayerSettingsService {
       await save(previous, scope: scope);
       return previous;
     }
-    if (raw == null) return PlayerSettings();
+    if (raw == null) return _common(PlayerSettings(), prefs, scope);
     try {
       final decoded = jsonDecode(raw);
       if (decoded is Map<String, dynamic>) {
@@ -42,12 +43,45 @@ class PlayerSettingsService {
           _liveDefaults(settings);
           await save(settings, scope: scope);
         }
-        return settings;
+        return _common(settings, prefs, scope);
       }
     } on FormatException {
       // Corrupt payload: fall through to defaults.
     }
-    return PlayerSettings();
+    return _common(PlayerSettings(), prefs, scope);
+  }
+
+  Future<PlayerSettings> _common(
+    PlayerSettings settings,
+    SharedPreferences prefs,
+    PlayerSettingsScope scope,
+  ) async {
+    if (scope == PlayerSettingsScope.liveTv) return settings;
+    final shared = prefs.getBool(autoNextKey);
+    if (shared == null) {
+      // Prefer the existing TV VOD choice even if live/shared loads first.
+      final vodRaw = prefs.getString(_key(PlayerSettingsScope.filmSeriesTv));
+      if (vodRaw != null) {
+        try {
+          final vod = jsonDecode(vodRaw);
+          if (vod is Map && vod['autoNextEpisode'] is bool) {
+            settings.autoNextEpisode = vod['autoNextEpisode'] as bool;
+          }
+        } on FormatException {
+          /* Keep the current validated settings. */
+        }
+      }
+      await prefs.setBool(autoNextKey, settings.autoNextEpisode);
+    } else {
+      settings.autoNextEpisode = shared;
+    }
+    return settings;
+  }
+
+  Future<void> setAutoNextEpisode(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(autoNextKey, value);
+    SyncHooks.settingsChanged();
   }
 
   /// TV live channels start with ExoPlayer, the device's native decoder:
@@ -74,6 +108,8 @@ class PlayerSettingsService {
     final defaults = PlayerSettings();
     if (scope == PlayerSettingsScope.liveTv) _liveDefaults(defaults);
     await save(defaults, scope: scope);
+    if (scope != PlayerSettingsScope.liveTv)
+      await setAutoNextEpisode(defaults.autoNextEpisode);
   }
 
   Future<Map<String, int>> _resumeMap(SharedPreferences prefs) async {

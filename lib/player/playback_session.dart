@@ -47,6 +47,7 @@ class PlaybackSession extends ChangeNotifier {
     this.previewMode = false,
     this.previewFallback = false,
     this.engineFactory,
+    this.onPositionCommitted,
   }) : _candidates = liveCandidates(
          url,
          isLive,
@@ -59,6 +60,7 @@ class PlaybackSession extends ChangeNotifier {
 
   final String url;
   final bool isLive;
+  final Future<void> Function(Duration position)? onPositionCommitted;
 
   /// Small/parallel players (Diretta preview, MultiView tiles).
   final bool previewMode;
@@ -976,6 +978,7 @@ class PlaybackSession extends ChangeNotifier {
     }
     if (!isLive && engine.value.isEnded) {
       await engine.seekTo(Duration.zero);
+      await onPositionCommitted?.call(Duration.zero);
       _vod?.markSeek();
       await engine.play();
     } else if (engine.value.isPlaying) {
@@ -988,13 +991,17 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
+  int _seekRevision = 0;
   Future<void> seekTo(Duration position) async {
+    final revision = ++_seekRevision;
     final engine = _engine;
     if (engine == null || isLive) return;
     final max = engine.value.duration;
     var target = position < Duration.zero ? Duration.zero : position;
     if (max > Duration.zero && target > max) target = max;
     await engine.seekTo(target);
+    if (_engine != engine || revision != _seekRevision) return;
+    await onPositionCommitted?.call(target);
     // The viewer moved the position: the next sample is not a stutter.
     _vod?.markSeek();
   }

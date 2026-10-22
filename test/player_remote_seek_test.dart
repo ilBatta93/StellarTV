@@ -305,6 +305,16 @@ void main() {
         'https://example.invalid/movie.mp4',
         succeed: true,
       );
+      await history.recordStart(
+        Channel(
+          id: 'movie',
+          name: 'Film',
+          url: engine.url,
+          logo: '',
+          group: '',
+          type: ContentType.movie,
+        ),
+      );
       await tester.pumpWidget(
         MultiProvider(
           providers: [
@@ -381,6 +391,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
       await tester.pump(const Duration(milliseconds: 701));
       expect(engine.sought, const Duration(seconds: 90));
+      expect(history.entryFor('movie')?.position, const Duration(seconds: 90));
       expect(opacity(), 0);
       await tester.sendKeyEvent(LogicalKeyboardKey.mediaFastForward);
       await tester.pump(const Duration(milliseconds: 701));
