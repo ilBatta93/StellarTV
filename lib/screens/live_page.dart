@@ -13,6 +13,7 @@ import '../services/catalog_builder.dart';
 import '../services/recent_live_channels.dart';
 import '../services/xtream_service.dart';
 import '../services/xtream_catchup.dart';
+import '../services/live_preview_policy.dart';
 import '../services/native_player_bridge.dart';
 import '../widgets/player/video_surface.dart';
 import '../navigation/app_routes.dart';
@@ -73,6 +74,33 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   int _previewGeneration = 0;
   Future<void> _releaseQueue = Future<void>.value();
   late final AppProvider _app;
+  late final EpgProvider _epg;
+  bool _previewWaiting = false;
+  bool get _previewMustWait => livePreviewMustWait(
+    guideReady: _epg.isReady,
+    guideLoading: _epg.isLoading || _epg.refreshDeferred,
+    catalogLoading: _app.isLoading,
+  );
+
+  void _guideWorkChanged() {
+    if (!mounted || !widget.active) return;
+    if (_previewMustWait) {
+      _previewWaiting = _selectedChannel != null;
+      if (_preview != null || _previewDelay?.isActive == true) {
+        _stopPreview();
+        setState(() {});
+      }
+      return;
+    }
+    if (!_previewWaiting) return;
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    _previewWaiting = false;
+    final selected = _selectedChannel;
+    final channel = selected == null ? null : _app.channelById(selected.id);
+    if (channel != null && channel.type == ContentType.live) {
+      _select(channel, _selectedProgram);
+    }
+  }
   StreamSubscription<void>? _screenOffSub;
 
   @override
@@ -87,6 +115,12 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   }
 
   void _routeChanged() {
+    if (_previewWaiting && ModalRoute.of(context)?.isCurrent == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _guideWorkChanged();
+      });
+      return;
+    }
     if (_preview != null || _previewDelay?.isActive == true) {
       _stopPreview();
       if (mounted) setState(() {});
@@ -170,6 +204,12 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       _selectedProgram = program;
     });
     if (same && _preview != null) return;
+    if (_previewMustWait) {
+      _previewWaiting = true;
+      _stopPreview();
+      return;
+    }
+    _previewWaiting = false;
     _stopPreview();
     if (mounted) setState(() {});
     final gen = _previewGeneration;
@@ -187,12 +227,20 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
           ModalRoute.of(context)?.isCurrent != true)
         return;
       if (_app.kidsMode && !_app.isKidsContent(channel)) return;
+      if (_previewMustWait) {
+        _previewWaiting = true;
+        return;
+      }
       await _releaseQueue;
       if (!mounted ||
           gen != _previewGeneration ||
           !widget.active ||
           ModalRoute.of(context)?.isCurrent != true)
         return;
+      if (_previewMustWait) {
+        _previewWaiting = true;
+        return;
+      }
       final session = PlaybackSession(
         url: channel.url,
         isLive: true,
@@ -748,6 +796,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _app = context.read<AppProvider>();
+    _epg = context.read<EpgProvider>();
+    _epg.addListener(_guideWorkChanged);
+    _app.addListener(_guideWorkChanged);
     _recentLive.addListener(_recentChanged);
     unawaited(_recentLive.load());
     WidgetsBinding.instance.addObserver(this);
@@ -763,6 +814,8 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     _searchController.dispose();
+    _epg.removeListener(_guideWorkChanged);
+    _app.removeListener(_guideWorkChanged);
     _recentLive.removeListener(_recentChanged);
     _screenOffSub?.cancel();
     _tick?.cancel();

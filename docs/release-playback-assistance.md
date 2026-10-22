@@ -22,3 +22,8 @@
 ## Aggiornamenti
 
 - Note dell’aggiornamento scorribili con il telecomando; selezione iniziale su Aggiorna e ritorno ai pulsanti dopo la lettura.
+
+## Guida programmi
+
+- Corretta la precedenza tra caricamento della guida e anteprima, mantenendo disponibili i comandi di navigazione.
+- Recupero degli aggiornamenti rinviati senza interrompere la visione a schermo intero.

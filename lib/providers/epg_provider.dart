@@ -55,6 +55,8 @@ class EpgProvider extends ChangeNotifier {
   final Map<String, String?> _channelMatch = {};
 
   bool get isLoading => _loading;
+  bool get isReady => _ready;
+  bool get refreshDeferred => _deferred;
   String? get error => _error;
   bool get hasData => !_data.isEmpty;
   bool get usePlaylistGuide => _usePlaylist;
@@ -113,13 +115,22 @@ class EpgProvider extends ChangeNotifier {
   void _schedule() {
     _timer?.cancel();
     _scheduledFor = _activeSources.join('|');
-    if (_activeSources.isEmpty || _playbackBlocked) return;
+    if (_activeSources.isEmpty) return;
     final due =
         _data.isEmpty ||
         _lastRun == null ||
         (_intervalMinutes > 0 &&
             DateTime.now().difference(_lastRun!) >=
                 Duration(minutes: _intervalMinutes));
+    if (_playbackBlocked) {
+      // Retain due work even when the first scheduling attempt happens while
+      // a preview is active. Closing that session must resume the download.
+      if (due && !_deferred) {
+        _deferred = true;
+        notifyListeners();
+      }
+      return;
+    }
     if (due) {
       refresh();
     } else if (_intervalMinutes > 0) {
@@ -140,6 +151,7 @@ class EpgProvider extends ChangeNotifier {
     if (_playbackBlocked) {
       _deferred = true;
       _timer?.cancel();
+      notifyListeners();
       return;
     }
     _deferred = false;
