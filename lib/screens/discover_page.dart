@@ -10,6 +10,7 @@ import '../services/title_display.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../services/image_warmup_service.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -904,6 +905,10 @@ class _PosterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    PosterMemoryWarmup.warm(
+      context,
+      items.take(8).map((i) => homePosterUrl(context, i)),
+    );
     return HorizontalRow(
       height: tmdbPosterRowHeight(context),
       itemCount: items
@@ -1212,6 +1217,10 @@ class _TvDiscoverState extends State<_TvDiscover> {
     BuildContext rowContext, {
     String? subtitle,
   }) {
+    PosterMemoryWarmup.warm(
+      rowContext,
+      items.take(8).map((i) => homePosterUrl(rowContext, i)),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

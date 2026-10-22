@@ -1,5 +1,3 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
@@ -500,12 +498,12 @@ class TvExitPrompt extends StatelessWidget {
     // tvOS-style glass pill: quiet, rounded, no hard accent frame.
     return ClipRRect(
       borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+      child: DecoratedBox(
+        decoration: const BoxDecoration(),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.55),
+            color: Colors.black.withValues(alpha: 0.38),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
             boxShadow: [

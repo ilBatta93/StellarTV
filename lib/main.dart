@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'services/image_warmup_service.dart';
 
 import 'services/app_foreground_service.dart';
 import 'services/foreground_http_client.dart';
@@ -56,6 +57,7 @@ Future<void> main() async {
       ..maximumSize = 400
       ..maximumSizeBytes = 150 << 20;
   }
+  await PosterMemoryWarmup.load();
   await DeviceIdentity.initialize();
   await Supabase.initialize(
     url: SupabaseConfig.url,

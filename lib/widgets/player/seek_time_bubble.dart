@@ -39,7 +39,7 @@ class SeekTimeBubble extends StatelessWidget {
                   height: height,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppColors.card.withValues(alpha: 0.92),
+                    color: AppColors.card.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(height / 2),
                     boxShadow: [
                       BoxShadow(
@@ -62,7 +62,7 @@ class SeekTimeBubble extends StatelessWidget {
                 CustomPaint(
                   size: const Size(12, 6),
                   painter: _PointerPainter(
-                    AppColors.card.withValues(alpha: 0.92),
+                    AppColors.card.withValues(alpha: 0.6),
                   ),
                 ),
               ],

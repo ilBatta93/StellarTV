@@ -1,6 +1,7 @@
 import '../models/home_layout_preferences.dart';
 import 'home_presentation.dart';
 import '../services/image_cache_service.dart';
+import '../services/image_warmup_service.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -18,11 +19,16 @@ class PosterImage extends StatelessWidget {
   final BoxFit fit;
   final IconData fallbackIcon;
 
+  /// Home cards record their decode width so the next start can decode the
+  /// first posters before the cards are built.
+  final bool rememberWidth;
+
   const PosterImage({
     super.key,
     required this.url,
     this.fit = BoxFit.cover,
     this.fallbackIcon = Icons.movie_outlined,
+    this.rememberWidth = false,
   });
 
   @override
@@ -46,6 +52,7 @@ class PosterImage extends StatelessWidget {
         if (c.maxWidth.isFinite && c.maxWidth > 0) {
           final px = c.maxWidth * MediaQuery.devicePixelRatioOf(context);
           cacheWidth = ((px / 64).ceil() * 64).clamp(64, 1280);
+          if (rememberWidth) PosterMemoryWarmup.noteWidth(cacheWidth);
         }
         return CachedNetworkImage(
           cacheManager: AppImageCache.manager,
@@ -114,6 +121,15 @@ class _PressableState extends State<Pressable> {
   }
 }
 
+/// The image a TMDB card shows: Home landscape shape uses the backdrop.
+String? homePosterUrl(BuildContext context, TmdbItem item) {
+  final home = HomePresentation.contains(context);
+  final ui = context.read<UiSettings>();
+  return home && ui.homePosterShape == HomePosterShape.landscape
+      ? item.backdropUrl ?? item.posterUrl
+      : item.posterUrl;
+}
+
 class TmdbPosterCard extends StatelessWidget {
   final TmdbItem item;
   final VoidCallback onTap;
@@ -138,11 +154,7 @@ class TmdbPosterCard extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          PosterImage(
-            url: home && ui.homePosterShape == HomePosterShape.landscape
-                ? item.backdropUrl ?? item.posterUrl
-                : item.posterUrl,
-          ),
+          PosterImage(url: homePosterUrl(context, item), rememberWidth: home),
           if (item.voteAverage > 0)
             Positioned(
               top: 6,

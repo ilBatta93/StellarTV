@@ -1,7 +1,6 @@
 import '../services/playback_progress_writer.dart';
 
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1954,7 +1953,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.7),
+                  color: Colors.black.withValues(alpha: 0.45),
                   borderRadius: BorderRadius.circular(22),
                 ),
                 child: Text(
@@ -2057,13 +2056,15 @@ class _PlayerScreenState extends State<PlayerScreen>
       child: SafeArea(
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+          // Light glass without blur: the scene stays visible if the card
+          // appears early, and no blur pass runs over the video surface.
+          child: DecoratedBox(
+            decoration: const BoxDecoration(),
             child: Container(
               width: 340,
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.55),
+                color: Colors.black.withValues(alpha: 0.38),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
                 boxShadow: [
@@ -2195,7 +2196,7 @@ class _NoticeBanner extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.card.withValues(alpha: 0.95),
+        color: AppColors.card.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.warning.withValues(alpha: 0.5)),
       ),
