@@ -275,9 +275,9 @@ void main() {
           }
           await tester.pumpWidget(const SizedBox());
           await tester.pump();
-          await tester.runAsync(() async {
-            await Future<void>.delayed(const Duration(milliseconds: 50));
-          });
+          // The session deliberately waits 350 ms before releasing its surface.
+          await tester.pump(const Duration(milliseconds: 500));
+          await tester.pump();
           history.dispose();
           app.dispose();
           client.dispose();
