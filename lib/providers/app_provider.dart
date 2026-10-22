@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,10 +12,10 @@ import '../models/catalog_load_state.dart';
 import '../models/series_details.dart';
 import '../models/tmdb_item.dart';
 import '../services/catalog_builder.dart';
+import '../services/catalog_index_builder.dart';
 import '../services/playlist_refresh_service.dart';
 import '../services/playback_work_policy.dart';
 import '../services/foreground_policy.dart';
-import '../services/tmdb_service.dart';
 import '../services/xtream_service.dart';
 import '../services/cloud_favorites_service.dart';
 import '../services/favorites_service.dart';
@@ -145,6 +146,7 @@ class AppProvider extends ChangeNotifier {
     _recentCache.clear();
     _favoritesCache = null;
     _titleIndex = null;
+    _indexEpoch++;
     _matchCache.clear();
     _seriesFolderIndex = null;
   }
@@ -240,6 +242,10 @@ class AppProvider extends ChangeNotifier {
         refreshPlaylist();
       });
     }
+    if (!value && _titleIndex == null && _allChannels.isNotEmpty) {
+      // Index skipped while the video played: build it once it closes.
+      Timer(const Duration(seconds: 2), _startCatalogIndex);
+    }
     if (!value && _pendingSections.isNotEmpty) {
       // Let the exit animation finish first.
       _pendingTimer = Timer(
@@ -314,7 +320,7 @@ class AppProvider extends ChangeNotifier {
       () => catalogOf(ContentType.series),
       () => groupedCatalog(ContentType.series),
       () => recentEntries(ContentType.series),
-      () => _titleIndex ??= _buildTitleIndex(),
+      _startCatalogIndex,
       () => allEntries(ContentType.movie),
       () => allEntries(ContentType.series),
     ];
@@ -747,11 +753,92 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// Normalized title -> playlist movies / series folders, built once per
-  /// playlist so the Top lists can check availability instantly.
+  /// playlist in a background isolate so the Home never freezes at launch.
   Map<String, List<Channel>>? _titleIndex;
   final Map<String, Channel?> _matchCache = {};
+  int _indexEpoch = 0;
+  bool _indexBuilding = false;
+  bool get catalogIndexReady => _titleIndex != null;
 
-  Map<String, List<Channel>> _buildTitleIndex() {
+  /// Starts (once) the off-thread grouping + title normalization. Never
+  /// during playback: the result is applied after the player closes.
+  void _startCatalogIndex() {
+    if (_indexBuilding || _titleIndex != null || _disposed) return;
+    if (_playbackActive) return;
+    final snapshot = _allChannels;
+    if (snapshot.isEmpty) return;
+    _indexBuilding = true;
+    final epoch = ++_indexEpoch;
+    final movies = channelsOf(ContentType.movie);
+    final movieNames = [for (final c in movies) c.name];
+    final seriesItems = _seriesCatalogCache.containsKey(ContentType.series)
+        ? const <Channel>[]
+        : channelsOf(ContentType.series);
+    final animeItems = _seriesCatalogCache.containsKey(ContentType.anime)
+        ? const <Channel>[]
+        : channelsOf(ContentType.anime);
+    final seriesReady = _seriesCatalogCache[ContentType.series];
+    final animeReady = _seriesCatalogCache[ContentType.anime];
+    // Series already grouped on this thread: only their names travel.
+    final seriesNames = seriesReady == null
+        ? null
+        : [for (final c in seriesReady) c];
+    final animeNames = animeReady == null ? null : [for (final c in animeReady) c];
+    unawaited(() async {
+      CatalogIndexData? data;
+      try {
+        data = await Isolate.run(
+          () => buildCatalogIndex(
+            movieNames,
+            seriesNames ?? seriesItems,
+            animeNames ?? animeItems,
+            alreadyGrouped: (seriesNames != null, animeNames != null),
+          ),
+        );
+      } catch (_) {
+        data = null;
+      }
+      _indexBuilding = false;
+      if (_disposed) return;
+      if (_titleIndex != null) return; // built synchronously meanwhile
+      if (epoch != _indexEpoch || !identical(snapshot, _allChannels)) {
+        // Playlist changed meanwhile: index the current one instead.
+        if (_titleIndex == null) _startCatalogIndex();
+        return;
+      }
+      _applyCatalogIndex(data, movies);
+    }());
+  }
+
+  void _applyCatalogIndex(CatalogIndexData? data, List<Channel> movies) {
+    if (data == null) {
+      // Isolate unavailable: fall back to the previous synchronous build.
+      _titleIndex = _buildTitleIndexSync();
+    } else {
+      final series = _seriesCatalogCache[ContentType.series] ??= data.seriesCatalog;
+      final anime = _seriesCatalogCache[ContentType.anime] ??= data.animeCatalog;
+      final lists = [movies, series, anime];
+      final sizes = [movies.length, data.seriesCatalog.length, data.animeCatalog.length];
+      final index = <String, List<Channel>>{};
+      data.titles.forEach((key, codes) {
+        final out = <Channel>[];
+        for (final code in codes) {
+          final kind = CatalogIndexData.kindOf(code);
+          final i = CatalogIndexData.indexOf(code);
+          final list = lists[kind];
+          if (list.length != sizes[kind] || i >= list.length) continue;
+          out.add(list[i]);
+        }
+        if (out.isNotEmpty) index[key] = out;
+      });
+      _titleIndex = index;
+    }
+    _matchCache.clear();
+    _seriesFolderIndex = null;
+    notifyListeners();
+  }
+
+  Map<String, List<Channel>> _buildTitleIndexSync() {
     final index = <String, List<Channel>>{};
     void add(String key, Channel c) {
       if (key.isEmpty) return;
@@ -771,8 +858,15 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// Series folder for an episode's series key.
-  /// O(1) lookup: Home cards call this on every build.
-  Channel? seriesFolderFor(String seriesKey) {
+  /// O(1) lookup: Home cards call this on every build. While the series
+  /// catalog is still grouped in background it answers null (no freeze).
+  Channel? seriesFolderFor(String seriesKey, {bool wait = true}) {
+    final grouped = _seriesCatalogCache.containsKey(ContentType.series) &&
+        _seriesCatalogCache.containsKey(ContentType.anime);
+    if (!wait && !grouped && _titleIndex == null) {
+      _startCatalogIndex();
+      if (_indexBuilding) return null;
+    }
     final index = _seriesFolderIndex ??= () {
       final m = <String, Channel>{};
       for (final type in [ContentType.series, ContentType.anime]) {
@@ -792,7 +886,8 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// True when the TMDB title can actually be watched with the playlist.
-  bool isAvailable(TmdbItem item) => findChannelFor(item) != null;
+  /// Non-blocking: false until the background index is ready.
+  bool isAvailable(TmdbItem item) => findChannelFor(item, wait: false) != null;
 
   /// External search/credits cannot bypass the verified playlist catalog.
   bool isTmdbAllowed(TmdbItem item) {
@@ -808,15 +903,27 @@ class AppProvider extends ChangeNotifier {
   /// Finds the playlist title for a TMDB item. Movies need an exact title
   /// match and, when both sides have a year, the same year: this avoids
   /// opening a different film with the same name (remakes, sequels).
-  Channel? findChannelFor(TmdbItem item) {
+  /// While the background index is still being built this answers null
+  /// without caching, and the Home refreshes as soon as it is ready.
+  /// [wait] false is for the Home: it never blocks the UI thread. User
+  /// actions (opening a title, search) keep the exact synchronous answer.
+  Channel? findChannelFor(TmdbItem item, {bool wait = true}) {
     if (_matchCache.containsKey(item.key)) return _matchCache[item.key];
+    if (_titleIndex == null) {
+      if (!wait) {
+        _startCatalogIndex();
+        return null;
+      }
+      _titleIndex = _buildTitleIndexSync();
+      _indexEpoch++; // the pending background result is now redundant
+    }
     final result = _findChannelFor(item);
     _matchCache[item.key] = result;
     return result;
   }
 
   Channel? _findChannelFor(TmdbItem item) {
-    final index = _titleIndex ??= _buildTitleIndex();
+    final index = _titleIndex!;
     final target = _titleKey(item.title);
     if (target.isEmpty) return null;
     final isMovie = item.contentType == ContentType.movie;
@@ -847,8 +954,9 @@ class AppProvider extends ChangeNotifier {
     return candidates.first;
   }
 
+  static final _yearPattern = RegExp(r'\b(19|20)\d{2}\b');
   static String? _yearOf(String name) =>
-      RegExp(r'\b(19|20)\d{2}\b').firstMatch(name)?.group(0);
+      _yearPattern.firstMatch(name)?.group(0);
 
   /// Title key without language prefix, brackets, quality tags and year.
   static String _dedupeKey(Channel c) {
@@ -856,8 +964,7 @@ class AppProvider extends ChangeNotifier {
     return k.isEmpty ? c.id : '${c.type.name}:$k';
   }
 
-  static String _titleKey(String raw) =>
-      _normalize(TmdbService.cleanTitle(raw));
+  static String _titleKey(String raw) => catalogTitleKey(raw);
 
   void indexEpisodes(List<Channel> episodes) {
     if (episodes.isEmpty) return;
@@ -922,12 +1029,6 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
-  static String _normalize(String s) => s
-      .toLowerCase()
-      .replaceAll(RegExp(r'^\s*[a-z]{2,3}\s*[:|\-]\s*'), '')
-      .replaceAll(RegExp(r'\[[^\]]*\]|\([^)]*\)'), ' ')
-      .replaceAll(RegExp(r'[^a-z0-9à-ÿ]+'), ' ')
-      .trim();
 
   bool isTmdbFavorite(TmdbItem item) =>
       _tmdbFavorites.any((e) => e.key == item.key);

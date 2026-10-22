@@ -120,3 +120,5 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Startup publishes the device catalog before detached missing-section loading; configured devices restore cloud data without gating Home. Full refresh keeps the input guard and catalog publication waits for closed playback.
 - Episode progress follows the latest actual seek or playback sample, not the greatest past progress; explicit completion remains terminal only within that player session.
 - Watch management uses one remote focus stop per season/episode and separate choice dialogs for bulk changes, avoiding ambiguous inline action grids.
+
+- Home title availability and series folders are indexed once per playlist in a background isolate (lib/services/catalog_index_builder.dart); Home lookups are non-blocking (wait: false) while user actions keep the synchronous fallback, so launch never freezes the remote. The index stays device-local and is never synced to the cloud.

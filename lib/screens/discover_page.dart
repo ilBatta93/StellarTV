@@ -152,7 +152,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 ((e.type == ContentType.series ||
                             e.type == ContentType.anime) &&
                         e.seriesKey.isNotEmpty
-                    ? app.seriesFolderFor(e.seriesKey)
+                    ? app.seriesFolderFor(e.seriesKey, wait: false)
                     : null) ??
                 (e.url.isEmpty
                     ? null
@@ -176,7 +176,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       final isEp = e.type == ContentType.series || e.type == ContentType.anime;
       if (!isEp || !e.isWatched || _hasNext.containsKey(e.contentId)) continue;
       final folder = e.seriesKey.isNotEmpty
-          ? app.seriesFolderFor(e.seriesKey)
+          ? app.seriesFolderFor(e.seriesKey, wait: false)
           : (c.isSeriesFolder ? c : null);
       if (folder != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -198,7 +198,13 @@ class _DiscoverPageState extends State<DiscoverPage> {
       if (mounted)
         context.read<DiscoverProvider>().loadForYou(
           watched,
-          liked: reactions.liked.where(app.isTmdbAllowed).toList(),
+          liked: reactions.liked
+              .where(
+                (i) =>
+                    !app.kidsMode ||
+                    (app.isAvailable(i) && app.isTmdbAllowed(i)),
+              )
+              .toList(),
           disliked: reactions.disliked,
           reactionSignature: reactions.signature,
         );
