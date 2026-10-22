@@ -1303,7 +1303,9 @@ class AppProvider extends ChangeNotifier {
 
   /// Never true during playback, so the wait screen cannot cover a video.
   bool get isRefreshingAny =>
-      _anyPending && !_playbackActive && !_startupLoading;
+      _anyPending &&
+      !_playbackActive &&
+      (!_startupLoading || _rawChannels.isEmpty);
 
   Future<void> _enqueue(ContentType type, Map<String, String> credentials) {
     final run = _sectionQueue.then((_) => _loadSection(type, credentials));

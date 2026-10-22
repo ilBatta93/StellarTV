@@ -100,7 +100,9 @@ class _SeriesWatchSheetState extends State<SeriesWatchSheet> {
     if (history.isWatched(id)) return 'Visto · automatico';
     if (entry == null || entry.position == Duration.zero)
       return 'Non iniziato · automatico';
-    return 'In corso · ${(entry.progress * 100).round()}%';
+    final progress = entry.progress;
+    if (progress == null) return 'In corso · durata non disponibile';
+    return 'In corso · ${(progress * 100).round()}%';
   }
 
   @override

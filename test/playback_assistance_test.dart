@@ -11,18 +11,25 @@ void main() {
   test('autoplay defaults on for existing installations', () {
     expect(PlayerSettings.fromJson({}).autoNextEpisode, true);
   });
-  test('autoplay off persists locally without changing other scopes', () async {
-    SharedPreferences.setMockInitialValues({});
-    final service = PlayerSettingsService();
-    final settings = PlayerSettings()..autoNextEpisode = false;
-    await service.save(settings, scope: PlayerSettingsScope.filmSeriesTv);
-    expect(
-      (await service.load(scope: PlayerSettingsScope.filmSeriesTv))
-          .autoNextEpisode,
-      false,
-    );
-    expect((await service.load()).autoNextEpisode, true);
-  });
+  test(
+    'autoplay off is shared by VOD scopes and leaves live settings independent',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final service = PlayerSettingsService();
+      final settings = PlayerSettings()..autoNextEpisode = false;
+      await service.save(settings, scope: PlayerSettingsScope.filmSeriesTv);
+      expect(
+        (await service.load(scope: PlayerSettingsScope.filmSeriesTv))
+            .autoNextEpisode,
+        false,
+      );
+      expect((await service.load()).autoNextEpisode, false);
+      expect(
+        (await service.load(scope: PlayerSettingsScope.liveTv)).autoNextEpisode,
+        false,
+      );
+    },
+  );
   test('lookup removes technical labels but preserves title and year', () {
     expect(
       segmentLookupTitle('IT: Dark (2017) FHD S01E02 HEVC'),
