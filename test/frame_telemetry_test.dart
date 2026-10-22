@@ -31,7 +31,9 @@ void main() {
     }
     s.add(buildUs: 120000, rasterUs: 1000, totalUs: 300000);
     expect(s.histogram.reduce((a, b) => a + b), 41);
-    expect(s.histogram[5], 2);
+    // Frames over 250 ms: totals 260..440 (19) plus the 300 ms frame.
+    expect(s.histogram[5], 20);
+    expect(s.histogram[4], 15);
     expect(s.rasterBound, 40);
     expect(s.buildBound, 1);
     expect(s.slowest.length, FrameStats.slowestKept);
