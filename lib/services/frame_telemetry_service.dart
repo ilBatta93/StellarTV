@@ -65,10 +65,12 @@ class FrameTelemetryService extends ChangeNotifier
       start();
       mark('main');
     }
-    unawaited(PackageInfo.fromPlatform().then(
-      (p) => _appVersion = '${p.version}+${p.buildNumber}',
-      onError: (_) {},
-    ));
+    unawaited(() async {
+      try {
+        final p = await PackageInfo.fromPlatform();
+        _appVersion = '${p.version}+${p.buildNumber}';
+      } catch (_) {}
+    }());
   }
 
   Future<void> setAutoStart(bool value) async {
