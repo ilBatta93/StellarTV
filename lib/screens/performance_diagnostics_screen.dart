@@ -92,6 +92,14 @@ class _PerformanceDiagnosticsScreenState
                       subtitle:
                           'Attivala, muoviti nell\'app con il telecomando e torna qui. Si ferma da sola dopo 10 minuti. Solo su questo dispositivo.',
                     ),
+                    SettingsSwitchTile(
+                      icon: Icons.rocket_launch_outlined,
+                      title: 'Avvia insieme all\'app',
+                      value: service.autoStartEnabled,
+                      onChanged: (v) => service.setAutoStart(v),
+                      subtitle:
+                          'Al prossimo avvio la misura parte subito e registra anche il caricamento iniziale. Si ferma comunque dopo 10 minuti.',
+                    ),
                     SettingsValueTile(
                       icon: Icons.restart_alt_rounded,
                       title: 'Azzera contatori',
@@ -125,9 +133,17 @@ class _PerformanceDiagnosticsScreenState
                       trailing: Text(_ms(s.avgRasterMs)),
                     ),
                     ListTile(
+                      title: const Text('Scatti da calcolo / da disegno'),
+                      trailing: Text('${s.buildBound} / ${s.rasterBound}'),
+                    ),
+                    ListTile(
+                      title: const Text('Blocchi oltre 100 ms'),
+                      trailing: Text('${s.histogram[4] + s.histogram[5]}'),
+                    ),
+                    ListTile(
                       title: const Text('Picco massimo'),
                       subtitle: Text(
-                        'Calcolo ${_ms(s.peakBuildUs / 1000)} · disegno ${_ms(s.peakRasterUs / 1000)}',
+                        'Calcolo ${_ms(s.peakBuildUs / 1000)} · disegno ${_ms(s.peakRasterUs / 1000)}${s.peakContext == null ? '' : ' · ${s.peakContext}'}',
                       ),
                       trailing: Text(_ms(s.peakUs / 1000)),
                     ),
