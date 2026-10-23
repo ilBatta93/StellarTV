@@ -11,6 +11,7 @@ import '../services/epg_timeline.dart';
 import '../player/playback_session.dart';
 import '../services/player_settings_service.dart';
 import '../services/catalog_builder.dart';
+import '../services/catalog_sort.dart' show sortLiveBackground;
 import '../services/recent_live_channels.dart';
 import '../services/xtream_service.dart';
 import '../services/xtream_catchup.dart';
