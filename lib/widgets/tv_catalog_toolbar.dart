@@ -94,28 +94,6 @@ class TvCatalogToolbar extends StatefulWidget {
     final state = focus?.context
         ?.findAncestorStateOfType<_TvCatalogToolbarState>();
     if (state?._back() ?? false) return true;
-    // System Back can arrive while primary focus is moving out of the panel.
-    // Look for the visible toolbar in the same route before Home takes over.
-    final focusContext = focus?.context;
-    if (focusContext == null) return false;
-    final route = ModalRoute.of(focusContext);
-    if (route == null || !route.isCurrent) return false;
-    final seen = <_TvCatalogToolbarState>{};
-    if (state != null) seen.add(state);
-    var scope = focus?.enclosingScope;
-    while (scope != null) {
-      for (final node in scope.traversalDescendants) {
-        if (!node.canRequestFocus) continue;
-        final candidate = node.context
-            ?.findAncestorStateOfType<_TvCatalogToolbarState>();
-        if (candidate == null ||
-            !seen.add(candidate) ||
-            ModalRoute.of(candidate.context) != route)
-          continue;
-        if (candidate._back()) return true;
-      }
-      scope = scope.enclosingScope;
-    }
     return false;
   }
 
