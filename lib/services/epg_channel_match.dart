@@ -102,7 +102,7 @@ class EpgMatcher {
     // The visible channel name decides the timeshift: providers often copy
     // the base tvg-id/tvg-name onto the "+1" channel.
     var shift = 0;
-    for (final n in [...names, tvgId ?? '']) {
+    for (final n in names) {
       final s = epgShiftOf(n);
       if (s > shift) shift = s;
     }
