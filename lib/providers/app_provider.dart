@@ -1417,10 +1417,7 @@ class AppProvider extends ChangeNotifier {
       _yearPattern.firstMatch(name)?.group(0);
 
   /// Title key without language prefix, brackets, quality tags and year.
-  static String _dedupeKey(Channel c) {
-    final k = _titleKey(c.seriesName ?? c.name);
-    return k.isEmpty ? c.id : '${c.type.name}:$k';
-  }
+  static String _dedupeKey(Channel c) => catalogEntryKey(c);
 
   static String _titleKey(String raw) => catalogTitleKey(raw);
 
@@ -1643,6 +1640,9 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> init() async {
+    // Saved genres are read off the UI thread right away, so genre filters
+    // and title facets work from the first screen, not after the warm-up.
+    unawaited(_kids.load().then((_) => notifyListeners()).catchError((_) {}));
     _favoriteIds = await _favoritesService.getFavoriteIds();
     _favoritesCache = null;
     _tmdbFavorites = await _favoritesService.getTmdbFavorites();

@@ -76,7 +76,18 @@ class TvCatalogToolbar extends StatefulWidget {
 
   /// Shared by key events and Android system Back (Home owns the route).
   static final _mountedToolbars = <_TvCatalogToolbarState>{};
+  /// Android delivers the system Back (PopScope) after the key event that
+  /// already closed a panel, sometimes several frames later: a short time
+  /// window keeps that echo from moving focus to the top menu.
+  static DateTime? _lastPanelBack;
+  static const _backEchoWindow = Duration(milliseconds: 700);
+  static bool get _withinBackEcho {
+    final last = _lastPanelBack;
+    return last != null && DateTime.now().difference(last) < _backEchoWindow;
+  }
+
   static bool handleBack(FocusNode? focus, {BuildContext? context}) {
+    if (_withinBackEcho) return true;
     final origin = context ?? focus?.context;
     final route = origin == null ? null : ModalRoute.of(origin);
     // A panel can be detached before Android sends its system Back callback.
@@ -184,6 +195,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   }
 
   void _consumePanelBack() {
+    TvCatalogToolbar._lastPanelBack = DateTime.now();
     _backConsumedThisFrame = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -324,11 +336,14 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
     return Focus(
       canRequestFocus: false,
       onKeyEvent: (_, event) {
-        if (event is KeyDownEvent &&
-            (event.logicalKey == LogicalKeyboardKey.goBack ||
-                event.logicalKey == LogicalKeyboardKey.escape ||
-                event.logicalKey == LogicalKeyboardKey.browserBack) &&
-            _back()) {
+        final isBack = event.logicalKey == LogicalKeyboardKey.goBack ||
+            event.logicalKey == LogicalKeyboardKey.escape ||
+            event.logicalKey == LogicalKeyboardKey.browserBack;
+        if (!isBack) return KeyEventResult.ignored;
+        if (event is KeyDownEvent && _back()) return KeyEventResult.handled;
+        // Key up / repeat of the Back that closed a panel: swallow it so the
+        // system Back never reaches Home and the opener keeps focus.
+        if (event is! KeyDownEvent && TvCatalogToolbar._withinBackEcho) {
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;

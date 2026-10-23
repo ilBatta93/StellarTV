@@ -37,6 +37,7 @@ import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
 import '../widgets/tv_focusable.dart';
+import '../widgets/title_facets.dart';
 
 /// A watch-history entry paired with the channel it belongs to.
 typedef ResumeItem = (HistoryEntry, Channel);
@@ -1708,7 +1709,10 @@ class _TvHeroInfo extends StatelessWidget {
       if (year.isNotEmpty) year,
       if (it.voteAverage > 0) '★ ${it.voteAverage.toStringAsFixed(1)}',
       it.mediaType == 'movie' ? 'Film' : 'Serie TV',
-    ].join('  ·  ');
+    ];
+    final facets = TitleFacets.of(context.read<AppProvider>(), item: it);
+    if (facets.genres.isNotEmpty) meta.add(facets.genres.take(2).join(', '));
+    final metaText = meta.join('  ·  ');
     return LayoutBuilder(
       builder: (context, bounds) {
         const vPad = 10.0;
@@ -1741,16 +1745,26 @@ class _TvHeroInfo extends StatelessWidget {
                 children: [
                   HomeTitleArt(item: it, height: logoH),
                   const SizedBox(height: 6),
-                  Text(
-                    meta,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 14,
-                      height: 1.25,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          metaText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                            height: 1.25,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      for (final p in facets.platforms.take(3)) ...[
+                        const SizedBox(width: 8),
+                        PlatformBadge(p),
+                      ],
+                    ],
                   ),
                   if (note != null) ...[
                     const SizedBox(height: 6),

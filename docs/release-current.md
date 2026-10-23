@@ -1,5 +1,5 @@
-- Nuova piattaforma selezionabile nei filtri esistenti.
-- Generi selezionabili subito, con risultati completati dai dati disponibili.
-- Indietro mantiene il pulsante di apertura anche durante i cambi di focus.
-- Sfondo Home mantenuto a risoluzione ridotta quando la memoria disponibile cala.
-- Meno calcoli ripetuti per categorie e conteggi dei filtri.
+- Titoli doppi rimossi in modo uniforme in tutti i cataloghi e nei filtri genere.
+- Schede titolo e banner Home con generi e piattaforme; indicate le categorie in cui il titolo è presente.
+- Indietro da un pannello filtri lascia il focus sul pulsante che lo ha aperto.
+- Chiudere un trailer libera subito la riproduzione video per le dirette successive.
+- Generi salvati disponibili fin dall'avvio.

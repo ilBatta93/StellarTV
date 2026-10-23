@@ -20,7 +20,7 @@ class PreparedCatalogStore {
   PreparedCatalogStore._();
   static final instance = PreparedCatalogStore._();
 
-  static const _version = 1;
+  static const _version = 2;
 
   static int _hash(int hash, String value) {
     for (final unit in value.codeUnits) {

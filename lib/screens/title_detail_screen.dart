@@ -29,6 +29,7 @@ import '../services/download_service.dart';
 import '../services/title_display.dart';
 import '../widgets/tv_wrap_navigation.dart';
 import '../widgets/category_assign_button.dart';
+import '../widgets/title_facets.dart';
 
 class TitleDetailScreen extends StatefulWidget {
   final TmdbItem? item;
@@ -187,6 +188,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                   ),
                 const SizedBox(height: 8),
                 _Meta(item: item, channel: widget.channel),
+                TitleFacetsRow(item: item, channel: widget.channel ?? playable),
                 const SizedBox(height: 16),
                 _Actions(item: item, playable: playable, variants: variants),
                 if (item != null && item.overview.isNotEmpty) ...[

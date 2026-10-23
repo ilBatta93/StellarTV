@@ -2,7 +2,7 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/custom_category.dart';
 import 'catalog_builder.dart';
-import 'catalog_index_builder.dart' show catalogTitleKey;
+import 'catalog_index_builder.dart' show catalogTitleKey, catalogEntryKey;
 
 /// Bounded cooperative work: no full catalog copy is sent to a second heap.
 /// Every batch yields to input and checks whether the owner still permits work.
@@ -172,9 +172,7 @@ Future<PreparedCatalog> prepareCatalog({
         ? other
         : byCategory[label] ?? const <Channel>[];
     for (final c in items) {
-      final key = type == ContentType.live
-          ? c.id
-          : '${c.type.name}:${CatalogBuilder.normalize(CatalogBuilder.stripQuality(c.seriesName ?? c.name))}';
+      final key = catalogEntryKey(c);
       if (local.add(c.id) && seen.add(key)) {
         final entry = CatalogEntry(primary: c, variants: [c]);
         entries.add(entry);

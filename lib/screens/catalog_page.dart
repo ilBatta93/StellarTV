@@ -9,6 +9,7 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
+import '../services/catalog_index_builder.dart' show catalogEntryKey;
 import '../providers/history_provider.dart';
 import '../providers/ui_settings.dart';
 import '../services/catalog_builder.dart';
@@ -803,7 +804,7 @@ class _CatalogPageState extends State<CatalogPage> {
     return [
       for (final g in app.groupedCatalog(widget.type))
         for (final e in g.entries)
-          if (_matchesGenre(app, e) && seen.add(e.primary.id)) e,
+          if (_matchesGenre(app, e) && seen.add(catalogEntryKey(e.primary))) e,
     ];
   }
 

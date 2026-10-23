@@ -1,4 +1,6 @@
 import '../models/channel.dart';
+import '../models/content_type.dart';
+import 'catalog_builder.dart';
 import 'series_grouping.dart';
 import 'tmdb_service.dart';
 
@@ -76,3 +78,14 @@ String catalogTitleKey(String raw) => TmdbService.cleanTitle(raw)
     .replaceAll(_brackets, ' ')
     .replaceAll(_nonWord, ' ')
     .trim();
+
+/// Duplicate key for one catalog title: same type and same sanitized name
+/// (language prefixes, quality tags, brackets and punctuation removed).
+/// Live channels keep their id, since equal names can be different feeds.
+String catalogEntryKey(Channel c) {
+  if (c.type == ContentType.live) return c.id;
+  final k = catalogTitleKey(
+    CatalogBuilder.stripQuality(c.seriesName ?? c.name),
+  );
+  return k.isEmpty ? c.id : '${c.type.name}:$k';
+}

@@ -1,3 +1,4 @@
+import 'catalog_index_builder.dart' show catalogEntryKey;
 import '../models/channel.dart';
 import '../models/content_type.dart';
 
@@ -75,9 +76,7 @@ class CatalogBuilder {
       final entries = <CatalogEntry>[];
       for (final entry in entriesOf(items)) {
         final c = entry.primary;
-        final key = c.type == ContentType.live
-            ? c.id
-            : '${c.type.name}:${normalize(stripQuality(c.seriesName ?? c.name))}';
+        final key = catalogEntryKey(c);
         if (!seenGlobal.add(key)) continue;
         entries.add(entry);
       }

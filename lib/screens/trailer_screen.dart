@@ -126,6 +126,12 @@ function seekBy(d){if(!player)return;player.seekTo(Math.max(0,player.getCurrentT
   @override
   void dispose() {
     _hide?.cancel();
+    // Release the hardware video decoder at once: stop the YouTube player and
+    // blank the page so live channels opened next get a free decoder.
+    _web
+        .runJavaScript('try{player&&player.stopVideo();player&&player.destroy()}catch(e){}')
+        .catchError((_) {})
+        .whenComplete(() => _web.loadRequest(Uri.parse('about:blank')).catchError((_) {}));
     _playFocus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();

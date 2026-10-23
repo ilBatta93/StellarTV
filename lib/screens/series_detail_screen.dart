@@ -25,6 +25,7 @@ import '../widgets/trailer_button.dart';
 import '../services/title_display.dart';
 import '../services/series_resume_policy.dart';
 import '../widgets/category_assign_button.dart';
+import '../widgets/title_facets.dart';
 import '../widgets/tv_wrap_navigation.dart';
 import '../widgets/series_watch_sheet.dart';
 
@@ -299,9 +300,14 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                       _Chip(label: '${seasons.length} stagioni'),
                     if (series.episodeCount > 0)
                       _Chip(label: '${series.episodeCount} episodi'),
+                    if (item != null && item.year.isNotEmpty)
+                      _Chip(label: item.year),
+                    if (item != null && item.voteAverage > 0)
+                      _Chip(label: '★ ${item.voteAverage.toStringAsFixed(1)}'),
                     _Chip(label: series.group),
                   ],
                 ),
+                TitleFacetsRow(item: item, channel: series),
                 const SizedBox(height: 16),
                 if (DeviceTypeService.isTv) ...[
                   _buildTvActions(context, isFav),
