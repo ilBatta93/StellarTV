@@ -151,3 +151,10 @@
 - [x] Minuti rimanenti a destra dei film recenti, con lo stesso layout di stagione/episodio.
 - [x] Regola condivisa di completamento dal 95% per film ed episodi, con test e verifica GitHub.
 - [ ] Prova su TV reale: richiede nuova APK autorizzata e dispositivo dell’utente.
+
+## 23 ottobre — caricamento e guida
+- [x] Guida progressiva in worker cancellabile, errori classificati, gzip/redirect e copia precedente conservata.
+- [x] Pubblicazione cataloghi cooperativa con controlli account/profilo, salvataggi seriali e precedenza aggiornamento alla guida.
+- [x] Dieci prove mirate Dart superate su sorgenti reali; analisi dei nuovi moduli pulita; protezioni foreground/anteprima verificate.
+- [x] Note pubbliche neutre e guida allineata.
+- [ ] Test integrati Flutter e misura su TV: SDK locale 3.38.3 non soddisfa il vincolo 3.44.0; nessuna build richiesta.

@@ -6,6 +6,7 @@ import '../models/channel.dart';
 import '../models/epg_program.dart';
 import '../services/epg_service.dart';
 import '../services/playback_work_policy.dart';
+import '../services/frame_telemetry_service.dart';
 import 'app_provider.dart';
 
 /// TV guide for the live channels. The playlist guide (Xtream xmltv.php) is
@@ -25,13 +26,19 @@ class EpgProvider extends ChangeNotifier {
   bool _disposed = false;
   bool _ready = false;
   bool get _playbackBlocked =>
-      _app.playbackActive || PlaybackWorkPolicy.instance.blocksGuide;
+      _app.isLoading ||
+      _app.playbackActive ||
+      PlaybackWorkPolicy.instance.blocksGuide;
 
   bool _wasBlocked = false;
   void _onPlaybackChanged() {
     final resumed = _wasBlocked && !_playbackBlocked;
     _wasBlocked = _playbackBlocked;
     if (_playbackBlocked) {
+      if (_loading) {
+        _deferred = true;
+        _service.deferActiveDownload();
+      }
       _timer?.cancel();
       return;
     }
@@ -165,18 +172,24 @@ class EpgProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
+      FrameTelemetryService.instance.mark('guida: download avviato');
       final data = await _service.fetch(sources);
       if (_disposed) return;
       if (_playbackBlocked || sources.join('|') != _activeSources.join('|')) {
         throw EpgRefreshDeferred();
       }
       _setData(data);
+      FrameTelemetryService.instance.mark('guida: pronta');
       await _service.markRun();
       _lastRun = DateTime.now();
     } on EpgRefreshDeferred {
+      FrameTelemetryService.instance.mark('guida: rinviata');
       _deferred = true;
-    } catch (e) {
-      _error = e.toString().replaceFirst('Exception: ', '');
+    } on EpgDownloadException catch (e) {
+      FrameTelemetryService.instance.mark('guida: errore download');
+      _error = e.message;
+    } catch (_) {
+      _error = 'Impossibile leggere la guida TV. Riprova.';
     } finally {
       _loading = false;
       if (!_disposed) notifyListeners();
@@ -280,6 +293,7 @@ class EpgProvider extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _service.deferActiveDownload();
     PlaybackWorkPolicy.instance.removeListener(_onPlaybackChanged);
     _timer?.cancel();
     _app.removeListener(_onAppChanged);

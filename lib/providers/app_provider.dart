@@ -25,6 +25,8 @@ import '../services/sync_service.dart';
 import '../services/series_grouping.dart';
 import '../services/kids_content_service.dart';
 import '../services/catalog_cache_service.dart';
+import '../services/catalog_publication.dart';
+import '../services/frame_telemetry_service.dart';
 import '../models/custom_category.dart';
 
 enum AuthMethod { none, xtream }
@@ -53,6 +55,15 @@ class AppProvider extends ChangeNotifier {
       });
     }
     if (active != _playbackActive) _setEffectivePlaybackActive(active);
+    if (!active &&
+        ForegroundPolicy.instance.active &&
+        _pendingSections.isNotEmpty &&
+        !(_pendingTimer?.isActive ?? false)) {
+      _pendingTimer = Timer(
+        const Duration(milliseconds: 900),
+        _applyPendingSections,
+      );
+    }
   }
 
   final XtreamService _xtreamService;
@@ -255,28 +266,73 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  void _applyPendingSections() {
-    if (_playbackActive || _pendingSections.isEmpty) return;
-    var list = _rawChannels;
-    for (final entry in _pendingSections.entries) {
-      list = [
-        ...list.where((c) => !_belongsToSection(c, entry.key)),
-        ...entry.value,
-      ];
+  bool _publishingPending = false;
+  final Set<Completer<void>> _visibilityWaits = {};
+  void _cancelVisibilityWaits() {
+    for (final wait in _visibilityWaits.toList()) {
+      if (!wait.isCompleted) wait.complete();
     }
-    _pendingSections.clear();
-    _setChannels(list);
-    notifyListeners();
   }
 
-  void _setChannels(List<Channel> channels) {
+  void _applyPendingSections() {
+    if (_publishingPending) return;
+    _publishingPending = true;
+    unawaited(
+      _publishPendingSections().whenComplete(() => _publishingPending = false),
+    );
+  }
+
+  Future<void> _publishPendingSections() async {
+    final key = _currentKey;
+    while (_pendingSections.isNotEmpty &&
+        key == _currentKey &&
+        !_disposed &&
+        !_playbackActive &&
+        ForegroundPolicy.instance.active) {
+      final entry = _pendingSections.entries.first;
+      final snapshot = _rawChannels;
+      final kids = _kidsMode, adult = _showAdult;
+      final evidence = _titleInfoVersion;
+      bool valid() =>
+          !_disposed &&
+          key == _currentKey &&
+          !_playbackActive &&
+          ForegroundPolicy.instance.active &&
+          identical(snapshot, _rawChannels) &&
+          kids == _kidsMode &&
+          adult == _showAdult &&
+          evidence == _titleInfoVersion &&
+          identical(_pendingSections[entry.key], entry.value);
+      final merged = await replaceCatalogSection(
+        current: snapshot,
+        replacement: entry.value,
+        type: entry.key,
+        stillCurrent: valid,
+      );
+      if (merged == null) continue;
+      final visible = await filterCatalogForPublication(
+        channels: merged,
+        allowed: (c) => kids ? isKidsContent(c) : (adult || !isAdult(c)),
+        requestEvidence: kids ? _kids.request : null,
+        stillCurrent: valid,
+      );
+      if (visible == null || !valid()) continue;
+      _pendingSections.remove(entry.key);
+      _setChannels(merged, visible: visible);
+      notifyListeners();
+    }
+  }
+
+  void _setChannels(List<Channel> channels, {List<Channel>? visible}) {
     _rawChannels = channels;
     // The background age check is heavy on big playlists: start it once the
     // sections settle and the first navigation is done, not at every publish.
     _warmUpTimer?.cancel();
     if (channels.isNotEmpty) {
       void warm() {
-        if (_playbackActive) {
+        if (_playbackActive ||
+            _anyPending ||
+            !ForegroundPolicy.instance.active) {
           _warmUpTimer = Timer(const Duration(seconds: 30), warm);
           return;
         }
@@ -285,7 +341,7 @@ class AppProvider extends ChangeNotifier {
 
       _warmUpTimer = Timer(const Duration(seconds: 20), warm);
     }
-    _applyAdultFilter();
+    _applyAdultFilter(visible: visible);
     _schedulePrewarm();
   }
 
@@ -304,8 +360,8 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _prewarm() async {
-    if (_playbackActive) {
-      // Never compete with the video for the UI thread.
+    if (_playbackActive || _anyPending || !ForegroundPolicy.instance.active) {
+      // Never compete with video or section publication for the UI thread.
       _prewarmTimer = Timer(
         const Duration(seconds: 10),
         () => unawaited(_prewarm()),
@@ -326,7 +382,11 @@ class AppProvider extends ChangeNotifier {
     ];
     for (final step in steps) {
       await Future<void>.delayed(const Duration(milliseconds: 300));
-      if (!identical(snapshot, _allChannels)) return;
+      if (!identical(snapshot, _allChannels) ||
+          _playbackActive ||
+          _anyPending ||
+          !ForegroundPolicy.instance.active)
+        return;
       step();
     }
   }
@@ -336,13 +396,15 @@ class AppProvider extends ChangeNotifier {
   int _titleInfoVersion = 0;
   int get titleInfoVersion => _titleInfoVersion;
 
-  void _applyAdultFilter() {
-    if (_kidsMode) _kids.request(_rawChannels);
-    _allChannels = _rawChannels
-        .where(
-          (c) => _kidsMode ? isKidsContent(c) : (_showAdult || !isAdult(c)),
-        )
-        .toList(growable: false);
+  void _applyAdultFilter({List<Channel>? visible}) {
+    if (_kidsMode && visible == null) _kids.request(_rawChannels);
+    _allChannels =
+        visible ??
+        _rawChannels
+            .where(
+              (c) => _kidsMode ? isKidsContent(c) : (_showAdult || !isAdult(c)),
+            )
+            .toList(growable: false);
     _channelIndex = null;
     _seriesFolderIndex = null;
     _invalidateCaches();
@@ -783,7 +845,9 @@ class AppProvider extends ChangeNotifier {
     final seriesNames = seriesReady == null
         ? null
         : [for (final c in seriesReady) c];
-    final animeNames = animeReady == null ? null : [for (final c in animeReady) c];
+    final animeNames = animeReady == null
+        ? null
+        : [for (final c in animeReady) c];
     unawaited(() async {
       CatalogIndexData? data;
       try {
@@ -815,10 +879,16 @@ class AppProvider extends ChangeNotifier {
       // Isolate unavailable: fall back to the previous synchronous build.
       _titleIndex = _buildTitleIndexSync();
     } else {
-      final series = _seriesCatalogCache[ContentType.series] ??= data.seriesCatalog;
-      final anime = _seriesCatalogCache[ContentType.anime] ??= data.animeCatalog;
+      final series = _seriesCatalogCache[ContentType.series] ??=
+          data.seriesCatalog;
+      final anime = _seriesCatalogCache[ContentType.anime] ??=
+          data.animeCatalog;
       final lists = [movies, series, anime];
-      final sizes = [movies.length, data.seriesCatalog.length, data.animeCatalog.length];
+      final sizes = [
+        movies.length,
+        data.seriesCatalog.length,
+        data.animeCatalog.length,
+      ];
       final index = <String, List<Channel>>{};
       data.titles.forEach((key, codes) {
         final out = <Channel>[];
@@ -861,7 +931,8 @@ class AppProvider extends ChangeNotifier {
   /// O(1) lookup: Home cards call this on every build. While the series
   /// catalog is still grouped in background it answers null (no freeze).
   Channel? seriesFolderFor(String seriesKey, {bool wait = true}) {
-    final grouped = _seriesCatalogCache.containsKey(ContentType.series) &&
+    final grouped =
+        _seriesCatalogCache.containsKey(ContentType.series) &&
         _seriesCatalogCache.containsKey(ContentType.anime);
     if (!wait && !grouped && _titleIndex == null) {
       _startCatalogIndex();
@@ -1028,7 +1099,6 @@ class AppProvider extends ChangeNotifier {
       ],
     );
   }
-
 
   bool isTmdbFavorite(TmdbItem item) =>
       _tmdbFavorites.any((e) => e.key == item.key);
@@ -1432,6 +1502,7 @@ class AppProvider extends ChangeNotifier {
     }
     if (!ForegroundPolicy.instance.active) {
       final done = Completer<void>();
+      _visibilityWaits.add(done);
       void resumed() {
         if (ForegroundPolicy.instance.active && !done.isCompleted)
           done.complete();
@@ -1443,6 +1514,7 @@ class AppProvider extends ChangeNotifier {
         await done.future;
       } finally {
         ForegroundPolicy.instance.removeListener(resumed);
+        _visibilityWaits.remove(done);
       }
     }
     final server = credentials['server']!;
@@ -1479,6 +1551,9 @@ class AppProvider extends ChangeNotifier {
         ),
       };
       if (_disposed || key != _currentKey) return;
+      FrameTelemetryService.instance.mark(
+        'catalogo: risposta pronta ${type.name}',
+      );
       if (_playbackActive) {
         // A video is playing: swapping the catalog now re-filters and
         // rebuilds every page under the player, freezing the picture and
@@ -1486,24 +1561,66 @@ class AppProvider extends ChangeNotifier {
         // player closes.
         _pendingSections[type] = channels;
       } else {
-        // Publish each completed section immediately, not after all three.
-        _pendingSections.remove(type);
-        _setChannels([
-          ..._rawChannels.where((c) => !_belongsToSection(c, type)),
-          ...channels,
-        ]);
+        // Publish each section atomically, yielding during merge/filter work.
+        // Recheck settings/profile/account after every yield; never relax Kids.
+        while (!_disposed &&
+            key == _currentKey &&
+            !_playbackActive &&
+            ForegroundPolicy.instance.active) {
+          final snapshot = _rawChannels;
+          final kids = _kidsMode;
+          final adult = _showAdult;
+          final evidence = _titleInfoVersion;
+          bool valid() =>
+              !_disposed &&
+              key == _currentKey &&
+              identical(snapshot, _rawChannels) &&
+              kids == _kidsMode &&
+              adult == _showAdult &&
+              evidence == _titleInfoVersion &&
+              !_playbackActive &&
+              ForegroundPolicy.instance.active;
+          final merged = await replaceCatalogSection(
+            current: snapshot,
+            replacement: channels,
+            type: type,
+            stillCurrent: valid,
+          );
+          if (merged == null) continue;
+          final visible = await filterCatalogForPublication(
+            channels: merged,
+            allowed: (c) => kids ? isKidsContent(c) : (adult || !isAdult(c)),
+            requestEvidence: kids ? _kids.request : null,
+            stillCurrent: valid,
+          );
+          if (visible == null || !valid()) continue;
+          _pendingSections.remove(type);
+          _setChannels(merged, visible: visible);
+          FrameTelemetryService.instance.mark(
+            'catalogo: pubblicato ${type.name}',
+          );
+          break;
+        }
+        if (_disposed || key != _currentKey) return;
+        if (_playbackActive || !ForegroundPolicy.instance.active)
+          _pendingSections[type] = channels;
       }
       _catalogStates[type] = CatalogLoadState(
         phase: CatalogLoadPhase.ready,
         hasContent: channels.isNotEmpty,
       );
-      unawaited(_catalogCache.writeSection(key, type, channels));
+      // Serialize cache workers with downloads instead of competing on TV CPU.
+      await _catalogCache.writeSection(key, type, channels);
+      FrameTelemetryService.instance.mark(
+        'catalogo: copia salvata ${type.name}',
+      );
     } catch (e) {
       if (_disposed || key != _currentKey) return;
       final message = e.toString().replaceFirst('Exception: ', '');
       _loadFailures.add(message);
       if (!_hasSection(type)) {
         final cached = _cacheSnapshot ??= await _catalogCache.read(key);
+        if (_disposed || key != _currentKey) return;
         final fallback = cached.where((c) => _belongsToSection(c, type));
         if (fallback.isNotEmpty) _setChannels([..._rawChannels, ...fallback]);
       }
@@ -1576,12 +1693,17 @@ class AppProvider extends ChangeNotifier {
       '${credentials['server'] ?? ''}|${credentials['username'] ?? ''}';
 
   Future<void> logout() async {
+    _xtreamCredentials = null;
+    _authMethod = AuthMethod.none;
+    _activeLoadKey = null;
+    _cancelVisibilityWaits();
     _startupEpoch++;
     _startupLoading = false;
     await _settingsService.clearCredentials();
     _refreshService.stop();
     // A new account must download its playlist completely the first time.
     unawaited(_refreshService.clearLastRun());
+    _pendingSections.clear();
     _setChannels([]);
     _catalogStates.clear();
     for (final p in _progress.values) {
@@ -1605,6 +1727,7 @@ class AppProvider extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _cancelVisibilityWaits();
     _startupEpoch++;
     PlaybackWorkPolicy.instance.removeListener(_onPlaybackWorkChanged);
     _pendingTimer?.cancel();

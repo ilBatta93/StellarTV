@@ -1,7 +1,7 @@
 // Guida ufficiale StellarTV. Va aggiornata insieme a ogni modifica di funzioni
 // dell'app o del sito, includendo solo funzioni attive nella versione corrente.
 // Testi neutri: nessun riferimento a fornitori, formati di sorgente o tipi di contenuto.
-// Versione app: 3.6.8
+export const GUIDE_APP_VERSION = "3.6.20";
 
 export type GuideItem = { title: string; body: string[] };
 export type GuideSection = { id: string; title: string; intro: string; items: GuideItem[] };
@@ -15,7 +15,7 @@ export const GUIDE: GuideSection[] = [
       { title: "Dispositivi supportati", body: ["StellarTV funziona su TV Android, Google TV e Fire TV, su telefoni e tablet Android e su iPhone e iPad.", "Sulla TV l'interfaccia è pensata per il telecomando, sul telefono per il tocco."] },
       { title: "Scaricare l'app", body: ["Dalla Panoramica del sito trovi i pulsanti di download, sempre all'ultima versione.", "Sulla TV puoi usare gli indirizzi brevi /apk e /ipa del sito, che funzionano anche senza accesso."] },
       { title: "Primo avvio", body: ["Dopo l'animazione del logo compare la schermata di accesso. Su TV la tastiera si apre premendo OK sul campo, su telefono con un tocco."] },
-      { title: "Aggiornare l'app", body: ["Installa la nuova versione sopra quella esistente: preferiti, cronologia, stati di visione e Filtro Bambino restano intatti.", "Dopo ogni aggiornamento la Panoramica del sito elenca cosa controllare."] },
+      { title: "Aggiornare l'app", body: ["Installa la nuova versione sopra quella esistente: preferiti, cronologia, stati di visione e Filtro Bambino restano intatti.", "Sulla TV la finestra di aggiornamento seleziona subito Aggiorna ora. Premi Su per leggere le modifiche dall’inizio, poi Su e Giù per scorrerle. A fine testo, un’altra pressione di Giù torna ad Aggiorna ora; Sinistra seleziona Più tardi e Destra torna ad Aggiorna ora.", "Sul telefono le note scorrono con il tocco. Dopo ogni aggiornamento la Panoramica del sito elenca cosa controllare."] },
     ],
   },
   {
@@ -47,10 +47,10 @@ export const GUIDE: GuideSection[] = [
     title: "Home e navigazione",
     intro: "Righe, ricerca, preferiti e personalizzazione.",
     items: [
-      { title: "La Home", body: ["Mostra banner, righe di titoli, ultimi aggiunti e Continua a guardare, con loghi ufficiali e percentuale di visione.", "Sulla TV le righe scorrono col D-Pad e il riquadro selezionato resta sempre visibile."] },
-      { title: "Continua a guardare", body: ["Quando superi la soglia di visione, il titolo resta nella riga con la scritta Prossimo se esiste un episodio ancora da vedere: OK lo avvia.", "Quando hai visto tutti gli episodi, o rimuovi il titolo dalla cronologia, la locandina sparisce."] },
+      { title: "La Home", body: ["Mostra banner, righe di titoli, ultimi aggiunti e Continua a guardare, con loghi ufficiali e percentuale di visione.", "Sulla TV le righe scorrono col D-Pad e il riquadro selezionato resta sempre visibile. Lo sfondo segue la selezione dopo una breve pausa; le immagini già salvate restano sul dispositivo.", "Quando la TV segnala memoria scarsa, lo sfondo decorativo viene sostituito da uno sfondo semplice fino alla chiusura completa dell’app. Le locandine, i comandi e i dati personali restano disponibili."] },
+      { title: "Continua a guardare", body: ["Riaprendo un elemento già visto, il titolo torna nella riga e si riprende dall’ultima posizione effettiva.", "Quando superi la soglia di visione, Prossimo avvia l’elemento immediatamente successivo anche se già visto. Gli altri stati di visione restano intatti.", "La locandina sparisce quando completi l’ultimo elemento disponibile o rimuovi il titolo dalla cronologia."] },
       { title: "Personalizzare", body: ["Nelle Impostazioni scegli numero e forma delle locandine, orientamento della Home, scala dell'interfaccia, soglia di visione e ordine delle righe. Queste scelte si sincronizzano tra i dispositivi."] },
-      { title: "Categorie, filtri e ricerca", body: ["Apri i pannelli Categorie e Filtri per piattaforma, genere e ordinamento. Cerca raggiunge tutte le sezioni. Tutto si usa col telecomando."] },
+      { title: "Categorie, filtri e ricerca", body: ["Apri i pannelli Categorie e Filtri per piattaforma, genere e ordinamento. Cerca raggiunge tutte le sezioni. Tutto si usa col telecomando.", "In Film e Serie TV, Ordina offre anche Uscita più recente e Uscita meno recente, basati sulla data di uscita originale del titolo; i titoli senza data compaiono in fondo."] },
       { title: "Preferiti", body: ["Aggiungi un titolo ai preferiti dalla sua scheda. Le rimozioni sono definitive su tutti i dispositivi."] },
     ],
   },
@@ -99,7 +99,7 @@ export const GUIDE: GuideSection[] = [
     intro: "Canali, guida programmi e MultiView.",
     items: [
       { title: "Cambiare canale", body: ["Durante la diretta Su e Giù passano al canale precedente o successivo. Sinistra apre l'elenco trasparente dei canali, con i recenti in cima; Indietro lo chiude."] },
-      { title: "Guida programmi", body: ["Mostra il programma in corso e i successivi."] },
+      { title: "Guida programmi", body: ["Ogni programma occupa uno spazio proporzionale alla sua durata e una linea colorata segna l'ora attuale.", "Durante il caricamento della guida, l’anteprima attende senza bloccare la navigazione e riprende quando il caricamento termina. Gli aggiornamenti pesanti restano sospesi durante la visione a schermo intero.", "La guida attende anche il completamento di un aggiornamento completo. Se il download non riesce, la copia precedente resta disponibile e compare un motivo sintetico: risposta HTTP, rete, connessione sicura o guida non valida.", "Con Sinistra e Destra scorri nel tempo, fino a sei ore indietro; con Su e Giù cambi canale restando sullo stesso orario.", "OK sul programma in corso avvia il canale; sui programmi passati con l'icona Rivedi avvia la visione dal loro inizio, se il canale lo consente."] },
       { title: "MultiView", body: ["Guarda più canali in riquadri; sposta il focus col D-Pad per scegliere l'audio."] },
       { title: "Pausa e riascolto", body: ["Dove disponibile puoi mettere in pausa, rivedere programmi passati e registrare."] },
     ],
@@ -149,9 +149,10 @@ export const GUIDE: GuideSection[] = [
     intro: "Cosa fare quando qualcosa non va.",
     items: [
       { title: "Inviare un report", body: ["Nell'app apri Diagnostica, scegli il tipo di problema e invia. Contiene solo dati tecnici, mai password o chiavi. I report compaiono in Account › Log errori, dove puoi eliminarli."] },
+      { title: "Prestazioni e fluidità", body: ["In Impostazioni › Diagnostica › Prestazioni e fluidità attiva Misura fluidità, muoviti nell'app e torna nella scheda per leggere fotogrammi al secondo, fotogrammi lenti, tempi medi di calcolo e disegno, blocchi oltre 100 ms e il picco massimo con la schermata in cui è avvenuto.", "Avvia insieme all'app fa partire la misura dal prossimo avvio, così il rapporto include anche il caricamento iniziale.", "La misura resta sul dispositivo e si ferma da sola dopo dieci minuti. Azzera contatori riparte da zero; Invia al mio account la rende visibile in Account › Log errori."] },
       { title: "Verifica servizio", body: ["Apri Impostazioni › Diagnostica, scegli la scheda appropriata e premi Verifica servizio. Dopo un errore finale il controllo compare anche nella schermata di riproduzione.", "È un controllo locale singolo, con attesa massima di otto secondi: non usa il cloud e non ripete richieste in continuazione. Non è disponibile per tutti i tipi di accesso.", "Il risultato distingue accesso non attivo, limite di connessioni, server raggiungibile e risposta non verificabile. Il conteggio può includere questa riproduzione o una connessione appena chiusa: non dimostra che sia collegato un altro dispositivo. Un timeout non dimostra che il server sia offline."] },
       { title: "Il video non parte", body: ["Leggi il risultato della verifica, controlla la rete e usa Riprova oppure Prova con un altro motore. Un servizio raggiungibile non garantisce la disponibilità di ogni riproduzione."] },
-      { title: "Schermata di attesa", body: ["All’avvio puoi navigare usando la copia salvata senza aspettare il recupero cloud. Il primo caricamento mostra indicatori nelle sezioni; durante un aggiornamento completo resta una schermata di attesa protettiva."] },
+      { title: "Schermata di attesa", body: ["All’avvio puoi navigare usando la copia salvata senza aspettare il recupero cloud. Il primo caricamento mostra indicatori nelle sezioni; durante un aggiornamento completo resta una schermata di attesa protettiva.", "Ogni sezione viene applicata e salvata separatamente. Il report di fluidità include i passaggi di ricezione, applicazione e salvataggio, senza dati di accesso."] },
       { title: "Dati assenti su un nuovo dispositivo", body: ["Accedi con lo stesso account e inserisci la chiave di recupero."] },
     ],
   },

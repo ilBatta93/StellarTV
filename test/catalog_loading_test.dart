@@ -70,6 +70,12 @@ class FakeCache extends CatalogCacheService {
 }
 
 Future<void> tick() => Future<void>.delayed(Duration.zero);
+Future<void> sectionReady(AppProvider app, ContentType type) async {
+  for (var i = 0; i < 200 && app.catalogState(type).isPending; i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+  expect(app.catalogState(type).isPending, false);
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -138,7 +144,7 @@ void main() {
         CatalogLoadPhase.queued,
       );
       api.live.complete([channel(ContentType.live)]);
-      await tick();
+      await sectionReady(app, ContentType.live);
       expect(app.catalogState(ContentType.live).phase, CatalogLoadPhase.ready);
       expect(app.channelsOf(ContentType.live), hasLength(1));
       expect(
@@ -147,7 +153,7 @@ void main() {
       );
       expect(app.isLoading, true);
       api.movies.complete([]);
-      await tick();
+      await sectionReady(app, ContentType.movie);
       expect(app.catalogState(ContentType.movie).phase, CatalogLoadPhase.ready);
       expect(app.catalogState(ContentType.movie).hasContent, false);
       expect(

@@ -28,3 +28,11 @@
 
 - Corretta la precedenza tra caricamento della guida e anteprima, mantenendo disponibili i comandi di navigazione.
 - Recupero degli aggiornamenti rinviati senza interrompere la visione a schermo intero.
+
+## Caricamento e affidabilità
+
+- Lettura progressiva della guida, compatibilità delle richieste e messaggi di errore più chiari, senza mostrare dati di accesso.
+- Guida precedente conservata in caso di errore; caricamenti rinviati quando inizia una riproduzione o un aggiornamento completo.
+- Applicazione dei dati suddivisa in piccoli passaggi, con controlli su account e profilo prima della pubblicazione.
+- Ridotta la sovrapposizione tra download, salvataggio locale e preparazione delle schermate.
+- Report di fluidità con punti di controllo per caricamento e salvataggio.
