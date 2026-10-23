@@ -443,6 +443,8 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
             onKeyEvent: (_, e) => _epgKey(e, c, p, all, visible),
             child: _EpgCell(
               program: p,
+              start: slot.start,
+              end: slot.end,
               compact: w < 44,
               catchup: XtreamCatchup.available(c, p, now),
               focus: _epgFocus == id,
@@ -1680,6 +1682,8 @@ Future<void> playArchiveProgramme(
 
 class _EpgCell extends StatefulWidget {
   final EpgProgram program;
+  final DateTime start;
+  final DateTime end;
   final bool compact;
   final bool catchup;
   final bool focus;
@@ -1687,6 +1691,8 @@ class _EpgCell extends StatefulWidget {
   final VoidCallback onPressed;
   const _EpgCell({
     required this.program,
+    required this.start,
+    required this.end,
     required this.compact,
     required this.catchup,
     required this.focus,
@@ -1790,7 +1796,7 @@ class _EpgCellState extends State<_EpgCell> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${_hm(p.startTime)} – ${_hm(p.endTime)}',
+                        '${_hm(widget.start)} – ${_hm(widget.end)}',
                         maxLines: 1,
                         overflow: TextOverflow.clip,
                         style: const TextStyle(

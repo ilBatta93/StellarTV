@@ -269,8 +269,31 @@ class EpgProvider extends ChangeNotifier {
   static String _norm(String s) => s
       .toLowerCase()
       .replaceAll(RegExp(r'^\s*[a-z]{2,3}\s*[:|\-]\s*'), '')
-      .replaceAll(RegExp(r'\b(fhd|uhd|hd|sd|4k|hevc|h265|backup|\+1)\b'), ' ')
+      .replaceAll(RegExp(r'\+\s*1\b'), ' plus1 ')
+      .replaceAll(RegExp(r'\b(fhd|uhd|hd|sd|4k|hevc|h265|backup)\b'), ' ')
       .replaceAll(RegExp(r'[^a-z0-9]+'), '');
+
+  /// Name fallback index; names claimed by different guide ids are dropped
+  /// so an ambiguous name never shows another channel's programmes.
+  Map<String, String> _buildNameIndex() {
+    final index = <String, String>{};
+    final ambiguous = <String>{};
+    void add(String name, String id) {
+      final key = _norm(name);
+      if (key.isEmpty || ambiguous.contains(key)) return;
+      final prior = index[key];
+      if (prior == null) {
+        index[key] = id;
+      } else if (prior != id) {
+        index.remove(key);
+        ambiguous.add(key);
+      }
+    }
+
+    _data.displayNames.forEach((id, name) => add(name, id));
+    for (final k in _data.programmes.keys) add(k, k);
+    return index;
+  }
 
   /// Guide channel id for a playlist channel: tvg-id first, then the name.
   String? _guideIdFor(Channel channel) {
@@ -288,10 +311,7 @@ class EpgProvider extends ChangeNotifier {
       }
     }
     if (id == null) {
-      final index = _nameIndex ??= {
-        for (final e in _data.displayNames.entries) _norm(e.value): e.key,
-        for (final k in _data.programmes.keys) _norm(k): k,
-      };
+      final index = _nameIndex ??= _buildNameIndex();
       id =
           index[_norm(channel.tvgName ?? channel.name)] ??
           index[_norm(channel.name)];

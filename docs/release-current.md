@@ -1,3 +1,2 @@
-- Navigazione Home alleggerita: le informazioni del titolo riutilizzano indici locali senza ripetere scansioni durante lo scorrimento.
-- Sfondo Home più definito, con dimensioni controllate anche quando il dispositivo segnala memoria scarsa.
-- Preparato il riuso dei dettagli pubblici già richiesti, senza nuovi caricamenti massivi; attivazione del servizio separata.
+- Etichette delle piattaforme mostrate solo quando il catalogo ufficiale conferma il titolo.
+- Guida TV: ogni canale usa solo la propria programmazione, compresi i canali +1, e gli orari delle caselle non si sovrappongono più.

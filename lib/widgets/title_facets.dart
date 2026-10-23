@@ -74,9 +74,9 @@ class TitleFacets {
     final service = PlatformCatalogService.instance;
     final platforms = <StreamingPlatform>[
       for (final p in StreamingPlatform.all)
-        if ((item != null &&
-                service.containsTitle(p, movies: movie, id: item.id)) ||
-            (c != null && (p.tagMatches(c.group) || p.tagMatches(c.name))))
+        // Only verified catalog membership: category names are not evidence.
+        if (item != null &&
+            service.containsTitle(p, movies: movie, id: item.id))
           p,
     ];
     return TitleFacets(
