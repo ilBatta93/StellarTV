@@ -1,3 +1,11 @@
+## Fluidità e metadati — 23 ottobre 2026
+- [x] Rimossa scansione categorie dal disegno Home; indice locale asincrono per le schede e membership piattaforme per ID.
+- [x] Banner limitato a 1280px normale/960px sotto pressione; diagnostica invariata.
+- [x] Client invia sessione account per cache metadati opzionale; nessun prefetch massivo.
+- [ ] Android: test e compilazione da seguire.
+- [ ] Cache condivisa: SQL manuale esterno e pubblicazione sito necessari.
+- [ ] Misura sul televisore reale: richiede dispositivo utente.
+
 - [x] Ottobre 16 (2): dirette stabili — un solo player alla volta, formati del canale provati prima di cambiare motore, ExoPlayer predefinito per Dirette TV e anteprima/MultiView, MPV senza ricerca forzata, MDK sicuro e impostazioni per motore
 - [ ] Ottobre 16 (2): prova su Fire TV, Google TV e Chromecast (serve build Codemagic)
 - [x] Ottobre 16: MPV dirette (codec FFmpeg completi, decodifica sicura anti schermo nero, buffer Fire TV), terzo motore MDK, Diretta senza chiusure, icone→canali, MultiView nel player, lista episodi Apple con progresso e Back a due livelli

@@ -46,11 +46,11 @@ void main() {
     'Reduced motion preserved',
   );
   check(
-    TvRenderPolicy.homeBackdropDecodeLimit(memoryPressure: true) == 480,
-    'Home retains only one 480px backdrop under pressure',
+    TvRenderPolicy.homeBackdropDecodeLimit(memoryPressure: true) == 960,
+    'Home retains only one bounded 960px backdrop under pressure',
   );
   check(
-    TvRenderPolicy.homeBackdropDecodeLimit(memoryPressure: false) == 960,
+    TvRenderPolicy.homeBackdropDecodeLimit(memoryPressure: false) == 1280,
     'Normal Home backdrop remains bounded',
   );
   print('PASS: 12 rendering policy checks');

@@ -1,5 +1,3 @@
-- Titoli doppi rimossi in modo uniforme in tutti i cataloghi e nei filtri genere.
-- Schede titolo e banner Home con generi e piattaforme; indicate le categorie in cui il titolo è presente.
-- Indietro da un pannello filtri lascia il focus sul pulsante che lo ha aperto.
-- Chiudere un trailer libera subito la riproduzione video per le dirette successive.
-- Generi salvati disponibili fin dall'avvio.
+- Navigazione Home alleggerita: le informazioni del titolo riutilizzano indici locali senza ripetere scansioni durante lo scorrimento.
+- Sfondo Home più definito, con dimensioni controllate anche quando il dispositivo segnala memoria scarsa.
+- Preparato il riuso dei dettagli pubblici già richiesti, senza nuovi caricamenti massivi; attivazione del servizio separata.

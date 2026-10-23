@@ -1710,7 +1710,11 @@ class _TvHeroInfo extends StatelessWidget {
       if (it.voteAverage > 0) '★ ${it.voteAverage.toStringAsFixed(1)}',
       it.mediaType == 'movie' ? 'Film' : 'Serie TV',
     ];
-    final facets = TitleFacets.of(context.read<AppProvider>(), item: it);
+    final facets = TitleFacets.of(
+      context.read<AppProvider>(),
+      item: it,
+      includeCategories: false,
+    );
     if (facets.genres.isNotEmpty) meta.add(facets.genres.take(2).join(', '));
     final metaText = meta.join('  ·  ');
     return LayoutBuilder(

@@ -20,6 +20,7 @@ class PlatformCatalogService extends ChangeNotifier {
   static const _prefix = 'platform_catalog_v1:';
 
   final Map<String, List<TmdbItem>> _items = {};
+  final Map<String, Set<int>> _titleIds = {};
   final Map<String, Future<void>> _loading = {};
   int _version = 0;
   int get version => _version;
@@ -29,6 +30,12 @@ class PlatformCatalogService extends ChangeNotifier {
 
   List<TmdbItem>? itemsOf(StreamingPlatform p, {required bool movies}) =>
       _items[_key(p, movies)];
+
+  bool containsTitle(
+    StreamingPlatform p, {
+    required bool movies,
+    required int id,
+  }) => _titleIds[_key(p, movies)]?.contains(id) ?? false;
 
   bool isLoading(StreamingPlatform p, {required bool movies}) =>
       _loading.containsKey(_key(p, movies));
@@ -55,11 +62,13 @@ class PlatformCatalogService extends ChangeNotifier {
                       case final item?)
                     item,
             ];
+            _titleIds[key] = _items[key]?.map((i) => i.id).toSet() ?? <int>{};
             return;
           }
         }
         final items = await tmdb.platformCatalog(p, movies: movies);
         _items[key] = items;
+        _titleIds[key] = items.map((i) => i.id).toSet();
         if (items.isNotEmpty) {
           await prefs.setString(
             '$_prefix$key',

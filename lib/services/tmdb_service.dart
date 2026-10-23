@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'title_logo_cache.dart';
 
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_config.dart';
 import '../models/streaming_platform.dart';
@@ -38,12 +39,19 @@ class TmdbService {
     final uri = Uri.parse(SupabaseConfig.tmdbProxyUrl)
         .replace(queryParameters: {'path': path, ...params});
     final http.Response res;
+    String bearer = SupabaseConfig.anonKey;
+    try {
+      bearer =
+          Supabase.instance.client.auth.currentSession?.accessToken ?? bearer;
+    } catch (_) {
+      // Public browsing works before account initialization as before.
+    }
     try {
       res = await _foregroundHttp
           .get(
             uri,
             headers: {
-              'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
+              'Authorization': 'Bearer $bearer',
               'apikey': SupabaseConfig.anonKey,
             },
           )

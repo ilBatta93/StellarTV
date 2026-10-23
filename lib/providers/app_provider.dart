@@ -15,6 +15,7 @@ import '../services/catalog_builder.dart';
 import '../services/catalog_preparation.dart';
 import '../services/prepared_catalog_store.dart';
 import '../services/catalog_index_builder.dart';
+import '../services/title_category_index.dart';
 import '../services/playlist_refresh_service.dart';
 import '../services/playback_work_policy.dart';
 import '../services/foreground_policy.dart';
@@ -159,6 +160,49 @@ class AppProvider extends ChangeNotifier {
   final Map<ContentType, String> _preparedSignatures = {};
   List<Channel>? _favoritesCache;
 
+  Map<String, List<String>> _titleCategories = const {};
+  Timer? _titleCategoriesTimer;
+  bool _titleCategoriesBuilding = false;
+
+  List<String> titleCategoriesOf(Channel channel) =>
+      _titleCategories[catalogEntryKey(channel)] ??
+      (channel.group.isEmpty ? const [] : [channel.group]);
+
+  void _scheduleTitleCategories() {
+    _titleCategoriesTimer?.cancel();
+    if (_disposed || _allChannels.isEmpty) return;
+    _titleCategoriesTimer = Timer(const Duration(milliseconds: 300), () async {
+      if (_disposed) return;
+      if (_titleCategoriesBuilding ||
+          _playbackActive ||
+          !ForegroundPolicy.instance.active) {
+        _scheduleTitleCategories();
+        return;
+      }
+      final snapshot = _allChannels;
+      final epoch = _preparationEpoch;
+      _titleCategoriesBuilding = true;
+      try {
+        final index = await Isolate.run(
+          () => buildTitleCategoryIndex(snapshot),
+        );
+        if (!_disposed &&
+            epoch == _preparationEpoch &&
+            identical(snapshot, _allChannels) &&
+            !_playbackActive) {
+          _titleCategories = index;
+          notifyListeners();
+        } else if (!_disposed) {
+          _scheduleTitleCategories();
+        }
+      } catch (_) {
+        // The current category remains available if indexing fails.
+      } finally {
+        _titleCategoriesBuilding = false;
+      }
+    });
+  }
+
   int _preparationEpoch = 0;
   int _playlistRefreshRevision = 0;
   int get playlistRefreshRevision => _playlistRefreshRevision;
@@ -272,6 +316,8 @@ class AppProvider extends ChangeNotifier {
 
   void _invalidateCaches() {
     _preparationEpoch++;
+    _titleCategories = const {};
+    _scheduleTitleCategories();
     _preparing.clear();
     _byType.clear();
     _categoryLabelSources.clear();
@@ -2120,6 +2166,7 @@ class AppProvider extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _titleCategoriesTimer?.cancel();
     _cancelVisibilityWaits();
     _startupEpoch++;
     PlaybackWorkPolicy.instance.removeListener(_onPlaybackWorkChanged);

@@ -56,16 +56,14 @@ class PosterImage extends StatelessWidget {
         int? cacheWidth;
         if (c.maxWidth.isFinite && c.maxWidth > 0) {
           final px = c.maxWidth * MediaQuery.devicePixelRatioOf(context);
-          cacheWidth = ((px / 64).ceil() * 64).clamp(
-            64,
-            TvRenderPolicy.decodeLimit(
-              isTv: DeviceTypeService.isTv,
-              memoryPressure: TvImageMemoryGuard.reducedRendering.value,
-            ),
-          );
           final limit = maxDecodeWidth;
-          if (limit != null && limit > 0 && cacheWidth > limit)
-            cacheWidth = limit;
+          final decodeLimit = limit != null && limit > 0
+              ? limit
+              : TvRenderPolicy.decodeLimit(
+                  isTv: DeviceTypeService.isTv,
+                  memoryPressure: TvImageMemoryGuard.reducedRendering.value,
+                );
+          cacheWidth = ((px / 64).ceil() * 64).clamp(64, decodeLimit);
           if (rememberWidth) PosterMemoryWarmup.noteWidth(cacheWidth);
         }
         return CachedNetworkImage(

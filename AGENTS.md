@@ -146,3 +146,6 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Frame diagnostics checkpoint bounded aggregates privately through a coalesced atomic file writer and rotate current to previous before auto-start, allowing explicit recovery uploads without background network work.
 
 - Genre options are immediately available independently of counts; matching retains verified metadata and Kids filtering, while counts are read-only in rendering and refreshed after evidence/preparation changes. Category labels memoize channel identity to avoid repeated catalog scans.
+
+- Title category membership is indexed once per visible playlist snapshot off the UI thread, invalidated with catalog caches; Home omits unused category facets and platform membership uses ID sets to avoid rendering-time scans.
+- Optional shared TMDB detail/credits/video cache keys include endpoint and language; only already-requested responses are cached, writes require a verified account, and missing schema falls back to the existing proxy without mass prefetch.
