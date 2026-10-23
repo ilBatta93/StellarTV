@@ -163,4 +163,5 @@
 - [x] Filtri quattro direzioni, ritorno icona e Sinistra alla categoria attiva
 - [x] Conteggi generi persistiti, caricamento evidenze deduplicato e EPG permanente per fonte
 - [x] Diagnostica invariata, guida e note neutre aggiornate
-- [ ] Test CI e compilazione Android, verifica su TV reale
+- [x] Android 3.7.8 pubblicata: 251 test passati, 2 saltati; test nativi e APK riusciti
+- [ ] Prova focus, generi e guida tra avvii su TV reale (serve dispositivo utente)
