@@ -140,11 +140,13 @@ class RatingValue extends StatelessWidget {
   final double? imdb;
   final double fallback;
   final double height;
+  final bool framed;
   const RatingValue({
     super.key,
     this.imdb,
     this.fallback = 0,
     this.height = 20,
+    this.framed = false,
   });
   @override
   Widget build(BuildContext context) {
@@ -152,7 +154,7 @@ class RatingValue extends StatelessWidget {
     final hasImdb = rating != null && rating > 0;
     final value = hasImdb ? rating : fallback;
     if (value <= 0) return const SizedBox.shrink();
-    return Semantics(
+    final badge = Semantics(
       label: '${hasImdb ? 'IMDb' : 'TMDB'} ${value.toStringAsFixed(1)}',
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -181,6 +183,16 @@ class RatingValue extends StatelessWidget {
         ],
       ),
     );
+    if (!framed) return badge;
+    // Same translucent dark pill as Home posters: legible on light artwork.
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.overlayControl,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: badge,
+    );
   }
 }
 
@@ -203,7 +215,13 @@ class ImdbRatingBadge extends StatelessWidget {
 class ChannelRatingBadge extends StatefulWidget {
   final Channel channel;
   final double height;
-  const ChannelRatingBadge(this.channel, {super.key, this.height = 16});
+  final bool framed;
+  const ChannelRatingBadge(
+    this.channel, {
+    super.key,
+    this.height = 16,
+    this.framed = false,
+  });
   @override
   State<ChannelRatingBadge> createState() => _ChannelRatingBadgeState();
 }
@@ -241,6 +259,7 @@ class _ChannelRatingBadgeState extends State<ChannelRatingBadge> {
           imdb: item == null ? null : ImdbRatingService.instance.ratingOf(item),
           fallback: service.ratingOf(widget.channel) ?? item?.voteAverage ?? 0,
           height: widget.height,
+          framed: widget.framed,
         );
       },
     );

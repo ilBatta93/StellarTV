@@ -94,8 +94,8 @@ class ChannelCard extends StatelessWidget {
                     if (!_isLive && context.read<UiSettings>().showRatings)
                       Positioned(
                         left: 6,
-                        bottom: 6,
-                        child: ChannelRatingBadge(channel),
+                        top: 6,
+                        child: ChannelRatingBadge(channel, framed: true),
                       ),
                     if (_isLive)
                       const Positioned(left: 6, bottom: 6, child: LiveBadge()),

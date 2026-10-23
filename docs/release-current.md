@@ -1,4 +1,1 @@
-- Valutazioni IMDb con logo nei cataloghi e nelle schede, con voto TMDB quando non disponibile.
-- Episodi: trama dedicata, valutazione individuale e dettagli apribili con il telecomando.
-- Informazioni durante la visione: titolo e trama dell’episodio corrente, valutazione e tempo rimanente.
-- Metadati riutilizzati dal dispositivo; nessuna richiesta aggiuntiva dal pannello durante la visione.
+- Voti nelle locandine di Film e Serie TV più leggibili: in alto a sinistra su sfondo scuro semitrasparente, come nella Home.
