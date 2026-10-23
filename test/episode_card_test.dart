@@ -98,7 +98,7 @@ void main() {
         await tester.pump();
         expect(
           FocusManager.instance.primaryFocus?.debugLabel,
-          'episode-watched:1',
+          downloadable ? 'episode-watched:1' : 'episode-info:1',
         );
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
         await tester.pump();
