@@ -141,3 +141,6 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - EPG timeline uses presentation-only clipped intervals and original program objects for playback; shared time geometry and event identity prevent overlap without changing archive timestamps.
 - TV Discover artwork paints one contrast scrim and keeps touch/player styling unchanged to reduce full-screen overdraw.
 - Both release workflows generate neutral, change-scoped notes from versioned release-current bullets; a bounded summary feeds the update dialog, whose notes focus owns remote scrolling directly.
+
+- Large catalog derivation uses a serialized cooperative preparation pipeline with bounded yields and scope/playback checks; rendering reads ready caches so navigation never starts a synchronous full grouping/sort.
+- Frame diagnostics checkpoint bounded aggregates privately through a coalesced atomic file writer and rotate current to previous before auto-start, allowing explicit recovery uploads without background network work.

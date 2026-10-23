@@ -8,12 +8,14 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'frame_telemetry_store.dart';
 
 /// Device-local frame telemetry. Records only while a measuring session is
 /// active, never uploads by itself and keeps bounded aggregates (per-second
 /// timeline, slowest frames, startup marks) instead of raw frame lists.
-class FrameTelemetryService extends ChangeNotifier
-    with WidgetsBindingObserver {
+class FrameTelemetryService extends ChangeNotifier with WidgetsBindingObserver {
   FrameTelemetryService._();
   static final FrameTelemetryService instance = FrameTelemetryService._();
 
@@ -47,6 +49,30 @@ class FrameTelemetryService extends ChangeNotifier
   int _peakRssMb = 0;
   int _peakImageMb = 0;
   String? _appVersion;
+  FrameTelemetryStore? _store;
+  Map<String, Object?>? previousReport;
+  int? _rssMb;
+  DateTime _lastCheckpoint = DateTime.fromMillisecondsSinceEpoch(0);
+  Future<void>? _initializing;
+
+  Future<void> initializeStore() => _initializing ??= () async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final store = FrameTelemetryStore(dir.path);
+      previousReport = await store.recover();
+      _store = store;
+      notifyListeners();
+    } catch (_) {
+      // Failed recovery must not overwrite the only recoverable file.
+    }
+  }();
+
+  void _checkpoint() {
+    final store = _store;
+    if (store == null || _startedAt == null) return;
+    _lastCheckpoint = DateTime.now();
+    unawaited(store.save(report()).catchError((_) {}));
+  }
 
   bool get recording => _recording;
   DateTime? get startedAt => _startedAt;
@@ -54,6 +80,7 @@ class FrameTelemetryService extends ChangeNotifier
   /// Called first thing in main(): starts measuring before the first frame
   /// when the user enabled "start with the app".
   Future<void> startIfAutoEnabled() async {
+    await initializeStore();
     try {
       final prefs = await SharedPreferences.getInstance();
       autoStartEnabled = prefs.getBool(autoStartKey) ?? false;
@@ -90,10 +117,13 @@ class FrameTelemetryService extends ChangeNotifier
   void _event(String label) {
     if (!_recording || _events.length >= _maxEvents) return;
     _events.add({'t': sinceLaunch.elapsedMilliseconds, 'event': label});
+    if (label == 'memoria scarsa' || label.startsWith('stato app:'))
+      _checkpoint();
   }
 
   void start() {
     if (_recording) return;
+    unawaited(initializeStore());
     stats.reset();
     _marks.clear();
     _timeline.clear();
@@ -106,7 +136,13 @@ class FrameTelemetryService extends ChangeNotifier
     SchedulerBinding.instance.addTimingsCallback(_onTimings);
     WidgetsBinding.instance.addObserver(this);
     _limit = Timer(maxSession, stop);
-    _sampler = Timer.periodic(const Duration(seconds: 1), (_) => _sample());
+    _sample();
+    _sampler = Timer.periodic(const Duration(seconds: 1), (_) {
+      _sample();
+      if (DateTime.now().difference(_lastCheckpoint).inSeconds >= 5)
+        _checkpoint();
+    });
+    _checkpoint();
     if (_firstFrameMs == null) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
         _firstFrameMs ??= sinceLaunch.elapsedMilliseconds;
@@ -124,6 +160,7 @@ class FrameTelemetryService extends ChangeNotifier
     _sampler?.cancel();
     SchedulerBinding.instance.removeTimingsCallback(_onTimings);
     WidgetsBinding.instance.removeObserver(this);
+    _checkpoint();
     notifyListeners();
   }
 
@@ -131,7 +168,12 @@ class FrameTelemetryService extends ChangeNotifier
     stats.reset();
     _timeline.clear();
     _events.clear();
+    _marks.clear();
+    _peakRssMb = 0;
+    _peakImageMb = 0;
+    _second = _Second(sinceLaunch.elapsedMilliseconds ~/ 1000);
     if (_recording) _startedAt = DateTime.now();
+    _checkpoint();
     notifyListeners();
   }
 
@@ -150,6 +192,7 @@ class FrameTelemetryService extends ChangeNotifier
   void _sample() {
     try {
       final rss = ProcessInfo.currentRss >> 20;
+      _rssMb = rss;
       if (rss > _peakRssMb) _peakRssMb = rss;
     } catch (_) {}
     final img = PaintingBinding.instance.imageCache.currentSizeBytes >> 20;
@@ -187,7 +230,6 @@ class FrameTelemetryService extends ChangeNotifier
   }
 
   Map<String, Object?> report() {
-    _sample();
     final view = PlatformDispatcher.instance.implicitView;
     final cache = PaintingBinding.instance.imageCache;
     return {
@@ -209,7 +251,7 @@ class FrameTelemetryService extends ChangeNotifier
         'refreshRate': view.display.refreshRate,
       },
       'memory': {
-        'rssMb': _safeRss(),
+        'rssMb': _rssMb,
         'peakRssMb': _peakRssMb,
         'imageCacheMb': cache.currentSizeBytes >> 20,
         'peakImageCacheMb': _peakImageMb,
@@ -221,22 +263,20 @@ class FrameTelemetryService extends ChangeNotifier
       ...stats.toJson(),
       'marks': List.of(_marks),
       'events': List.of(_events),
-      'timeline': List.of(_timeline),
+      'timeline': [
+        ..._timeline,
+        if (_recording && _second.frames > 0 && _timeline.length < _maxTimeline)
+          _second.toJson(_route),
+      ],
+      'recordingAtCheckpoint': _recording,
     };
-  }
-
-  int? _safeRss() {
-    try {
-      return ProcessInfo.currentRss >> 20;
-    } catch (_) {
-      return null;
-    }
   }
 }
 
 class _TelemetryRouteObserver extends NavigatorObserver {
-  String _name(Route<dynamic>? r) =>
-      r?.settings.name ?? r?.runtimeType.toString() ?? '?';
+  String _name(Route<dynamic>? r) => r == null
+      ? 'avvio'
+      : r.runtimeType.toString().replaceAll(RegExp(r'<.*>'), '');
   @override
   void didPush(Route route, Route? previousRoute) =>
       FrameTelemetryService.instance._setRoute(_name(route));
@@ -261,12 +301,12 @@ class _Second {
   }
 
   Map<String, Object?> toJson(String route) => {
-        's': sec,
-        'f': frames,
-        'j': jank,
-        'max': (worstUs / 100).round() / 10,
-        'r': route,
-      };
+    's': sec,
+    'f': frames,
+    'j': jank,
+    'max': (worstUs / 100).round() / 10,
+    'r': route,
+  };
 }
 
 /// Pure aggregate of frame timings, testable without the engine.
@@ -345,8 +385,14 @@ class FrameStats {
     }
   }
 
-  void _keepSlow(int total, int build, int raster, int vsync, int? at,
-      String? context) {
+  void _keepSlow(
+    int total,
+    int build,
+    int raster,
+    int vsync,
+    int? at,
+    String? context,
+  ) {
     if (slowest.length >= slowestKept &&
         (slowest.last['ms'] as double) * 1000 >= total) {
       return;
@@ -379,29 +425,29 @@ class FrameStats {
   static double _r(double v) => (v * 10).roundToDouble() / 10;
 
   Map<String, Object?> toJson() => {
-        'frames': frames,
-        'jankFrames': jank,
-        'jankPercent': _r(jankPercent),
-        'fps': _r(fps),
-        'avgBuildMs': _r(avgBuildMs),
-        'avgRasterMs': _r(avgRasterMs),
-        'avgVsyncMs': _r(avgVsyncMs),
-        'avgFrameMs': _r(avgTotalMs),
-        'jankBuildBound': buildBound,
-        'jankRasterBound': rasterBound,
-        'histogram': {
-          'le16': histogram[0],
-          'le33': histogram[1],
-          'le50': histogram[2],
-          'le100': histogram[3],
-          'le250': histogram[4],
-          'gt250': histogram[5],
-        },
-        'peakMs': _r(peakUs / 1000),
-        'peakBuildMs': _r(peakBuildUs / 1000),
-        'peakRasterMs': _r(peakRasterUs / 1000),
-        'peakAt': peakAt?.toUtc().toIso8601String(),
-        'peakContext': peakContext,
-        'slowest': List.of(slowest),
-      };
+    'frames': frames,
+    'jankFrames': jank,
+    'jankPercent': _r(jankPercent),
+    'fps': _r(fps),
+    'avgBuildMs': _r(avgBuildMs),
+    'avgRasterMs': _r(avgRasterMs),
+    'avgVsyncMs': _r(avgVsyncMs),
+    'avgFrameMs': _r(avgTotalMs),
+    'jankBuildBound': buildBound,
+    'jankRasterBound': rasterBound,
+    'histogram': {
+      'le16': histogram[0],
+      'le33': histogram[1],
+      'le50': histogram[2],
+      'le100': histogram[3],
+      'le250': histogram[4],
+      'gt250': histogram[5],
+    },
+    'peakMs': _r(peakUs / 1000),
+    'peakBuildMs': _r(peakBuildUs / 1000),
+    'peakRasterMs': _r(peakRasterUs / 1000),
+    'peakAt': peakAt?.toUtc().toIso8601String(),
+    'peakContext': peakContext,
+    'slowest': List.of(slowest),
+  };
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import '../services/catalog_sort.dart' show sortCatalogBackground;
 
 import 'package:flutter/material.dart';
@@ -317,6 +318,10 @@ class _CatalogPageState extends State<CatalogPage> {
       _recentGroups = groups;
       _recentSnapshot = app.recentEntries(widget.type);
     }
+    if ((_recentSnapshot?.isEmpty ?? true) &&
+        app.catalogPreparing(widget.type)) {
+      _recentSnapshot = app.recentEntries(widget.type);
+    }
     return _recentSnapshot ?? const [];
   }
 
@@ -380,7 +385,7 @@ class _CatalogPageState extends State<CatalogPage> {
 
   String _platformKey(AppProvider app, StreamingPlatform p) =>
       '${p.name}:${PlatformCatalogService.instance.version}:'
-      '${identityHashCode(app.allChannels)}';
+      '${identityHashCode(app.allChannels)}:${app.catalogIndexRevision}';
 
   /// Playlist ids TMDB lists for the selected platform (matched locally).
   Set<String> _platformMatches(AppProvider app, StreamingPlatform p) {
@@ -509,7 +514,7 @@ class _CatalogPageState extends State<CatalogPage> {
     }
 
     final groups = app.groupedCatalog(widget.type);
-    if (groups.isEmpty) {
+    if (groups.isEmpty && !app.catalogPreparing(widget.type)) {
       return EmptyState(
         icon: Icons.playlist_add_rounded,
         title: 'Nessun contenuto',
@@ -854,6 +859,9 @@ class _CatalogPageState extends State<CatalogPage> {
             )
           : _recent(app),
     );
+    if (entries.isEmpty && app.catalogPreparing(widget.type)) {
+      return Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
     if (entries.isEmpty) {
       return EmptyState(
         icon: Icons.search_off_rounded,
@@ -985,6 +993,9 @@ class _CatalogPageState extends State<CatalogPage> {
         () => all.where((e) => _matchesGenre(app, e)).toList(),
       ),
     );
+    if (entries.isEmpty && app.catalogPreparing(widget.type)) {
+      return Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
     if (entries.isEmpty) {
       return EmptyState(
         icon: Icons.search_off_rounded,
@@ -1004,6 +1015,9 @@ class _CatalogPageState extends State<CatalogPage> {
         () => group.entries.where((e) => _matchesGenre(app, e)).toList(),
       ),
     );
+    if (entries.isEmpty && app.catalogPreparing(widget.type)) {
+      return Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
     if (entries.isEmpty) {
       return EmptyState(
         icon: Icons.search_off_rounded,
@@ -1028,7 +1042,7 @@ class _CatalogPageState extends State<CatalogPage> {
     final groups = app.groupedCatalog(widget.type);
     final key =
         '${identityHashCode(groups)}|$q|$_selectedCategory|$_genreId|'
-        '$_platform|$_only4k|${app.titleInfoVersion}';
+        '$_platform|$_only4k|${app.titleInfoVersion}|${app.catalogIndexRevision}|${PlatformCatalogService.instance.version}';
     if (_lowerNames.length > 200000) _lowerNames.clear();
     if (_searchKey == key && _searchResult != null) {
       final cached = _ordered(_searchResult!);

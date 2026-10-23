@@ -1,3 +1,3 @@
-- Avvio più fluido su TV: i lavori pesanti attendono che il telecomando sia fermo.
-- Dettatura vocale disponibile in tutti i campi di testo tramite il pulsante microfono.
-- Chiave di recupero con percorso guidato: creazione solo alla prima attivazione.
+- Preparazione progressiva delle sezioni e degli ordinamenti, con comandi disponibili durante il caricamento.
+- Ridotte elaborazioni simultanee e copie temporanee dei cataloghi; protezione memoria conservata.
+- Diagnostica salvata sul dispositivo: la sessione precedente resta disponibile dopo il riavvio e può essere inviata dal telecomando.

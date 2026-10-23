@@ -1,4 +1,5 @@
 import 'dart:isolate';
+
 import '../models/channel.dart';
 import 'catalog_builder.dart';
 
@@ -82,3 +83,8 @@ Future<List<CatalogEntry>> sortCatalogBackground(
     ratingOf: (c) => ratings[c.id],
   ),
 );
+
+Future<List<Channel>> sortLiveBackground(
+  List<Channel> channels,
+  CatalogSort? order,
+) => Isolate.run(() => sortCatalog(channels, order, (c) => c));

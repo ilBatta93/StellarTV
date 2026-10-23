@@ -61,6 +61,34 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     });
   }
 
+  Object? _listGroups;
+  String? _listKey;
+  List<Channel>? _listCache;
+  List<Channel>? _sortSource;
+  CatalogSort? _sortOrder;
+  List<Channel>? _sortResult;
+  int _sortEpoch = 0;
+
+  List<Channel> _orderedLive(List<Channel> channels) {
+    if (_sort == null || _sort == CatalogSort.provider) return channels;
+    if (identical(channels, _sortSource) && _sortOrder == _sort)
+      return _sortResult ?? channels;
+    _sortSource = channels;
+    _sortOrder = _sort;
+    _sortResult = null;
+    final epoch = ++_sortEpoch;
+    final order = _sort;
+    unawaited(
+      sortLiveBackground(channels, order)
+          .then((result) {
+            if (!mounted || epoch != _sortEpoch) return;
+            setState(() => _sortResult = result);
+          })
+          .catchError((_) {}),
+    );
+    return channels;
+  }
+
   CatalogSort? _sort = CatalogSort.provider;
   String _query = '';
   String? _category;
@@ -80,7 +108,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   bool get _previewMustWait => livePreviewMustWait(
     guideReady: _epg.isReady,
     guideLoading: _epg.isLoading || _epg.refreshDeferred,
-    catalogLoading: _app.isLoading,
+    catalogLoading: _app.isLoading || _app.catalogPreparing(ContentType.live),
   );
 
   void _guideWorkChanged() {
@@ -834,7 +862,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       return Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
     final groups = app.groupedCatalog(ContentType.live);
-    if (groups.isEmpty) {
+    if (groups.isEmpty && !app.catalogPreparing(ContentType.live)) {
       return const EmptyState(
         icon: Icons.live_tv_rounded,
         title: 'Nessun canale',
@@ -842,7 +870,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       );
     }
     // Default category: "TV Sat" (when the playlist has it).
-    if (!_defaultApplied) {
+    if (!_defaultApplied && groups.isNotEmpty) {
       _defaultApplied = true;
       String n(String s) =>
           s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
@@ -862,7 +890,12 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     ];
     final showWatched = _category == _watchedLabel;
     final selected = groups.where((g) => g.label == _category).firstOrNull;
-    var channels = showWatched
+    final listKey =
+        '$_category|$_query|${_query.isEmpty ? 0 : DateTime.now().minute}|${showWatched ? _recentLive.ids.join(',') : ''}';
+    final reusable = identical(_listGroups, groups) && _listKey == listKey;
+    var channels = reusable
+        ? (_listCache ?? const <Channel>[])
+        : showWatched
         ? [for (final e in watched) e.primary]
         : selected != null
         ? [for (final e in selected.entries) e.primary]
@@ -870,7 +903,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
             for (final g in groups)
               for (final e in g.entries) e.primary,
           ];
-    if (_query.isNotEmpty) {
+    if (!reusable && _query.isNotEmpty) {
       final q = _query.toLowerCase();
       channels = channels
           .where(
@@ -881,9 +914,13 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
           .toList();
     }
 
-    if (DeviceTypeService.isTv && !showWatched) {
-      channels = sortCatalog(channels, _sort, (c) => c);
+    if (!reusable) {
+      _listGroups = groups;
+      _listKey = listKey;
+      _listCache = channels;
     }
+    if (DeviceTypeService.isTv && !showWatched)
+      channels = _orderedLive(channels);
 
     if (_selectedChannel != null &&
         !channels.any((c) => c.id == _selectedChannel?.id)) {
