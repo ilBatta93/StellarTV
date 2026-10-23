@@ -15,11 +15,37 @@ Channel _movie(String id, String name, {String group = 'Film'}) => Channel(
 );
 
 void main() {
-  test('saved order wins, new categories keep their default place', () {
+  test('Crunchyroll is shared by movie and series platform filters', () {
+    final p = StreamingPlatform.byName('Crunchyroll');
+    expect(p?.providerIds, '283');
+    expect(p?.region, 'IT');
+    if (p == null) return;
     expect(
-      applyCategoryOrder(['A', 'B', 'C', 'D'], ['C', 'Gone', 'A']),
-      ['C', 'A', 'B', 'D'],
+      belongsToPlatform(
+        p,
+        _movie('cr-film', 'Titolo', group: 'Crunchyroll'),
+        {},
+      ),
+      isTrue,
     );
+    final series = Channel(
+      id: 'cr-tv',
+      name: 'Titolo',
+      url: 'u',
+      logo: '',
+      group: 'Crunchyroll',
+      type: ContentType.series,
+    );
+    expect(belongsToPlatform(p, series, {}), isTrue);
+    expect(belongsToPlatform(p, _movie('other', 'Animazione'), {}), isFalse);
+  });
+  test('saved order wins, new categories keep their default place', () {
+    expect(applyCategoryOrder(['A', 'B', 'C', 'D'], ['C', 'Gone', 'A']), [
+      'C',
+      'A',
+      'B',
+      'D',
+    ]);
   });
 
   test('moving a category stays inside the list', () {
@@ -39,8 +65,10 @@ void main() {
     expect(back.name, 'Serata');
     expect(back.type, ContentType.movie);
     expect(back.itemIds, ['10', '20']);
-    expect(CustomCategory.tryParse({'id': 'x', 'name': ' ', 'type': 'movie'}),
-        isNull);
+    expect(
+      CustomCategory.tryParse({'id': 'x', 'name': ' ', 'type': 'movie'}),
+      isNull,
+    );
   });
 
   test('Disney+ is a Home platform with its TMDB provider id', () {
@@ -53,7 +81,11 @@ void main() {
     final netflix = StreamingPlatform.byName('Netflix')!;
     expect(belongsToPlatform(netflix, _movie('1', 'Titolo'), {'1'}), isTrue);
     expect(
-      belongsToPlatform(netflix, _movie('2', 'Titolo', group: 'NETFLIX FILM'), {}),
+      belongsToPlatform(
+        netflix,
+        _movie('2', 'Titolo', group: 'NETFLIX FILM'),
+        {},
+      ),
       isTrue,
     );
     expect(belongsToPlatform(netflix, _movie('3', 'Titolo [NF]'), {}), isTrue);
@@ -63,7 +95,9 @@ void main() {
       belongsToPlatform(disney, _movie('5', 'X', group: 'Disney+ Film'), {}),
       isTrue,
     );
-    expect(belongsToPlatform(disney, _movie('6', 'Disney classico'), {}),
-        isFalse);
+    expect(
+      belongsToPlatform(disney, _movie('6', 'Disney classico'), {}),
+      isFalse,
+    );
   });
 }

@@ -104,7 +104,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Guided diagnostics adds only an enumerated optional problem to explicit exports/uploads; original technical evidence and player behavior remain unchanged.
 
 - Settings option pickers mount their bounded option list eagerly inside a scroll view, so the current offscreen value receives TV autofocus and arrow navigation starts from it.
-- Catalog panel Back resolves the visible same-route toolbar across focus transitions and consumes duplicate hardware/system dispatch within the closing frame, so genre/platform panels restore their own opener before the top menu handles a later Back.
+- Catalog panel Back resolves the mounted, focus-enabled same-route toolbar using the Home context even when primary focus detaches; transition tokens cancel stale focus callbacks and panel arrows remain owned by the explicit grid.
 
 - All PlaybackSession instances register shared background-work gates: guide/playlist work waits for closed sessions, cloud sends wait for explicit pause/end; pending local changes flush through the existing serialized sync.
 - Native device identity carries a stable cloud compatibility marker independent of release numbering; external vault gating must reject explicitly and preserve the existing validation/CAS function, never claim a discarded write succeeded.
@@ -126,7 +126,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Live previews wait for guide initialization and active guide/catalog downloads, resuming through provider listeners; blocked initial EPG scheduling retains due work so closing playback cannot lose a refresh.
 - Frame telemetry records aggregates only during an explicit session (auto-stop) and uploads through the same owner-scoped diagnostic reports table, so no extra polling or tables exist.
 
-- TV Home decodes posters on demand, retains one complete vertical neighbour and bounded horizontal neighbours for D-Pad traversal, and swaps only changed settled artwork; native memory pressure suppresses the decorative backdrop until process restart through TvRenderPolicy, never hiding selectable cards or deleting disk/user data.
+- TV Home decodes posters on demand, retains one complete vertical neighbour and bounded horizontal neighbours for D-Pad traversal, and swaps only changed settled artwork; native memory pressure bounds the single Home backdrop through TvRenderPolicy while suppressing other decorative backdrops until process restart, never hiding selectable cards or deleting disk/user data.
 - TV decoded-image memory shrinks on native memory-pressure signals; speculative image work checks playback/visibility and reuses cached files, never deleting user data or disk images.
 - Catalog sort logic is browser/native-independent in catalog_sort.dart; a top-level isolate boundary receives only catalog entries and rating snapshots, while recent/filter list identities are cached to avoid repeated UI-thread sorts.
 
@@ -144,3 +144,5 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 
 - Catalog derivation uses bounded cooperative jobs and scope/playback checks; prepared device files include genre counts, so filter opening never scans titles synchronously. Evidence cache loads before queuing unknowns; EPG files are source-scoped in application support, with independent freshness and full-refresh integration.
 - Frame diagnostics checkpoint bounded aggregates privately through a coalesced atomic file writer and rotate current to previous before auto-start, allowing explicit recovery uploads without background network work.
+
+- Genre options are immediately available independently of counts; matching retains verified metadata and Kids filtering, while counts are read-only in rendering and refreshed after evidence/preparation changes. Category labels memoize channel identity to avoid repeated catalog scans.

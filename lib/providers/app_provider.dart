@@ -151,6 +151,8 @@ class AppProvider extends ChangeNotifier {
   final Map<ContentType, List<Channel>> _seriesCatalogCache = {};
   final Map<ContentType, List<CatalogGroup>> _groupedCache = {};
   final Map<ContentType, List<CatalogEntry>> _recentCache = {};
+  final Map<ContentType, List<Channel>> _categoryLabelSources = {};
+  final Map<ContentType, List<String>> _categoryLabels = {};
   final Map<ContentType, Map<int, int>> _genreCountsCache = {};
   final Map<ContentType, int> _genreCountsVersions = {};
   final Map<ContentType, Future<void>> _genreCountJobs = {};
@@ -272,6 +274,8 @@ class AppProvider extends ChangeNotifier {
     _preparationEpoch++;
     _preparing.clear();
     _byType.clear();
+    _categoryLabelSources.clear();
+    _categoryLabels.clear();
     _seriesCatalogCache.clear();
     _groupedCache.clear();
     _allCache.clear();
@@ -588,6 +592,9 @@ class AppProvider extends ChangeNotifier {
       () {
         _titleInfoVersion++;
         if (_kidsMode) _applyAdultFilter();
+        for (final type in _groupedCache.keys.toList()) {
+          unawaited(_ensureGenreCounts(type));
+        }
         notifyListeners();
       },
     );
@@ -642,15 +649,23 @@ class AppProvider extends ChangeNotifier {
       catalogOf(type).map((c) => c.group).toSet().toList()..sort();
 
   /// Category labels in the playlist's own order (not alphabetical).
-  List<String> categoryOrderOf(ContentType type) => channelsOf(type)
-      .where(
-        (c) =>
-            (type != ContentType.series && type != ContentType.anime) ||
-            c.isSeriesFolder,
-      )
-      .map((c) => c.group)
-      .toSet()
-      .toList();
+  List<String> categoryOrderOf(ContentType type) {
+    final channels = channelsOf(type);
+    if (identical(_categoryLabelSources[type], channels)) {
+      return _categoryLabels[type] ?? const [];
+    }
+    final labels = channels
+        .where(
+          (c) =>
+              (type != ContentType.series && type != ContentType.anime) ||
+              c.isSeriesFolder,
+        )
+        .map((c) => c.group)
+        .toSet()
+        .toList(growable: false);
+    _categoryLabelSources[type] = channels;
+    return _categoryLabels[type] = List.unmodifiable(labels);
+  }
 
   /// Categories the user hid per type (key: content type name).
   Map<String, List<String>> get hiddenCategories => _hiddenCategories;
@@ -666,6 +681,8 @@ class AppProvider extends ChangeNotifier {
     _preparationEpoch++;
     _preparing.clear();
     _groupedCache.remove(type);
+    _genreCountsCache.remove(type);
+    _genreCountsVersions.remove(type);
     _allCache.remove(type);
     _recentCache.remove(type);
     notifyListeners();
@@ -759,6 +776,8 @@ class AppProvider extends ChangeNotifier {
     _preparationEpoch++;
     _preparing.clear();
     _groupedCache.remove(type);
+    _genreCountsCache.remove(type);
+    _genreCountsVersions.remove(type);
     _allCache.remove(type);
     _recentCache.remove(type);
     notifyListeners();
@@ -938,7 +957,6 @@ class AppProvider extends ChangeNotifier {
 
   /// Read-only UI access: never walks the catalog while opening a filter.
   Map<int, int> genreCountsOf(ContentType type) {
-    unawaited(_ensureGenreCounts(type));
     return _genreCountsCache[type] ?? const {};
   }
 
@@ -946,57 +964,87 @@ class AppProvider extends ChangeNotifier {
     final running = _genreCountJobs[type];
     if (running != null) return running;
     final groups = _groupedCache[type];
-    if (groups == null || _disposed ||
+    if (groups == null ||
+        _disposed ||
         _genreCountsVersions[type] == _titleInfoVersion) {
       return Future<void>.value();
     }
     final epoch = _preparationEpoch;
     final version = _titleInfoVersion;
     final accountKey = _currentKey;
-    bool current() => !_disposed && epoch == _preparationEpoch &&
-        version == _titleInfoVersion && identical(groups, _groupedCache[type]);
+    bool current() =>
+        !_disposed &&
+        epoch == _preparationEpoch &&
+        version == _titleInfoVersion &&
+        identical(groups, _groupedCache[type]);
     late final Future<void> job;
-    job = () async {
-      await _kids.load();
-      final work = CatalogYield(() async => current() &&
-          !_playbackActive && ForegroundPolicy.instance.active);
-      final counts = <int, int>{};
-      try {
-        if (!current() || _playbackActive || !ForegroundPolicy.instance.active) return;
-        for (final group in groups) {
-          for (final entry in group.entries) {
-            for (final id in genresOf(entry.primary) ?? const <int>[]) {
-              counts[id] = (counts[id] ?? 0) + 1;
+    job =
+        () async {
+          await _kids.load();
+          final work = CatalogYield(
+            () async =>
+                current() &&
+                !_playbackActive &&
+                ForegroundPolicy.instance.active,
+          );
+          final counts = <int, int>{};
+          try {
+            if (!current() ||
+                _playbackActive ||
+                !ForegroundPolicy.instance.active)
+              return;
+            for (final group in groups) {
+              for (final entry in group.entries) {
+                for (final id in genresOf(entry.primary) ?? const <int>[]) {
+                  counts[id] = (counts[id] ?? 0) + 1;
+                }
+                await work.step();
+              }
             }
-            await work.step();
+            if (!current() ||
+                _playbackActive ||
+                !ForegroundPolicy.instance.active)
+              return;
+            _genreCountsCache[type] = Map.unmodifiable(counts);
+            _genreCountsVersions[type] = version;
+            notifyListeners();
+            final signature = _preparedSignatures[type];
+            final channels = _byType[type];
+            final all = _allCache[type];
+            final recent = _recentCache[type];
+            if (signature != null &&
+                channels != null &&
+                all != null &&
+                recent != null) {
+              await PreparedCatalogStore.instance.write(
+                accountKey,
+                type,
+                signature,
+                PreparedCatalog(
+                  channels,
+                  _seriesCatalogCache[type] ?? channels,
+                  groups,
+                  recent,
+                  all,
+                ),
+                genreCounts: counts,
+              );
+            }
+          } on CatalogPreparationCancelled {
+            // Retry on the next eligible filter access; never publish stale counts.
           }
-        }
-        if (!current() || _playbackActive || !ForegroundPolicy.instance.active) return;
-        _genreCountsCache[type] = Map.unmodifiable(counts);
-        _genreCountsVersions[type] = version;
-        notifyListeners();
-        final signature = _preparedSignatures[type];
-        final channels = _byType[type];
-        final all = _allCache[type];
-        final recent = _recentCache[type];
-        if (signature != null && channels != null && all != null && recent != null) {
-          await PreparedCatalogStore.instance.write(accountKey, type, signature,
-            PreparedCatalog(channels, _seriesCatalogCache[type] ?? channels,
-                groups, recent, all), genreCounts: counts);
-        }
-      } on CatalogPreparationCancelled {
-        // Retry on the next eligible filter access; never publish stale counts.
-      }
-    }().whenComplete(() {
-      if (identical(_genreCountJobs[type], job)) _genreCountJobs.remove(type);
-    });
+        }().whenComplete(() {
+          if (identical(_genreCountJobs[type], job))
+            _genreCountJobs.remove(type);
+        });
     _genreCountJobs[type] = job;
     return job;
   }
 
   /// Asks the background TMDB check for genres of exactly these titles (the
   /// catalog cards), so the genre bar fills for series folders too.
-  void requestTitleInfo(Iterable<Channel> items) => unawaited(_kids.warmUp(items));
+  void requestTitleInfo(Iterable<Channel> items) =>
+      unawaited(_kids.warmUp(items));
 
   /// "Tutti i Film" / "Tutte le Serie": every visible title once, A-Z.
   List<CatalogEntry> allEntries(ContentType type) {

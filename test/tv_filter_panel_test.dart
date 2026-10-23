@@ -167,6 +167,78 @@ void main() {
       );
     }
   }
+  testWidgets('Back keeps opener ownership with null focus during teardown', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    late BuildContext homeContext;
+    var menuBacks = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            homeContext = context;
+            return Scaffold(
+              body: TvCatalogToolbar(
+                controller: controller,
+                hint: 'Cerca',
+                onChanged: (_) {},
+                onSort: (_) {},
+                sort: null,
+                filters: (_) => TvFilterPanel(
+                  options: [TvFilterOption('Tutti', true, () {})],
+                ),
+                platforms: (_) => TvFilterPanel(
+                  options: [TvFilterOption('Tutti', true, () {})],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    for (final tooltip in ['Filtri e categorie', 'Piattaforme streaming']) {
+      final opener = tester
+          .widget<TvFocusable>(
+            find.ancestor(
+              of: find.byTooltip(tooltip),
+              matching: find.byType(TvFocusable),
+            ),
+          )
+          .focusNode;
+      for (var i = 0; i < 5; i++) {
+        await tester.tap(find.byTooltip(tooltip));
+        await tester.pumpAndSettle();
+        // Home must resolve the toolbar even when primaryFocus was detached.
+        if (!TvCatalogToolbar.handleBack(null, context: homeContext))
+          menuBacks++;
+        expect(TvCatalogToolbar.handleBack(null, context: homeContext), isTrue);
+        await tester.pumpAndSettle();
+        expect(opener?.hasFocus, isTrue);
+        expect(menuBacks, 0);
+      }
+    }
+    await tester.tap(find.byTooltip('Cerca'));
+    await tester.pumpAndSettle();
+    // First Back dismisses the keyboard; the next collapses the search field.
+    TvCatalogToolbar.handleBack(null, context: homeContext);
+    await tester.pumpAndSettle();
+    TvCatalogToolbar.handleBack(null, context: homeContext);
+    await tester.pumpAndSettle();
+    final search = tester
+        .widget<TvFocusable>(
+          find.ancestor(
+            of: find.byTooltip('Cerca'),
+            matching: find.byType(TvFocusable),
+          ),
+        )
+        .focusNode;
+    expect(search?.hasFocus, isTrue);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
   testWidgets(
     'Lazy inline filters navigate rows, restore tools and close on leaving',
     (tester) async {

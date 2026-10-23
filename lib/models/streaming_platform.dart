@@ -78,6 +78,13 @@ class StreamingPlatform {
         caseSensitive: false,
       ),
     ),
+    StreamingPlatform(
+      name: 'Crunchyroll',
+      providerIds: '283',
+      region: 'IT',
+      color: const Color(0xFFF47521),
+      tags: RegExp(r'\bcrunchyroll\b', caseSensitive: false),
+    ),
   ];
 
   static StreamingPlatform? byName(String? name) {

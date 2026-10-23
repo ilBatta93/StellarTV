@@ -120,22 +120,7 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
     final panel = primary.ancestors
         .where((n) => n.debugLabel == 'catalog panel')
         .firstOrNull;
-    if (panel != null) {
-      final nodes = panel.traversalDescendants
-          .where((n) => n.canRequestFocus && !n.skipTraversal)
-          .toList();
-      final y = primary.rect.center.dy;
-      final hasRow = nodes.any(
-        (n) => up ? n.rect.center.dy < y - 5 : n.rect.center.dy > y + 5,
-      );
-      if (hasRow) return false;
-      if (up) {
-        _search();
-      } else {
-        _first(_items);
-      }
-      return true;
-    }
+    if (panel != null) return false;
     if (primary.ancestors.contains(_tools)) {
       if (up) {
         if (context.getInheritedWidgetOfExactType<TvCatalogMenu>() != null) {
@@ -180,7 +165,6 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
 
   @override
   void dispose() {
-
     _tools.dispose();
     _filters.dispose();
     _items.dispose();
@@ -191,9 +175,8 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
   Widget build(BuildContext context) => Focus(
     canRequestFocus: false,
     skipTraversal: true,
-    onKeyEvent: (_, event) => _key(event)
-        ? KeyEventResult.handled
-        : KeyEventResult.ignored,
+    onKeyEvent: (_, event) =>
+        _key(event) ? KeyEventResult.handled : KeyEventResult.ignored,
     child: Column(
       children: [
         FocusScope(node: _tools, child: widget.toolbar),

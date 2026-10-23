@@ -1309,13 +1309,12 @@ class _TvDiscoverState extends State<_TvDiscover> {
                   valueListenable: _hero,
                   builder: (_, item, _) => ValueListenableBuilder<bool>(
                     valueListenable: TvImageMemoryGuard.reducedRendering,
-                    builder: (_, pressure, _) =>
-                        TvRenderPolicy.backdropAllowed(
-                          isTv: true,
-                          memoryPressure: pressure,
-                        )
-                        ? _TvHeroBackdrop(item: item)
-                        : const ColoredBox(color: AppColors.background),
+                    builder: (_, pressure, _) => _TvHeroBackdrop(
+                      item: item,
+                      decodeWidth: TvRenderPolicy.homeBackdropDecodeLimit(
+                        memoryPressure: pressure,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1653,7 +1652,8 @@ class _TvRowTitle extends StatelessWidget {
 class _TvHeroBackdrop extends StatelessWidget {
   final TmdbItem? item;
 
-  const _TvHeroBackdrop({required this.item});
+  final int decodeWidth;
+  const _TvHeroBackdrop({required this.item, required this.decodeWidth});
 
   @override
   Widget build(BuildContext context) {
@@ -1666,7 +1666,10 @@ class _TvHeroBackdrop extends StatelessWidget {
               key: ValueKey(item!.key),
               fit: StackFit.expand,
               children: [
-                PosterImage(url: item!.backdropUrl),
+                PosterImage(
+                  url: item?.backdropUrl,
+                  maxDecodeWidth: decodeWidth,
+                ),
                 DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(

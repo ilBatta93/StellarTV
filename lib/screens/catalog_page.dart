@@ -716,8 +716,7 @@ class _CatalogPageState extends State<CatalogPage> {
   /// One-genre chip bar; only genres that exist in the playlist are shown.
   Widget _buildTvFilters(AppProvider app, List<CatalogGroup> groups) {
     final names = widget.type == ContentType.movie ? _movieGenres : _tvGenres;
-    final counts = app.genreCountsOf(widget.type);
-    final present = counts.keys.where(names.containsKey).toList()
+    final present = names.keys.toList()
       ..sort((a, b) => (names[a] ?? '').compareTo(names[b] ?? ''));
     return TvFilterPanel(
       options: [
@@ -738,24 +737,7 @@ class _CatalogPageState extends State<CatalogPage> {
 
   Widget _buildGenreBar(AppProvider app, List<CatalogGroup> groups) {
     final names = _genreNames;
-    // Counting genres walks the whole catalog: only redo it when the catalog
-    // or the TMDB genres changed, not at every rebuild of the page.
-    var counts = _genreCounts;
-    if (counts == null ||
-        !identical(_genreCountsGroups, groups) ||
-        _genreCountsVersion != app.titleInfoVersion) {
-      counts = <int, int>{};
-      for (final g in groups) {
-        for (final e in g.entries) {
-          for (final id in app.genresOf(e.primary) ?? const <int>[]) {
-            if (names.containsKey(id)) counts[id] = (counts[id] ?? 0) + 1;
-          }
-        }
-      }
-      _genreCounts = counts;
-      _genreCountsGroups = groups;
-      _genreCountsVersion = app.titleInfoVersion;
-    }
+    final counts = app.genreCountsOf(widget.type);
     if (counts.isEmpty) return const SizedBox.shrink();
     final ids = counts.keys.toList()
       ..sort((a, b) => names[a]!.compareTo(names[b]!));

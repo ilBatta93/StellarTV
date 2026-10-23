@@ -303,7 +303,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Back on TV: content -> top menu -> Home tab -> background-or-close choice.
   void _onTvBack() {
-    if (TvCatalogToolbar.handleBack(FocusManager.instance.primaryFocus)) return;
+    if (TvCatalogToolbar.handleBack(
+      FocusManager.instance.primaryFocus,
+      context: context,
+    ))
+      return;
     if (!_tvNavScope.hasFocus) {
       _focusNav();
       return;
@@ -323,9 +327,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text('Chiudere StellarTV?'),
         content: const Text(
           'Puoi lasciarla in background, pronta da riprendere, oppure chiuderla del tutto.',

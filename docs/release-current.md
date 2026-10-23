@@ -1,4 +1,5 @@
-- Frecce più precise nei filtri, anche con pressioni rapide; Indietro torna al pulsante di apertura.
-- Nelle impostazioni, Sinistra torna alla categoria aperta.
-- Filtri riaperti dai dati salvati sul dispositivo, con meno attese ed elaborazioni ripetute.
-- Guida programmi conservata tra gli avvii e aggiornata dopo il rinnovo completo dei contenuti o all’intervallo scelto.
+- Nuova piattaforma selezionabile nei filtri esistenti.
+- Generi selezionabili subito, con risultati completati dai dati disponibili.
+- Indietro mantiene il pulsante di apertura anche durante i cambi di focus.
+- Sfondo Home mantenuto a risoluzione ridotta quando la memoria disponibile cala.
+- Meno calcoli ripetuti per categorie e conteggi dei filtri.

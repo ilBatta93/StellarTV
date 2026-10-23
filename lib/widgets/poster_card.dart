@@ -23,6 +23,7 @@ class PosterImage extends StatelessWidget {
   /// Home cards record their decode width so the next start can decode the
   /// first posters before the cards are built.
   final bool rememberWidth;
+  final int? maxDecodeWidth;
 
   const PosterImage({
     super.key,
@@ -30,6 +31,7 @@ class PosterImage extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.fallbackIcon = Icons.movie_outlined,
     this.rememberWidth = false,
+    this.maxDecodeWidth,
   });
 
   @override
@@ -61,6 +63,9 @@ class PosterImage extends StatelessWidget {
               memoryPressure: TvImageMemoryGuard.reducedRendering.value,
             ),
           );
+          final limit = maxDecodeWidth;
+          if (limit != null && limit > 0 && cacheWidth > limit)
+            cacheWidth = limit;
           if (rememberWidth) PosterMemoryWarmup.noteWidth(cacheWidth);
         }
         return CachedNetworkImage(

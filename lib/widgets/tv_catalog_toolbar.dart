@@ -75,7 +75,22 @@ class TvCatalogToolbar extends StatefulWidget {
   final ValueChanged<CatalogViewMode>? onViewMode;
 
   /// Shared by key events and Android system Back (Home owns the route).
-  static bool handleBack(FocusNode? focus) {
+  static final _mountedToolbars = <_TvCatalogToolbarState>{};
+  static bool handleBack(FocusNode? focus, {BuildContext? context}) {
+    final origin = context ?? focus?.context;
+    final route = origin == null ? null : ModalRoute.of(origin);
+    // A panel can be detached before Android sends its system Back callback.
+    // Resolve ownership without depending on primaryFocus surviving teardown.
+    if (route != null && route.isCurrent) {
+      for (final toolbar in _mountedToolbars.toList()) {
+        if (toolbar.mounted &&
+            toolbar._search.canRequestFocus &&
+            ModalRoute.of(toolbar.context) == route &&
+            toolbar._back()) {
+          return true;
+        }
+      }
+    }
     final state = focus?.context
         ?.findAncestorStateOfType<_TvCatalogToolbarState>();
     if (state?._back() ?? false) return true;
@@ -109,6 +124,14 @@ class TvCatalogToolbar extends StatefulWidget {
 }
 
 class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
+  int _transition = 0;
+  bool _restoring = false;
+  @override
+  void initState() {
+    super.initState();
+    TvCatalogToolbar._mountedToolbars.add(this);
+  }
+
   bool _expanded = false;
   bool _filtersOpen = false;
   bool _platformsOpen = false;
@@ -122,6 +145,8 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   final _view = FocusNode(debugLabel: 'catalogViewMode');
   @override
   void dispose() {
+    TvCatalogToolbar._mountedToolbars.remove(this);
+    _transition++;
     _filterButton.dispose();
     _platformButton.dispose();
     _panel.dispose();
@@ -138,24 +163,28 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
       _search.requestFocus();
       return;
     }
+    final token = ++_transition;
+    _restoring = false;
     setState(() {
       _filtersOpen = false;
       _platformsOpen = false;
       _expanded = true;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) TvTextField.focusWithKeyboard(_field);
+      if (mounted && token == _transition && _expanded)
+        TvTextField.focusWithKeyboard(_field);
     });
   }
 
   void _collapse() {
     if (!_expanded) return;
+    _transition++;
     SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
     setState(() => _expanded = false);
   }
 
   bool _back() {
-    if (_backConsumedThisFrame) return true;
+    if (_backConsumedThisFrame || _restoring) return true;
     if (_expanded) {
       if (TvTextField.dismissKeyboard(_field)) return true;
       _consumePanelBack();
@@ -187,8 +216,10 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   }
 
   void _focusPanel() {
+    final token = _transition;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !(_filtersOpen || _platformsOpen)) return;
+      if (!mounted || token != _transition || !(_filtersOpen || _platformsOpen))
+        return;
       final nodes = _panel.traversalDescendants.where(
         (n) => n.canRequestFocus && !n.skipTraversal,
       );
@@ -198,6 +229,8 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
 
   void _togglePlatforms() {
     _collapse();
+    _transition++;
+    _restoring = false;
     setState(() {
       _filtersOpen = false;
       _platformsOpen = !_platformsOpen;
@@ -211,30 +244,33 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
 
   void _toggleFilters() {
     _collapse();
+    _transition++;
+    _restoring = false;
     setState(() {
       _platformsOpen = false;
       _filtersOpen = !_filtersOpen;
     });
     if (_filtersOpen) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_filtersOpen) return;
-        final nodes = _panel.traversalDescendants.where(
-          (n) => n.canRequestFocus && !n.skipTraversal,
-        );
-        if (nodes.isNotEmpty) nodes.first.requestFocus();
-      });
+      _focusPanel();
     } else {
       _restoreOpener(_filterButton);
     }
   }
 
   void _restoreOpener(FocusNode node) {
-    node.requestFocus();
+    final token = _transition;
+    _restoring = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_filtersOpen && !_platformsOpen && !_expanded) {
+      if (!mounted || token != _transition) return;
+      if (!_filtersOpen &&
+          !_platformsOpen &&
+          !_expanded &&
+          node.canRequestFocus) {
         node.requestFocus();
       }
+      _restoring = false;
     });
+    WidgetsBinding.instance.scheduleFrame();
   }
 
   Future<void> _choose() async {
@@ -320,9 +356,10 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
         return KeyEventResult.ignored;
       },
       onFocusChange: (focused) {
-        if (_backConsumedThisFrame) return;
+        if (_backConsumedThisFrame || _restoring) return;
         if (!focused && _expanded) _collapse();
         if (!focused && (_filtersOpen || _platformsOpen)) {
+          _transition++;
           setState(() {
             _filtersOpen = false;
             _platformsOpen = false;

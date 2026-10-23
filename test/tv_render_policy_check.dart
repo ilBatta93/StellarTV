@@ -45,5 +45,13 @@ void main() {
     !TvRenderPolicy.startupFade(isTv: false, animations: false),
     'Reduced motion preserved',
   );
-  print('PASS: 10 rendering policy checks');
+  check(
+    TvRenderPolicy.homeBackdropDecodeLimit(memoryPressure: true) == 480,
+    'Home retains only one 480px backdrop under pressure',
+  );
+  check(
+    TvRenderPolicy.homeBackdropDecodeLimit(memoryPressure: false) == 960,
+    'Normal Home backdrop remains bounded',
+  );
+  print('PASS: 12 rendering policy checks');
 }
