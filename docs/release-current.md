@@ -1,1 +1,1 @@
-- Voti nelle locandine di Film e Serie TV più leggibili: in alto a sinistra su sfondo scuro semitrasparente, come nella Home.
+- Valutazioni nelle locandine dei cataloghi più leggibili: in alto a sinistra su sfondo scuro semitrasparente, come nella Home.
