@@ -158,3 +158,9 @@
 - [x] Dieci prove mirate Dart superate su sorgenti reali; analisi dei nuovi moduli pulita; protezioni foreground/anteprima verificate.
 - [x] Note pubbliche neutre e guida allineata.
 - [ ] Test integrati Flutter e misura su TV: SDK locale 3.38.3 non soddisfa il vincolo 3.44.0; nessuna build richiesta.
+
+## Ottobre 23 — focus e cache locali
+- [x] Filtri quattro direzioni, ritorno icona e Sinistra alla categoria attiva
+- [x] Conteggi generi persistiti, caricamento evidenze deduplicato e EPG permanente per fonte
+- [x] Diagnostica invariata, guida e note neutre aggiornate
+- [ ] Test CI e compilazione Android, verifica su TV reale

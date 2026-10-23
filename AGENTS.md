@@ -13,7 +13,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - TV catalog boundary keys bubble through a non-focusable ancestor before geometric traversal; the Home-owned top menu links every stop explicitly across spacers, so Up returns to the active tab and lateral movement never selects a tab by itself.
 - Live completion flags never enter replay controls; explicit viewer pause cancels startup health deadlines and defers recovery until manual resume, so monitoring cannot restart a paused stream.
 
-- TV catalogs keep filters/categories in a lazy inline panel shared by live and VOD: remote movement stays inside open panels until their vertical boundary, returns to tools above the first row and enters content below the last; default sorting preserves provider order and category drawers retain left-edge access.
+- TV catalogs share a lazy filter grid with explicit four-direction row/column targets; Back restores its opener through teardown and settings Left returns to the retained active sidebar node, avoiding geometric focus jumps while touch is unchanged.
 - TV poster ratings use a shared two-request queue and an isolate-written device cache; unknown ratings sort last, and only the selected category is queued for vote sorting.
 - TV person details reuse the fixed title backdrop and compact poster grid; the touch person layout stays unchanged.
 
@@ -142,5 +142,5 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - TV Discover artwork paints one contrast scrim and keeps touch/player styling unchanged to reduce full-screen overdraw.
 - Both release workflows generate neutral, change-scoped notes from versioned release-current bullets; a bounded summary feeds the update dialog, whose notes focus owns remote scrolling directly.
 
-- Large catalog derivation uses a serialized cooperative preparation pipeline with bounded yields and scope/playback checks; rendering reads ready caches so navigation never starts a synchronous full grouping/sort.
+- Catalog derivation uses bounded cooperative jobs and scope/playback checks; prepared device files include genre counts, so filter opening never scans titles synchronously. Evidence cache loads before queuing unknowns; EPG files are source-scoped in application support, with independent freshness and full-refresh integration.
 - Frame diagnostics checkpoint bounded aggregates privately through a coalesced atomic file writer and rotate current to previous before auto-start, allowing explicit recovery uploads without background network work.

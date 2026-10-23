@@ -158,8 +158,9 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
     if (_backConsumedThisFrame) return true;
     if (_expanded) {
       if (TvTextField.dismissKeyboard(_field)) return true;
+      _consumePanelBack();
       _collapse();
-      _search.requestFocus();
+      _restoreOpener(_search);
       return true;
     }
     if (_filtersOpen) {
@@ -178,7 +179,10 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   void _consumePanelBack() {
     _backConsumedThisFrame = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _backConsumedThisFrame = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _backConsumedThisFrame = false;
+      });
+      WidgetsBinding.instance.scheduleFrame();
     });
   }
 
@@ -316,6 +320,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
         return KeyEventResult.ignored;
       },
       onFocusChange: (focused) {
+        if (_backConsumedThisFrame) return;
         if (!focused && _expanded) _collapse();
         if (!focused && (_filtersOpen || _platformsOpen)) {
           setState(() {

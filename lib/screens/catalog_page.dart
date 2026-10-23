@@ -716,23 +716,8 @@ class _CatalogPageState extends State<CatalogPage> {
   /// One-genre chip bar; only genres that exist in the playlist are shown.
   Widget _buildTvFilters(AppProvider app, List<CatalogGroup> groups) {
     final names = widget.type == ContentType.movie ? _movieGenres : _tvGenres;
-    var counts = _genreCounts;
-    if (counts == null ||
-        !identical(_genreCountsGroups, groups) ||
-        _genreCountsVersion != app.titleInfoVersion) {
-      counts = <int, int>{};
-      for (final group in groups) {
-        for (final entry in group.entries) {
-          for (final id in app.genresOf(entry.primary) ?? const <int>[]) {
-            if (names.containsKey(id)) counts[id] = (counts[id] ?? 0) + 1;
-          }
-        }
-      }
-      _genreCounts = counts;
-      _genreCountsGroups = groups;
-      _genreCountsVersion = app.titleInfoVersion;
-    }
-    final present = counts.keys.toList()
+    final counts = app.genreCountsOf(widget.type);
+    final present = counts.keys.where(names.containsKey).toList()
       ..sort((a, b) => (names[a] ?? '').compareTo(names[b] ?? ''));
     return TvFilterPanel(
       options: [

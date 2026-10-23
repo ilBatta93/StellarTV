@@ -9,6 +9,47 @@ import 'package:stellar_tv/widgets/tv_filter_panel.dart';
 import 'package:stellar_tv/widgets/tv_focusable.dart';
 
 void main() {
+  testWidgets('rapid filter arrows stay in the row and panel', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 650,
+            child: TvFilterPanel(
+              options: [
+                for (var i = 0; i < 9; i++)
+                  TvFilterOption('Option $i', false, () {}),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final nodes = tester
+        .widgetList<TvFocusable>(find.byType(TvFocusable))
+        .map((w) => w.focusNode)
+        .whereType<FocusNode>()
+        .toList();
+    nodes[4].requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+    expect(nodes[0].hasFocus, true);
+    for (var i = 0; i < 5; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    }
+    await tester.pumpAndSettle();
+    expect(nodes[2].hasFocus, true);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+    expect(nodes[4].hasFocus, true);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
   setUp(() async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -28,38 +69,69 @@ void main() {
           final menu = FocusNode();
           final tile = FocusNode();
           var menuBacks = 0;
-          Widget panel(BuildContext _) => TvFilterPanel(options: [
-            TvFilterOption('Tutte', true, () {}),
-            TvFilterOption('Filtro', false, () {}),
-          ]);
-          await tester.pumpWidget(MaterialApp(home: PopScope(
-            canPop: false,
-            onPopInvokedWithResult: (didPop, _) {
-              if (!didPop && !TvCatalogToolbar.handleBack(
-                FocusManager.instance.primaryFocus,
-              )) {
-                menuBacks++;
-                menu.requestFocus();
-              }
-            },
-            child: Scaffold(body: Column(children: [
-              TvFocusable(focusNode: menu, onPressed: () {},
-                child: const SizedBox(height: 40, child: Text('Menu'))),
-              TvCatalogToolbar(
-                controller: controller, hint: section,
-                onChanged: (_) {}, onSort: (_) {}, sort: null,
-                genresOnly: true, filters: panel,
-                platforms: platform ? panel : null,
+          Widget panel(BuildContext _) => TvFilterPanel(
+            options: [
+              TvFilterOption('Tutte', true, () {}),
+              TvFilterOption('Filtro', false, () {}),
+            ],
+          );
+          await tester.pumpWidget(
+            MaterialApp(
+              home: PopScope(
+                canPop: false,
+                onPopInvokedWithResult: (didPop, _) {
+                  if (!didPop &&
+                      !TvCatalogToolbar.handleBack(
+                        FocusManager.instance.primaryFocus,
+                      )) {
+                    menuBacks++;
+                    menu.requestFocus();
+                  }
+                },
+                child: Scaffold(
+                  body: Column(
+                    children: [
+                      TvFocusable(
+                        focusNode: menu,
+                        onPressed: () {},
+                        child: const SizedBox(height: 40, child: Text('Menu')),
+                      ),
+                      TvCatalogToolbar(
+                        controller: controller,
+                        hint: section,
+                        onChanged: (_) {},
+                        onSort: (_) {},
+                        sort: null,
+                        genresOnly: true,
+                        filters: panel,
+                        platforms: platform ? panel : null,
+                      ),
+                      TvFocusable(
+                        focusNode: tile,
+                        onPressed: () {},
+                        child: const SizedBox(
+                          height: 40,
+                          child: Text('Titolo'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              TvFocusable(focusNode: tile, onPressed: () {},
-                child: const SizedBox(height: 40, child: Text('Titolo'))),
-            ])),
-          )));
+            ),
+          );
           await tester.pumpAndSettle();
-          final tooltip = platform ? 'Piattaforme streaming' : 'Filtri per genere';
-          final opener = tester.widget<TvFocusable>(find.ancestor(
-            of: find.byTooltip(tooltip), matching: find.byType(TvFocusable),
-          )).focusNode;
+          final tooltip = platform
+              ? 'Piattaforme streaming'
+              : 'Filtri per genere';
+          final opener = tester
+              .widget<TvFocusable>(
+                find.ancestor(
+                  of: find.byTooltip(tooltip),
+                  matching: find.byType(TvFocusable),
+                ),
+              )
+              .focusNode;
           await tester.tap(find.byTooltip(tooltip));
           await tester.pumpAndSettle();
           // Resolve system Back even with a focus reference outside the toolbar.
@@ -88,7 +160,9 @@ void main() {
           expect(menuBacks, 1);
           expect(tester.takeException(), isNull);
           await tester.pumpWidget(const SizedBox());
-          controller.dispose(); menu.dispose(); tile.dispose();
+          controller.dispose();
+          menu.dispose();
+          tile.dispose();
         },
       );
     }

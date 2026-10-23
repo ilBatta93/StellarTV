@@ -7,6 +7,8 @@ import 'epg_downloader.dart';
 export '../models/epg_data.dart';
 export 'epg_downloader.dart' show EpgRefreshDeferred, EpgDownloadException;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:crypto/crypto.dart';
 
 import 'sync_hooks.dart';
 import 'playback_work_policy.dart';
@@ -55,16 +57,22 @@ class EpgService {
   Future<void> markRun() async => (await SharedPreferences.getInstance())
       .setString(_lastRunKey, DateTime.now().toIso8601String());
 
-  File get _cacheFile =>
-      File('${Directory.systemTemp.path}/stellartv_epg_cache_v1.json');
+  static String sourceKey(List<String> sources) =>
+      sha256.convert(utf8.encode(jsonEncode(sources))).toString();
 
-  Future<EpgData> loadCache() async {
+  Future<File> _cacheFile(List<String> sources) async {
+    final directory = await getApplicationSupportDirectory();
+    return File('${directory.path}/stellartv_epg_v2_${sourceKey(sources)}.json');
+  }
+
+  Future<EpgData> loadCache(List<String> sources) async {
+    if (sources.isEmpty) return const EpgData();
     try {
-      final file = _cacheFile;
-      if (!await file.exists()) return const EpgData();
-      final text = await file.readAsString();
+      final path = (await _cacheFile(sources)).path;
       return await Isolate.run(() {
-        final json = jsonDecode(text);
+        final file = File(path);
+        if (!file.existsSync()) return const EpgData();
+        final json = jsonDecode(file.readAsStringSync());
         return json is Map<String, dynamic>
             ? EpgData.fromJson(json)
             : const EpgData();
@@ -78,8 +86,9 @@ class EpgService {
   /// Returns the merged guide; throws when no source could be read.
   Future<EpgData> fetch(List<String> urls) async {
     final policy = PlaybackWorkPolicy.instance;
+    final cacheFile = await _cacheFile(urls);
     final staged =
-        '${_cacheFile.path}.${DateTime.now().microsecondsSinceEpoch}.pending';
+        '${cacheFile.path}.${DateTime.now().microsecondsSinceEpoch}.pending';
     final job = EpgDownloadJob(List.of(urls), staged);
     _activeJob = job;
     var canceled = false;
@@ -96,7 +105,7 @@ class EpgService {
       final data = await job.run();
       if (canceled || policy.blocksGuide) throw EpgRefreshDeferred();
       // Same event turn as guard: old cache survives failed/canceled downloads.
-      File(staged).renameSync(_cacheFile.path);
+      File(staged).renameSync(cacheFile.path);
       return data;
     } finally {
       if (identical(_activeJob, job)) _activeJob = null;

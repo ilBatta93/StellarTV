@@ -151,9 +151,15 @@ class AppProvider extends ChangeNotifier {
   final Map<ContentType, List<Channel>> _seriesCatalogCache = {};
   final Map<ContentType, List<CatalogGroup>> _groupedCache = {};
   final Map<ContentType, List<CatalogEntry>> _recentCache = {};
+  final Map<ContentType, Map<int, int>> _genreCountsCache = {};
+  final Map<ContentType, int> _genreCountsVersions = {};
+  final Map<ContentType, Future<void>> _genreCountJobs = {};
+  final Map<ContentType, String> _preparedSignatures = {};
   List<Channel>? _favoritesCache;
 
   int _preparationEpoch = 0;
+  int _playlistRefreshRevision = 0;
+  int get playlistRefreshRevision => _playlistRefreshRevision;
   final Map<ContentType, Future<void>> _preparing = {};
   Future<void> _preparationTail = Future<void>.value();
 
@@ -232,8 +238,10 @@ class AppProvider extends ChangeNotifier {
                   },
                 );
             if (!await allowed()) return;
-            if (restored == null) {
-              unawaited(store.write(accountKey, type, signature, result));
+            _preparedSignatures[type] = signature;
+            if (restored != null && saved != null) {
+              final counts = PreparedCatalogStore.genreCounts(saved);
+              if (counts != null) _genreCountsCache[type] = counts;
             }
             _byType[type] = result.channels;
             if (type == ContentType.series || type == ContentType.anime)
@@ -245,6 +253,7 @@ class AppProvider extends ChangeNotifier {
             _allCache[type] = result.all;
             FrameTelemetryService.instance.mark('catalog preparation ready');
             notifyListeners();
+            unawaited(_ensureGenreCounts(type));
           } on CatalogPreparationCancelled {
             // Scope changed: never publish stale account/profile/category data.
           } catch (_) {
@@ -267,6 +276,10 @@ class AppProvider extends ChangeNotifier {
     _groupedCache.clear();
     _allCache.clear();
     _recentCache.clear();
+    _genreCountsCache.clear();
+    _genreCountsVersions.clear();
+    _genreCountJobs.clear();
+    _preparedSignatures.clear();
     _favoritesCache = null;
     _titleIndex = null;
     _indexEpoch++;
@@ -923,9 +936,67 @@ class AppProvider extends ChangeNotifier {
   /// TMDB genre ids of a playlist movie/series (null while not checked yet).
   List<int>? genresOf(Channel c) => _kids.genresOf(c);
 
+  /// Read-only UI access: never walks the catalog while opening a filter.
+  Map<int, int> genreCountsOf(ContentType type) {
+    unawaited(_ensureGenreCounts(type));
+    return _genreCountsCache[type] ?? const {};
+  }
+
+  Future<void> _ensureGenreCounts(ContentType type) {
+    final running = _genreCountJobs[type];
+    if (running != null) return running;
+    final groups = _groupedCache[type];
+    if (groups == null || _disposed ||
+        _genreCountsVersions[type] == _titleInfoVersion) {
+      return Future<void>.value();
+    }
+    final epoch = _preparationEpoch;
+    final version = _titleInfoVersion;
+    final accountKey = _currentKey;
+    bool current() => !_disposed && epoch == _preparationEpoch &&
+        version == _titleInfoVersion && identical(groups, _groupedCache[type]);
+    late final Future<void> job;
+    job = () async {
+      await _kids.load();
+      final work = CatalogYield(() async => current() &&
+          !_playbackActive && ForegroundPolicy.instance.active);
+      final counts = <int, int>{};
+      try {
+        if (!current() || _playbackActive || !ForegroundPolicy.instance.active) return;
+        for (final group in groups) {
+          for (final entry in group.entries) {
+            for (final id in genresOf(entry.primary) ?? const <int>[]) {
+              counts[id] = (counts[id] ?? 0) + 1;
+            }
+            await work.step();
+          }
+        }
+        if (!current() || _playbackActive || !ForegroundPolicy.instance.active) return;
+        _genreCountsCache[type] = Map.unmodifiable(counts);
+        _genreCountsVersions[type] = version;
+        notifyListeners();
+        final signature = _preparedSignatures[type];
+        final channels = _byType[type];
+        final all = _allCache[type];
+        final recent = _recentCache[type];
+        if (signature != null && channels != null && all != null && recent != null) {
+          await PreparedCatalogStore.instance.write(accountKey, type, signature,
+            PreparedCatalog(channels, _seriesCatalogCache[type] ?? channels,
+                groups, recent, all), genreCounts: counts);
+        }
+      } on CatalogPreparationCancelled {
+        // Retry on the next eligible filter access; never publish stale counts.
+      }
+    }().whenComplete(() {
+      if (identical(_genreCountJobs[type], job)) _genreCountJobs.remove(type);
+    });
+    _genreCountJobs[type] = job;
+    return job;
+  }
+
   /// Asks the background TMDB check for genres of exactly these titles (the
   /// catalog cards), so the genre bar fills for series folders too.
-  void requestTitleInfo(Iterable<Channel> items) => _kids.request(items);
+  void requestTitleInfo(Iterable<Channel> items) => unawaited(_kids.warmUp(items));
 
   /// "Tutti i Film" / "Tutte le Serie": every visible title once, A-Z.
   List<CatalogEntry> allEntries(ContentType type) {
@@ -1725,7 +1796,11 @@ class AppProvider extends ChangeNotifier {
       ])
         retrySection(t),
     ]);
-    if (_loadFailures.isEmpty) await _refreshService.markRun();
+    if (_loadFailures.isEmpty) {
+      await _refreshService.markRun();
+      _playlistRefreshRevision++;
+      notifyListeners();
+    }
     await _refreshService.schedule();
   }
 
@@ -1940,6 +2015,8 @@ class AppProvider extends ChangeNotifier {
       );
       if (complete && requestedKey == _currentKey) {
         await _refreshService.markRun();
+        _playlistRefreshRevision++;
+        notifyListeners();
       }
     } finally {
       _finishIfIdle();

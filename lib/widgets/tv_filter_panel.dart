@@ -37,6 +37,15 @@ class TvFilterPanel extends StatefulWidget {
     return prev >= 0 ? prev : null;
   }
 
+  static int? horizontalTarget(int index, int count, int columns, bool right) {
+    if (count <= 0 || columns <= 0 || index < 0 || index >= count) return null;
+    final column = index % columns;
+    if (right) {
+      return column < columns - 1 && index + 1 < count ? index + 1 : null;
+    }
+    return column > 0 ? index - 1 : null;
+  }
+
   @override
   State<TvFilterPanel> createState() => _TvFilterPanelState();
 }
@@ -44,8 +53,13 @@ class TvFilterPanel extends StatefulWidget {
 class _TvFilterPanelState extends State<TvFilterPanel> {
   final List<FocusNode> _nodes = [];
   int _columns = 1;
+  int? _requestedIndex;
 
   void _syncNodes() {
+    final requested = _requestedIndex;
+    if (requested != null && requested >= widget.options.length) {
+      _requestedIndex = null;
+    }
     while (_nodes.length < widget.options.length) {
       _nodes.add(FocusNode());
     }
@@ -67,16 +81,18 @@ class _TvFilterPanelState extends State<TvFilterPanel> {
     final key = event.logicalKey;
     final down = key == LogicalKeyboardKey.arrowDown;
     final up = key == LogicalKeyboardKey.arrowUp;
-    if (!down && !up) return KeyEventResult.ignored;
-    final index = _nodes.indexWhere((n) => n.hasFocus);
+    final right = key == LogicalKeyboardKey.arrowRight;
+    final left = key == LogicalKeyboardKey.arrowLeft;
+    if (!down && !up && !right && !left) return KeyEventResult.ignored;
+    final index = _requestedIndex ?? _nodes.indexWhere((n) => n.hasFocus);
     if (index < 0) return KeyEventResult.ignored;
-    final target = TvFilterPanel.verticalTarget(
-      index,
-      _nodes.length,
-      _columns,
-      down,
-    );
-    if (target != null) _nodes[target].requestFocus();
+    final target = (down || up)
+        ? TvFilterPanel.verticalTarget(index, _nodes.length, _columns, down)
+        : TvFilterPanel.horizontalTarget(index, _nodes.length, _columns, right);
+    if (target != null) {
+      _requestedIndex = target;
+      _nodes[target].requestFocus();
+    }
     // Always consumed: the focus never leaves the open panel vertically.
     return KeyEventResult.handled;
   }
@@ -118,6 +134,9 @@ class _TvFilterPanelState extends State<TvFilterPanel> {
 
   Widget _item(TvFilterOption option, FocusNode node) => TvFocusable(
     focusNode: node,
+    onFocusChange: (focused) {
+      if (focused) _requestedIndex = _nodes.indexOf(node);
+    },
     focusedScale: 1,
     borderRadius: BorderRadius.circular(8),
     onPressed: option.onSelected,

@@ -58,6 +58,9 @@ class EpgProvider extends ChangeNotifier {
   int _intervalMinutes = 1440;
   DateTime? _lastRun;
   String? _scheduledFor;
+  String? _cacheSource;
+  int _cacheEpoch = 0;
+  int _playlistRefreshRevision = 0;
   Map<String, String>? _nameIndex;
   final Map<String, String?> _channelMatch = {};
 
@@ -96,8 +99,12 @@ class EpgProvider extends ChangeNotifier {
     _manual = await _service.manualSources();
     _intervalMinutes = await _service.intervalMinutes();
     _lastRun = await _service.lastRun();
-    final cached = await _service.loadCache();
+    final sources = _activeSources;
+    final cached = await _service.loadCache(sources);
     if (_disposed) return;
+    _cacheSource = sources.join('|');
+    _lastRun = cached.fetchedAt;
+    _playlistRefreshRevision = _app.playlistRefreshRevision;
     _ready = true;
     _setData(cached);
     notifyListeners();
@@ -109,8 +116,33 @@ class EpgProvider extends ChangeNotifier {
     _onPlaybackChanged();
     // Credentials can arrive after startup (login or cloud restore).
     final signature = _activeSources.join('|');
-    if (signature != _scheduledFor) _schedule();
+    if (signature != _cacheSource) {
+      _timer?.cancel();
+      _cacheSource = signature;
+      _setData(const EpgData());
+      _service.deferActiveDownload();
+      unawaited(_restoreSourceCache());
+    } else if (signature != _scheduledFor) {
+      _schedule();
+    }
+    if (_playlistRefreshRevision != _app.playlistRefreshRevision) {
+      _playlistRefreshRevision = _app.playlistRefreshRevision;
+      _deferred = true;
+      _timer?.cancel();
+      _timer = Timer(const Duration(seconds: 20), refresh);
+    }
     _channelMatch.clear();
+  }
+
+  Future<void> _restoreSourceCache() async {
+    final epoch = ++_cacheEpoch;
+    final sources = _activeSources;
+    final data = await _service.loadCache(sources);
+    if (_disposed || epoch != _cacheEpoch || sources.join('|') != _cacheSource) return;
+    _setData(data);
+    _lastRun = data.fetchedAt;
+    notifyListeners();
+    _schedule();
   }
 
   void _setData(EpgData data) {

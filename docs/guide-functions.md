@@ -1,7 +1,7 @@
 // Guida ufficiale StellarTV. Va aggiornata insieme a ogni modifica di funzioni
 // dell'app o del sito, includendo solo funzioni attive nella versione corrente.
 // Testi neutri: nessun riferimento a fornitori, formati di sorgente o tipi di contenuto.
-export const GUIDE_APP_VERSION = "3.7.1";
+export const GUIDE_APP_VERSION = "3.7.6";
 
 export type GuideItem = { title: string; body: string[] };
 export type GuideSection = { id: string; title: string; intro: string; items: GuideItem[] };
@@ -51,7 +51,7 @@ export const GUIDE: GuideSection[] = [
       { title: "La Home", body: ["Mostra banner, righe di titoli, ultimi aggiunti e Continua a guardare, con loghi ufficiali e percentuale di visione.", "Sulla TV le righe scorrono col D-Pad e il riquadro selezionato resta sempre visibile. Lo sfondo segue la selezione dopo una breve pausa; le immagini già salvate restano sul dispositivo.", "Quando la TV segnala memoria scarsa, lo sfondo decorativo viene sostituito da uno sfondo semplice fino alla chiusura completa dell’app. Le locandine, i comandi e i dati personali restano disponibili."] },
       { title: "Continua a guardare", body: ["Riaprendo un elemento già visto, il titolo torna nella riga e si riprende dall’ultima posizione effettiva.", "Quando superi la soglia di visione, Prossimo avvia l’elemento immediatamente successivo anche se già visto. Gli altri stati di visione restano intatti.", "La locandina sparisce quando completi l’ultimo elemento disponibile o rimuovi il titolo dalla cronologia."] },
       { title: "Personalizzare", body: ["Nelle Impostazioni scegli numero e forma delle locandine, orientamento della Home, scala dell'interfaccia, soglia di visione e ordine delle righe. Queste scelte si sincronizzano tra i dispositivi."] },
-      { title: "Categorie, filtri e ricerca", body: ["Apri i pannelli Categorie e Filtri per piattaforma, genere e ordinamento. Cerca raggiunge tutte le sezioni. Tutto si usa col telecomando.", "In Film e Serie TV, Ordina offre anche Uscita più recente e Uscita meno recente, basati sulla data di uscita originale del titolo; i titoli senza data compaiono in fondo."] },
+      { title: "Categorie, filtri e ricerca", body: ["Apri i pannelli Categorie e Filtri per piattaforma, genere e ordinamento. Cerca raggiunge tutte le sezioni. Nei filtri le quattro frecce si spostano tra le opzioni senza uscire dal pannello; Indietro torna all’icona che lo ha aperto. Nella ricerca, il primo Indietro chiude la tastiera e il successivo torna alla lente.", "Le sezioni già preparate e i generi conosciuti vengono riutilizzati dal salvataggio locale. I nuovi dati si completano gradualmente e i risultati si aggiornano quando cambiano contenuti, categorie o informazioni del titolo.", "In Film e Serie TV, Ordina offre anche Uscita più recente e Uscita meno recente, basati sulla data di uscita originale del titolo; i titoli senza data compaiono in fondo."] },
       { title: "Preferiti", body: ["Aggiungi un titolo ai preferiti dalla sua scheda. Le rimozioni sono definitive su tutti i dispositivi."] },
     ],
   },
@@ -100,7 +100,7 @@ export const GUIDE: GuideSection[] = [
     intro: "Canali, guida programmi e MultiView.",
     items: [
       { title: "Cambiare canale", body: ["Durante la diretta Su e Giù passano al canale precedente o successivo. Sinistra apre l'elenco trasparente dei canali, con i recenti in cima; Indietro lo chiude."] },
-      { title: "Guida programmi", body: ["Ogni programma occupa uno spazio proporzionale alla sua durata e una linea del colore del tema segna l'ora attuale, allineata agli orari. Gli intervalli sovrapposti sono adattati solo nella presentazione; le azioni conservano gli orari originali.", "Durante il caricamento della guida, l’anteprima attende senza bloccare la navigazione e riprende quando il caricamento termina. Gli aggiornamenti pesanti restano sospesi durante la visione a schermo intero.", "La guida attende anche il completamento di un aggiornamento completo. Se il download non riesce, la copia precedente resta disponibile e compare un motivo sintetico: risposta HTTP, rete, connessione sicura o guida non valida.", "Con Sinistra e Destra scorri nel tempo, fino a sei ore indietro; con Su e Giù cambi canale restando sullo stesso orario.", "OK sul programma in corso avvia il canale; sui programmi passati con l'icona Rivedi avvia la visione dal loro inizio, se il canale lo consente."] },
+      { title: "Guida programmi", body: ["Ogni programma occupa uno spazio proporzionale alla sua durata e una linea del colore del tema segna l'ora attuale, allineata agli orari. Gli intervalli sovrapposti sono adattati solo nella presentazione; le azioni conservano gli orari originali.", "Durante il caricamento della guida, l’anteprima attende senza bloccare la navigazione e riprende quando il caricamento termina. Gli aggiornamenti pesanti restano sospesi durante la visione a schermo intero.", "La copia della guida rimane nella memoria locale dell’app tra gli avvii ed è separata per le fonti configurate. Si aggiorna all’intervallo scelto o dopo un aggiornamento completo dei contenuti, mai durante la visione.", "La guida attende anche il completamento di un aggiornamento completo. Se il download non riesce, la copia precedente resta disponibile e compare un motivo sintetico: risposta HTTP, rete, connessione sicura o guida non valida.", "Con Sinistra e Destra scorri nel tempo, fino a sei ore indietro; con Su e Giù cambi canale restando sullo stesso orario.", "OK sul programma in corso avvia il canale; sui programmi passati con l'icona Rivedi avvia la visione dal loro inizio, se il canale lo consente."] },
       { title: "MultiView", body: ["Guarda più canali in riquadri; sposta il focus col D-Pad per scegliere l'audio."] },
       { title: "Pausa e riascolto", body: ["Dove disponibile puoi mettere in pausa, rivedere programmi passati e registrare."] },
     ],
@@ -120,6 +120,7 @@ export const GUIDE: GuideSection[] = [
     items: [
       { title: "Tasti principali", body: ["Frecce: spostano il focus. OK: apre o conferma; tenuto premuto apre il menu rapido dove disponibile. Indietro: chiude pannelli e torna indietro."] },
       { title: "Menu in alto", body: ["Dalla prima riga premi Su per raggiungere il menu: torni sempre alla scheda attiva."] },
+      { title: "Impostazioni sulla TV", body: ["Dalla colonna delle opzioni, Sinistra torna alla categoria aperta nella colonna di sinistra, anche quando hai scorso l’elenco."] },
       { title: "Indietro dalla Home", body: ["Nelle Impostazioni scegli se il doppio Indietro manda l'app in secondo piano o la chiude."] },
     ],
   },

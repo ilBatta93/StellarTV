@@ -25,6 +25,15 @@ Future<String> sig(List<Channel> rows, {Set<String> hidden = const {}}) =>
     );
 
 void main() {
+  test('persisted genre counts roundtrip without rescanning title metadata', () {
+    const prepared = PreparedCatalog([], [], [], [], []);
+    final data = PreparedCatalogStore.encode('scope', prepared,
+        genreCounts: {16: 23, 10765: 5});
+    expect(PreparedCatalogStore.genreCounts(Map<String, dynamic>.from(data)),
+        {16: 23, 10765: 5});
+    expect(PreparedCatalogStore.genreCounts({'genreCounts': {'16': -1}}), isNull);
+    expect(PreparedCatalogStore.genreCounts({}), isNull);
+  });
   final y = CatalogYield(() async => true);
   test(
     'unchanged playlist restores the same structure without re-preparing',

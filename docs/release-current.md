@@ -1,4 +1,4 @@
-- Avvio più rapido: le sezioni già preparate vengono riaperte subito senza essere ricostruite, finché i contenuti non cambiano.
-- Pannelli dei filtri navigabili con le frecce su e giù senza chiudersi; si chiudono solo con Indietro.
-- Navigazione col telecomando più precisa nei gruppi di pulsanti di schede, ricerca, profili e player.
-- Righe informative delle diagnostiche e delle capacità del lettore selezionabili per scorrere l'elenco.
+- Frecce più precise nei filtri, anche con pressioni rapide; Indietro torna al pulsante di apertura.
+- Nelle impostazioni, Sinistra torna alla categoria aperta.
+- Filtri riaperti dai dati salvati sul dispositivo, con meno attese ed elaborazioni ripetute.
+- Guida programmi conservata tra gli avvii e aggiornata dopo il rinnovo completo dei contenuti o all’intervallo scelto.

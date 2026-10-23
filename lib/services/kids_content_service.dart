@@ -57,6 +57,7 @@ class KidsContentService {
   final Map<String, List<int>> _genres = {};
   final CatalogWorkQueue _work = CatalogWorkQueue();
   bool _loaded = false;
+  Future<void>? _loading;
   bool _running = false;
   void Function()? onVerdicts;
 
@@ -81,9 +82,12 @@ class KidsContentService {
     '${(await getApplicationSupportDirectory()).path}/stellartv_kids_v3.json',
   );
 
-  Future<void> load() async {
-    if (_loaded) return;
-    _loaded = true;
+  Future<void> load() {
+    if (_loaded) return Future<void>.value();
+    return _loading ??= _load();
+  }
+
+  Future<void> _load() async {
     // Verdicts live in a file decoded in a background isolate. They used to
     // be huge strings in the preferences, which slowed every app start and
     // were rewritten on the main thread after each small batch.
@@ -109,6 +113,7 @@ class KidsContentService {
       }
     } catch (_) {}
     // Refresh lists/genre bar right away with the saved data.
+    _loaded = true;
     if (_verdicts.isNotEmpty || _genres.isNotEmpty) onVerdicts?.call();
   }
 

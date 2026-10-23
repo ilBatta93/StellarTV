@@ -210,6 +210,28 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pump(const Duration(milliseconds: 500));
       expect(ui.homePosterShape, HomePosterShape.square);
+      final shapeRow = find
+          .ancestor(of: field, matching: find.byType(TvFocusable))
+          .first;
+      final contentFocus = tester
+          .widget<Focus>(
+            find.descendant(of: shapeRow, matching: find.byType(Focus)).first,
+          )
+          .focusNode;
+      expect(contentFocus, isNotNull);
+      contentFocus?.requestFocus();
+      await tester.pump();
+      final category = find
+          .ancestor(
+            of: find.text('Aspetto e Home'),
+            matching: find.byType(TvFocusable),
+          )
+          .first;
+      final activeNode = tester.widget<TvFocusable>(category).focusNode;
+      expect(activeNode, isNotNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(activeNode?.hasFocus, true);
       final reload = UiSettings();
       await reload.load();
       expect(reload.homePosterShape, HomePosterShape.square);

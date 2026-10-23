@@ -61,7 +61,8 @@ class PreparedCatalogStore {
   }
 
   /// Id-only form of a prepared catalog.
-  static Map<String, Object> encode(String signature, PreparedCatalog p) => {
+  static Map<String, Object> encode(String signature, PreparedCatalog p,
+      {Map<int, int>? genreCounts}) => {
     'sig': signature,
     'catalog': [for (final c in p.catalog) c.id],
     'groups': [
@@ -73,7 +74,22 @@ class PreparedCatalogStore {
     ],
     'recent': [for (final e in p.recent) e.primary.id],
     'all': [for (final e in p.all) e.primary.id],
+    if (genreCounts != null)
+      'genreCounts': {for (final e in genreCounts.entries) '${e.key}': e.value},
   };
+
+  static Map<int, int>? genreCounts(Map<String, dynamic> data) {
+    final raw = data['genreCounts'];
+    if (raw is! Map) return null;
+    final result = <int, int>{};
+    for (final entry in raw.entries) {
+      final id = int.tryParse('${entry.key}');
+      final value = entry.value;
+      if (id == null || value is! int || value < 0) return null;
+      result[id] = value;
+    }
+    return result;
+  }
 
   /// Rebuilds a prepared catalog from its id form, or null when anything no
   /// longer resolves (then the caller prepares from scratch).
@@ -172,13 +188,15 @@ class PreparedCatalogStore {
     String accountKey,
     ContentType type,
     String signature,
-    PreparedCatalog prepared,
+    PreparedCatalog prepared, {
+    Map<int, int>? genreCounts,
+  }
   ) async {
     try {
       final path = await _path(accountKey, type);
-      final data = encode(signature, prepared);
+      final data = encode(signature, prepared, genreCounts: genreCounts);
       await Isolate.run(() {
-        final tmp = File('$path.tmp');
+        final tmp = File('$path.${DateTime.now().microsecondsSinceEpoch}.tmp');
         tmp.writeAsStringSync(jsonEncode(data), flush: true);
         tmp.renameSync(path);
       });

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../widgets/apple_page_scaffold.dart';
 
@@ -49,6 +50,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _loadedRefreshMinutes = 0;
   DateTime? _lastRefresh;
   String? _lastRefreshLabel;
+  late final List<FocusNode> _categoryNodes = [
+    for (var i = 0; i < _categories.length; i++) FocusNode(),
+  ];
 
   @override
   void initState() {
@@ -79,6 +83,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    for (final node in _categoryNodes) {
+      node.dispose();
+    }
     super.dispose();
   }
 
@@ -754,6 +761,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: TvFocusable(
+        focusNode: tv ? _categoryNodes[i] : null,
         autofocus: tv && i == 0,
         borderRadius: BorderRadius.circular(14),
         onFocusChange: tv
@@ -842,11 +850,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             Expanded(
-              child: FocusTraversalGroup(
+              child: Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onKeyEvent: (_, event) {
+                  if (event is! KeyUpEvent &&
+                      event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+                    _categoryNodes[_category].requestFocus();
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: FocusTraversalGroup(
                 child: ListView(
                   key: ValueKey(_category),
                   padding: const EdgeInsets.fromLTRB(12, 8, 32, 32),
                   children: _sectionsFor(_category, provider),
+                ),
                 ),
               ),
             ),
