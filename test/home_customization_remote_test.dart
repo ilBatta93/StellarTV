@@ -213,13 +213,8 @@ void main() {
       final shapeRow = find
           .ancestor(of: field, matching: find.byType(TvFocusable))
           .first;
-      final contentFocus = tester
-          .widget<Focus>(
-            find.descendant(of: shapeRow, matching: find.byType(Focus)).first,
-          )
-          .focusNode;
-      expect(contentFocus, isNotNull);
-      contentFocus?.requestFocus();
+      final contentFocus = Focus.of(tester.element(field));
+      contentFocus.requestFocus();
       await tester.pump();
       final category = find
           .ancestor(
