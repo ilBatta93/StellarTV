@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/user_profile.dart';
 import '../providers/profile_provider.dart';
 import '../services/profile_service.dart';
@@ -12,6 +13,7 @@ import '../widgets/brand_logo.dart';
 import '../services/device_type_service.dart';
 import '../widgets/tv_focusable.dart';
 import '../widgets/tv_text_field.dart';
+import '../widgets/tv_wrap_navigation.dart';
 import 'home_screen.dart';
 
 /// Apple-inspired profile picker shown after login. Lets the user pick an
@@ -67,20 +69,22 @@ class _ProfilePickerScreenState extends State<ProfilePickerScreen> {
                       ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: 20,
-                        runSpacing: 24,
-                        children: [
-                          for (final p in profiles.items)
-                            _ProfileAvatar(
-                              profile: p,
-                              selected: p.id == profiles.selectedId,
-                              onTap: () => _select(p),
-                              onLongPress: () => _showActions(p),
-                            ),
-                          _AddProfileTile(onTap: _createProfile),
-                        ],
+                      child: TvWrapNavigation(
+                        child: Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 20,
+                          runSpacing: 24,
+                          children: [
+                            for (final p in profiles.items)
+                              _ProfileAvatar(
+                                profile: p,
+                                selected: p.id == profiles.selectedId,
+                                onTap: () => _select(p),
+                                onLongPress: () => _showActions(p),
+                              ),
+                            _AddProfileTile(onTap: _createProfile),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 40),
@@ -390,21 +394,23 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final entry in ProfileAvatars.entries.entries)
-                _IconOption(
-                  icon: ProfileAvatars.iconOf(entry.key),
-                  color: Color(
-                    ProfileAvatars.colors[_avatarColor] ??
-                        ProfileAvatars.colors['arancio']!,
+          TvWrapNavigation(
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final entry in ProfileAvatars.entries.entries)
+                  _IconOption(
+                    icon: ProfileAvatars.iconOf(entry.key),
+                    color: Color(
+                      ProfileAvatars.colors[_avatarColor] ??
+                          ProfileAvatars.colors['arancio']!,
+                    ),
+                    selected: entry.key == _avatarKey,
+                    onTap: () => setState(() => _avatarKey = entry.key),
                   ),
-                  selected: entry.key == _avatarKey,
-                  onTap: () => setState(() => _avatarKey = entry.key),
-                ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -412,17 +418,19 @@ class _ProfileEditorSheetState extends State<_ProfileEditorSheet> {
             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final entry in ProfileAvatars.colors.entries)
-                _ColorOption(
-                  color: Color(entry.value),
-                  selected: entry.key == _avatarColor,
-                  onTap: () => setState(() => _avatarColor = entry.key),
-                ),
-            ],
+          TvWrapNavigation(
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final entry in ProfileAvatars.colors.entries)
+                  _ColorOption(
+                    color: Color(entry.value),
+                    selected: entry.key == _avatarColor,
+                    onTap: () => setState(() => _avatarColor = entry.key),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           tvSettingsRow(

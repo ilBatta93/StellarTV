@@ -6,6 +6,7 @@ import '../../player/playback_session.dart';
 import '../../theme/app_theme.dart';
 import '../../services/device_type_service.dart';
 import '../tv_focusable.dart';
+import '../tv_wrap_navigation.dart';
 import 'player_format.dart';
 
 Future<void> _showSheet(
@@ -528,22 +529,24 @@ class _DelayControl extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            step('-500', -500),
-            step('-50', -50),
-            control(
-              TextButton(
-                onPressed: () => onChanged(Duration.zero),
-                child: const Text('Azzera'),
+        TvWrapNavigation(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              step('-500', -500),
+              step('-50', -50),
+              control(
+                TextButton(
+                  onPressed: () => onChanged(Duration.zero),
+                  child: const Text('Azzera'),
+                ),
+                () => onChanged(Duration.zero),
               ),
-              () => onChanged(Duration.zero),
-            ),
-            step('+50', 50),
-            step('+500', 500),
-          ],
+              step('+50', 50),
+              step('+500', 500),
+            ],
+          ),
         ),
       ],
     );

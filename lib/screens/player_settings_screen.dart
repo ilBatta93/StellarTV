@@ -584,21 +584,25 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
                 : caps.hdrFormats.join(', '),
           ),
           for (final e in caps.decoders.entries)
-            ListTile(
-              dense: true,
-              leading: Icon(
-                e.value
-                    ? Icons.check_circle_rounded
-                    : Icons.remove_circle_outline_rounded,
-                color: e.value ? AppColors.success : AppColors.textMuted,
-                size: 20,
-              ),
-              title: Text(e.key, style: const TextStyle(fontSize: 14)),
-              trailing: Text(
-                e.value ? 'Supportato' : 'Via software / no',
-                style: TextStyle(
+            TvFocusable(
+              onPressed: () {},
+              focusedScale: 1,
+              child: ListTile(
+                dense: true,
+                leading: Icon(
+                  e.value
+                      ? Icons.check_circle_rounded
+                      : Icons.remove_circle_outline_rounded,
                   color: e.value ? AppColors.success : AppColors.textMuted,
-                  fontSize: 12,
+                  size: 20,
+                ),
+                title: Text(e.key, style: const TextStyle(fontSize: 14)),
+                trailing: Text(
+                  e.value ? 'Supportato' : 'Via software / no',
+                  style: TextStyle(
+                    color: e.value ? AppColors.success : AppColors.textMuted,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ),

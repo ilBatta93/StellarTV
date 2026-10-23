@@ -13,6 +13,7 @@ import '../models/series_details.dart';
 import '../models/tmdb_item.dart';
 import '../services/catalog_builder.dart';
 import '../services/catalog_preparation.dart';
+import '../services/prepared_catalog_store.dart';
 import '../services/catalog_index_builder.dart';
 import '../services/playlist_refresh_service.dart';
 import '../services/playback_work_policy.dart';
@@ -187,24 +188,53 @@ class AppProvider extends ChangeNotifier {
           if (!await allowed()) return;
           FrameTelemetryService.instance.mark('catalog preparation start');
           try {
-            final result = await prepareCatalog(
+            final accountKey = _currentKey;
+            final store = PreparedCatalogStore.instance;
+            final yieldWork = CatalogYield(allowed);
+            final signature = await PreparedCatalogStore.signature(
               snapshot: snapshot,
               type: type,
               hidden: hidden,
               custom: custom,
               order: order,
-              yieldWork: CatalogYield(allowed),
-              onProgress: (groups, recent) {
-                if (!current() ||
-                    _playbackActive ||
-                    !ForegroundPolicy.instance.active)
-                  return;
-                _groupedCache[type] = groups;
-                _recentCache[type] = recent;
-                notifyListeners();
-              },
+              yieldWork: yieldWork,
             );
+            final saved = await store.read(accountKey, type);
+            final restored = saved == null
+                ? null
+                : await PreparedCatalogStore.restore(
+                    saved,
+                    signature,
+                    snapshot,
+                    type,
+                    yieldWork,
+                  );
+            if (restored != null) {
+              FrameTelemetryService.instance.mark('catalog restored');
+            }
+            final result =
+                restored ??
+                await prepareCatalog(
+                  snapshot: snapshot,
+                  type: type,
+                  hidden: hidden,
+                  custom: custom,
+                  order: order,
+                  yieldWork: CatalogYield(allowed),
+                  onProgress: (groups, recent) {
+                    if (!current() ||
+                        _playbackActive ||
+                        !ForegroundPolicy.instance.active)
+                      return;
+                    _groupedCache[type] = groups;
+                    _recentCache[type] = recent;
+                    notifyListeners();
+                  },
+                );
             if (!await allowed()) return;
+            if (restored == null) {
+              unawaited(store.write(accountKey, type, signature, result));
+            }
             _byType[type] = result.channels;
             if (type == ContentType.series || type == ContentType.anime)
               _seriesCatalogCache[type] = result.catalog;

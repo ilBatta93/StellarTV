@@ -16,6 +16,7 @@ import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
+import '../widgets/tv_wrap_navigation.dart';
 import '../widgets/tv_text_field.dart';
 
 /// Which kind of result the user wants to see.
@@ -365,33 +366,35 @@ class _FilterBar extends StatelessWidget {
     final tv = DeviceTypeService.isTv;
     return Padding(
       padding: EdgeInsets.fromLTRB(padding, tv ? 16 : 12, padding, 0),
-      child: Wrap(
-        spacing: tv ? 12 : 8,
-        runSpacing: 8,
-        children: [
-          for (final f in SearchFilter.values)
-            ChoiceChip(
-              label: Text(f.label),
-              selected: f == value,
-              showCheckmark: false,
-              onSelected: (_) => onChanged(f),
-              labelStyle: TextStyle(
-                fontSize: tv ? 16 : 13,
-                fontWeight: FontWeight.w600,
-                color: f == value
-                    ? AppColors.textPrimary
-                    : AppColors.textSecondary,
+      child: TvWrapNavigation(
+        child: Wrap(
+          spacing: tv ? 12 : 8,
+          runSpacing: 8,
+          children: [
+            for (final f in SearchFilter.values)
+              ChoiceChip(
+                label: Text(f.label),
+                selected: f == value,
+                showCheckmark: false,
+                onSelected: (_) => onChanged(f),
+                labelStyle: TextStyle(
+                  fontSize: tv ? 16 : 13,
+                  fontWeight: FontWeight.w600,
+                  color: f == value
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
+                ),
+                selectedColor: AppColors.primary,
+                backgroundColor: AppColors.surface,
+                side: BorderSide(color: AppColors.clear),
+                shape: const StadiumBorder(),
+                padding: EdgeInsets.symmetric(
+                  horizontal: tv ? 14 : 8,
+                  vertical: tv ? 8 : 2,
+                ),
               ),
-              selectedColor: AppColors.primary,
-              backgroundColor: AppColors.surface,
-              side: BorderSide(color: AppColors.clear),
-              shape: const StadiumBorder(),
-              padding: EdgeInsets.symmetric(
-                horizontal: tv ? 14 : 8,
-                vertical: tv ? 8 : 2,
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

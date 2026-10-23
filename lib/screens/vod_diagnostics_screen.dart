@@ -103,7 +103,7 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
                 ),
                 subtitle: 'Solo su questo dispositivo. Rapporti con modello, sistema, versione app e dati del lettore; senza password o indirizzi IPTV.',
               ),
-              ListTile(
+              TvInfoRow(
                 title: Text('${service.log.events.length} eventi salvati'),
                 subtitle: const Text(
                   'Avvio, primo fotogramma, attese, fotogrammi scartati, buffer quasi vuoto, scatti e errori. Ultimi 1000 eventi.',
@@ -191,7 +191,7 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
           ...service.log.events.reversed
               .take(30)
               .map(
-                (e) => ListTile(
+                (e) => TvInfoRow(
                   title: Text('${e['type']}'),
                   subtitle: Text(
                     '${e['at']}\n${e['engine'] ?? ''} ${e['hwdec'] ?? ''} ${e['codec'] ?? ''} ${e['category'] ?? ''} ${e['droppedFrames'] ?? e['stallMs'] ?? e['jumpMs'] ?? e['cacheMs'] ?? e['avSyncMs'] ?? e['durationMs'] ?? e['startupMs'] ?? e['elapsedMs'] ?? ''} ',

@@ -1,3 +1,4 @@
-- Sezioni pronte in pochi secondi dall'avvio; la Diretta viene preparata per prima senza attendere le altre sezioni.
-- Home e cataloghi si riempiono senza lunghe attese anche durante l'aggiornamento dei contenuti.
-- Schermata Prestazioni e fluidità interamente navigabile con il telecomando, riga per riga.
+- Avvio più rapido: le sezioni già preparate vengono riaperte subito senza essere ricostruite, finché i contenuti non cambiano.
+- Pannelli dei filtri navigabili con le frecce su e giù senza chiudersi; si chiudono solo con Indietro.
+- Navigazione col telecomando più precisa nei gruppi di pulsanti di schede, ricerca, profili e player.
+- Righe informative delle diagnostiche e delle capacità del lettore selezionabili per scorrere l'elenco.

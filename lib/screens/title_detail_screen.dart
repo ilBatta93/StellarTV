@@ -27,6 +27,7 @@ import '../widgets/reaction_buttons.dart';
 import '../widgets/trailer_button.dart';
 import '../services/download_service.dart';
 import '../services/title_display.dart';
+import '../widgets/tv_wrap_navigation.dart';
 import '../widgets/category_assign_button.dart';
 
 class TitleDetailScreen extends StatefulWidget {
@@ -489,20 +490,22 @@ class _Actions extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final v in variants)
-                ActionChip(
-                  label: Text(
-                    CatalogBuilder.qualityLabel(v.name) ??
-                        (v.group != playable!.group ? v.group : 'STD'),
-                    style: const TextStyle(fontSize: 12),
+          TvWrapNavigation(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final v in variants)
+                  ActionChip(
+                    label: Text(
+                      CatalogBuilder.qualityLabel(v.name) ??
+                          (v.group != playable!.group ? v.group : 'STD'),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onPressed: () => openChannel(context, v),
                   ),
-                  onPressed: () => openChannel(context, v),
-                ),
-            ],
+              ],
+            ),
           ),
         ],
         if (DeviceTypeService.isTv && playable != null) ...[
@@ -592,53 +595,55 @@ class _Actions extends StatelessWidget {
     final channel = playable;
     final titleItem = item;
     final inList = titleItem != null && app.isTmdbFavorite(titleItem);
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        if (channel != null) ...[
-          TvFocusable(
-            autofocus: true,
-            onPressed: () => _play(context),
-            child: ElevatedButton.icon(
+    return TvWrapNavigation(
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (channel != null) ...[
+            TvFocusable(
+              autofocus: true,
               onPressed: () => _play(context),
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: Text(playLabel, textAlign: TextAlign.center),
+              child: ElevatedButton.icon(
+                onPressed: () => _play(context),
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: Text(playLabel, textAlign: TextAlign.center),
+              ),
             ),
-          ),
-          TvFocusable(
-            onPressed: () => app.toggleFavorite(channel),
-            child: OutlinedButton.icon(
+            TvFocusable(
               onPressed: () => app.toggleFavorite(channel),
-              icon: Icon(
-                app.favoriteIds.contains(channel.id)
-                    ? Icons.favorite_rounded
-                    : Icons.favorite_border_rounded,
-              ),
-              label: Text(
-                app.favoriteIds.contains(channel.id)
-                    ? 'Nei preferiti'
-                    : 'Preferiti',
+              child: OutlinedButton.icon(
+                onPressed: () => app.toggleFavorite(channel),
+                icon: Icon(
+                  app.favoriteIds.contains(channel.id)
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                ),
+                label: Text(
+                  app.favoriteIds.contains(channel.id)
+                      ? 'Nei preferiti'
+                      : 'Preferiti',
+                ),
               ),
             ),
-          ),
-          if (DownloadService.canDownload(channel))
-            DownloadButton(channel: channel, expanded: true),
-        ],
-        if (titleItem != null) ...[
-          TvFocusable(
-            autofocus: channel == null,
-            onPressed: () => app.toggleTmdbFavorite(titleItem),
-            child: OutlinedButton.icon(
+            if (DownloadService.canDownload(channel))
+              DownloadButton(channel: channel, expanded: true),
+          ],
+          if (titleItem != null) ...[
+            TvFocusable(
+              autofocus: channel == null,
               onPressed: () => app.toggleTmdbFavorite(titleItem),
-              icon: Icon(inList ? Icons.check_rounded : Icons.add_rounded),
-              label: Text(inList ? 'Nella mia lista' : 'La mia lista'),
+              child: OutlinedButton.icon(
+                onPressed: () => app.toggleTmdbFavorite(titleItem),
+                icon: Icon(inList ? Icons.check_rounded : Icons.add_rounded),
+                label: Text(inList ? 'Nella mia lista' : 'La mia lista'),
+              ),
             ),
-          ),
-          TrailerButton(item: titleItem),
+            TrailerButton(item: titleItem),
+          ],
         ],
-      ],
+      ),
     );
   }
 

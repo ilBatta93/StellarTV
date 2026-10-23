@@ -102,7 +102,7 @@ class _LiveDiagnosticsScreenState extends State<LiveDiagnosticsScreen> {
                 ),
                 subtitle: 'Solo su questo dispositivo. Rapporti con modello, sistema e versione app; senza password o indirizzi IPTV.',
               ),
-              ListTile(
+              TvInfoRow(
                 title: Text('${service.log.events.length} eventi salvati'),
                 subtitle: const Text(
                   'Avvio, primo fotogramma, attese, possibili blocchi, errori e cambi lettore. Ultimi 1000 eventi.',
@@ -190,7 +190,7 @@ class _LiveDiagnosticsScreenState extends State<LiveDiagnosticsScreen> {
           ...service.log.events.reversed
               .take(30)
               .map(
-                (e) => ListTile(
+                (e) => TvInfoRow(
                   title: Text('${e['type']}'),
                   subtitle: Text(
                     '${e['at']}\n${e['engine'] ?? ''} ${e['category'] ?? ''} ${e['durationMs'] ?? e['startupMs'] ?? e['elapsedMs'] ?? ''} ms',

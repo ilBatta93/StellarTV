@@ -411,37 +411,37 @@ Future<T?> pickOption<T>(
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final o in options)
-                    _tvOption(
-                      autofocus: o == current,
-                      onPressed: () => Navigator.pop(ctx, o),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                        ),
-                        title: Text(
-                          label(o),
-                          style: TextStyle(
-                            color: o == current
-                                ? AppColors.primary
-                                : AppColors.textPrimary,
-                            fontWeight: o == current
-                                ? FontWeight.w600
-                                : FontWeight.w400,
+                  children: [
+                    for (final o in options)
+                      _tvOption(
+                        autofocus: o == current,
+                        onPressed: () => Navigator.pop(ctx, o),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 24,
                           ),
+                          title: Text(
+                            label(o),
+                            style: TextStyle(
+                              color: o == current
+                                  ? AppColors.primary
+                                  : AppColors.textPrimary,
+                              fontWeight: o == current
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                          subtitle: _subtitle(detail?.call(o)),
+                          trailing: o == current
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  color: AppColors.primary,
+                                )
+                              : null,
+                          onTap: () => Navigator.pop(ctx, o),
                         ),
-                        subtitle: _subtitle(detail?.call(o)),
-                        trailing: o == current
-                            ? Icon(
-                                Icons.check_rounded,
-                                color: AppColors.primary,
-                              )
-                            : null,
-                        onTap: () => Navigator.pop(ctx, o),
                       ),
-                    ),
-                ],
+                  ],
                 ),
               ),
             ),
@@ -468,4 +468,37 @@ Widget _tvOption({
     borderRadius: BorderRadius.circular(10),
     child: child,
   );
+}
+
+/// TV: an informational row that still takes one focus stop, so the remote
+/// can scroll through long read-only lists (results, events). Touch: plain.
+class TvInfoRow extends StatelessWidget {
+  final Widget title;
+  final Widget? subtitle;
+  final Widget? trailing;
+  final bool isThreeLine;
+  const TvInfoRow({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.isThreeLine = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tile = ListTile(
+      title: title,
+      subtitle: subtitle,
+      trailing: trailing,
+      isThreeLine: isThreeLine,
+    );
+    if (!DeviceTypeService.isTv) return tile;
+    return TvFocusable(
+      onPressed: () {},
+      focusedScale: 1,
+      borderRadius: BorderRadius.circular(12),
+      child: tile,
+    );
+  }
 }

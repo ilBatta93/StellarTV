@@ -43,6 +43,7 @@ import '../widgets/player/video_surface.dart';
 import '../widgets/player/tv_playback_info.dart';
 import '../widgets/player/tv_quick_playback_sheet.dart';
 import '../widgets/poster_card.dart';
+import '../widgets/tv_wrap_navigation.dart';
 import '../widgets/tv_focusable.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -2294,27 +2295,29 @@ class _FailureView extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 24),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    OutlinedButton(
-                      onPressed: onBack,
-                      child: const Text('Indietro'),
-                    ),
-                    for (final e in PlayerEngineType.values)
+                TvWrapNavigation(
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.center,
+                    children: [
                       OutlinedButton(
-                        onPressed: () => session.switchEngine(e),
-                        child: Text('Prova con ${e.label}'),
+                        onPressed: onBack,
+                        child: const Text('Indietro'),
                       ),
-                    ElevatedButton.icon(
-                      focusNode: retryFocus,
-                      icon: const Icon(Icons.refresh_rounded),
-                      label: const Text('Riprova'),
-                      onPressed: session.retry,
-                    ),
-                  ],
+                      for (final e in PlayerEngineType.values)
+                        OutlinedButton(
+                          onPressed: () => session.switchEngine(e),
+                          child: Text('Prova con ${e.label}'),
+                        ),
+                      ElevatedButton.icon(
+                        focusNode: retryFocus,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Riprova'),
+                        onPressed: session.retry,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
