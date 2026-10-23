@@ -177,5 +177,5 @@
 ## Voti ed episodi — 23 ottobre sera
 - [x] IMDb nei cataloghi e schede; trama/voto individuale episodio e pannello Su locale.
 - [x] Guida, note neutrali e test aggiornati; workflow serie 3.8 esplicito.
-- [ ] Build Android seguita fino al completamento.
+- [x] Android 3.8.2 run 40038787549 riuscita: test, APK e verifiche native; correzione test focus nel primo tentativo.
 - [ ] Prova reale su TV e servizio pubblicato: richiedono utente.
