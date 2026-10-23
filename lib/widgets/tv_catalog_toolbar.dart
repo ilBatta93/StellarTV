@@ -102,7 +102,12 @@ class TvCatalogToolbar extends StatefulWidget {
   static bool handleBack(FocusNode? focus, {BuildContext? context}) {
     if (_pendingEcho) {
       _pendingEcho = false;
-      return true;
+      // Only an echo when nothing is open any more; with a panel open this
+      // is a genuine Back and closes it below.
+      final anyOpen = _mountedToolbars.any(
+        (t) => t.mounted && (t._filtersOpen || t._platformsOpen || t._expanded),
+      );
+      if (!anyOpen) return true;
     }
     final origin = context ?? focus?.context;
     final route = origin == null ? null : ModalRoute.of(origin);
