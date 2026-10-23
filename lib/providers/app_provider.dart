@@ -27,6 +27,8 @@ import '../services/kids_content_service.dart';
 import '../services/catalog_cache_service.dart';
 import '../services/catalog_publication.dart';
 import '../services/frame_telemetry_service.dart';
+import '../services/device_type_service.dart';
+import '../services/image_warmup_service.dart' show RemoteNavigation;
 import '../models/custom_category.dart';
 
 enum AuthMethod { none, xtream }
@@ -336,10 +338,18 @@ class AppProvider extends ChangeNotifier {
           _warmUpTimer = Timer(const Duration(seconds: 30), warm);
           return;
         }
+        if (DeviceTypeService.isTv &&
+            !RemoteNavigation.stillFor(const Duration(seconds: 2))) {
+          _warmUpTimer = Timer(const Duration(seconds: 5), warm);
+          return;
+        }
         unawaited(_kids.warmUp(_rawChannels));
       }
 
-      _warmUpTimer = Timer(const Duration(seconds: 20), warm);
+      _warmUpTimer = Timer(
+        Duration(seconds: DeviceTypeService.isTv ? 40 : 20),
+        warm,
+      );
     }
     _applyAdultFilter(visible: visible);
     _schedulePrewarm();
@@ -353,10 +363,25 @@ class AppProvider extends ChangeNotifier {
   void _schedulePrewarm() {
     _prewarmTimer?.cancel();
     if (_rawChannels.isEmpty) return;
+    // TV boxes: the first half minute belongs to the Home and the remote;
+    // grouping tens of thousands of titles there froze input after launch.
     _prewarmTimer = Timer(
-      const Duration(seconds: 4),
+      DeviceTypeService.isTv
+          ? const Duration(seconds: 30)
+          : const Duration(seconds: 4),
       () => unawaited(_prewarm()),
     );
+  }
+
+  /// TV: heavy grouping waits until the remote has been still for 2 s.
+  Future<bool> _waitRemoteStill(List<Channel> snapshot) async {
+    if (!DeviceTypeService.isTv) return true;
+    const still = Duration(seconds: 2);
+    while (!RemoteNavigation.stillFor(still)) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (!identical(snapshot, _allChannels)) return false;
+    }
+    return true;
   }
 
   Future<void> _prewarm() async {
@@ -381,7 +406,10 @@ class AppProvider extends ChangeNotifier {
       () => allEntries(ContentType.series),
     ];
     for (final step in steps) {
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await Future<void>.delayed(
+        Duration(milliseconds: DeviceTypeService.isTv ? 800 : 300),
+      );
+      if (!await _waitRemoteStill(snapshot)) return;
       if (!identical(snapshot, _allChannels) ||
           _playbackActive ||
           _anyPending ||

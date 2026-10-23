@@ -16,6 +16,7 @@ import android.content.res.Configuration
 import android.media.MediaCodecList
 import android.os.Build
 import android.os.Bundle
+import android.speech.RecognizerIntent
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
@@ -36,6 +37,38 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    private var pendingSpeech: MethodChannel.Result? = null
+    private val speechRequest = 7341
+
+    private fun startSpeech(result: MethodChannel.Result) {
+        pendingSpeech?.success(null)
+        pendingSpeech = result
+        try {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "it-IT")
+                .putExtra(RecognizerIntent.EXTRA_PROMPT, "Parla ora")
+                .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            startActivityForResult(intent, speechRequest)
+        } catch (e: Exception) {
+            pendingSpeech = null
+            result.error("unavailable", e.message, null)
+        }
+    }
+
+    @Deprecated("Activity result API not used by FlutterActivity")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == speechRequest) {
+            val text = if (resultCode == RESULT_OK)
+                data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            else null
+            pendingSpeech?.success(text)
+            pendingSpeech = null
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+
     private var channel: MethodChannel? = null
     private var autoPip = false
     private var pipRatio = Rational(16, 9)
@@ -244,6 +277,7 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                     "showKeyboard" -> result.success(showSoftKeyboard())
+                    "speechToText" -> startSpeech(result)
                     "setTextEditing" -> {
                         setTextEditing(call.arguments as? Boolean ?: false)
                         result.success(null)

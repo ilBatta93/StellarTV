@@ -25,7 +25,7 @@ void main(){
   final ui=UiSettings();
   await tester.pumpWidget(MultiProvider(providers:[ChangeNotifierProvider.value(value:sync),ChangeNotifierProvider.value(value:history),ChangeNotifierProvider.value(value:ui)],child:MaterialApp(home:Builder(builder:(context)=>Scaffold(body:FilledButton(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const PersonalVaultScreen())),child:const Text('Open')))))));
   await tester.tap(find.text('Open'));await tester.pump();await tester.pump(const Duration(milliseconds:400));
-  expect(find.text('Chiave STV1'),findsOneWidget);
+  await tester.pump(const Duration(milliseconds:100));expect(find.text('Oppure inserisci la chiave STV1'),findsOneWidget);expect(find.text('Attiva la cassaforte e crea la chiave'),findsNothing);
   for(var i=0;i<5;i++){await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);await tester.pump();}
   expect(FocusManager.instance.primaryFocus?.context,isNotNull);
   await tester.pageBack();await tester.pump();await tester.pump(const Duration(milliseconds:400));

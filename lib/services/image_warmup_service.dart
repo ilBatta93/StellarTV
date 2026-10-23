@@ -26,6 +26,10 @@ class RemoteNavigation {
   static bool get moving =>
       DateTime.now().millisecondsSinceEpoch - _lastMs < quiet.inMilliseconds;
 
+  /// True when no remote key arrived for at least [d] (startup heavy work).
+  static bool stillFor(Duration d) =>
+      DateTime.now().millisecondsSinceEpoch - _lastMs >= d.inMilliseconds;
+
   /// Waits (bounded to ~3 s) until the remote has been still for [quiet].
   static Future<void> idle() async {
     for (var i = 0; i < 30 && moving; i++) {

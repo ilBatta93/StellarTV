@@ -21,6 +21,34 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
   String? _generated;
   String _status = '';
   bool _phone = false;
+
+  /// null = checking; otherwise which guided path is shown.
+  _VaultState? _state;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _detect());
+  }
+
+  Future<void> _detect() async {
+    final sync = context.read<SyncProvider>();
+    _VaultState next;
+    try {
+      if (await sync.recoveryKey() != null) {
+        next = _VaultState.active;
+      } else if (await sync.hasCloudVault()) {
+        next = _VaultState.existing;
+      } else {
+        next = _VaultState.fresh;
+      }
+    } catch (_) {
+      // Unknown: never offer a new key when an existing vault may exist.
+      next = _VaultState.existing;
+    }
+    if (mounted) setState(() => _state = next);
+  }
+
   @override
   void dispose() {
     _input.dispose();
@@ -48,10 +76,11 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
   Future<void> _create() => _run(() async {
     if (await context.read<SyncProvider>().hasCloudVault()) {
       if (mounted)
-        setState(
-          () => _status =
-              'Esiste già un salvataggio: importa la chiave del dispositivo autorizzato.',
-        );
+        setState(() {
+          _status =
+              'La cassaforte esiste già: usa la tua chiave attuale. Una chiave nuova non aprirebbe i dati salvati.';
+          _state = _VaultState.existing;
+        });
       return;
     }
     final key = PersonalVault.generateKey();
@@ -76,6 +105,7 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
     if (!pushed && !await sync.hasCloudVault())
       throw StateError(sync.lastPushError ?? 'Salvataggio non verificato');
     await history.pullFromCloud();
+    if (mounted) _state = _VaultState.active;
     if (mounted)
       setState(
         () => _status = pushed
@@ -124,6 +154,26 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
       ),
     ),
   );
+  Widget _intro(BuildContext context) {
+    final text = switch (_state) {
+      null => 'Controllo lo stato della cassaforte…',
+      _VaultState.fresh =>
+        'La cassaforte protegge cronologia e preferiti con una chiave che '
+            'conosci solo tu. Si crea una volta sola e vale per tutti i tuoi '
+            'dispositivi: conservala (foto del QR o copia scritta), perché '
+            'senza chiave i dati salvati non si possono recuperare.',
+      _VaultState.existing =>
+        'La tua cassaforte è già attiva. Per aprirla su questo dispositivo '
+            'serve la stessa chiave usata finora: inviala dal telefono o '
+            'inseriscila. Non crearne una nuova, non aprirebbe i dati salvati.',
+      _VaultState.active =>
+        'Cassaforte attiva e sincronizzata su questo dispositivo. Usa '
+            '“Mostra chiave e QR” per aprirla su un altro dispositivo. La '
+            'chiave resta la stessa: non serve crearne altre.',
+    };
+    return Text(text);
+  }
+
   @override
   Widget build(BuildContext context) => ApplePageScaffold(
     title: 'Dati cifrati',
@@ -135,19 +185,71 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 12),
-        const Text(
-          'Conservala fuori dal cloud. Chi vede questa chiave può leggere i dati cifrati del tuo account. Se perdi la chiave e tutti i dispositivi autorizzati, i dati non sono recuperabili. La configurazione dei contenuti resta solo sul dispositivo.',
-        ),
+        _intro(context),
         const SizedBox(height: 16),
-        TvTextField(
-          controller: _input,
-          obscureText: !_reveal,
-          decoration: const InputDecoration(
-            labelText: 'Chiave STV1',
-            border: OutlineInputBorder(),
+        if (_state == null)
+          const LinearProgressIndicator()
+        else if (_state == _VaultState.fresh) ...[
+          if (_generated == null)
+            _action(
+              'Attiva la cassaforte e crea la chiave',
+              Icons.key,
+              _create,
+            ),
+          if (_generated != null) ...[
+            TvTextField(
+              controller: _input,
+              obscureText: !_reveal,
+              decoration: const InputDecoration(
+                labelText: 'La tua chiave',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            TvFocusable(
+              onPressed: () => setState(() => _saved = !_saved),
+              child: CheckboxListTile(
+                value: _saved,
+                onChanged: (v) => setState(() => _saved = v ?? false),
+                title: const Text(
+                  'Ho conservato la chiave in un posto sicuro',
+                ),
+              ),
+            ),
+            _action('Conferma e attiva', Icons.lock_outline, () {
+              if (!_saved) {
+                setState(
+                  () => _status =
+                      'Prima conserva la chiave (foto del QR o copia scritta).',
+                );
+                return;
+              }
+              _authorize();
+            }),
+          ],
+          _action(
+            'Ho già una chiave: ricevila dal telefono',
+            Icons.smartphone,
+            _fromPhone,
           ),
-        ),
-        _action('Invia la chiave dal telefono', Icons.smartphone, _fromPhone),
+        ] else ...[
+          if (_state == _VaultState.existing) ...[
+            _action(
+              'Ricevi la chiave dal telefono',
+              Icons.smartphone,
+              _fromPhone,
+            ),
+            const SizedBox(height: 8),
+            TvTextField(
+              controller: _input,
+              obscureText: !_reveal,
+              decoration: const InputDecoration(
+                labelText: 'Oppure inserisci la chiave STV1',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            _action('Sblocca', Icons.lock_open, _authorize),
+          ],
+        ],
         if (_phone)
           PhoneHandoffPanel(
             onReceived: _received,
@@ -156,26 +258,8 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
               if (m != null) _status = m;
             }),
           ),
-        _action('Importa e sincronizza', Icons.lock_outline, () {
-          if (_generated != null && !_saved) {
-            setState(
-              () => _status = 'Conserva prima la chiave fuori dal cloud.',
-            );
-            return;
-          }
-          _authorize();
-        }),
-        _action('Crea nuova chiave', Icons.key, _create),
-        if (_generated != null)
-          TvFocusable(
-            onPressed: () => setState(() => _saved = !_saved),
-            child: CheckboxListTile(
-              value: _saved,
-              onChanged: (v) => setState(() => _saved = v ?? false),
-              title: const Text('Ho conservato la chiave fuori dal cloud'),
-            ),
-          ),
-        _action('Mostra chiave e QR', Icons.qr_code, _show),
+        if (_state == _VaultState.active)
+          _action('Mostra chiave e QR', Icons.qr_code, _show),
         if (_reveal && _input.text.isNotEmpty) ...[
           const SizedBox(height: 12),
           Center(
@@ -216,3 +300,5 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
     ),
   );
 }
+
+enum _VaultState { fresh, existing, active }

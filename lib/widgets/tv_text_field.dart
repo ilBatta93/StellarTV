@@ -83,6 +83,16 @@ class TvTextField extends StatefulWidget {
     } catch (_) {}
   }
 
+  /// Opens the system voice input (remote microphone). Returns the spoken
+  /// text, or null when cancelled or unavailable on this device.
+  static Future<String?> dictate() async {
+    try {
+      return await _device.invokeMethod<String>('speechToText');
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Moves focus to [node] and opens the keyboard there.
   static void focusWithKeyboard(FocusNode node) {
     final state = _TvTextFieldState._registry[node];
@@ -343,6 +353,44 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
     );
   }
 
+  bool _listening = false;
+
+  Future<void> _dictate() async {
+    if (_listening) return;
+    setState(() => _listening = true);
+    final text = (await TvTextField.dictate())?.trim();
+    if (!mounted) return;
+    setState(() => _listening = false);
+    if (text == null || text.isEmpty) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Nessun testo riconosciuto')),
+      );
+      return;
+    }
+    final value = widget.maxLength != null && text.length > widget.maxLength!
+        ? text.substring(0, widget.maxLength!)
+        : text;
+    widget.controller.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+    widget.onChanged?.call(value);
+    if (_shell.context != null) _shell.requestFocus();
+  }
+
+  Widget _micButton() => TvFocusable(
+    focusedScale: 1,
+    onPressed: _dictate,
+    child: IconButton(
+      tooltip: 'Dettatura vocale',
+      onPressed: _dictate,
+      icon: Icon(
+        _listening ? Icons.mic_rounded : Icons.mic_none_rounded,
+        size: 20,
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     if (!_tv) {
@@ -358,14 +406,30 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
       }
 
       decoration = decoration.copyWith(
-        suffixIcon: TvFocusable(
-          focusedScale: 1,
-          onPressed: clear,
-          child: IconButton(
-            tooltip: 'Cancella ricerca',
-            onPressed: clear,
-            icon: const Icon(Icons.close_rounded, size: 20),
-          ),
+        suffixIcon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _micButton(),
+            TvFocusable(
+              focusedScale: 1,
+              onPressed: clear,
+              child: IconButton(
+                tooltip: 'Cancella ricerca',
+                onPressed: clear,
+                icon: const Icon(Icons.close_rounded, size: 20),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (decoration.suffixIcon == null) {
+      decoration = decoration.copyWith(suffixIcon: _micButton());
+    } else {
+      final existing = decoration.suffixIcon!;
+      decoration = decoration.copyWith(
+        suffixIcon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [_micButton(), existing],
         ),
       );
     }
