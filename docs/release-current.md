@@ -1,3 +1,3 @@
-- Preparazione progressiva delle sezioni e degli ordinamenti, con comandi disponibili durante il caricamento.
-- Ridotte elaborazioni simultanee e copie temporanee dei cataloghi; protezione memoria conservata.
-- Diagnostica salvata sul dispositivo: la sessione precedente resta disponibile dopo il riavvio e può essere inviata dal telecomando.
+- Cataloghi pronti in pochi secondi dall'avvio; la Diretta viene preparata per prima e non attende Film e Serie.
+- Home, Film e Serie si riempiono senza lunghe attese anche durante l'aggiornamento della playlist.
+- Schermata Prestazioni e fluidità interamente navigabile con il telecomando, riga per riga.

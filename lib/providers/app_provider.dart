@@ -175,16 +175,14 @@ class AppProvider extends ChangeNotifier {
         identical(snapshot, _allChannels);
     Future<bool> allowed() async {
       while (current() &&
-          (_playbackActive ||
-              _anyPending ||
-              !ForegroundPolicy.instance.active)) {
+          (_playbackActive || !ForegroundPolicy.instance.active)) {
         await Future<void>.delayed(const Duration(milliseconds: 100));
       }
       return current();
     }
 
     late final Future<void> job;
-    job = _preparationTail
+    job = Future<void>.value()
         .then((_) async {
           if (!await allowed()) return;
           FrameTelemetryService.instance.mark('catalog preparation start');
@@ -453,7 +451,7 @@ class AppProvider extends ChangeNotifier {
     // grouping tens of thousands of titles there froze input after launch.
     _prewarmTimer = Timer(
       DeviceTypeService.isTv
-          ? const Duration(seconds: 30)
+          ? const Duration(seconds: 2)
           : const Duration(seconds: 4),
       () => unawaited(_prewarm()),
     );
@@ -471,7 +469,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _prewarm() async {
-    if (_playbackActive || _anyPending || !ForegroundPolicy.instance.active) {
+    if (_playbackActive || !ForegroundPolicy.instance.active) {
       // Never compete with video or section publication for the UI thread.
       _prewarmTimer = Timer(
         const Duration(seconds: 10),
@@ -482,10 +480,10 @@ class AppProvider extends ChangeNotifier {
     final snapshot = _allChannels;
     if (snapshot.isEmpty) return;
     for (final type in [
+      ContentType.live,
       ContentType.movie,
       ContentType.series,
       ContentType.anime,
-      ContentType.live,
     ]) {
       await Future<void>.delayed(const Duration(milliseconds: 100));
       if (!identical(snapshot, _allChannels) || _disposed) return;
@@ -1037,9 +1035,7 @@ class AppProvider extends ChangeNotifier {
         !_disposed && epoch == _indexEpoch && identical(snapshot, _allChannels);
     Future<bool> allowed() async {
       while (current() &&
-          (_playbackActive ||
-              _anyPending ||
-              !ForegroundPolicy.instance.active)) {
+          (_playbackActive || !ForegroundPolicy.instance.active)) {
         await Future<void>.delayed(const Duration(milliseconds: 100));
       }
       return current();

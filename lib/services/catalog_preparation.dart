@@ -12,9 +12,9 @@ class CatalogYield {
   final Stopwatch _clock = Stopwatch()..start();
   int _items = 0;
   Future<void> step() async {
-    if (++_items < 64 && _clock.elapsedMicroseconds < 2000) return;
-    _items = 0;
-    await Future<void>.delayed(const Duration(milliseconds: 1));
+    // Time budget only: ~6 ms of work per frame, then one event-loop turn.
+    if ((++_items & 255) != 0 || _clock.elapsedMicroseconds < 6000) return;
+    await Future<void>.delayed(Duration.zero);
     if (!await allowed()) throw const CatalogPreparationCancelled();
     _clock.reset();
   }

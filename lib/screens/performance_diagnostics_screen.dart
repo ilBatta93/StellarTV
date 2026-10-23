@@ -11,6 +11,7 @@ import '../services/device_type_service.dart';
 import '../services/frame_telemetry_service.dart';
 import '../widgets/apple_page_scaffold.dart';
 import '../widgets/settings_tiles.dart';
+import '../widgets/tv_focusable.dart';
 
 class PerformanceDiagnosticsScreen extends StatefulWidget {
   const PerformanceDiagnosticsScreen({super.key});
@@ -111,37 +112,37 @@ class _PerformanceDiagnosticsScreenState
             SettingsSection(
               title: 'Risultati',
               children: [
-                ListTile(
+                _InfoRow(
                   title: const Text('FPS stimati'),
                   trailing: Text(s.fps.toStringAsFixed(0)),
                 ),
-                ListTile(
+                _InfoRow(
                   title: const Text('Fotogrammi misurati'),
                   trailing: Text('${s.frames}'),
                 ),
-                ListTile(
+                _InfoRow(
                   title: const Text('Fotogrammi lenti (oltre 16,6 ms)'),
                   trailing: Text(
                     '${s.jank} (${s.jankPercent.toStringAsFixed(1)}%)',
                   ),
                 ),
-                ListTile(
+                _InfoRow(
                   title: const Text('Tempo di calcolo medio'),
                   trailing: Text(_ms(s.avgBuildMs)),
                 ),
-                ListTile(
+                _InfoRow(
                   title: const Text('Tempo di disegno medio'),
                   trailing: Text(_ms(s.avgRasterMs)),
                 ),
-                ListTile(
+                _InfoRow(
                   title: const Text('Scatti da calcolo / da disegno'),
                   trailing: Text('${s.buildBound} / ${s.rasterBound}'),
                 ),
-                ListTile(
+                _InfoRow(
                   title: const Text('Blocchi oltre 100 ms'),
                   trailing: Text('${s.histogram[4] + s.histogram[5]}'),
                 ),
-                ListTile(
+                _InfoRow(
                   title: const Text('Picco massimo'),
                   subtitle: Text(
                     'Calcolo ${_ms(s.peakBuildUs / 1000)} · disegno ${_ms(s.peakRasterUs / 1000)}${s.peakContext == null ? '' : ' · ${s.peakContext}'}',
@@ -195,7 +196,7 @@ class _PerformanceDiagnosticsScreenState
               SettingsSection(
                 title: 'Sessione precedente',
                 children: [
-                  ListTile(
+                  _InfoRow(
                     title: const Text('Ultima misura salvata sul dispositivo'),
                     subtitle: Text(
                       '${previous['sessionStartedAt'] ?? previous['createdAt'] ?? ''} · ${previous['frames'] ?? 0} fotogrammi',
@@ -248,4 +249,25 @@ class _PerformanceDiagnosticsScreenState
       );
     },
   );
+}
+
+/// TV: read-only rows are still focus stops, so the remote can scroll the
+/// whole page (results, report actions, previous session) one row at a time.
+class _InfoRow extends StatelessWidget {
+  final Widget title;
+  final Widget? subtitle;
+  final Widget? trailing;
+  const _InfoRow({required this.title, this.subtitle, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    final tile = ListTile(title: title, subtitle: subtitle, trailing: trailing);
+    if (!DeviceTypeService.isTv) return tile;
+    return TvFocusable(
+      onPressed: () {},
+      focusedScale: 1,
+      borderRadius: BorderRadius.circular(12),
+      child: tile,
+    );
+  }
 }
