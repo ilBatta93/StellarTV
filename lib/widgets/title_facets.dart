@@ -7,6 +7,9 @@ import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
 import '../providers/app_provider.dart';
 import '../services/imdb_rating_service.dart';
+import '../services/catalog_rating_service.dart';
+import '../services/title_metadata_store.dart';
+import '../models/episode_metadata.dart';
 import '../services/platform_catalog_service.dart';
 import '../services/title_providers_service.dart';
 import '../theme/app_theme.dart';
@@ -106,7 +109,10 @@ class PlatformBadge extends StatelessWidget {
     label: platform.name,
     child: Container(
       height: height,
-      padding: EdgeInsets.symmetric(horizontal: height * 0.3, vertical: height * 0.14),
+      padding: EdgeInsets.symmetric(
+        horizontal: height * 0.3,
+        vertical: height * 0.14,
+      ),
       decoration: BoxDecoration(
         color: AppColors.badgeLight,
         borderRadius: BorderRadius.circular(6),
@@ -117,7 +123,11 @@ class PlatformBadge extends StatelessWidget {
         filterQuality: FilterQuality.medium,
         errorBuilder: (_, __, ___) => Text(
           platform.name,
-          style: TextStyle(color: platform.color, fontSize: height * 0.5, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: platform.color,
+            fontSize: height * 0.5,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     ),
@@ -126,37 +136,135 @@ class PlatformBadge extends StatelessWidget {
 
 /// Official IMDb badge with the IMDb rating; TMDB vote as fallback while
 /// IMDb is unknown or has no rating for the title.
+class RatingValue extends StatelessWidget {
+  final double? imdb;
+  final double fallback;
+  final double height;
+  const RatingValue({
+    super.key,
+    this.imdb,
+    this.fallback = 0,
+    this.height = 20,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final rating = imdb;
+    final hasImdb = rating != null && rating > 0;
+    final value = hasImdb ? rating : fallback;
+    if (value <= 0) return const SizedBox.shrink();
+    return Semantics(
+      label: '${hasImdb ? 'IMDb' : 'TMDB'} ${value.toStringAsFixed(1)}',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hasImdb)
+            Image.asset(
+              'assets/platforms/imdb.png',
+              height: height,
+              filterQuality: FilterQuality.medium,
+            )
+          else
+            Icon(
+              Icons.star_rounded,
+              color: AppColors.secondary,
+              size: height * 0.8,
+            ),
+          const SizedBox(width: 4),
+          Text(
+            value.toStringAsFixed(1),
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: height * 0.65,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class ImdbRatingBadge extends StatelessWidget {
   final TmdbItem item;
   final double height;
   const ImdbRatingBadge(this.item, {super.key, this.height = 20});
   @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: ImdbRatingService.instance.store,
+    builder: (_, __) => RatingValue(
+      imdb: ImdbRatingService.instance.ratingOf(item),
+      fallback: item.voteAverage,
+      height: height,
+    ),
+  );
+}
+
+/// All catalog layouts resolve the same identity and update only this badge.
+class ChannelRatingBadge extends StatefulWidget {
+  final Channel channel;
+  final double height;
+  const ChannelRatingBadge(this.channel, {super.key, this.height = 16});
+  @override
+  State<ChannelRatingBadge> createState() => _ChannelRatingBadgeState();
+}
+
+class _ChannelRatingBadgeState extends State<ChannelRatingBadge> {
+  @override
+  void initState() {
+    super.initState();
+    _request();
+  }
+
+  @override
+  void didUpdateWidget(covariant ChannelRatingBadge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.channel.id != widget.channel.id) _request();
+  }
+
+  void _request() {
+    if (!TitleMetadataStore.disabled)
+      CatalogRatingService.instance.request([widget.channel], priority: true);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final service = ImdbRatingService.instance;
+    final service = CatalogRatingService.instance;
     return ListenableBuilder(
-      listenable: service.store,
-      builder: (context, _) {
-        final imdb = service.ratingOf(item);
-        final hasImdb = imdb != null && imdb > 0;
-        final value = hasImdb ? imdb : item.voteAverage;
-        if (value <= 0) return const SizedBox.shrink();
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (hasImdb)
-              Image.asset('assets/platforms/imdb.png', height: height, filterQuality: FilterQuality.medium)
-            else
-              Icon(Icons.star_rounded, color: AppColors.secondary, size: height * 0.8),
-            const SizedBox(width: 4),
-            Text(
-              value.toStringAsFixed(1),
-              style: TextStyle(color: AppColors.textPrimary, fontSize: height * 0.65, fontWeight: FontWeight.w700),
-            ),
-          ],
+      listenable: Listenable.merge([
+        service,
+        service.identities,
+        ImdbRatingService.instance.store,
+      ]),
+      builder: (_, __) {
+        final item = service.itemOf(widget.channel);
+        return RatingValue(
+          imdb: item == null ? null : ImdbRatingService.instance.ratingOf(item),
+          fallback: service.ratingOf(widget.channel) ?? item?.voteAverage ?? 0,
+          height: widget.height,
         );
       },
     );
   }
+}
+
+class EpisodeRatingBadge extends StatelessWidget {
+  final EpisodeMetadata metadata;
+  final bool request;
+  const EpisodeRatingBadge(this.metadata, {super.key, this.request = true});
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: ImdbRatingService.instance.store,
+    builder: (_, __) => RatingValue(
+      imdb: ImdbRatingService.instance.episodeRating(
+        metadata.seriesId,
+        metadata.season,
+        metadata.episode,
+        request: request,
+      ),
+      fallback: metadata.tmdbRating,
+      height: 16,
+    ),
+  );
 }
 
 /// Genres, platforms and the "also in" categories for title pages.

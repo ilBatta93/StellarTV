@@ -29,6 +29,7 @@ import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
 import '../providers/discover_provider.dart';
 import '../widgets/poster_card.dart';
+import '../widgets/title_facets.dart';
 import '../widgets/tv_category_panel.dart';
 import '../widgets/tv_text_field.dart';
 import '../widgets/section_row.dart';
@@ -1225,7 +1226,6 @@ class _CatalogListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final channel = entry.primary;
-    final rating = CatalogRatingService.instance.ratingOf(channel);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Pressable(
@@ -1271,10 +1271,8 @@ class _CatalogListTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        if (rating != null && rating > 0) ...[
-                          RatingBadge(value: rating),
-                          const SizedBox(width: 8),
-                        ],
+                        ChannelRatingBadge(channel),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             channel.group,

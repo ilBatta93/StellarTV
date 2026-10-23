@@ -173,3 +173,9 @@
 - [x] Diagnostica invariata, guida e note neutre aggiornate
 - [x] Android 3.7.8 pubblicata: 251 test passati, 2 saltati; test nativi e APK riusciti
 - [ ] Prova focus, generi e guida tra avvii su TV reale (serve dispositivo utente)
+
+## Voti ed episodi — 23 ottobre sera
+- [x] IMDb nei cataloghi e schede; trama/voto individuale episodio e pannello Su locale.
+- [x] Guida, note neutrali e test aggiornati; workflow serie 3.8 esplicito.
+- [ ] Build Android seguita fino al completamento.
+- [ ] Prova reale su TV e servizio pubblicato: richiedono utente.

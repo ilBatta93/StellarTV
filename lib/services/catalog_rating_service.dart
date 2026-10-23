@@ -14,6 +14,10 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../config/supabase_config.dart';
 import 'tmdb_service.dart';
+import 'title_metadata_store.dart';
+import '../models/tmdb_item.dart';
+
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 final _foregroundHttp = ForegroundHttpClient();
 
@@ -29,6 +33,14 @@ class CatalogRatingService extends ChangeNotifier {
 
   static final instance = CatalogRatingService._();
   final _tmdb = TmdbService();
+  final identities = TitleMetadataStore<TmdbItem>(
+    fileName: 'catalog_rating_identities_v1.json',
+    encode: (v) => v.toJson(),
+    decode: (v) =>
+        v is Map ? TmdbItem.tryParse(Map<String, dynamic>.from(v)) : null,
+  );
+  TmdbItem? itemOf(Channel c) => identities.valueOf(_key(c));
+  void remember(Channel c, TmdbItem item) => identities.put(_key(c), item);
   final Map<String, double> _ratings = {};
   final LinkedHashMap<String, Channel> _queue = LinkedHashMap();
   final Set<String> _active = {};
@@ -58,6 +70,7 @@ class CatalogRatingService extends ChangeNotifier {
       '${(await getApplicationSupportDirectory()).path}/tv_ratings_v1.json';
 
   Future<void> _load() async {
+    await identities.load();
     try {
       final path = await _path();
       final data = await Isolate.run(() {
@@ -82,7 +95,7 @@ class CatalogRatingService extends ChangeNotifier {
       if (c.type != ContentType.movie && c.type != ContentType.series) continue;
       final key = _key(c);
       final failed = _failed[key];
-      if (_ratings.containsKey(key) ||
+      if ((_ratings.containsKey(key) && itemOf(c) != null) ||
           _active.contains(key) ||
           (failed != null && DateTime.now().difference(failed).inMinutes < 5)) {
         continue;
@@ -91,6 +104,15 @@ class CatalogRatingService extends ChangeNotifier {
       if (_queue.length < 5000 || _queue.containsKey(key)) _queue[key] = c;
     }
     _drain(priority: priority);
+  }
+
+  String _bearer() {
+    try {
+      return Supabase.instance.client.auth.currentSession?.accessToken ??
+          SupabaseConfig.anonKey;
+    } catch (_) {
+      return SupabaseConfig.anonKey;
+    }
   }
 
   static const _batch = 40;
@@ -135,7 +157,10 @@ class CatalogRatingService extends ChangeNotifier {
       final res = await _foregroundHttp
           .post(
             Uri.parse('${SupabaseConfig.apiBase}/ratings'),
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ${_bearer()}',
+            },
             body: jsonEncode({
               'items': [
                 for (final e in entries)
@@ -148,11 +173,31 @@ class CatalogRatingService extends ChangeNotifier {
           )
           .timeout(const Duration(seconds: 25));
       if (res.statusCode != 200) throw Exception('ratings ${res.statusCode}');
-      final list = (jsonDecode(res.body) as Map)['results'] as List;
+      final body = jsonDecode(res.body) as Map;
+      final list = body['results'] as List;
+      final ids = body['identities'] as List?;
       for (var i = 0; i < entries.length && i < list.length; i++) {
         final v = list[i];
         if (v is num) {
           _ratings[entries[i].key] = v.toDouble();
+          final identity = ids != null && i < ids.length ? ids[i] : null;
+          if (identity is Map && identity['id'] is num) {
+            final c = entries[i].value;
+            remember(
+              c,
+              TmdbItem(
+                id: (identity['id'] as num).toInt(),
+                mediaType: c.type == ContentType.movie ? 'movie' : 'tv',
+                title: c.displaySeriesName,
+                overview: c.plot ?? '',
+                posterPath: null,
+                backdropPath: null,
+                voteAverage: v.toDouble(),
+                popularity: 0,
+                releaseDate: '',
+              ),
+            );
+          }
         } else {
           _failed[entries[i].key] = DateTime.now();
         }
@@ -187,6 +232,7 @@ class CatalogRatingService extends ChangeNotifier {
         _queue[key] = c;
         return;
       }
+      if (item != null) remember(c, item);
       _ratings[key] = item?.voteAverage ?? 0;
       _scheduleNotify();
       _saveTimer ??= Timer(const Duration(seconds: 10), () {

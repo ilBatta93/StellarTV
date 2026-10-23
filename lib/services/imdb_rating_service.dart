@@ -30,14 +30,33 @@ class ImdbRatingService {
   static String keyOf(TmdbItem item) =>
       '${item.isMovie ? 'movie' : 'tv'}:${item.id}';
 
+  static String episodeKey(int id, int season, int episode) =>
+      'tv:$id:$season:$episode';
+  double? episodeRating(
+    int id,
+    int season,
+    int episode, {
+    bool request = true,
+  }) {
+    final key = episodeKey(id, season, episode);
+    if (request) _requestKey(key);
+    return store.valueOf(key);
+  }
+
+  void _requestKey(String key) {
+    if (!TitleMetadataStore.disabled &&
+        !store.isFresh(key) &&
+        _asked.add(key)) {
+      _queued.add(key);
+      _timer ??= Timer(const Duration(milliseconds: 400), _flush);
+    }
+  }
+
   /// IMDb rating, 0 when IMDb has none, null while unknown.
   double? ratingOf(TmdbItem item) {
     final key = keyOf(item);
     final v = store.valueOf(key);
-    if (!TitleMetadataStore.disabled && !store.isFresh(key) && _asked.add(key)) {
-      _queued.add(key);
-      _timer ??= Timer(const Duration(milliseconds: 400), _flush);
-    }
+    _requestKey(key);
     return v;
   }
 
@@ -73,7 +92,11 @@ class ImdbRatingService {
                     for (final k in batch)
                       {
                         'type': k.split(':').first,
-                        'id': int.parse(k.split(':').last),
+                        'id': int.parse(k.split(':')[1]),
+                        if (k.split(':').length == 4) ...{
+                          'season': int.parse(k.split(':')[2]),
+                          'episode': int.parse(k.split(':')[3]),
+                        },
                       },
                   ],
                 }),
@@ -81,12 +104,18 @@ class ImdbRatingService {
               .timeout(const Duration(seconds: 25));
           if (res.statusCode != 200) continue;
           final body = jsonDecode(res.body);
-          for (final r in (body is Map ? body['results'] as List? : null) ??
-              const []) {
+          for (final r
+              in (body is Map ? body['results'] as List? : null) ?? const []) {
             if (r is! Map || r['known'] != true) continue;
             final rating = r['rating'];
             store.put(
-              '${r['type']}:${r['id']}',
+              r['season'] is num && r['episode'] is num
+                  ? episodeKey(
+                      (r['id'] as num).toInt(),
+                      (r['season'] as num).toInt(),
+                      (r['episode'] as num).toInt(),
+                    )
+                  : '${r['type']}:${r['id']}',
               rating is num ? rating.toDouble() : 0,
             );
           }

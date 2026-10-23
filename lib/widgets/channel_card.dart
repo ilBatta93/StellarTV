@@ -5,8 +5,11 @@ import '../models/content_type.dart';
 import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
 import 'poster_card.dart';
+import 'title_facets.dart';
 import '../providers/ui_settings.dart';
+
 import 'package:provider/provider.dart';
+
 import '../services/catalog_rating_service.dart';
 
 class ChannelCard extends StatelessWidget {
@@ -88,13 +91,11 @@ class ChannelCard extends StatelessWidget {
                         onTap: onFavoriteTap,
                       ),
                     ),
-                    if (rating != null &&
-                        rating > 0 &&
-                        context.read<UiSettings>().showRatings)
+                    if (!_isLive && context.read<UiSettings>().showRatings)
                       Positioned(
                         left: 6,
                         bottom: 6,
-                        child: RatingBadge(value: rating),
+                        child: ChannelRatingBadge(channel),
                       ),
                     if (_isLive)
                       const Positioned(left: 6, bottom: 6, child: LiveBadge()),
@@ -103,33 +104,33 @@ class ChannelCard extends StatelessWidget {
               ),
             ),
             if (_isLive || context.read<UiSettings>().showTitles)
-            Padding(
-              padding: DeviceTypeService.isTv
-                  ? const EdgeInsets.fromLTRB(9, 8, 9, 9)
-                  : const EdgeInsets.only(top: 8),
-              child: DeviceTypeService.isTv
-                  ? TvPosterTitle(channel.name)
-                  : Text(
-                      channel.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: DeviceTypeService.isTv ? 15 : 12,
-                        fontWeight: DeviceTypeService.isTv
-                            ? FontWeight.w700
-                            : FontWeight.w600,
-                        height: DeviceTypeService.isTv ? 1.2 : 1.1,
-                        shadows: [
-                          Shadow(
-                            color: AppColors.overlay,
-                            offset: const Offset(0, 1),
-                            blurRadius: 2,
-                          ),
-                        ],
+              Padding(
+                padding: DeviceTypeService.isTv
+                    ? const EdgeInsets.fromLTRB(9, 8, 9, 9)
+                    : const EdgeInsets.only(top: 8),
+                child: DeviceTypeService.isTv
+                    ? TvPosterTitle(channel.name)
+                    : Text(
+                        channel.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: DeviceTypeService.isTv ? 15 : 12,
+                          fontWeight: DeviceTypeService.isTv
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          height: DeviceTypeService.isTv ? 1.2 : 1.1,
+                          shadows: [
+                            Shadow(
+                              color: AppColors.overlay,
+                              offset: const Offset(0, 1),
+                              blurRadius: 2,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-            ),
+              ),
           ],
         ),
       ),

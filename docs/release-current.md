@@ -1,4 +1,4 @@
-- Loghi ufficiali delle piattaforme sempre visibili su banner, schede e locandine, verificati per singolo titolo.
-- Voti IMDb con badge ufficiale; il voto TMDB resta come riserva.
-- Generi disponibili subito dopo l'avvio e conservati sul dispositivo.
-- Guida TV: canali +1 riconosciuti con la propria programmazione o con orari spostati di un'ora.
+- Valutazioni IMDb con logo nei cataloghi e nelle schede, con voto TMDB quando non disponibile.
+- Episodi: trama dedicata, valutazione individuale e dettagli apribili con il telecomando.
+- Informazioni durante la visione: titolo e trama dell’episodio corrente, valutazione e tempo rimanente.
+- Metadati riutilizzati dal dispositivo; nessuna richiesta aggiuntiva dal pannello durante la visione.

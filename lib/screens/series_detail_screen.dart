@@ -28,6 +28,8 @@ import '../widgets/category_assign_button.dart';
 import '../widgets/title_facets.dart';
 import '../widgets/tv_wrap_navigation.dart';
 import '../widgets/series_watch_sheet.dart';
+import '../services/episode_metadata_service.dart';
+import '../services/catalog_rating_service.dart';
 
 class SeriesDetailScreen extends StatefulWidget {
   final Channel series;
@@ -145,7 +147,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _item = widget.item;
+    _item = widget.item ?? CatalogRatingService.instance.itemOf(widget.series);
     _load();
     _loadInfo();
   }
@@ -162,6 +164,8 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
           );
       if (item == null || !mounted) return;
       setState(() => _item = item);
+      CatalogRatingService.instance.remember(widget.series, item);
+      _prepareEpisodes();
       final cast = await tmdb.cast(item);
       final recommendations = await tmdb.recommendations(item);
       if (!mounted) return;
@@ -194,6 +198,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         _selectedSeason = 0;
         _loading = false;
       });
+      _prepareEpisodes();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -201,6 +206,22 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         _loading = false;
       });
     }
+  }
+
+  void _prepareEpisodes() {
+    final item = _item;
+    final seasons = _details?.seasons;
+    if (item == null || seasons == null || _selectedSeason >= seasons.length)
+      return;
+    final season = seasons[_selectedSeason];
+    EpisodeMetadataService.instance.prepare(item, season.number, [
+      for (final e in season.episodes) e.channel,
+    ]);
+  }
+
+  void _selectSeason(int i) {
+    setState(() => _selectedSeason = i);
+    _prepareEpisodes();
   }
 
   @override
@@ -394,11 +415,11 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                 itemBuilder: (context, i) {
                   final selected = i == _selectedSeason;
                   return TvFocusable(
-                    onPressed: () => setState(() => _selectedSeason = i),
+                    onPressed: () => _selectSeason(i),
                     child: ChoiceChip(
                       label: Text(seasons[i].name),
                       selected: selected,
-                      onSelected: (_) => setState(() => _selectedSeason = i),
+                      onSelected: (_) => _selectSeason(i),
                       labelStyle: TextStyle(
                         fontFamily: DeviceTypeService.isTv ? 'Manrope' : null,
                         color: selected
@@ -424,7 +445,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
             child: HorizontalRow(
               key: ValueKey(currentSeason.number),
               horizontalFocusFilter: (node) => node is EpisodePlaybackFocusNode,
-              height: 300,
+              height: 390,
               itemCount: currentSeason.episodes.length,
               itemBuilder: (context, i) {
                 final ep = currentSeason.episodes[i];
@@ -432,6 +453,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                 final entry = history.entryFor(ep.channel.id);
                 return EpisodeCard(
                   episode: ep,
+                  seriesTmdbId: _item?.id,
                   progress: entry?.isWatched == true ? null : entry?.progress,
                   watched: history.isWatched(ep.channel.id),
                   onToggleWatched: () {

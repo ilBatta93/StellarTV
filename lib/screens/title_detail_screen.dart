@@ -1,5 +1,6 @@
 import '../widgets/ui_scale.dart';
 import '../services/image_cache_service.dart';
+import '../services/catalog_rating_service.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -52,7 +53,12 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _item = widget.item;
+    final channel = widget.channel;
+    _item =
+        widget.item ??
+        (channel == null
+            ? null
+            : CatalogRatingService.instance.itemOf(channel));
     _load();
   }
 
@@ -80,6 +86,10 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
       }
       if (!mounted) return;
       setState(() => _item = item);
+      final resolvedChannel = widget.channel;
+      if (item != null && resolvedChannel != null) {
+        CatalogRatingService.instance.remember(resolvedChannel, item);
+      }
       final similar = item == null
           ? <TmdbItem>[]
           : await tmdb.recommendations(item);

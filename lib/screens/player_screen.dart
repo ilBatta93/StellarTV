@@ -1,4 +1,6 @@
 import '../services/playback_progress_writer.dart';
+import '../services/episode_metadata_service.dart';
+import '../models/episode_metadata.dart';
 
 import 'dart:async';
 
@@ -1823,6 +1825,14 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
+  String _episodeInfoTitle() {
+    final metadata = EpisodeMetadataService.instance.forChannel(widget.channel);
+    if (metadata == null) return widget.channel.name;
+    final code =
+        'S${metadata.season.toString().padLeft(2, '0')} E${metadata.episode.toString().padLeft(2, '0')}';
+    return '${widget.channel.displaySeriesName} · $code${metadata.title.isEmpty ? '' : ' · ${metadata.title}'}';
+  }
+
   List<Widget> _buildOverlays(
     PlaybackSession session,
     PlayerSettings settings,
@@ -1852,10 +1862,17 @@ class _PlayerScreenState extends State<PlayerScreen>
       if (connecting) _ConnectingView(session: session),
       if (DeviceTypeService.isTv && _tvInfoVisible && !_controlsVisible)
         TvPlaybackInfo(
-          title: widget.channel.name,
-          plot:
-              widget.channel.plot ??
-              _app.seriesFolderFor(widget.channel.seriesKey ?? '')?.plot,
+          title: _episodeInfoTitle(),
+          episodeMetadata: EpisodeMetadataService.instance.forChannel(
+            widget.channel,
+          ),
+          plot: episodeSynopsis(
+            EpisodeMetadataService.instance
+                .forChannel(widget.channel)
+                ?.overview,
+            widget.channel.plot,
+            _app.seriesFolderFor(widget.channel.seriesKey ?? '')?.plot,
+          ),
           duration: session.value.duration,
           position: session.value.position,
           speed: session.speed,

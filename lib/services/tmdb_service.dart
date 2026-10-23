@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
 import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
+import '../models/episode_metadata.dart';
 import '../models/title_trailer.dart';
 import '../models/tmdb_person.dart';
 
@@ -354,6 +355,26 @@ class TmdbService {
         return null;
       }
     });
+  }
+
+  Future<List<EpisodeMetadata>> seasonMetadata(int id, int season) async {
+    final body = await _get('tv/$id/season/$season', {'language': 'it-IT'});
+    final raw = body['episodes'];
+    if (raw is! List) return [];
+    return [
+      for (final e in raw)
+        if (e is Map &&
+            e['season_number'] == season &&
+            e['episode_number'] is num)
+          EpisodeMetadata(
+            seriesId: id,
+            season: season,
+            episode: (e['episode_number'] as num).toInt(),
+            title: '${e['name'] ?? ''}',
+            overview: '${e['overview'] ?? ''}',
+            tmdbRating: (e['vote_average'] as num?)?.toDouble() ?? 0,
+          ),
+    ];
   }
 
   Future<List<TmdbItem>> recommendations(TmdbItem item) async {

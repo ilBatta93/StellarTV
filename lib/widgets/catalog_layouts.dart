@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/catalog_builder.dart';
-import '../services/catalog_rating_service.dart';
+import 'title_facets.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import 'poster_card.dart';
@@ -27,7 +27,6 @@ class CatalogLandscapeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tv = DeviceTypeService.isTv;
     final channel = entry.primary;
-    final rating = CatalogRatingService.instance.ratingOf(channel);
     final quality = CatalogBuilder.qualityLabel(channel.name);
     final content = ClipRRect(
       borderRadius: BorderRadius.circular(14),
@@ -77,8 +76,7 @@ class CatalogLandscapeCard extends StatelessWidget {
                         runSpacing: 4,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          if (rating != null && rating > 0)
-                            RatingBadge(value: rating),
+                          ChannelRatingBadge(channel),
                           if (quality != null) _Chip(quality),
                         ],
                       ),
@@ -156,7 +154,6 @@ class _SpotlightBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final channel = entry.primary;
-    final rating = CatalogRatingService.instance.ratingOf(channel);
     final quality = CatalogBuilder.qualityLabel(channel.name);
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -205,8 +202,7 @@ class _SpotlightBody extends StatelessWidget {
                         runSpacing: 6,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          if (rating != null && rating > 0)
-                            RatingBadge(value: rating),
+                          ChannelRatingBadge(channel),
                           if (quality != null) _Chip(quality),
                           if (entry.variants.length > 1)
                             _Chip('${entry.variants.length} versioni'),

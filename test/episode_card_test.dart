@@ -104,7 +104,18 @@ void main() {
         await tester.pump();
         expect(
           FocusManager.instance.primaryFocus?.debugLabel,
-          'episode-watched:1',
+          'episode-info:1',
+        );
+        await tester.sendKeyEvent(
+          LogicalKeyboardKey.select,
+          platform: 'android',
+        );
+        await tester.pumpAndSettle();
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pumpAndSettle();
+        expect(
+          FocusManager.instance.primaryFocus?.debugLabel,
+          'episode-info:1',
         );
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
         await tester.pump();
