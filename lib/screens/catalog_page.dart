@@ -292,6 +292,7 @@ class CatalogPage extends StatefulWidget {
 class _CatalogPageState extends State<CatalogPage> {
   final TextEditingController _searchController = TextEditingController();
   FocusNode? _drawerReturn;
+  bool _drawerOpen = false;
   void _openCategories() {
     _drawerReturn = FocusManager.instance.primaryFocus;
     _scaffoldKey.currentState?.openDrawer();
@@ -299,6 +300,7 @@ class _CatalogPageState extends State<CatalogPage> {
 
   void _closeCategories() => _scaffoldKey.currentState?.closeDrawer();
   void _drawerChanged(bool opened) {
+    if (mounted && _drawerOpen != opened) setState(() => _drawerOpen = opened);
     if (opened || !DeviceTypeService.isTv) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -431,6 +433,7 @@ class _CatalogPageState extends State<CatalogPage> {
               : p.name,
           _platform == p,
           () => _selectPlatform(p),
+          brandColor: p.color,
         ),
     ],
   );
@@ -562,12 +565,14 @@ class _CatalogPageState extends State<CatalogPage> {
       drawerEnableOpenDragGesture: true,
       drawerEdgeDragWidth: 48,
       onDrawerChanged: _drawerChanged,
-      drawer: DeviceTypeService.isTv
+      drawer: !_drawerOpen
+          ? const SizedBox(width: 280)
+          : DeviceTypeService.isTv
           ? TvCategoryPanel(
               categories: {
                 _recentLabel: _recent(app).length,
                 _watchedLabel: watched.length,
-                _allLabel: app.allEntries(widget.type).length,
+                _allLabel: app.catalogCountOf(widget.type),
                 for (final g in groups)
                   if (g.label != _allLabel) g.label: g.entries.length,
               },
@@ -583,7 +588,7 @@ class _CatalogPageState extends State<CatalogPage> {
               categories: {
                 _recentLabel: _recent(app).length,
                 _watchedLabel: watched.length,
-                _allLabel: app.allEntries(widget.type).length,
+                _allLabel: app.catalogCountOf(widget.type),
                 for (final g in groups)
                   if (g.label != _allLabel) g.label: g.entries.length,
               },

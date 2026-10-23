@@ -1046,6 +1046,17 @@ class AppProvider extends ChangeNotifier {
   void requestTitleInfo(Iterable<Channel> items) =>
       unawaited(_kids.warmUp(items));
 
+  /// Drawer counts never sort or initiate title preparation.
+  int catalogCountOf(ContentType type) {
+    final ready = _allCache[type];
+    if (ready != null) return ready.length;
+    final seen = <String>{};
+    for (final group in _groupedCache[type] ?? const <CatalogGroup>[]) {
+      for (final entry in group.entries) seen.add(_dedupeKey(entry.primary));
+    }
+    return seen.length;
+  }
+
   /// "Tutti i Film" / "Tutte le Serie": every visible title once, A-Z.
   List<CatalogEntry> allEntries(ContentType type) {
     if (_largeCatalog && !_allCache.containsKey(type)) {

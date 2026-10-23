@@ -5,7 +5,13 @@ import '../theme/app_theme.dart';
 import 'tv_focusable.dart';
 
 class TvFilterOption {
-  const TvFilterOption(this.label, this.selected, this.onSelected);
+  const TvFilterOption(
+    this.label,
+    this.selected,
+    this.onSelected, {
+    this.brandColor,
+  });
+  final Color? brandColor;
   final String label;
   final bool selected;
   final VoidCallback onSelected;
@@ -147,11 +153,13 @@ class _TvFilterPanelState extends State<TvFilterPanel> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: option.selected
-              ? AppColors.primary.withValues(alpha: 0.18)
+              ? (option.brandColor ?? AppColors.primary).withValues(alpha: 0.18)
               : AppColors.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: option.selected ? AppColors.primary : AppColors.border,
+            color:
+                option.brandColor ??
+                (option.selected ? AppColors.primary : AppColors.border),
           ),
         ),
         child: Text(
