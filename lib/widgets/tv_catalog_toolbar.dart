@@ -77,17 +77,33 @@ class TvCatalogToolbar extends StatefulWidget {
   /// Shared by key events and Android system Back (Home owns the route).
   static final _mountedToolbars = <_TvCatalogToolbarState>{};
   /// Android delivers the system Back (PopScope) after the key event that
-  /// already closed a panel, sometimes several frames later: a short time
-  /// window keeps that echo from moving focus to the top menu.
-  static DateTime? _lastPanelBack;
-  static const _backEchoWindow = Duration(milliseconds: 700);
-  static bool get _withinBackEcho {
-    final last = _lastPanelBack;
-    return last != null && DateTime.now().difference(last) < _backEchoWindow;
+  /// already closed a panel, sometimes several frames later. That single
+  /// echo is swallowed; the next real key press clears the guard, so a
+  /// second deliberate Back still works normally.
+  static bool _pendingEcho = false;
+  static bool _guardInstalled = false;
+  static bool _clearEcho(KeyEvent event) {
+    if (event is KeyDownEvent) _pendingEcho = false;
+    return false;
+  }
+
+  static bool get _withinBackEcho => _pendingEcho;
+
+  /// Called only when a physical Back key closed a panel: that key's system
+  /// Back echo is the one to swallow.
+  static void _armEcho() {
+    if (!_guardInstalled) {
+      _guardInstalled = true;
+      HardwareKeyboard.instance.addHandler(_clearEcho);
+    }
+    _pendingEcho = true;
   }
 
   static bool handleBack(FocusNode? focus, {BuildContext? context}) {
-    if (_withinBackEcho) return true;
+    if (_pendingEcho) {
+      _pendingEcho = false;
+      return true;
+    }
     final origin = context ?? focus?.context;
     final route = origin == null ? null : ModalRoute.of(origin);
     // A panel can be detached before Android sends its system Back callback.
@@ -135,6 +151,9 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   @override
   void dispose() {
     TvCatalogToolbar._mountedToolbars.remove(this);
+    if (TvCatalogToolbar._mountedToolbars.isEmpty) {
+      TvCatalogToolbar._pendingEcho = false;
+    }
     _transition++;
     _filterButton.dispose();
     _platformButton.dispose();
@@ -195,7 +214,6 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   }
 
   void _consumePanelBack() {
-    TvCatalogToolbar._lastPanelBack = DateTime.now();
     _backConsumedThisFrame = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -340,6 +358,12 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
             event.logicalKey == LogicalKeyboardKey.escape ||
             event.logicalKey == LogicalKeyboardKey.browserBack;
         if (!isBack) return KeyEventResult.ignored;
+        if (event is KeyDownEvent && (_filtersOpen || _platformsOpen || _expanded)) {
+          if (_back()) {
+            TvCatalogToolbar._armEcho();
+            return KeyEventResult.handled;
+          }
+        }
         if (event is KeyDownEvent && _back()) return KeyEventResult.handled;
         // Key up / repeat of the Back that closed a panel: swallow it so the
         // system Back never reaches Home and the opener keeps focus.
@@ -375,7 +399,7 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
                             event.logicalKey == LogicalKeyboardKey.escape ||
                             event.logicalKey ==
                                 LogicalKeyboardKey.browserBack)) {
-                      _back();
+                      if (_back()) TvCatalogToolbar._armEcho();
                       return KeyEventResult.handled;
                     }
                     return KeyEventResult.ignored;
