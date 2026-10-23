@@ -5,6 +5,7 @@ import '../services/image_warmup_service.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'title_facets.dart';
 import 'package:provider/provider.dart';
 
 import '../models/tmdb_item.dart';
@@ -176,7 +177,7 @@ class TmdbPosterCard extends StatelessWidget {
             Positioned(
               top: 6,
               left: 6,
-              child: RatingBadge(value: item.voteAverage),
+              child: RatingBadge(value: item.voteAverage, item: item),
             ),
         ],
       ),
@@ -315,7 +316,7 @@ class RankedPosterCard extends StatelessWidget {
                         Positioned(
                           top: 6,
                           left: 6,
-                          child: RatingBadge(value: item.voteAverage),
+                          child: RatingBadge(value: item.voteAverage, item: item),
                         ),
                     ],
                   ),
@@ -331,11 +332,23 @@ class RankedPosterCard extends StatelessWidget {
 
 class RatingBadge extends StatelessWidget {
   final double value;
+  final TmdbItem? item;
 
-  const RatingBadge({super.key, required this.value});
+  const RatingBadge({super.key, required this.value, this.item});
 
   @override
   Widget build(BuildContext context) {
+    final it = item;
+    if (it != null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        decoration: BoxDecoration(
+          color: AppColors.overlayControl,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: ImdbRatingBadge(it, height: 14),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(

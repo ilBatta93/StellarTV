@@ -33,6 +33,8 @@ class AppColors {
   static const qrInk = Color(0xFF000000);
 
   static const textPrimary = Color(0xFFFFFFFF);
+  /// Light pill behind official brand logos.
+  static const badgeLight = Color(0xFFF4F4F6);
   static const textSecondary = Color(0xFFAEAEB2);
   static const textMuted = Color(0xFF8E8E93);
 

@@ -5,6 +5,7 @@ import 'dart:isolate';
 
 import 'package:xml/xml_events.dart';
 import '../models/epg_data.dart';
+import 'epg_channel_match.dart';
 
 class EpgRefreshDeferred implements Exception {}
 
@@ -324,8 +325,15 @@ Future<Map<String, dynamic>> parseXmltvStream(
       } else if (event is XmlEndElementEvent) {
         final name = event.localName;
         final channelId = channel;
-        if (name == 'display-name' && channelId != null)
-          names[channelId] = fields[name]?.toString().trim() ?? '';
+        if (name == 'display-name' && channelId != null) {
+          // Every display-name is kept (not only the last one).
+          final value = fields[name]?.toString().trim() ?? '';
+          final prior = names[channelId] as String?;
+          if (value.isNotEmpty &&
+              !(prior?.split(epgNameSeparator).contains(value) ?? false))
+            names[channelId] =
+                prior == null || prior.isEmpty ? value : '$prior$epgNameSeparator$value';
+        }
         end(name);
       }
     }

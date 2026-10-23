@@ -38,6 +38,8 @@ import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
 import '../widgets/tv_focusable.dart';
 import '../widgets/title_facets.dart';
+import '../services/title_providers_service.dart';
+import '../services/platform_catalog_service.dart';
 
 /// A watch-history entry paired with the channel it belongs to.
 typedef ResumeItem = (HistoryEntry, Channel);
@@ -1707,7 +1709,6 @@ class _TvHeroInfo extends StatelessWidget {
         : '';
     final meta = <String>[
       if (year.isNotEmpty) year,
-      if (it.voteAverage > 0) '★ ${it.voteAverage.toStringAsFixed(1)}',
       it.mediaType == 'movie' ? 'Film' : 'Serie TV',
     ];
     final facets = TitleFacets.of(
@@ -1749,8 +1750,21 @@ class _TvHeroInfo extends StatelessWidget {
                 children: [
                   HomeTitleArt(item: it, height: logoH),
                   const SizedBox(height: 6),
-                  Row(
+                  ListenableBuilder(
+                    listenable: Listenable.merge([
+                      TitleProvidersService.instance.store,
+                      PlatformCatalogService.instance,
+                    ]),
+                    builder: (context, _) {
+                    final facets = TitleFacets.of(
+                      context.read<AppProvider>(),
+                      item: it,
+                      includeCategories: false,
+                    );
+                    return Row(
                     children: [
+                      ImdbRatingBadge(it, height: 18),
+                      const SizedBox(width: 10),
                       Flexible(
                         child: Text(
                           metaText,
@@ -1766,9 +1780,11 @@ class _TvHeroInfo extends StatelessWidget {
                       ),
                       for (final p in facets.platforms.take(3)) ...[
                         const SizedBox(width: 8),
-                        PlatformBadge(p),
+                        PlatformBadge(p, height: 22),
                       ],
                     ],
+                  );
+                    },
                   ),
                   if (note != null) ...[
                     const SizedBox(height: 6),

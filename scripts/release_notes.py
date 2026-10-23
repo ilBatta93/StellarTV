@@ -28,9 +28,24 @@ def render(version, texts):
 def git(*args):
     return subprocess.check_output(['git', *args], text=True).strip()
 
+SERIES_FROM_RUN = 108  # run 108 publishes 3.8.0
+
+def series_version(version, run_number):
+    """3.8.N from build 108 on; older runs keep the version they received."""
+    if run_number is not None and run_number >= SERIES_FROM_RUN:
+        return f'3.8.{run_number - SERIES_FROM_RUN}'
+    return version
+
 def main():
+    import os
     import sys
-    version = sys.argv[1]
+    run = os.environ.get('GITHUB_RUN_NUMBER')
+    version = series_version(sys.argv[1], int(run) if run and run.isdigit() else None)
+    env_file = os.environ.get('GITHUB_ENV')
+    if env_file and version != sys.argv[1]:
+        # Later GITHUB_ENV lines win: the APK, tag and release use 3.8.N.
+        with open(env_file, 'a') as f:
+            f.write(f'VERSION={version}\n')
     tags = git('tag', '--list', 'v3.*', '--sort=-v:refname').splitlines()
     previous = next((t for t in tags if t != 'v' + version), None)
     scope = previous + '..HEAD' if previous else 'HEAD'

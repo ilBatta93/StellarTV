@@ -2,7 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:stellar_tv/models/epg_program.dart';
 import 'package:stellar_tv/services/epg_timeline.dart';
 
+import 'epg_channel_match_test.dart' as channel_match;
+
 void main() {
+  channel_match.main();
   final base = DateTime.utc(2026, 10, 23, 8);
   EpgProgram p(String id, int start, int end) => EpgProgram(
     id: id,

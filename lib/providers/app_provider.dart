@@ -512,21 +512,15 @@ class AppProvider extends ChangeNotifier {
         if (_playbackActive ||
             _anyPending ||
             !ForegroundPolicy.instance.active) {
-          _warmUpTimer = Timer(const Duration(seconds: 30), warm);
-          return;
-        }
-        if (DeviceTypeService.isTv &&
-            !RemoteNavigation.stillFor(const Duration(seconds: 2))) {
           _warmUpTimer = Timer(const Duration(seconds: 5), warm);
           return;
         }
         unawaited(_kids.warmUp(_rawChannels));
       }
 
-      _warmUpTimer = Timer(
-        Duration(seconds: DeviceTypeService.isTv ? 40 : 20),
-        warm,
-      );
+      // Genres are read from the shared cache in bulk right away: the
+      // lookup is network-bound and never waits for an idle remote.
+      _warmUpTimer = Timer(const Duration(seconds: 3), warm);
     }
     _applyAdultFilter(visible: visible);
     _schedulePrewarm();

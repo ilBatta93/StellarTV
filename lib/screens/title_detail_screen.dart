@@ -380,8 +380,7 @@ class _Meta extends StatelessWidget {
     final chips = <Widget>[
       _Chip(label: isMovie ? 'Film' : 'Serie TV'),
       if (item != null && item!.year.isNotEmpty) _Chip(label: item!.year),
-      if (item != null && item!.voteAverage > 0)
-        RatingBadge(value: item!.voteAverage),
+      if (item != null) ImdbRatingBadge(item!),
       if (channel != null) _Chip(label: channel!.group),
     ];
     return Wrap(spacing: 8, runSpacing: 8, children: chips);

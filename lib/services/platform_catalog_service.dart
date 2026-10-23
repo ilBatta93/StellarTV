@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/channel.dart';
 import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
+import 'playback_work_policy.dart';
+import 'title_metadata_store.dart';
 import 'tmdb_service.dart';
 
 /// Titles each streaming platform offers in Italy (from TMDB), loaded on
@@ -16,7 +18,7 @@ class PlatformCatalogService extends ChangeNotifier {
   PlatformCatalogService._();
   static final instance = PlatformCatalogService._();
 
-  static const _ttl = Duration(hours: 24);
+  static const _ttl = Duration(days: 30);
   static const _prefix = 'platform_catalog_v1:';
 
   final Map<String, List<TmdbItem>> _items = {};
@@ -40,6 +42,26 @@ class PlatformCatalogService extends ChangeNotifier {
   bool isLoading(StreamingPlatform p, {required bool movies}) =>
       _loading.containsKey(_key(p, movies));
 
+  bool _warming = false;
+
+  /// Loads every platform catalog (saved copy first) shortly after start,
+  /// one at a time and never during playback, so badges are always ready.
+  Future<void> warmUpAll(TmdbService tmdb) async {
+    if (_warming || TitleMetadataStore.disabled) return;
+    _warming = true;
+    await Future<void>.delayed(const Duration(seconds: 6));
+    for (final movies in const [true, false]) {
+      for (final p in StreamingPlatform.all) {
+        while (PlaybackWorkPolicy.instance.blocksGuide) {
+          await Future<void>.delayed(const Duration(seconds: 30));
+        }
+        try {
+          await ensure(tmdb, p, movies: movies);
+        } catch (_) {}
+      }
+    }
+  }
+
   Future<void> ensure(
     TmdbService tmdb,
     StreamingPlatform p, {
@@ -54,7 +76,7 @@ class PlatformCatalogService extends ChangeNotifier {
         if (raw != null) {
           final m = jsonDecode(raw) as Map<String, dynamic>;
           final at = DateTime.tryParse('${m['at']}');
-          if (at != null && DateTime.now().difference(at) < _ttl) {
+          if (at != null) {
             _items[key] = [
               for (final e in (m['items'] as List? ?? const []))
                 if (e is Map)
@@ -63,10 +85,15 @@ class PlatformCatalogService extends ChangeNotifier {
                     item,
             ];
             _titleIds[key] = _items[key]?.map((i) => i.id).toSet() ?? <int>{};
-            return;
+            // Saved catalogs stay in use; only after 30 days they are
+            // re-checked, replacing the copy only when the answer arrives.
+            if (DateTime.now().difference(at) < _ttl) return;
+            _version++;
+            notifyListeners();
           }
         }
         final items = await tmdb.platformCatalog(p, movies: movies);
+        if (items.isEmpty && (_items[key]?.isNotEmpty ?? false)) return;
         _items[key] = items;
         _titleIds[key] = items.map((i) => i.id).toSet();
         if (items.isNotEmpty) {

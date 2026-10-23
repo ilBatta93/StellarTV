@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/channel.dart';
 import '../models/epg_program.dart';
+import '../services/epg_channel_match.dart';
 import '../services/epg_service.dart';
 import '../services/playback_work_policy.dart';
 import '../services/frame_telemetry_service.dart';
@@ -61,8 +62,9 @@ class EpgProvider extends ChangeNotifier {
   String? _cacheSource;
   int _cacheEpoch = 0;
   int _playlistRefreshRevision = 0;
-  Map<String, String>? _nameIndex;
-  final Map<String, String?> _channelMatch = {};
+  EpgMatcher? _nameIndex;
+  final Map<String, EpgMatch?> _channelMatch = {};
+  final Map<EpgMatch, List<EpgProgram>> _shifted = {};
 
   bool get isLoading => _loading;
   bool get isReady => _ready;
@@ -149,6 +151,7 @@ class EpgProvider extends ChangeNotifier {
     _data = data;
     _nameIndex = null;
     _channelMatch.clear();
+    _shifted.clear();
   }
 
   void _schedule() {
@@ -266,64 +269,38 @@ class EpgProvider extends ChangeNotifier {
     _schedule();
   }
 
-  static String _norm(String s) => s
-      .toLowerCase()
-      .replaceAll(RegExp(r'^\s*[a-z]{2,3}\s*[:|\-]\s*'), '')
-      .replaceAll(RegExp(r'\+\s*1\b'), ' plus1 ')
-      .replaceAll(RegExp(r'\b(fhd|uhd|hd|sd|4k|hevc|h265|backup)\b'), ' ')
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '');
-
-  /// Name fallback index; names claimed by different guide ids are dropped
-  /// so an ambiguous name never shows another channel's programmes.
-  Map<String, String> _buildNameIndex() {
-    final index = <String, String>{};
-    final ambiguous = <String>{};
-    void add(String name, String id) {
-      final key = _norm(name);
-      if (key.isEmpty || ambiguous.contains(key)) return;
-      final prior = index[key];
-      if (prior == null) {
-        index[key] = id;
-      } else if (prior != id) {
-        index.remove(key);
-        ambiguous.add(key);
-      }
-    }
-
-    _data.displayNames.forEach((id, name) => add(name, id));
-    for (final k in _data.programmes.keys) add(k, k);
-    return index;
-  }
-
-  /// Guide channel id for a playlist channel: tvg-id first, then the name.
-  String? _guideIdFor(Channel channel) {
+  /// Guide match for a playlist channel, keeping "+1" channels separate.
+  EpgMatch? _guideIdFor(Channel channel) {
     if (_channelMatch.containsKey(channel.id)) return _channelMatch[channel.id];
-    String? id;
-    final tvg = channel.tvgId?.trim();
-    if (tvg != null && tvg.isNotEmpty) {
-      if (_data.programmes.containsKey(tvg)) {
-        id = tvg;
-      } else {
-        final lower = tvg.toLowerCase();
-        id = _data.programmes.keys
-            .where((k) => k.toLowerCase() == lower)
-            .firstOrNull;
-      }
-    }
-    if (id == null) {
-      final index = _nameIndex ??= _buildNameIndex();
-      id =
-          index[_norm(channel.tvgName ?? channel.name)] ??
-          index[_norm(channel.name)];
-    }
-    _channelMatch[channel.id] = id;
-    return id;
+    final matcher = _nameIndex ??= EpgMatcher(
+      guideIds: _data.programmes.keys.toSet(),
+      displayNames: _data.displayNames,
+    );
+    final m = matcher.match(
+      name: channel.name,
+      tvgName: channel.tvgName,
+      tvgId: channel.tvgId,
+    );
+    _channelMatch[channel.id] = m;
+    return m;
   }
 
   List<EpgProgram> programmesFor(Channel channel) {
-    final id = _guideIdFor(channel);
-    if (id == null) return const [];
-    return _data.programmes[id] ?? const [];
+    final m = _guideIdFor(channel);
+    if (m == null) return const [];
+    final base = _data.programmes[m.id] ?? const <EpgProgram>[];
+    if (m.shiftHours == 0) return base;
+    return _shifted[m] ??= [
+      for (final p in base)
+        EpgProgram(
+          id: '${p.id}+${m.shiftHours}',
+          channelId: p.channelId,
+          title: p.title,
+          description: p.description,
+          startTime: p.startTime.add(Duration(hours: m.shiftHours)),
+          endTime: p.endTime.add(Duration(hours: m.shiftHours)),
+        ),
+    ];
   }
 
   EpgProgram? nowFor(Channel channel) {

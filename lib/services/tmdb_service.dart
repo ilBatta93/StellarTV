@@ -182,6 +182,25 @@ class TmdbService {
     return _dedupe(out);
   }
 
+  /// TMDB provider ids offering [item] by subscription in Italy, or null
+  /// when the lookup failed (retried later).
+  Future<Set<String>?> watchProviderIds(TmdbItem item) async {
+    try {
+      final body = await _get(
+        '${item.isMovie ? 'movie' : 'tv'}/${item.id}/watch/providers',
+      );
+      final it = (body['results'] as Map?)?['IT'];
+      final flat = it is Map ? it['flatrate'] : null;
+      return {
+        if (flat is List)
+          for (final p in flat)
+            if (p is Map && p['provider_id'] != null) '${p['provider_id']}',
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
   static List<TmdbItem> _dedupe(List<TmdbItem> items) {
     final seen = <String>{};
     return [

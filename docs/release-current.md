@@ -1,2 +1,4 @@
-- Etichette delle piattaforme mostrate solo quando il catalogo ufficiale conferma il titolo.
-- Guida TV: ogni canale usa solo la propria programmazione, compresi i canali +1, e gli orari delle caselle non si sovrappongono più.
+- Loghi ufficiali delle piattaforme sempre visibili su banner, schede e locandine, verificati per singolo titolo.
+- Voti IMDb con badge ufficiale; il voto TMDB resta come riserva.
+- Generi disponibili subito dopo l'avvio e conservati sul dispositivo.
+- Guida TV: canali +1 riconosciuti con la propria programmazione o con orari spostati di un'ora.

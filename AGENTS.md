@@ -149,3 +149,5 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 
 - Title category membership is indexed once per visible playlist snapshot off the UI thread, invalidated with catalog caches; Home omits unused category facets and platform membership uses ID sets to avoid rendering-time scans.
 - Optional shared TMDB detail/credits/video cache keys include endpoint and language; only already-requested responses are cached, writes require a verified account, and missing schema falls back to the existing proxy without mass prefetch.
+- Per-title metadata (IMDb ratings, watch providers) lives in device stores valid 30 days and refreshed in the background, never rebuilt at start; badges must not depend on opening filters.
+- EPG matching keeps timeshift channels (+1/+2) separate from base guides even with shared tvg-ids; missing timeshift guides reuse the base shifted by the hours.

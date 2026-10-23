@@ -1,3 +1,6 @@
+import '../services/title_providers_service.dart';
+import '../services/imdb_rating_service.dart';
+import '../services/platform_catalog_service.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -11,7 +14,13 @@ import '../services/tmdb_service.dart';
 class DiscoverProvider extends ChangeNotifier {
   final TmdbService tmdb;
 
-  DiscoverProvider(this.tmdb);
+  DiscoverProvider(this.tmdb) {
+    // Platform badges must not depend on opening a filter: per-title
+    // answers and the saved platform catalogs load right after start.
+    TitleProvidersService.instance.attach(tmdb);
+    ImdbRatingService.instance.store.load();
+    PlatformCatalogService.instance.warmUpAll(tmdb);
+  }
 
   bool _isLoading = false;
   String? _error;

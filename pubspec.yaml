@@ -58,6 +58,7 @@ flutter:
     - assets/branding/stellartv_tv.svg
     - assets/branding/stellartv_scritta.svg
     - assets/branding/stellar_space.jpg
+    - assets/platforms/
   fonts:
     - family: Sora
       fonts:

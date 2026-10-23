@@ -11,7 +11,11 @@ class StreamingPlatform {
   /// does not list the title. Matched case-insensitively on word bounds.
   final RegExp tags;
 
+  /// Official wordmark image (name logo) shown in title badges.
+  final String logoAsset;
+
   const StreamingPlatform({
+    required this.logoAsset,
     required this.name,
     required this.providerIds,
     required this.region,
@@ -26,6 +30,7 @@ class StreamingPlatform {
   static final all = [
     StreamingPlatform(
       name: 'Netflix',
+      logoAsset: 'assets/platforms/netflix.png',
       providerIds: '8',
       region: 'IT',
       color: const Color(0xFFE50914),
@@ -33,6 +38,7 @@ class StreamingPlatform {
     ),
     StreamingPlatform(
       name: 'Prime Video',
+      logoAsset: 'assets/platforms/prime_video.png',
       providerIds: '119',
       region: 'IT',
       color: const Color(0xFF00A8E1),
@@ -43,6 +49,7 @@ class StreamingPlatform {
     ),
     StreamingPlatform(
       name: 'Disney+',
+      logoAsset: 'assets/platforms/disney_plus.png',
       providerIds: '337',
       region: 'IT',
       color: const Color(0xFF113CCF),
@@ -53,6 +60,7 @@ class StreamingPlatform {
     ),
     StreamingPlatform(
       name: 'Apple TV+',
+      logoAsset: 'assets/platforms/apple_tv_plus.png',
       providerIds: '350',
       region: 'IT',
       color: const Color(0xFFE5E5EA),
@@ -63,6 +71,7 @@ class StreamingPlatform {
     ),
     StreamingPlatform(
       name: 'HBO Max',
+      logoAsset: 'assets/platforms/hbo_max.png',
       providerIds: '1899|384',
       region: 'IT',
       color: const Color(0xFF5B8CFF),
@@ -70,6 +79,7 @@ class StreamingPlatform {
     ),
     StreamingPlatform(
       name: 'Paramount+',
+      logoAsset: 'assets/platforms/paramount_plus.png',
       providerIds: '531',
       region: 'IT',
       color: const Color(0xFF0064FF),
@@ -80,6 +90,7 @@ class StreamingPlatform {
     ),
     StreamingPlatform(
       name: 'Crunchyroll',
+      logoAsset: 'assets/platforms/crunchyroll.png',
       providerIds: '283',
       region: 'IT',
       color: const Color(0xFFF47521),

@@ -6,7 +6,9 @@ import '../models/content_type.dart';
 import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
 import '../providers/app_provider.dart';
+import '../services/imdb_rating_service.dart';
 import '../services/platform_catalog_service.dart';
+import '../services/title_providers_service.dart';
 import '../theme/app_theme.dart';
 
 /// TMDB genres (Italian labels). Movie and TV ids differ for a few genres.
@@ -72,13 +74,19 @@ class TitleFacets {
         if (names[id] != null) names[id]!,
     ];
     final service = PlatformCatalogService.instance;
-    final platforms = <StreamingPlatform>[
-      for (final p in StreamingPlatform.all)
-        // Only verified catalog membership: category names are not evidence.
-        if (item != null &&
-            service.containsTitle(p, movies: movie, id: item.id))
-          p,
-    ];
+    // Per-title official availability wins; catalog membership is used
+    // only until the title's own answer is saved on the device.
+    final verified = item == null
+        ? null
+        : TitleProvidersService.instance.platformsOf(item);
+    final platforms =
+        verified ??
+        <StreamingPlatform>[
+          for (final p in StreamingPlatform.all)
+            if (item != null &&
+                service.containsTitle(p, movies: movie, id: item.id))
+              p,
+        ];
     return TitleFacets(
       genres.take(3).toList(),
       platforms,
@@ -87,27 +95,68 @@ class TitleFacets {
   }
 }
 
-/// Small brand-coloured platform label.
+/// Official platform name logo on a light pill (logos are drawn for light
+/// backgrounds, so every brand stays readable on the dark UI).
 class PlatformBadge extends StatelessWidget {
   final StreamingPlatform platform;
-  const PlatformBadge(this.platform, {super.key});
+  final double height;
+  const PlatformBadge(this.platform, {super.key, this.height = 22});
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-    decoration: BoxDecoration(
-      color: platform.color.withValues(alpha: 0.2),
-      border: Border.all(color: platform.color.withValues(alpha: 0.75)),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Text(
-      platform.name,
-      style: const TextStyle(
-        color: AppColors.textPrimary,
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
+  Widget build(BuildContext context) => Semantics(
+    label: platform.name,
+    child: Container(
+      height: height,
+      padding: EdgeInsets.symmetric(horizontal: height * 0.3, vertical: height * 0.14),
+      decoration: BoxDecoration(
+        color: AppColors.badgeLight,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Image.asset(
+        platform.logoAsset,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, __, ___) => Text(
+          platform.name,
+          style: TextStyle(color: platform.color, fontSize: height * 0.5, fontWeight: FontWeight.w700),
+        ),
       ),
     ),
   );
+}
+
+/// Official IMDb badge with the IMDb rating; TMDB vote as fallback while
+/// IMDb is unknown or has no rating for the title.
+class ImdbRatingBadge extends StatelessWidget {
+  final TmdbItem item;
+  final double height;
+  const ImdbRatingBadge(this.item, {super.key, this.height = 20});
+  @override
+  Widget build(BuildContext context) {
+    final service = ImdbRatingService.instance;
+    return ListenableBuilder(
+      listenable: service.store,
+      builder: (context, _) {
+        final imdb = service.ratingOf(item);
+        final hasImdb = imdb != null && imdb > 0;
+        final value = hasImdb ? imdb : item.voteAverage;
+        if (value <= 0) return const SizedBox.shrink();
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasImdb)
+              Image.asset('assets/platforms/imdb.png', height: height, filterQuality: FilterQuality.medium)
+            else
+              Icon(Icons.star_rounded, color: AppColors.secondary, size: height * 0.8),
+            const SizedBox(width: 4),
+            Text(
+              value.toStringAsFixed(1),
+              style: TextStyle(color: AppColors.textPrimary, fontSize: height * 0.65, fontWeight: FontWeight.w700),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 /// Genres, platforms and the "also in" categories for title pages.
@@ -119,6 +168,16 @@ class TitleFacetsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        TitleProvidersService.instance.store,
+        PlatformCatalogService.instance,
+      ]),
+      builder: (context, _) => _build(app),
+    );
+  }
+
+  Widget _build(AppProvider app) {
     final f = TitleFacets.of(app, item: item, channel: channel);
     Widget chip(String label) => Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
