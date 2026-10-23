@@ -205,6 +205,14 @@ class _UpdateDialogState extends State<_UpdateDialog> {
   bool _readingNotes = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && DeviceTypeService.isTv) _updateFocus.requestFocus();
+    });
+  }
+
+  @override
   void dispose() {
     _notesScroll.dispose();
     _notesFocus.dispose();
@@ -272,8 +280,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
         if (mounted) {
           setState(() {
             _progress = null;
-            _error =
-                'Consenti a StellarTV di installare app, poi premi di nuovo "Installa".';
+            _error = 'Consenti a StellarTV di installare app, poi premi di nuovo "Installa".';
           });
         }
         await AppUpdateService.openInstallSettings();
@@ -296,7 +303,11 @@ class _UpdateDialogState extends State<_UpdateDialog> {
   @override
   Widget build(BuildContext context) {
     final busy = _progress != null;
-    final notes = widget.release.notes.trim();
+    final raw = widget.release.notes.trim();
+    final match = RegExp(
+      r'<!-- stellar-summary -->([\s\S]*?)<!-- /stellar-summary -->',
+    ).firstMatch(raw);
+    final notes = (match?.group(1) ?? raw).trim();
     final tv = DeviceTypeService.isTv;
     Widget action(
       Widget child,
@@ -346,6 +357,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
                 if (tv)
                   Focus(
                     focusNode: _notesFocus,
+                    onKeyEvent: _navigate,
                     onFocusChange: (value) {
                       if (mounted) setState(() => _readingNotes = value);
                     },

@@ -137,3 +137,7 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - EPG HTTP, gzip, incremental XML events, merging and JSON serialization run in a killable worker; only bounded classified errors leave it and staged cache replacement follows the foreground/playback guard, preserving the previous guide on failure.
 - Catalog section publication yields in bounded batches and validates account, profile, evidence and snapshot before atomic replacement; per-section disk workers are awaited to avoid overlapping downloads and saves on constrained TVs.
 - EPG yields priority to active catalog refreshes and is canceled/deferred through the existing guide queue, avoiding competing heavy workers without new polling.
+
+- EPG timeline uses presentation-only clipped intervals and original program objects for playback; shared time geometry and event identity prevent overlap without changing archive timestamps.
+- TV Discover artwork paints one contrast scrim and keeps touch/player styling unchanged to reduce full-screen overdraw.
+- Both release workflows generate neutral, change-scoped notes from versioned release-current bullets; a bounded summary feeds the update dialog, whose notes focus owns remote scrolling directly.

@@ -1,0 +1,3 @@
+- Guida programmi con riquadri non sovrapposti e indicatore orario allineato.
+- Grafica TV alleggerita mantenendo leggibilità e selezione col telecomando.
+- Aggiornamenti con novità sintetiche e lettura delle note più affidabile.

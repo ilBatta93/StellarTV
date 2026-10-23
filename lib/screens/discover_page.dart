@@ -11,8 +11,10 @@ import '../services/series_resume_policy.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
 import '../services/image_warmup_service.dart';
 import '../services/tv_render_policy.dart';
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -108,8 +110,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
   void _queueNextCheck(HistoryEntry e, Channel folder) {
     final key = seriesReplayKey(context.read<HistoryProvider>().profileId, e);
     if (!_activeReplayKeys.contains(key)) return;
-    if (_hasNext.containsKey(key) ||
-        _pendingNext.any((p) => p.$3 == key)) {
+    if (_hasNext.containsKey(key) || _pendingNext.any((p) => p.$3 == key)) {
       return;
     }
     _pendingNext.add((e, folder, key));
@@ -124,12 +125,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
       try {
         final next = await _findNextEpisode(context, entry, folder);
         if (!mounted) break;
-        if (generation != _nextGeneration || !_activeReplayKeys.contains(key)) continue;
+        if (generation != _nextGeneration || !_activeReplayKeys.contains(key))
+          continue;
         _hasNext[key] = next != null;
         if (next == null) setState(() {});
       } catch (_) {
         if (!mounted) break;
-        if (generation != _nextGeneration || !_activeReplayKeys.contains(key)) continue;
+        if (generation != _nextGeneration || !_activeReplayKeys.contains(key))
+          continue;
         // Unknown: keep the series visible.
         _hasNext[key] = true;
       }
@@ -158,7 +161,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final history = context.watch<HistoryProvider>();
     final reactions = context.watch<ReactionsProvider>();
     _activeReplayKeys = {
-      for (final entry in history.continueWatching) seriesReplayKey(history.profileId, entry),
+      for (final entry in history.continueWatching)
+        seriesReplayKey(history.profileId, entry),
     };
     _hasNext.removeWhere((key, _) => !_activeReplayKeys.contains(key));
     // Episodes may not be indexed after a restart: rebuild them from the
@@ -218,15 +222,18 @@ class _DiscoverPageState extends State<DiscoverPage> {
     ];
     for (final (e, c) in started) {
       final isEp = e.type == ContentType.series || e.type == ContentType.anime;
-      if (!isEp || !replayEpisodeComplete(e) ||
-          _hasNext.containsKey(seriesReplayKey(history.profileId, e))) continue;
+      if (!isEp ||
+          !replayEpisodeComplete(e) ||
+          _hasNext.containsKey(seriesReplayKey(history.profileId, e)))
+        continue;
       final folder = e.seriesKey.isNotEmpty
           ? app.seriesFolderFor(e.seriesKey, wait: false)
           : (c.isSeriesFolder ? c : null);
       if (folder != null) {
         final generation = _nextGeneration;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && generation == _nextGeneration) _queueNextCheck(e, folder);
+          if (mounted && generation == _nextGeneration)
+            _queueNextCheck(e, folder);
         });
       }
     }
@@ -895,7 +902,12 @@ Future<SeriesEpisode?> _findNextEpisode(
   final details = await app.loadSeriesDetails(folder);
   final all = details.allEpisodes;
   final ch = app.channelById(entry.contentId);
-  return nextEpisodeInSequence(all, entry.contentId, season: ch?.season, number: ch?.episode);
+  return nextEpisodeInSequence(
+    all,
+    entry.contentId,
+    season: ch?.season,
+    number: ch?.episode,
+  );
 }
 
 /// Plays the episode after a finished one; opens the series page when the
@@ -1658,41 +1670,15 @@ class _TvHeroBackdrop extends StatelessWidget {
                 DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        AppColors.background.withValues(alpha: 0.92),
-                        AppColors.background.withValues(alpha: 0.55),
-                        Colors.transparent,
-                      ],
-                      stops: const [0, 0.38, 0.75],
-                    ),
-                  ),
-                ),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                       colors: [
                         AppColors.background,
-                        AppColors.background.withValues(alpha: 0.85),
-                        Colors.transparent,
+                        AppColors.background.withValues(alpha: 0.82),
+                        AppColors.background.withValues(alpha: 0.55),
+                        AppColors.background,
                       ],
-                      stops: const [0, 0.38, 0.62],
-                    ),
-                  ),
-                ),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        AppColors.background.withValues(alpha: 0.75),
-                        Colors.transparent,
-                      ],
-                      stops: const [0, 0.16],
+                      stops: const [0, 0.3, 0.6, 1],
                     ),
                   ),
                 ),

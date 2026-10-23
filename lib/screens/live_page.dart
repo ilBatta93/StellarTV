@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/epg_program.dart';
+import '../services/epg_timeline.dart';
 import '../player/playback_session.dart';
 import '../services/player_settings_service.dart';
 import '../services/catalog_builder.dart';
@@ -101,6 +102,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       _select(channel, _selectedProgram);
     }
   }
+
   StreamSubscription<void>? _screenOffSub;
 
   @override
@@ -151,7 +153,6 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       _app.setPlaybackActive(false);
     }
   }
-
 
   Future<void> _confirmClearRecent() async {
     final ok = await showDialog<bool>(
@@ -302,7 +303,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
           ),
         if (nowX >= 0 && nowX <= width)
           Positioned(
-            left: (nowX - 4).clamp(0.0, width - 8),
+            left: nowX - 4,
             top: 5,
             child: Container(
               width: 8,
@@ -370,7 +371,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     final chosen = target;
     setState(() {
       _epgStart = next;
-      _epgFocus = '${c.id}|${chosen.startTime.millisecondsSinceEpoch}';
+      _epgFocus = epgTimelineKey(c.id, chosen);
     });
     _select(c, chosen);
     return KeyEventResult.handled;
@@ -381,21 +382,25 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     final end = start.add(_epgSpan);
     final min = _epgMin;
     final now = DateTime.now();
-    final all = epg
-        .programmesFor(c)
-        .where((p) => p.endTime.isAfter(min) && p.endTime.isAfter(p.startTime))
+    final slots = epgTimelineSlots(epg.programmesFor(c))
+        .where((slot) => slot.end.isAfter(min))
         .toList();
-    final visible = [
-      for (final p in all)
-        if (p.endTime.isAfter(start) && p.startTime.isBefore(end)) p,
+    final all = [for (final slot in slots) slot.program];
+    final visibleSlots = [
+      for (final slot in slots)
+        if (slot.end.isAfter(start) && slot.start.isBefore(end)) slot,
     ];
+    final visible = [for (final slot in visibleSlots) slot.program];
     final nowX = _epgX(now, start, width);
     final cells = <Widget>[];
-    for (final p in visible) {
-      final l = _epgX(p.startTime.isBefore(start) ? start : p.startTime, start, width);
-      final r = _epgX(p.endTime.isAfter(end) ? end : p.endTime, start, width);
-      final w = (r - l - 6).clamp(4.0, width);
-      final id = '${c.id}|${p.startTime.millisecondsSinceEpoch}';
+    for (final slot in visibleSlots) {
+      final p = slot.program;
+      final l = epgTimelineX(slot.start, start, _epgSpan, width);
+      final r = epgTimelineX(slot.end, start, _epgSpan, width);
+      final interval = r - l;
+      final w = interval > 12 ? interval - 6 : interval;
+      if (w <= 0) continue;
+      final id = epgTimelineKey(c.id, p);
       cells.add(
         Positioned(
           key: ValueKey(id),
@@ -465,15 +470,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
               bottom: 0,
               child: IgnorePointer(
                 child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.5),
-                        blurRadius: 6,
-                      ),
-                    ],
-                  ),
+                  decoration: BoxDecoration(color: AppColors.primary),
                 ),
               ),
             ),
@@ -803,7 +800,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     unawaited(_recentLive.load());
     WidgetsBinding.instance.addObserver(this);
     // TV switched off or screen off: the preview connection closes at once.
-    _screenOffSub = NativePlayerBridge.instance.screenOff.listen((_) => _routeChanged());
+    _screenOffSub = NativePlayerBridge.instance.screenOff.listen(
+      (_) => _routeChanged(),
+    );
     OpenRoutesObserver.instance.changes.addListener(_routeChanged);
     // Keep "now on" and progress bars current.
     _tick = Timer.periodic(const Duration(seconds: 60), (_) {
@@ -1710,9 +1709,7 @@ class _EpgCellState extends State<_EpgCell> {
                 ? EdgeInsets.zero
                 : const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: live
-                  ? AppColors.primary.withValues(alpha: 0.12)
-                  : AppColors.surface,
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: live

@@ -113,6 +113,24 @@ void main() {
     expect(tester.takeException(), isNull);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
+  testWidgets('summary is short and notes own remote scrolling', (
+    tester,
+  ) async {
+    await open(
+      tester,
+      '<!-- stellar-summary -->\n- Navigazione migliorata\n<!-- /stellar-summary -->\n' +
+          List.generate(80, (i) => 'Change $i').join('\n'),
+    );
+    expect(actionNode(tester, 'Aggiorna ora')?.hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(actionNode(tester, 'Aggiorna ora')?.hasFocus, isFalse);
+    expect(actionNode(tester, 'Più tardi')?.hasFocus, isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(actionNode(tester, 'Aggiorna ora')?.hasFocus, isTrue);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
   testWidgets('empty notes leave both actions reachable', (tester) async {
     await open(tester, '');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);

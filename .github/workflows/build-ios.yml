@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Determina versione
         env:
@@ -37,6 +39,11 @@ jobs:
           echo "VERSION=$V" >> "$GITHUB_ENV"
           echo "BUILD_NUM=$BUILD" >> "$GITHUB_ENV"
           echo "Versione: $V (build $BUILD)"
+
+      - name: Note di rilascio neutrali
+        run: |
+          python3 -m unittest discover -s scripts -p '*_test.py'
+          python3 scripts/release_notes.py "$VERSION"
 
       - name: Setup Flutter (stable)
         uses: subosito/flutter-action@v2
@@ -130,13 +137,8 @@ jobs:
         with:
           tag_name: "v${{ env.VERSION }}"
           name: "StellarTV v${{ env.VERSION }}"
-          body: |
-            ## StellarTV v${{ env.VERSION }}
-            Compilazione dal commit `${{ github.sha }}`.
-
-            **iOS:** IPA non firmato, da installare con Sideloadly / AltStore / TrollStore.
+          body_path: RELEASE_NOTES.md
           files: dist/*.ipa
-          append_body: true
           draft: false
           prerelease: false
 
@@ -150,12 +152,7 @@ jobs:
           token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: "v${{ env.VERSION }}"
           name: "StellarTV v${{ env.VERSION }}"
-          body: |
-            ## StellarTV v${{ env.VERSION }}
-            Aggiornamento ufficiale di StellarTV.
-
-            **iOS:** IPA non firmato, da installare con Sideloadly / AltStore / TrollStore.
+          body_path: RELEASE_NOTES.md
           files: dist/*.ipa
-          append_body: true
           draft: false
           prerelease: false

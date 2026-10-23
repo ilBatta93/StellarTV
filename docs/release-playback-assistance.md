@@ -36,3 +36,10 @@
 - Applicazione dei dati suddivisa in piccoli passaggi, con controlli su account e profilo prima della pubblicazione.
 - Ridotta la sovrapposizione tra download, salvataggio locale e preparazione delle schermate.
 - Report di fluidità con punti di controllo per caricamento e salvataggio.
+
+## Guida e presentazione TV
+
+- Riquadri della guida non sovrapposti, orari originali conservati per le azioni e indicatore orario allineato.
+- Ridotti gli strati grafici dello sfondo TV, senza cambiare i comandi durante la visione.
+- Note sintetiche nel riquadro automatico, con focus iniziale su Aggiorna e lettura diretta col telecomando.
+- Note di ogni build generate dalle modifiche effettive con testo neutro.
