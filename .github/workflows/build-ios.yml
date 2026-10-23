@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   build-and-release:
@@ -130,7 +131,7 @@ jobs:
         with:
           name: "StellarTV-iOS-v${{ env.VERSION }}"
           path: dist/*.ipa
-          retention-days: 14
+          retention-days: 5
 
       - name: Crea GitHub Release
         uses: softprops/action-gh-release@v2
@@ -156,3 +157,18 @@ jobs:
           files: dist/*.ipa
           draft: false
           prerelease: false
+
+      - name: Pulizia artifact e release (ultime 5)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REPO=${{ github.repository }}
+          # Artifact: tiene i 5 piu recenti, elimina gli altri (spazio Actions limitato).
+          gh api "repos/$REPO/actions/artifacts?per_page=100" --paginate -q '.artifacts | sort_by(.created_at) | reverse | .[5:] | .[].id' | while read -r ID; do
+            gh api -X DELETE "repos/$REPO/actions/artifacts/$ID" || true
+          done
+          # Release: tiene le 5 piu recenti; i tag restano per le note di rilascio.
+          gh release list --repo "$REPO" --limit 200 --json tagName -q '.[5:] | .[].tagName' | while read -r TAG; do
+            gh release delete "$TAG" --repo "$REPO" --yes || true
+          done
