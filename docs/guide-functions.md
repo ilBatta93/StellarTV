@@ -1,7 +1,7 @@
 // Guida ufficiale StellarTV. Va aggiornata insieme a ogni modifica di funzioni
 // dell'app o del sito, includendo solo funzioni attive nella versione corrente.
 // Testi neutri: nessun riferimento a fornitori, formati di sorgente o tipi di contenuto.
-export const GUIDE_APP_VERSION = "3.7.8";
+export const GUIDE_APP_VERSION = "3.7.10";
 
 export type GuideItem = { title: string; body: string[] };
 export type GuideSection = { id: string; title: string; intro: string; items: GuideItem[] };
