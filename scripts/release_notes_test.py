@@ -3,8 +3,8 @@ from release_notes import render, series_version
 
 class NotesTest(unittest.TestCase):
     def test_series_38_starts_at_build_108(self):
-        self.assertEqual(series_version('3.7.18', 108), '3.8.0')
-        self.assertEqual(series_version('3.7.19', 109), '3.8.1')
+        self.assertEqual(series_version('3.7.20', 110), '3.8.0')
+        self.assertEqual(series_version('3.7.21', 111), '3.8.1')
         self.assertEqual(series_version('3.7.16', 106), '3.7.16')
     def test_summary_is_three_changes_and_complete_notes_kept(self):
         output = render('3.6.22', ['- Prima modifica\n- Seconda modifica\n- Terza modifica\n- Quarta modifica'])

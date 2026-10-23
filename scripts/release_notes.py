@@ -28,7 +28,7 @@ def render(version, texts):
 def git(*args):
     return subprocess.check_output(['git', *args], text=True).strip()
 
-SERIES_FROM_RUN = 108  # run 108 publishes 3.8.0
+SERIES_FROM_RUN = 110  # run 110 publishes 3.8.0
 
 def series_version(version, run_number):
     """3.8.N from build 108 on; older runs keep the version they received."""
