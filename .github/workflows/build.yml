@@ -33,9 +33,9 @@ jobs:
       - name: Versione e note di rilascio
         run: |
           set -e
-          # Dalla build 65 si passa alla serie 3.6 (3.6.0, 3.6.1, ...)
-          PATCH=$(( ${{ github.run_number }} - 65 ))
-          VERSION="3.6.${PATCH}"
+          # Dalla build 90 si passa alla serie 3.7 (3.7.0, 3.7.1, ...)
+          PATCH=$(( ${{ github.run_number }} - 90 ))
+          VERSION="3.7.${PATCH}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           python3 -m unittest discover -s scripts -p '*_test.py'
           python3 scripts/release_notes.py "$VERSION"
