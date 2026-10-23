@@ -11,6 +11,13 @@ def bullets(text):
         raise ValueError('Release notes must contain neutral feature bullets')
     return lines
 
+def _neutral(text):
+    try:
+        bullets(text)
+        return True
+    except ValueError:
+        return False
+
 def render(version, texts):
     lines = list(dict.fromkeys(line for text in texts for line in bullets(text)))
     summary = '\n'.join('- ' + line[:140] for line in lines[:3])
@@ -32,6 +39,11 @@ def main():
     if not commits and any(p.startswith('lib/') for p in changed.splitlines()):
         raise ValueError('Update docs/release-current.md for this build before publishing')
     texts = [git('show', c + ':docs/release-current.md') for c in commits]
+    if texts:
+        # A later commit may replace non-neutral wording: keep only valid
+        # versions, but the current file must always be valid itself.
+        bullets(texts[-1])
+        texts = [t for t in texts if _neutral(t)]
     if not texts:
         texts = [Path('docs/release-current.md').read_text()]
     Path('RELEASE_NOTES.md').write_text(render(version, texts))
