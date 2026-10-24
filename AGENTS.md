@@ -152,5 +152,5 @@ Kids visibility uses one strict genre/category-and-certification policy across c
 - Per-title metadata (IMDb ratings, watch providers) lives in device stores valid 30 days and refreshed in the background, never rebuilt at start; badges must not depend on opening filters.
 - EPG matching keeps timeshift channels (+1/+2) separate from base guides even with shared tvg-ids; missing timeshift guides reuse the base shifted by the hours.
 
-- Catalog rating responses retain TMDB identities alongside legacy numeric results, so every layout and detail can share the same IMDb queue and fallback.
+- Title parsing is device-only and year-aware, preserves numeric titles, and requires an unambiguous official-name match; versioned derived caches exclude legacy title-only identities. TMDB policy markers prevent double weighting; IMDb pending values stay hidden, with nonpersistent transport-failure fallback. Episode artwork uses validated per-episode stills and a bounded cached fallback chain. App services use the primary companion origin.
 - Episode metadata is scoped by series/season/episode, prepared per selected season before playback and read locally by player information; never substitute the series rating for an episode.

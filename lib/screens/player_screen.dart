@@ -2404,7 +2404,12 @@ class _EpisodePickerState extends State<_EpisodePicker> {
     final watched = entry?.isWatched ?? false;
     final progress = watched ? null : entry?.progress;
     final number = episode.episode ?? i + 1;
-    final image = episode.logo.isNotEmpty ? episode.logo : widget.current.logo;
+    final images = episodeArtwork(
+      EpisodeMetadataService.instance.forChannel(episode),
+      episode.logo,
+      widget.current.logo,
+    );
+    final image = images.firstOrNull;
     return TvFocusable(
       focusNode: i == 0 ? _first : null,
       autofocus: current || (i == 0 && season != (widget.current.season ?? 1)),
@@ -2442,6 +2447,7 @@ class _EpisodePickerState extends State<_EpisodePicker> {
                       children: [
                         PosterImage(
                           url: image,
+                          fallbackUrls: images.skip(1).toList(),
                           fallbackIcon: Icons.movie_outlined,
                         ),
                         if (current)

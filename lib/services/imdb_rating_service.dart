@@ -11,7 +11,7 @@ import 'title_metadata_store.dart';
 
 /// Official IMDb ratings, saved on the device (30 days) and requested in
 /// small batches only for titles actually shown. Null rating = unknown on
-/// IMDb, so the UI keeps the TMDB vote.
+/// IMDb, so the UI waits until that lookup completes before using TMDB.
 class ImdbRatingService {
   ImdbRatingService._();
   static final instance = ImdbRatingService._();
@@ -23,6 +23,7 @@ class ImdbRatingService {
   );
   final _http = ForegroundHttpClient();
   final Set<String> _queued = {};
+  final Set<String> _settled = {};
   final Set<String> _asked = {};
   // Keys only looked up in the shared cloud cache (sorting): never trigger
   // an external IMDb request, so a 10k title sort costs zero OMDb calls.
@@ -44,7 +45,7 @@ class ImdbRatingService {
   }) {
     final key = episodeKey(id, season, episode);
     if (request) _requestKey(key);
-    return store.valueOf(key);
+    return store.valueOf(key) ?? (_settled.contains(key) ? 0 : null);
   }
 
   void _requestKey(String key) {
@@ -75,7 +76,7 @@ class ImdbRatingService {
     final key = keyOf(item);
     final v = store.valueOf(key);
     _requestKey(key);
-    return v;
+    return v ?? (_settled.contains(key) ? 0 : null);
   }
 
   Future<void> _flush() async {
@@ -123,7 +124,8 @@ class ImdbRatingService {
                 }),
               )
               .timeout(const Duration(seconds: 25));
-          if (res.statusCode != 200) continue;
+          if (res.statusCode != 200)
+            throw const FormatException("IMDb unavailable");
           final body = jsonDecode(res.body);
           for (final r
               in (body is Map ? body['results'] as List? : null) ?? const []) {
@@ -141,7 +143,12 @@ class ImdbRatingService {
             );
           }
         } catch (_) {
-          // Offline: TMDB vote stays visible; retried at the next start.
+          // Do not persist transport failures as confirmed IMDb absence.
+        } finally {
+          if (!cacheOnly) {
+            _settled.addAll(batch);
+            store.notifyAvailabilityChanged();
+          }
         }
       }
     } finally {

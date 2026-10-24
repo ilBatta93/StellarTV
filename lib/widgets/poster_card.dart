@@ -5,7 +5,9 @@ import '../services/image_warmup_service.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
 import 'title_facets.dart';
+
 import 'package:provider/provider.dart';
 
 import '../models/tmdb_item.dart';
@@ -25,6 +27,7 @@ class PosterImage extends StatelessWidget {
   /// first posters before the cards are built.
   final bool rememberWidth;
   final int? maxDecodeWidth;
+  final List<String> fallbackUrls;
 
   const PosterImage({
     super.key,
@@ -33,6 +36,7 @@ class PosterImage extends StatelessWidget {
     this.fallbackIcon = Icons.movie_outlined,
     this.rememberWidth = false,
     this.maxDecodeWidth,
+    this.fallbackUrls = const [],
   });
 
   @override
@@ -79,7 +83,15 @@ class PosterImage extends StatelessWidget {
               ? Duration.zero
               : const Duration(milliseconds: 200),
           placeholder: (_, _) => Container(color: AppColors.card),
-          errorWidget: (_, _, _) => fallback,
+          errorWidget: (_, _, _) => fallbackUrls.isEmpty
+              ? fallback
+              : PosterImage(
+                  url: fallbackUrls.first,
+                  fallbackUrls: fallbackUrls.skip(1).toList(),
+                  fit: fit,
+                  fallbackIcon: fallbackIcon,
+                  maxDecodeWidth: maxDecodeWidth,
+                ),
         );
       },
     );
@@ -316,7 +328,10 @@ class RankedPosterCard extends StatelessWidget {
                         Positioned(
                           top: 6,
                           left: 6,
-                          child: RatingBadge(value: item.voteAverage, item: item),
+                          child: RatingBadge(
+                            value: item.voteAverage,
+                            item: item,
+                          ),
                         ),
                     ],
                   ),

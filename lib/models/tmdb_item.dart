@@ -1,4 +1,5 @@
 import 'content_type.dart';
+import 'rating_policy.dart';
 
 class TmdbItem {
   final int id;
@@ -25,7 +26,8 @@ class TmdbItem {
 
   bool get isMovie => mediaType == 'movie';
   String get key => '${mediaType}_$id';
-  ContentType get contentType => isMovie ? ContentType.movie : ContentType.series;
+  ContentType get contentType =>
+      isMovie ? ContentType.movie : ContentType.series;
   String get year => releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '';
 
   String? get posterUrl =>
@@ -47,22 +49,23 @@ class TmdbItem {
       overview: (json['overview'] ?? '').toString(),
       posterPath: json['poster_path'] as String?,
       backdropPath: json['backdrop_path'] as String?,
-      voteAverage: (json['vote_average'] as num?)?.toDouble() ?? 0,
+      voteAverage: tmdbPayloadVote(json),
       popularity: (json['popularity'] as num?)?.toDouble() ?? 0,
-      releaseDate:
-          (json['release_date'] ?? json['first_air_date'] ?? '').toString(),
+      releaseDate: (json['release_date'] ?? json['first_air_date'] ?? '')
+          .toString(),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'media_type': mediaType,
-        'title': title,
-        'overview': overview,
-        'poster_path': posterPath,
-        'backdrop_path': backdropPath,
-        'vote_average': voteAverage,
-        'popularity': popularity,
-        'release_date': releaseDate,
-      };
+    'id': id,
+    'media_type': mediaType,
+    'title': title,
+    'overview': overview,
+    'poster_path': posterPath,
+    'backdrop_path': backdropPath,
+    'vote_average': voteAverage,
+    'stellar_vote_policy': 1,
+    'popularity': popularity,
+    'release_date': releaseDate,
+  };
 }

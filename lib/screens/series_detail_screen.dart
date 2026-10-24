@@ -454,6 +454,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                 return EpisodeCard(
                   episode: ep,
                   seriesTmdbId: _item?.id,
+                  seriesImage: _item?.posterUrl ?? widget.series.logo,
                   progress: entry?.isWatched == true ? null : entry?.progress,
                   watched: history.isWatched(ep.channel.id),
                   onToggleWatched: () {

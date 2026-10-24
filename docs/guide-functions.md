@@ -70,8 +70,9 @@ export const GUIDE: GuideSection[] = [
     intro: "Dettagli, trailer, episodi e stati di visione.",
     items: [
       { title: "Scheda", body: ["Trama, valutazioni, cast e azioni in fila: Riproduci, Trailer, Preferiti."] },
+      { title: "Riconoscimento", body: ["I nomi con punti, trattini bassi e indicazioni tecniche vengono normalizzati senza cambiare gli identificativi personali. L’anno distingue le diverse uscite; i risultati ambigui non vengono assegnati automaticamente. Immagini, valutazioni e dettagli usano l’identità riconosciuta del titolo. Le immagini non disponibili negli archivi ufficiali non possono essere garantite."] },
       { title: "Trailer", body: ["Si apre in YouTube, in italiano quando disponibile, altrimenti in inglese. Non entra nella cronologia."] },
-      { title: "Episodi", body: ["Stagioni ed episodi scorrono in orizzontale con la percentuale di visione. Se manca la miniatura viene usata l'immagine del titolo."] },
+      { title: "Episodi", body: ["Stagioni ed episodi scorrono in orizzontale con la percentuale di visione. Le miniature usano prima l’immagine ufficiale del singolo episodio, verificata per stagione e numero; se assente o non caricabile, usano la miniatura disponibile e infine l’immagine del titolo."] },
       { title: "Gestisci visione", body: ["Scegli una stagione e apri la riga da modificare: Visto, Non visto oppure Automatico dal progresso. Le azioni per tutta una stagione o l’intera raccolta sono nei rispettivi menu separati.", "Le scelte sono reversibili e si sincronizzano. Automatico dal progresso rimuove la scelta manuale senza cancellare la posizione salvata.", "Se inizi da una stagione successiva, un suggerimento discreto propone di segnare le precedenti; Non ora lo silenzia."] },
     ],
   },

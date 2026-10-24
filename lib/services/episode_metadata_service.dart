@@ -13,7 +13,7 @@ class EpisodeMetadataService {
   EpisodeMetadataService._();
   static final instance = EpisodeMetadataService._();
   final store = TitleMetadataStore<EpisodeMetadata>(
-    fileName: 'episode_metadata_v1.json',
+    fileName: 'episode_metadata_v2.json',
     encode: (v) => v.toJson(),
     decode: EpisodeMetadata.parse,
   );
@@ -43,6 +43,11 @@ class EpisodeMetadataService {
         await store.load();
         if (PlaybackWorkPolicy.instance.blocksGuide) return;
         final known = channels.where((c) => c.episode != null).toList();
+        for (final c in known) {
+          final number = c.episode;
+          if (number != null)
+            ImdbRatingService.instance.episodeRating(item.id, season, number);
+        }
         if (known.isNotEmpty &&
             known.every(
               (c) => store.isFresh('tv:${item.id}:$season:${c.episode}'),

@@ -29,6 +29,8 @@ class TitleMetadataStore<T> extends ChangeNotifier {
   /// Widget tests never touch files or the network.
   static final bool disabled = Platform.environment.containsKey('FLUTTER_TEST');
 
+  void notifyAvailabilityChanged() => notifyListeners();
+
   T? valueOf(String key) => _values[key]?.$1;
   bool isFresh(String key) {
     final at = _values[key]?.$2;
@@ -72,7 +74,8 @@ class TitleMetadataStore<T> extends ChangeNotifier {
     try {
       final file = await _file();
       final data = {
-        for (final e in _values.entries) e.key: [encode(e.value.$1), e.value.$2],
+        for (final e in _values.entries)
+          e.key: [encode(e.value.$1), e.value.$2],
       };
       final path = file.path;
       await Isolate.run(() {

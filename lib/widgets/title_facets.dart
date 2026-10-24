@@ -5,6 +5,7 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
+import '../models/rating_policy.dart';
 import '../providers/app_provider.dart';
 import '../services/imdb_rating_service.dart';
 import '../services/catalog_rating_service.dart';
@@ -135,7 +136,7 @@ class PlatformBadge extends StatelessWidget {
 }
 
 /// Official IMDb badge with the IMDb rating; TMDB vote as fallback while
-/// IMDb is unknown or has no rating for the title.
+/// IMDb has confirmed no rating; unknown ratings stay hidden.
 class RatingValue extends StatelessWidget {
   final double? imdb;
   final double fallback;
@@ -152,7 +153,7 @@ class RatingValue extends StatelessWidget {
   Widget build(BuildContext context) {
     final rating = imdb;
     final hasImdb = rating != null && rating > 0;
-    final value = hasImdb ? rating : fallback;
+    final value = preferredRating(rating, fallback);
     if (value <= 0) return const SizedBox.shrink();
     final badge = Semantics(
       label: '${hasImdb ? 'IMDb' : 'TMDB'} ${value.toStringAsFixed(1)}',

@@ -1,2 +1,4 @@
-- Ordinamento per voto basato sulla valutazione IMDb, con il voto TMDB come riserva quando IMDb non è disponibile.
-- Valutazioni IMDb mostrate subito dai dati salvati sul dispositivo e condivise tra tutti gli utenti, con meno richieste esterne.
+- Riconoscimento dei nomi con punti e indicazioni tecniche, con anno e controllo dei risultati ambigui.
+- Miniature ufficiali dei singoli episodi con immagini alternative quando non disponibili.
+- IMDb prioritario senza voto provvisorio; TMDB ponderato sotto 20 voti.
+- Servizi dell’app collegati al sito principale su Vercel.

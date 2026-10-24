@@ -14,6 +14,7 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../config/supabase_config.dart';
 import 'tmdb_service.dart';
+import 'title_matching.dart';
 import 'imdb_rating_service.dart';
 import 'title_metadata_store.dart';
 import '../models/tmdb_item.dart';
@@ -35,7 +36,7 @@ class CatalogRatingService extends ChangeNotifier {
   static final instance = CatalogRatingService._();
   final _tmdb = TmdbService();
   final identities = TitleMetadataStore<TmdbItem>(
-    fileName: 'catalog_rating_identities_v1.json',
+    fileName: 'catalog_rating_identities_v2.json',
     encode: (v) => v.toJson(),
     decode: (v) =>
         v is Map ? TmdbItem.tryParse(Map<String, dynamic>.from(v)) : null,
@@ -63,8 +64,8 @@ class CatalogRatingService extends ChangeNotifier {
 
   final Expando<String> _keys = Expando('tvRating');
 
-  String _key(Channel c) => _keys[c] ??=
-      '${c.type.name}:${TmdbService.cleanTitle(c.displaySeriesName).toLowerCase()}';
+  String _key(Channel c) =>
+      _keys[c] ??= parseTitle(c.displaySeriesName).key(c.type.name);
   double? ratingOf(Channel c) => _ratings[_key(c)];
 
   /// Sort value: IMDb when known (>0), otherwise the TMDB vote.
@@ -80,10 +81,13 @@ class CatalogRatingService extends ChangeNotifier {
   }
 
   Future<String> _path() async =>
-      '${(await getApplicationSupportDirectory()).path}/tv_ratings_v1.json';
+      '${(await getApplicationSupportDirectory()).path}/tv_ratings_v2.json';
 
   Future<void> _load() async {
-    await Future.wait([identities.load(), ImdbRatingService.instance.store.load()]);
+    await Future.wait([
+      identities.load(),
+      ImdbRatingService.instance.store.load(),
+    ]);
     try {
       final path = await _path();
       final data = await Isolate.run(() {
@@ -166,6 +170,22 @@ class CatalogRatingService extends ChangeNotifier {
 
   Future<void> _fetchGroup(Map<String, Channel> group) async {
     final entries = group.entries.toList();
+    final direct = entries.where((e) {
+      final parsed = parseTitle(e.value.displaySeriesName);
+      return parsed.year != null ||
+          RegExp(r'^(19|20)\d{2}').hasMatch(parsed.title);
+    }).toList();
+    if (direct.isNotEmpty) {
+      for (var i = 0; i < direct.length; i += 2) {
+        await Future.wait(
+          direct.skip(i).take(2).map((e) => _fetch(e.key, e.value)),
+        );
+      }
+      final remaining = Map<String, Channel>.from(group)
+        ..removeWhere((k, _) => direct.any((e) => e.key == k));
+      if (remaining.isNotEmpty) await _fetchGroup(remaining);
+      return;
+    }
     try {
       final res = await _foregroundHttp
           .post(
@@ -189,6 +209,10 @@ class CatalogRatingService extends ChangeNotifier {
       final body = jsonDecode(res.body) as Map;
       final list = body['results'] as List;
       final ids = body['identities'] as List?;
+      if (list.length != entries.length ||
+          (ids != null && ids.length != entries.length)) {
+        throw const FormatException('Misaligned rating response');
+      }
       for (var i = 0; i < entries.length && i < list.length; i++) {
         final v = list[i];
         if (v is num) {

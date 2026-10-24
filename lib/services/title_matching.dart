@@ -1,0 +1,74 @@
+/// Device-only parsing: never changes playlist, history or favorite identifiers.
+class ParsedTitle {
+  final String title;
+  final String? year;
+  const ParsedTitle(this.title, this.year);
+  String key(String type) =>
+      '$type:${normalizeTitle(title)}:${year ?? "unknown"}';
+}
+
+final _technical = RegExp(
+  r'\s+(?:4K|UHD|FHD|HD|SD|2160P|1080P|1080I|720P|480P|HEVC|H[ -]?26[45]|X[ -]?26[45]|AVC|10BIT|8BIT|HDR10\+?|HDR|DV|DOLBY VISION|DOVI|SDR|WEB[ -]?DL|WEBRIP|WEB|BLURAY|BDRIP|BRRIP|DVDRIP|HDTV|REMUX|PROPER|REPACK|AC3|EAC3|DDP?5[ -]1|AAC|DTS(?:[ -]HD(?:[ -]MA)?)?|ATMOS|TRUEHD|5 1|7 1|SUB[ -]?ITA|SUBS?|ITA|ITALIAN|ENG|ENGLISH|MULTI|DUAL|AUDIO)\s*$',
+  caseSensitive: false,
+);
+
+ParsedTitle parseTitle(String raw) {
+  var t = raw.replaceAll(
+    RegExp(r'\.(mkv|mp4|avi|ts|m3u8|mov|wmv)\s*$', caseSensitive: false),
+    '',
+  );
+  t = t.replaceAll(
+    RegExp(r'^\s*\[(IT|ITA|ENG|4K|UHD|HD)\]\s*', caseSensitive: false),
+    '',
+  );
+  t = t.replaceAll(RegExp(r'^\s*(?:NETFLIX|CINEMA|FILM|TOP|PRIME|IT|ITA|ENG)\s*[|:]\s+', caseSensitive: false), '');
+  t = t.replaceAll(RegExp(r'^\s*[A-Z]{2,3}\s*-\s+'), '');
+  t = t.replaceAll(RegExp(r'[._]'), ' ');
+  t = t.replaceAllMapped(RegExp(r'\[([^\]]*)\]|\(([^)]*)\)'), (m) {
+    final inner = (m[1] ?? m[2] ?? '').trim();
+    return RegExp(r'^(19|20)\d{2}$').hasMatch(inner) ||
+            _technical.hasMatch(' $inner')
+        ? ' $inner '
+        : m[0] ?? '';
+  });
+  t = t.replaceAll(
+    RegExp(
+      r'\bS\d{1,2}\s*E\d{1,3}\b|\b\d{1,2}x\d{1,3}\b',
+      caseSensitive: false,
+    ),
+    ' ',
+  );
+  t = t.replaceAll(RegExp(r'\s+'), ' ').trim();
+  while (_technical.hasMatch(t)) {
+    t = t.replaceAll(_technical, '').trim();
+  }
+  // A leading number may be the title itself (1917, 2001: A Space Odyssey).
+  final yearMatch = RegExp(r'\s+((?:19|20)\d{2})\s*$').firstMatch(t);
+  final year = yearMatch?.group(1);
+  if (yearMatch != null) t = t.substring(0, yearMatch.start).trim();
+  t = t
+      .replaceAll(RegExp(r'\s*[|]\s*'), ' ')
+      .replaceAll(RegExp(r'\s+[-–:]\s*$'), '')
+      .trim();
+  return ParsedTitle(t, year);
+}
+
+String normalizeTitle(String title) => title
+    .toLowerCase()
+    .replaceAll(RegExp(r'[^a-z0-9à-ÿ]+'), ' ')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
+List<String> titleQueries(String title) {
+  final parts = title.split(RegExp(r'\s+[/–-]\s+|\s*/\s*'));
+  return {
+    title,
+    ...parts.where((p) => p.trim().isNotEmpty).map((p) => p.trim()),
+  }.toList();
+}
+
+bool matchesTitle(ParsedTitle parsed, Iterable<String> names, String year) {
+  if (parsed.year != null && parsed.year != year) return false;
+  final targets = titleQueries(parsed.title).map(normalizeTitle).toSet();
+  return names.any((name) => targets.contains(normalizeTitle(name)));
+}

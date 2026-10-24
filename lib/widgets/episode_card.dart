@@ -20,6 +20,7 @@ class EpisodeCard extends StatefulWidget {
   final bool watched;
   final double? progress;
   final int? seriesTmdbId;
+  final String? seriesImage;
   const EpisodeCard({
     super.key,
     required this.episode,
@@ -28,6 +29,7 @@ class EpisodeCard extends StatefulWidget {
     this.watched = false,
     this.progress,
     this.seriesTmdbId,
+    this.seriesImage,
   });
   @override
   State<EpisodeCard> createState() => _EpisodeCardState();
@@ -140,6 +142,11 @@ class _EpisodeCardState extends State<EpisodeCard> {
       listenable: service.store,
       builder: (context, _) {
         final metadata = service.forChannel(episode.channel);
+        final images = episodeArtwork(
+          metadata,
+          episode.image ?? episode.channel.logo,
+          widget.seriesImage,
+        );
         final plot = episodeSynopsis(
           metadata?.overview,
           episode.overview,
@@ -172,7 +179,8 @@ class _EpisodeCardState extends State<EpisodeCard> {
                               fit: StackFit.expand,
                               children: [
                                 PosterImage(
-                                  url: episode.image ?? episode.channel.logo,
+                                  url: images.firstOrNull,
+                                  fallbackUrls: images.skip(1).toList(),
                                 ),
                                 if (progress case final value?)
                                   Align(

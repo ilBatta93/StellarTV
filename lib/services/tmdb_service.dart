@@ -10,6 +10,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
 import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
+import '../models/rating_policy.dart';
+import 'title_matching.dart';
 import '../models/episode_metadata.dart';
 import '../models/title_trailer.dart';
 import '../models/tmdb_person.dart';
@@ -372,7 +374,10 @@ class TmdbService {
             episode: (e['episode_number'] as num).toInt(),
             title: '${e['name'] ?? ''}',
             overview: '${e['overview'] ?? ''}',
-            tmdbRating: (e['vote_average'] as num?)?.toDouble() ?? 0,
+            tmdbRating: tmdbPayloadVote(e),
+            stillPath: e['still_path'] is String
+                ? e['still_path'] as String
+                : null,
           ),
     ];
   }
@@ -454,40 +459,36 @@ class TmdbService {
     String rawTitle, {
     required bool isMovie,
   }) async {
-    final cleaned = cleanTitle(rawTitle);
-    if (cleaned.isEmpty) return null;
-    final body = await _get(isMovie ? 'search/movie' : 'search/tv', {
-      'query': cleaned,
-    });
-    final items = _parseResults(body, type: isMovie ? 'movie' : 'tv');
-    if (items.isEmpty) return null;
-    // Prefer an exact title match (and the playlist year when present).
-    String norm(String v) =>
-        v.toLowerCase().replaceAll(RegExp(r'[^a-z0-9à-ÿ]+'), ' ').trim();
-    final target = norm(cleaned);
-    final year = RegExp(r'\b(19|20)\d{2}\b').firstMatch(rawTitle)?.group(0);
-    final exact = items.where((e) => norm(e.title) == target).toList();
-    if (year != null) {
-      for (final e in exact) {
-        if (e.year == year) return e;
+    final parsed = parseTitle(rawTitle);
+    if (parsed.title.isEmpty) return null;
+    final type = isMovie ? 'movie' : 'tv';
+    final yearKey = isMovie ? 'year' : 'first_air_date_year';
+    for (final language in ['it-IT', 'en-US']) {
+      for (final query in titleQueries(parsed.title)) {
+        final body = await _get('search/$type', {
+          'query': query,
+          'language': language,
+          if (parsed.year != null) yearKey: parsed.year ?? '',
+        });
+        final raw = body['results'];
+        if (raw is! List) continue;
+        final accepted = <TmdbItem>[];
+        for (final result in raw.whereType<Map<String, dynamic>>()) {
+          final item = TmdbItem.tryParse(result, fallbackType: type);
+          if (item == null) continue;
+          if (matchesTitle(parsed, [
+            item.title,
+            '${result['original_title'] ?? result['original_name'] ?? ''}',
+          ], item.year)) {
+            accepted.add(item);
+          }
+        }
+        // A search rank is not evidence. Ambiguous remakes stay unresolved.
+        if (accepted.length == 1) return accepted.single;
       }
     }
-    return exact.isNotEmpty ? exact.first : items.first;
+    return null;
   }
 
-  static String cleanTitle(String raw) {
-    var t = raw;
-    t = t.replaceAll(RegExp(r'^\s*[A-Z]{2,3}\s*[:|\-]\s*'), '');
-    t = t.replaceAll(RegExp(r'\[[^\]]*\]|\([^)]*\)'), ' ');
-    t = t.replaceAll(
-      RegExp(
-        r'\b(4K|UHD|FHD|HD|SD|HEVC|H265|MULTI|SUB ITA|ITA|ENG)\b',
-        caseSensitive: false,
-      ),
-      ' ',
-    );
-    t = t.replaceAll(RegExp(r'\b(19|20)\d{2}\b'), ' ');
-    t = t.replaceAll(RegExp(r'[_.|]'), ' ');
-    return t.replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
+  static String cleanTitle(String raw) => parseTitle(raw).title;
 }
