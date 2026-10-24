@@ -1,1 +1,2 @@
-- Valutazioni nelle locandine dei cataloghi più leggibili: in alto a sinistra su sfondo scuro semitrasparente, come nella Home.
+- Ordinamento per voto basato sulla valutazione IMDb, con il voto TMDB come riserva quando IMDb non è disponibile.
+- Valutazioni IMDb mostrate subito dai dati salvati sul dispositivo e condivise tra tutti gli utenti, con meno richieste esterne.

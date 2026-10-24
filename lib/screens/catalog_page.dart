@@ -23,6 +23,7 @@ import '../widgets/tv_filter_panel.dart';
 import '../widgets/tv_catalog_navigation.dart';
 import '../widgets/tv_focusable.dart';
 import '../services/catalog_rating_service.dart';
+import '../services/imdb_rating_service.dart';
 import '../services/image_warmup_service.dart';
 import '../services/platform_catalog_service.dart';
 import '../models/streaming_platform.dart';
@@ -366,6 +367,7 @@ class _CatalogPageState extends State<CatalogPage> {
   void initState() {
     super.initState();
     CatalogRatingService.instance.addListener(_ratingsChanged);
+    ImdbRatingService.instance.store.addListener(_imdbChanged);
     PlatformCatalogService.instance.addListener(_platformsChanged);
   }
 
@@ -468,6 +470,14 @@ class _CatalogPageState extends State<CatalogPage> {
 
   /// Re-sorts at most every few seconds while ratings stream in, so the grid
   /// does not rebuild and reshuffle continuously under the remote focus.
+  // IMDb values change the sort key too: bump the version so the sorted
+  // snapshot is recomputed through the same throttle.
+  void _imdbChanged() {
+    if (_sort != CatalogSort.rating) return;
+    CatalogRatingService.instance.version++;
+    _ratingsChanged();
+  }
+
   void _ratingsChanged() {
     if (!mounted || !DeviceTypeService.isTv || _sort != CatalogSort.rating) {
       return;
@@ -486,6 +496,7 @@ class _CatalogPageState extends State<CatalogPage> {
   @override
   void dispose() {
     CatalogRatingService.instance.removeListener(_ratingsChanged);
+    ImdbRatingService.instance.store.removeListener(_imdbChanged);
     PlatformCatalogService.instance.removeListener(_platformsChanged);
     _ratingsTimer?.cancel();
     _searchController.dispose();
@@ -1111,8 +1122,13 @@ class _CatalogPageState extends State<CatalogPage> {
     }
     if (!_sorting) {
       _sorting = true;
-      if (_sort == CatalogSort.rating)
+      if (_sort == CatalogSort.rating) {
         service.request(entries.map((e) => e.primary));
+        // Shared cache only: sorting never spends external IMDb calls.
+        ImdbRatingService.instance.prime(
+          entries.map((e) => service.itemOf(e.primary)).whereType<TmdbItem>(),
+        );
+      }
       final order = _sort;
       final version = service.version;
       // No provider, context or native object enters the isolate.
@@ -1123,7 +1139,7 @@ class _CatalogPageState extends State<CatalogPage> {
           if (order == CatalogSort.rating) {
             for (var i = 0; i < entries.length; i++) {
               final c = entries[i].primary;
-              ratings[c.id] = service.ratingOf(c) ?? 0;
+              ratings[c.id] = service.sortRatingOf(c);
               if (i % 200 == 199) {
                 await Future<void>.delayed(Duration.zero);
                 if (!mounted) return;

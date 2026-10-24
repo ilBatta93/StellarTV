@@ -13,7 +13,7 @@ enum CatalogSort {
   dateDesc('Ultimo aggiunto'),
   releaseDesc('Uscita più recente'),
   releaseAsc('Uscita meno recente'),
-  rating('Voto');
+  rating('Voto IMDb');
 
   const CatalogSort(this.label);
   final String label;

@@ -14,6 +14,7 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../config/supabase_config.dart';
 import 'tmdb_service.dart';
+import 'imdb_rating_service.dart';
 import 'title_metadata_store.dart';
 import '../models/tmdb_item.dart';
 
@@ -66,11 +67,23 @@ class CatalogRatingService extends ChangeNotifier {
       '${c.type.name}:${TmdbService.cleanTitle(c.displaySeriesName).toLowerCase()}';
   double? ratingOf(Channel c) => _ratings[_key(c)];
 
+  /// Sort value: IMDb when known (>0), otherwise the TMDB vote.
+  double sortRatingOf(Channel c) {
+    final item = itemOf(c);
+    final imdb = item == null
+        ? null
+        : ImdbRatingService.instance.store.valueOf(
+            ImdbRatingService.keyOf(item),
+          );
+    if (imdb != null && imdb > 0) return imdb;
+    return _ratings[_key(c)] ?? 0;
+  }
+
   Future<String> _path() async =>
       '${(await getApplicationSupportDirectory()).path}/tv_ratings_v1.json';
 
   Future<void> _load() async {
-    await identities.load();
+    await Future.wait([identities.load(), ImdbRatingService.instance.store.load()]);
     try {
       final path = await _path();
       final data = await Isolate.run(() {
