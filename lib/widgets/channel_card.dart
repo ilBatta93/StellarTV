@@ -11,6 +11,7 @@ import '../providers/ui_settings.dart';
 import 'package:provider/provider.dart';
 
 import '../services/catalog_rating_service.dart';
+import '../services/title_matching.dart';
 
 class ChannelCard extends StatelessWidget {
   final Channel channel;
@@ -27,6 +28,31 @@ class ChannelCard extends StatelessWidget {
   });
 
   bool get _isLive => channel.type == ContentType.live;
+
+  String get _title => _isLive ? channel.name : displayTitle(channel.name);
+
+  static const _audiobookCover = 'assets/images/audiobook_cover.jpg';
+
+  /// Provider artwork first, then the official TMDB poster, then the
+  /// audiobook cover or the neutral icon.
+  Widget _artwork() {
+    final audiobook = isAudiobook(channel.name, channel.group);
+    final tmdb = audiobook
+        ? null
+        : CatalogRatingService.instance.itemOf(channel)?.posterUrl;
+    final icon = channel.type == ContentType.series ||
+            channel.type == ContentType.anime
+        ? Icons.video_library_outlined
+        : Icons.movie_outlined;
+    final cover = Image.asset(_audiobookCover, fit: BoxFit.cover, cacheWidth: 360);
+    if (channel.logo.isEmpty && tmdb == null && audiobook) return cover;
+    return PosterImage(
+      url: channel.logo.isEmpty ? tmdb : channel.logo,
+      fallbackUrls: [if (tmdb != null && channel.logo.isNotEmpty) tmdb],
+      fallbackIcon: icon,
+      audiobookCover: audiobook ? _audiobookCover : null,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,14 +101,7 @@ class ChannelCard extends StatelessWidget {
                         ),
                       )
                     else
-                      PosterImage(
-                        url: channel.logo,
-                        fallbackIcon:
-                            channel.type == ContentType.series ||
-                                channel.type == ContentType.anime
-                            ? Icons.video_library_outlined
-                            : Icons.movie_outlined,
-                      ),
+                      _artwork(),
                     Positioned(
                       top: 6,
                       right: 6,
@@ -109,9 +128,9 @@ class ChannelCard extends StatelessWidget {
                     ? const EdgeInsets.fromLTRB(9, 8, 9, 9)
                     : const EdgeInsets.only(top: 8),
                 child: DeviceTypeService.isTv
-                    ? TvPosterTitle(channel.name)
+                    ? TvPosterTitle(_title)
                     : Text(
-                        channel.name,
+                        _title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

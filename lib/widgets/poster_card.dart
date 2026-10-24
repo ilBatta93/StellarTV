@@ -29,6 +29,9 @@ class PosterImage extends StatelessWidget {
   final int? maxDecodeWidth;
   final List<String> fallbackUrls;
 
+  /// Bundled cover shown instead of the neutral icon (audiobooks).
+  final String? audiobookCover;
+
   const PosterImage({
     super.key,
     required this.url,
@@ -37,15 +40,18 @@ class PosterImage extends StatelessWidget {
     this.rememberWidth = false,
     this.maxDecodeWidth,
     this.fallbackUrls = const [],
+    this.audiobookCover,
   });
 
   @override
   Widget build(BuildContext context) {
-    final fallback = Container(
-      color: AppColors.card,
-      alignment: Alignment.center,
-      child: Icon(fallbackIcon, color: AppColors.textMuted, size: 28),
-    );
+    final Widget fallback = audiobookCover != null
+        ? Image.asset(audiobookCover!, fit: BoxFit.cover, cacheWidth: 360)
+        : Container(
+            color: AppColors.card,
+            alignment: Alignment.center,
+            child: Icon(fallbackIcon, color: AppColors.textMuted, size: 28),
+          );
     // The "Mostra anteprime" setting: when off, all poster images become a
     // neutral placeholder tile.
     if (!context.select<UiSettings, bool>((ui) => ui.showPosters)) {
@@ -91,6 +97,7 @@ class PosterImage extends StatelessWidget {
                   fit: fit,
                   fallbackIcon: fallbackIcon,
                   maxDecodeWidth: maxDecodeWidth,
+                  audiobookCover: audiobookCover,
                 ),
         );
       },

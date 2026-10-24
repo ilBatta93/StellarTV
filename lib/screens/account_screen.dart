@@ -251,7 +251,8 @@ class _AccountScreenState extends State<AccountScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Senza account i dati restano solo su questo dispositivo.',
+            'Senza account i dati restano solo su questo dispositivo.\n'
+            'Account e guida: stellartv.vercel.app',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textMuted,

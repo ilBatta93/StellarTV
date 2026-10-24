@@ -72,3 +72,50 @@ bool matchesTitle(ParsedTitle parsed, Iterable<String> names, String year) {
   final targets = titleQueries(parsed.title).map(normalizeTitle).toSet();
   return names.any((name) => targets.contains(normalizeTitle(name)));
 }
+
+/// Notable traits worth keeping in a displayed name (3D, special cuts).
+final _notable = RegExp(
+  r"\b(3D|EXTENDED(?: CUT| EDITION)?|DIRECTOR'?S CUT|UNCUT|UNRATED|REMASTERED|IMAX|VERSIONE ESTESA|EDIZIONE SPECIALE)\b",
+  caseSensitive: false,
+);
+
+/// On-screen name: the bare title without dots, years, quality or language
+/// tags. Notable traits (3D, special editions) are kept as a short suffix.
+/// Display only: identifiers and matching keys never use this value.
+String displayTitle(String raw) {
+  if (raw.trim().isEmpty) return raw;
+  final dotted = raw
+      .replaceAll(
+        RegExp(r'\.(mkv|mp4|avi|ts|m3u8|mov|wmv)\s*$', caseSensitive: false),
+        '',
+      )
+      .replaceAllMapped(
+    RegExp(r'(?<=[A-Za-zÀ-ÿ0-9])[._](?=[A-Za-zÀ-ÿ0-9(\[])'),
+    (_) => ' ',
+  );
+  final traits = <String>[];
+  for (final m in _notable.allMatches(dotted)) {
+    final v = m.group(1)!.toUpperCase() == '3D'
+        ? '3D'
+        : m.group(1)!
+              .toLowerCase()
+              .split(' ')
+              .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
+              .join(' ');
+    if (!traits.contains(v)) traits.add(v);
+  }
+  var t = parseTitle(dotted.replaceAll(_notable, ' ')).title;
+  t = t
+      .replaceAll(RegExp(r'[\[\]()]\s*[\[\]()]'), ' ')
+      .replaceAll(RegExp(r'\s*[-–:|]\s*$'), '')
+      .replaceAll(RegExp(r'^\s*[-–:|]\s*'), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (t.isEmpty) return raw.trim();
+  return traits.isEmpty ? t : '$t (${traits.join(', ')})';
+}
+
+/// Audiobook entries get a dedicated cover when the provider has none.
+bool isAudiobook(String name, String group) =>
+    RegExp(r'audio ?libr|audiobook', caseSensitive: false)
+        .hasMatch('$group $name');

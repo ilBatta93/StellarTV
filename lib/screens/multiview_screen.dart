@@ -91,7 +91,17 @@ class _MultiViewScreenState extends State<MultiViewScreen>
         slot.autoRetries = 0;
       }
       final v = session.value;
-      if (!v.isPlaying && !v.isEnded) unawaited(session.ensurePlaying());
+      if (!v.isPlaying && !v.isEnded && !v.isBuffering) {
+        unawaited(session.ensurePlaying());
+      }
+      // Some live engines keep reporting the same position while the
+      // picture plays normally: a tile that is playing and not buffering is
+      // healthy, so it is never restarted (that caused cyclic pauses).
+      if (v.isPlaying && !v.isBuffering) {
+        slot.lastPosition = v.position;
+        slot.stallSince = now;
+        continue;
+      }
       if (v.position != slot.lastPosition) {
         slot.lastPosition = v.position;
         slot.stallSince = now;

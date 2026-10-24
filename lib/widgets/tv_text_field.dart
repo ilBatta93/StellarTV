@@ -281,9 +281,12 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
       return KeyEventResult.handled;
     }
     // Right moves onto the trailing buttons (mic, clear) inside the bar.
-    if (k == LogicalKeyboardKey.arrowRight && _mic.context != null) {
-      _mic.requestFocus();
-      return KeyEventResult.handled;
+    if (k == LogicalKeyboardKey.arrowRight) {
+      final first = _trailingStops().firstOrNull;
+      if (first != null) {
+        _focusStop(first);
+        return KeyEventResult.handled;
+      }
     }
     return _prev?.call(node, e) ?? KeyEventResult.ignored;
   }
@@ -295,22 +298,51 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
   final FocusNode _clear = FocusNode(debugLabel: 'TvTextField clear')
     ..skipTraversal = true;
 
+  /// Host of a caller-provided trailing action (for example the password
+  /// eye): it stays out of Up/Down traversal and is reached with Right.
+  final FocusNode _extra = FocusNode(
+    debugLabel: 'TvTextField extra',
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
+
+  /// Dictation is offered only where it can work: never on password fields
+  /// and never on Fire TV, whose microphone always belongs to Alexa.
+  bool get _voice => !widget.obscureText && !DeviceTypeService.isFireTv;
+
+  /// Trailing stops in on-screen order, left to right.
+  List<FocusNode> _trailingStops() => [
+    if (_mic.context != null) _mic,
+    if (_clear.context != null) _clear,
+    if (_extra.context != null && _extra.descendants.any((n) => n.canRequestFocus))
+      _extra,
+  ];
+
+  void _focusStop(FocusNode node) {
+    if (node == _extra) {
+      _extra.descendants.firstWhere((n) => n.canRequestFocus).requestFocus();
+    } else {
+      node.requestFocus();
+    }
+  }
+
   KeyEventResult _onTrailingKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
     final k = e.logicalKey;
-    final onMic = _mic.hasFocus;
+    final stops = _trailingStops();
+    final index = stops.indexWhere((n) => n.hasFocus);
     if (k == LogicalKeyboardKey.arrowLeft) {
-      if (!onMic && _mic.context != null) {
-        _mic.requestFocus();
+      if (index > 0) {
+        _focusStop(stops[index - 1]);
       } else {
         _shell.requestFocus();
       }
       return KeyEventResult.handled;
     }
     if (k == LogicalKeyboardKey.arrowRight) {
-      if (onMic && _clear.context != null) _clear.requestFocus();
+      if (index >= 0 && index + 1 < stops.length) _focusStop(stops[index + 1]);
       return KeyEventResult.handled;
     }
     if (k == LogicalKeyboardKey.arrowDown) {
@@ -372,6 +404,7 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
     _shell.dispose();
     _mic.dispose();
     _clear.dispose();
+    _extra.dispose();
     _own.dispose();
     super.dispose();
   }
@@ -450,41 +483,41 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
     final theme = Theme.of(context);
     final highlighted = _shell.hasPrimaryFocus;
     var decoration = widget.decoration ?? const InputDecoration();
-    if (widget.clearable && widget.controller.text.isNotEmpty) {
-      void clear() {
-        widget.controller.clear();
-        widget.onChanged?.call('');
-      }
-
-      decoration = decoration.copyWith(
-        suffixIcon: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _micButton(),
-            TvFocusable(
-              focusNode: _clear,
-              focusedScale: 1,
-              onPressed: clear,
-              child: IconButton(
-                tooltip: 'Cancella ricerca',
-                onPressed: clear,
-                icon: const Icon(Icons.close_rounded, size: 20),
-              ),
-            ),
-          ],
-        ),
-      );
-    } else if (decoration.suffixIcon == null) {
-      decoration = decoration.copyWith(suffixIcon: _micButton());
-    } else {
-      final existing = decoration.suffixIcon!;
-      decoration = decoration.copyWith(
-        suffixIcon: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [_micButton(), existing],
-        ),
-      );
+    final existing = decoration.suffixIcon;
+    final showClear = widget.clearable && widget.controller.text.isNotEmpty;
+    void clear() {
+      widget.controller.clear();
+      widget.onChanged?.call('');
     }
+
+    final trailingChildren = <Widget>[
+      if (_voice) _micButton(),
+      if (showClear)
+        TvFocusable(
+          focusNode: _clear,
+          focusedScale: 1,
+          onPressed: clear,
+          child: IconButton(
+            tooltip: 'Cancella ricerca',
+            onPressed: clear,
+            icon: const Icon(Icons.close_rounded, size: 20),
+          ),
+        ),
+      if (existing != null)
+        Focus(
+          focusNode: _extra,
+          canRequestFocus: false,
+          skipTraversal: true,
+          child: ExcludeFocusTraversal(child: existing),
+        ),
+    ];
+    decoration = decoration.copyWith(
+      suffixIcon: trailingChildren.isEmpty
+          ? null
+          : trailingChildren.length == 1
+          ? trailingChildren.first
+          : Row(mainAxisSize: MainAxisSize.min, children: trailingChildren),
+    );
     final trailing = decoration.suffixIcon;
     if (trailing != null) {
       decoration = decoration.copyWith(

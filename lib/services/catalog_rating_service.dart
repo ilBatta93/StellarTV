@@ -36,7 +36,7 @@ class CatalogRatingService extends ChangeNotifier {
   static final instance = CatalogRatingService._();
   final _tmdb = TmdbService();
   final identities = TitleMetadataStore<TmdbItem>(
-    fileName: 'catalog_rating_identities_v2.json',
+    fileName: 'catalog_rating_identities_v3.json',
     encode: (v) => v.toJson(),
     decode: (v) =>
         v is Map ? TmdbItem.tryParse(Map<String, dynamic>.from(v)) : null,
@@ -81,7 +81,7 @@ class CatalogRatingService extends ChangeNotifier {
   }
 
   Future<String> _path() async =>
-      '${(await getApplicationSupportDirectory()).path}/tv_ratings_v2.json';
+      '${(await getApplicationSupportDirectory()).path}/tv_ratings_v3.json';
 
   Future<void> _load() async {
     await Future.wait([
@@ -227,7 +227,9 @@ class CatalogRatingService extends ChangeNotifier {
                 mediaType: c.type == ContentType.movie ? 'movie' : 'tv',
                 title: c.displaySeriesName,
                 overview: c.plot ?? '',
-                posterPath: null,
+                posterPath: identity['poster'] is String
+                    ? identity['poster'] as String
+                    : null,
                 backdropPath: null,
                 voteAverage: v.toDouble(),
                 popularity: 0,

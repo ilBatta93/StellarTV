@@ -1,6 +1,7 @@
-- Riconoscimento dei nomi con punti e indicazioni tecniche, con anno e controllo dei risultati ambigui.
-- Miniature ufficiali dei singoli episodi con immagini alternative quando non disponibili.
-- IMDb prioritario senza voto provvisorio; TMDB ponderato sotto 20 voti.
-- Servizi dell’app collegati al sito principale su Vercel.
-- Copia locale dei cataloghi salvata e letta a piccoli blocchi, con meno memoria e protezione dalle copie interrotte.
-- Microfono in tutte le barre di ricerca raggiungibile con la freccia Destra; dettatura diretta senza finestra di scelta.
+- Nomi dei titoli puliti: niente punti, anni o sigle tecniche; restano 3D e versioni speciali.
+- Locandine ufficiali usate quando manca l'immagine della lista.
+- Copertina dedicata per gli audiolibri.
+- Voti senza valori 10 falsi: archivio voti ricalcolato con la regola dei 20 voti.
+- Accesso: frecce lineari tra password e occhio, niente microfono sulla password, indirizzo del sito visibile.
+- Fire TV: microfono a schermo nascosto, perché il tasto vocale appartiene ad Alexa.
+- MultiView: i riquadri non si fermano più ciclicamente per qualche secondo.
