@@ -2,6 +2,6 @@
 - Locandine ufficiali usate quando manca l'immagine della lista.
 - Copertina dedicata per gli audiolibri.
 - Voti senza valori 10 falsi: archivio voti ricalcolato con la regola dei 20 voti.
-- Accesso: frecce lineari tra password e occhio, niente microfono sulla password, indirizzo del sito visibile.
+- Accesso: frecce lineari tra campi e pulsante mostra/nascondi, nessun microfono nei campi riservati, indirizzo del sito visibile.
 - Fire TV: microfono a schermo nascosto, perché il tasto vocale appartiene ad Alexa.
 - MultiView: i riquadri non si fermano più ciclicamente per qualche secondo.
