@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../services/device_type_service.dart';
 import '../services/tv_remote_keys.dart';
 import 'tv_focusable.dart';
@@ -279,7 +280,54 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
       node.previousFocus();
       return KeyEventResult.handled;
     }
+    // Right moves onto the trailing buttons (mic, clear) inside the bar.
+    if (k == LogicalKeyboardKey.arrowRight && _mic.context != null) {
+      _mic.requestFocus();
+      return KeyEventResult.handled;
+    }
     return _prev?.call(node, e) ?? KeyEventResult.ignored;
+  }
+
+  // Trailing buttons stay out of linear traversal: Down/Up from the bar skip
+  // them, Right/Left move between the bar and the buttons.
+  final FocusNode _mic = FocusNode(debugLabel: 'TvTextField mic')
+    ..skipTraversal = true;
+  final FocusNode _clear = FocusNode(debugLabel: 'TvTextField clear')
+    ..skipTraversal = true;
+
+  KeyEventResult _onTrailingKey(FocusNode node, KeyEvent e) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final k = e.logicalKey;
+    final onMic = _mic.hasFocus;
+    if (k == LogicalKeyboardKey.arrowLeft) {
+      if (!onMic && _mic.context != null) {
+        _mic.requestFocus();
+      } else {
+        _shell.requestFocus();
+      }
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.arrowRight) {
+      if (onMic && _clear.context != null) _clear.requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.arrowDown) {
+      _shell.requestFocus();
+      if (widget.onMoveDown != null) {
+        widget.onMoveDown?.call();
+        return KeyEventResult.handled;
+      }
+      _shell.nextFocus();
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.arrowUp) {
+      _shell.requestFocus();
+      _shell.previousFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   /// Keys while the real field is focused (keyboard open or just closed).
@@ -322,6 +370,8 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
     _detach();
     _shell.removeListener(_onShellFocus);
     _shell.dispose();
+    _mic.dispose();
+    _clear.dispose();
     _own.dispose();
     super.dispose();
   }
@@ -379,6 +429,7 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
   }
 
   Widget _micButton() => TvFocusable(
+    focusNode: _mic,
     focusedScale: 1,
     onPressed: _dictate,
     child: IconButton(
@@ -411,6 +462,7 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
           children: [
             _micButton(),
             TvFocusable(
+              focusNode: _clear,
               focusedScale: 1,
               onPressed: clear,
               child: IconButton(
@@ -430,6 +482,17 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
         suffixIcon: Row(
           mainAxisSize: MainAxisSize.min,
           children: [_micButton(), existing],
+        ),
+      );
+    }
+    final trailing = decoration.suffixIcon;
+    if (trailing != null) {
+      decoration = decoration.copyWith(
+        suffixIcon: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onKeyEvent: _onTrailingKey,
+          child: trailing,
         ),
       );
     }

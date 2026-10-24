@@ -49,11 +49,31 @@ class MainActivity : FlutterActivity() {
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "it-IT")
                 .putExtra(RecognizerIntent.EXTRA_PROMPT, "Parla ora")
                 .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            speechPackage(intent)?.let { intent.setPackage(it) }
             startActivityForResult(intent, speechRequest)
         } catch (e: Exception) {
             pendingSpeech = null
             result.error("unavailable", e.message, null)
         }
+    }
+
+    /// Picks one dictation engine so Android never shows the chooser (cut off
+    /// on some Google TV sets). The TV assistant (katniss) is skipped because
+    /// it launches a system-wide search instead of returning text.
+    private fun speechPackage(intent: Intent): String? {
+        val found = try {
+            packageManager.queryIntentActivities(intent, 0)
+                .mapNotNull { it.activityInfo?.packageName }
+                .distinct()
+        } catch (_: Exception) { emptyList() }
+        if (found.size <= 1) return null
+        val usable = found.filter { !it.contains("katniss") }
+        val preferred = listOf(
+            "com.google.android.tts",
+            "com.google.android.googlequicksearchbox",
+            "com.google.android.voicesearch",
+        )
+        return preferred.firstOrNull { it in usable } ?: usable.firstOrNull()
     }
 
     @Deprecated("Activity result API not used by FlutterActivity")

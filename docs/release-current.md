@@ -3,3 +3,4 @@
 - IMDb prioritario senza voto provvisorio; TMDB ponderato sotto 20 voti.
 - Servizi dell’app collegati al sito principale su Vercel.
 - Copia locale dei cataloghi salvata e letta a piccoli blocchi, con meno memoria e protezione dalle copie interrotte.
+- Microfono in tutte le barre di ricerca raggiungibile con la freccia Destra; dettatura diretta senza finestra di scelta.
