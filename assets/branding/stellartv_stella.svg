@@ -1,1 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="63.0 -1.0 498.0 514.0" width="498" height="514"><title>STELLAR TV — stella</title><defs><linearGradient id="orbit-ivory" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff9e8" /><stop offset=".55" stop-color="#f4ebd6" /><stop offset="1" stop-color="#ccb58e" /></linearGradient><radialGradient id="planet-gold" cx="35%" cy="30%"><stop stop-color="#ffc459" /><stop offset="1" stop-color="#cf8423" /></radialGradient><linearGradient id="star-edge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fae8c4" /><stop offset=".45" stop-color="#b88b4c" /><stop offset=".65" stop-color="#fae8c4" /><stop offset="1" stop-color="#967449" /></linearGradient><radialGradient id="star-gold" cx="50%" cy="50%" r="56%"><stop offset="0" stop-color="#fffbe1" /><stop offset=".15" stop-color="#ffe29a" /><stop offset=".40" stop-color="#f7ae38" /><stop offset=".75" stop-color="#c58e40" /><stop offset="1" stop-color="#8e704b" /></radialGradient></defs><g id="stella-e-orbita"><path id="orbita-posteriore" d="M464 90 C579 66 569 179 456 286 C360 378 231 449 140 435 C42 421 60 351 135 274 L147 278 C89 346 77 398 127 411 C204 438 345 363 444 274 C557 170 550 91 466 100 Z M346 127 Q381 108 412 103 L414 109 Q379 121 349 138 Z" fill="url(#orbit-ivory)" /><path id="stella-bordo" d="M312 3 C347 193 362 219 557 256 C362 293 347 325 312 509 C277 325 256 293 67 256 C256 219 277 193 312 3 Z" fill="url(#star-edge)" /><path id="stella-luce" d="M312 13 C344 198 365 224 548 256 C365 288 344 319 312 499 C280 319 259 288 76 256 C259 224 280 198 312 13 Z" fill="url(#star-gold)" /><path id="orbita-anteriore" d="M466 90 C574 70 564 176 454 282 C377 356 274 411 205 431 L202 419 C274 395 369 343 442 274 C544 176 551 94 466 100 Z" fill="url(#orbit-ivory)" /><circle id="pianeta-440" cx="440" cy="100" r="20" fill="url(#planet-gold)" /><path d="M431 94 q8 -7 15 0 q-2 6 5 9 q-8 5 -15 -1 q4 -4 -5 -8" fill="#ffe5a7" opacity=".45" /><circle id="pianeta-180" cx="180" cy="418" r="21" fill="url(#orbit-ivory)" /><path d="M171 412 q8 -7 15 0 q-2 6 5 9 q-8 5 -15 -1 q4 -4 -5 -8" fill="#d9c9a7" opacity=".45" /></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="2048" height="2048">
+<title>STELLAR TV — stella</title>
+<defs>
+<linearGradient id="fA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffeaa6"/><stop offset="1" stop-color="#f0b843"/></linearGradient>
+<linearGradient id="fB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e3a03a"/><stop offset="1" stop-color="#b8741f"/></linearGradient>
+<linearGradient id="fC" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd877"/><stop offset="1" stop-color="#e9a73a"/></linearGradient>
+<linearGradient id="fD" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c9862a"/><stop offset="1" stop-color="#8f5615"/></linearGradient>
+<linearGradient id="fE" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d48f2e"/><stop offset="1" stop-color="#9c5f17"/></linearGradient>
+<linearGradient id="fF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a86a1d"/><stop offset="1" stop-color="#6b400d"/></linearGradient>
+<linearGradient id="fG" x1="1" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#b47422"/><stop offset="1" stop-color="#7a4a10"/></linearGradient>
+<linearGradient id="fH" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#f3bd4c"/></linearGradient>
+<radialGradient id="glow"><stop offset="0" stop-color="#fff"/><stop offset=".2" stop-color="#fff3c0" stop-opacity=".9"/><stop offset="1" stop-color="#ffd25a" stop-opacity="0"/></radialGradient>
+<linearGradient id="orb" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff1c2"/><stop offset=".35" stop-color="#f2c55a"/><stop offset=".7" stop-color="#c8862c"/><stop offset="1" stop-color="#ffe29a"/></linearGradient>
+<linearGradient id="tvb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe7a3"/><stop offset=".5" stop-color="#e9a63c"/><stop offset="1" stop-color="#a8681c"/></linearGradient>
+<radialGradient id="scr" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#cfe7f2"/><stop offset="1" stop-color="#5d8296"/></radialGradient>
+<clipPath id="starClip"><path d="M512 42 Q554.3 469.7 982 512 Q554.3 554.3 512 982 Q469.7 554.3 42 512 Q469.7 469.7 512 42Z"/></clipPath>
+<clipPath id="frontClip"><path d="M-1342.3677091335749 1261.213186831824 L2366.367709133575 -237.21318683182403 L3115.5808959653987 1617.1545223017508 L-593.1545223017508 3115.5808959653987Z"/></clipPath>
+<mask id="gap"><rect width="1024" height="1024" fill="#fff"/><circle cx="213.3" cy="734.8" r="122" fill="#000"/></mask>
+<symbol id="spark" viewBox="-10 -10 20 20"><path d="M0-10Q1.2-1.2 10 0Q1.2 1.2 0 10Q-1.2 1.2-10 0Q-1.2-1.2 0-10Z" fill="#ffd774"/></symbol>
+</defs>
+<g mask="url(#gap)"><ellipse cx="512" cy="512" rx="440" ry="165" transform="rotate(-22 512 512)" fill="none" stroke="#5a360c" stroke-width="50"/><ellipse cx="512" cy="512" rx="440" ry="165" transform="rotate(-22 512 512)" fill="none" stroke="url(#orb)" stroke-width="38"/></g>
+<path d="M512 42 Q554.3 469.7 982 512 Q554.3 554.3 512 982 Q469.7 554.3 42 512 Q469.7 469.7 512 42Z" fill="#5a360c" stroke="#5a360c" stroke-width="18" stroke-linejoin="round"/>
+<g clip-path="url(#starClip)"><path d="M512 512L512.0 42.0L230.0 230.0Z" fill="url(#fA)"/><path d="M512 512L512.0 42.0L794.0 230.0Z" fill="url(#fB)"/><path d="M512 512L982.0 512.0L794.0 230.0Z" fill="url(#fC)"/><path d="M512 512L982.0 512.0L794.0 794.0Z" fill="url(#fD)"/><path d="M512 512L512.0 982.0L794.0 794.0Z" fill="url(#fE)"/><path d="M512 512L512.0 982.0L230.0 794.0Z" fill="url(#fF)"/><path d="M512 512L42.0 512.0L230.0 794.0Z" fill="url(#fG)"/><path d="M512 512L42.0 512.0L230.0 230.0Z" fill="url(#fH)"/>
+<g stroke="#fff6d2" stroke-opacity=".55" stroke-width="4"><line x1="512" y1="512" x2="512" y2="42"/><line x1="512" y1="512" x2="982" y2="512"/><line x1="512" y1="512" x2="512" y2="982"/><line x1="512" y1="512" x2="42" y2="512"/></g></g>
+<circle cx="512" cy="512" r="150" fill="url(#glow)"/>
+<path d="M512 442L520 504L582 512L520 520L512 582L504 520L442 512L504 504Z" fill="#fff"/>
+<g mask="url(#gap)" clip-path="url(#frontClip)"><ellipse cx="512" cy="512" rx="440" ry="165" transform="rotate(-22 512 512)" fill="none" stroke="#5a360c" stroke-width="50"/><ellipse cx="512" cy="512" rx="440" ry="165" transform="rotate(-22 512 512)" fill="none" stroke="url(#orb)" stroke-width="38"/></g>
+<g transform="translate(213.3 734.8) rotate(6.4)">
+<g stroke="#5a360c" stroke-width="14" stroke-linecap="round"><line x1="-8" y1="-70" x2="-48" y2="-122"/><line x1="8" y1="-70" x2="56" y2="-114"/></g>
+<g stroke="#f6c55a" stroke-width="6" stroke-linecap="round"><line x1="-8" y1="-70" x2="-48" y2="-122"/><line x1="8" y1="-70" x2="56" y2="-114"/></g>
+<circle cx="-48" cy="-122" r="11" fill="#ffd774" stroke="#5a360c" stroke-width="5"/><circle cx="56" cy="-114" r="11" fill="#ffd774" stroke="#5a360c" stroke-width="5"/>
+<ellipse cx="0" cy="-70" rx="22" ry="12" fill="url(#tvb)" stroke="#5a360c" stroke-width="5"/>
+<rect x="-96" y="-68" width="192" height="138" rx="30" fill="url(#tvb)" stroke="#5a360c" stroke-width="9"/>
+<rect x="-78" y="-50" width="124" height="102" rx="22" fill="#3b2408"/>
+<rect x="-72" y="-44" width="112" height="90" rx="18" fill="url(#scr)"/>
+<path d="M-60 -32 Q-30 -40 -4 -34 L-14 -20 Q-38 -24 -58 -16Z" fill="#fff" opacity=".85"/>
+<circle cx="70" cy="-26" r="11" fill="#7a4a10"/><circle cx="70" cy="6" r="11" fill="#7a4a10"/>
+<g fill="#7a4a10"><rect x="60" y="30" width="20" height="4" rx="2"/><rect x="60" y="40" width="20" height="4" rx="2"/></g>
+<path d="M-66 70 L-78 92 M66 70 L78 92" stroke="#5a360c" stroke-width="12" stroke-linecap="round"/>
+</g>
+<use href="#spark" x="790" y="150" width="56" height="56"/><use href="#spark" x="180" y="170" width="44" height="44"/>
+<use href="#spark" x="840" y="690" width="48" height="48"/><use href="#spark" x="110" y="320" width="28" height="28"/>
+</svg>

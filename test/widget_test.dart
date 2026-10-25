@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stellar_tv/main.dart';
-import 'package:stellar_tv/widgets/brand_logo.dart';
+import 'package:stellar_tv/widgets/brand_intro.dart';
 
 void main() {
   setUp(() {
@@ -11,6 +11,6 @@ void main() {
   testWidgets('App renders splash screen with brand', (tester) async {
     await tester.pumpWidget(const StellarTvApp());
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.byType(BrandWordmark), findsOneWidget);
+    expect(find.byType(BrandIntro), findsOneWidget);
   });
 }

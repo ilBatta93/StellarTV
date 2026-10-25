@@ -18,9 +18,9 @@ void main() {
     await tester.runAsync(() async { await Future<void>.delayed(const Duration(milliseconds: 200)); });
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    final logo = tester.widget<SvgPicture>(find.descendant(of: find.byType(BrandLogo), matching: find.byType(SvgPicture)));
-    expect(logo.height, 46 * 1.35);
-    expect(logo.width, closeTo(46 * 1.35 * 1992.1 / 514, .001));
+    expect(find.descendant(of: find.byType(BrandLogo), matching: find.byType(SvgPicture)), findsNWidgets(3));
+    expect(tester.getSize(find.byType(BrandLogo)).height, 46 * 1.35);
+    expect(tester.getSize(find.byType(BrandLogo)).width, closeTo(46 * 1.35 * 1992.1 / 514, .001));
     expect(tester.getSize(find.byType(BrandIntro)).height, closeTo(640 * 514 / 1992.1, .01));
     final boundary = key.currentContext?.findRenderObject();
     if (boundary is RenderRepaintBoundary) {

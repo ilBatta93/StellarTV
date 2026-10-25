@@ -24,16 +24,6 @@ class BrandIntro extends StatelessWidget {
   const BrandIntro({super.key, required this.progress});
   final double progress;
 
-  static Widget _part(String asset, BrandBox b, double scale, double left, double opacity) =>
-      Positioned(
-        left: left,
-        top: (b.y - kBrandFullBox.y) * scale,
-        child: Opacity(
-          opacity: opacity,
-          child: brandArt(asset, b.w * scale, b.h * scale, ''),
-        ),
-      );
-
   @override
   Widget build(BuildContext context) {
     final frame = BrandIntroFrame.at(progress);
@@ -41,27 +31,12 @@ class BrandIntro extends StatelessWidget {
       label: 'STELLAR TV',
       image: true,
       child: ExcludeSemantics(
-        child: LayoutBuilder(
-          builder: (context, box) {
-            final width = box.maxWidth.clamp(0.0, 720.0);
-            final full = kBrandFullBox;
-            final scale = width / full.w;
-            double at(BrandBox b) => (b.x - full.x) * scale;
-            final centred = (width - kBrandStarBox.w * scale) / 2;
-            return SizedBox(
-              width: width,
-              height: full.h * scale,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  _part(kBrandSymbolAsset, kBrandStarBox, scale,
-                      centred * (1 - frame.shift) + at(kBrandStarBox) * frame.shift, frame.symbol),
-                  _part(kBrandStellarAsset, kBrandStellarBox, scale, at(kBrandStellarBox), frame.stellar),
-                  _part(kBrandTvAsset, kBrandTvBox, scale, at(kBrandTvBox), frame.tv),
-                ],
-              ),
-            );
-          },
+        child: BrandLockup(
+          symbol: frame.symbol,
+          shift: frame.shift,
+          stellar: frame.stellar,
+          tv: frame.tv,
+          maxWidth: 720,
         ),
       ),
     );

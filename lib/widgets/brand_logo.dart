@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-/// Approved "E orbitale v2" logo as four shared vectors (same files as the
-/// website): full logo, star symbol, STELLAR wordmark and TV emblem, plus the
-/// STELLAR + TV name. Vectors stay sharp at every TV and phone density.
-const String kBrandWordmarkAsset = 'assets/branding/stellartv_logo.svg';
+/// Shared mark: star vector, STELLAR wordmark and TV emblem (same files as the
+/// website), plus the STELLAR + TV name. Vectors stay sharp at every density.
 const String kBrandSymbolAsset = 'assets/branding/stellartv_stella.svg';
 const String kBrandStellarAsset = 'assets/branding/stellartv_stellar.svg';
 const String kBrandTvAsset = 'assets/branding/stellartv_tv.svg';
@@ -16,6 +14,8 @@ class BrandBox {
   final double x, y, w, h;
   double get aspect => w / h;
 }
+
+const Color kBrandCanvas = Color(0xFF0B0B0E);
 
 const kBrandFullBox = BrandBox(63.0, -1.0, 1992.1, 514.0);
 const kBrandStarBox = BrandBox(63.0, -1.0, 498.0, 514.0);
@@ -39,7 +39,93 @@ class BrandMark extends StatelessWidget {
   const BrandMark({super.key, this.size = 40});
   @override
   Widget build(BuildContext context) =>
-      brandArt(kBrandSymbolAsset, size * kBrandStarBox.aspect, size, 'Stella StellarTV');
+      brandArt(kBrandSymbolAsset, size, size, 'Stella StellarTV');
+}
+
+/// Star, STELLAR and TV in the shared artwork, at one moment of the intro.
+class BrandLockup extends StatelessWidget {
+  const BrandLockup({
+    super.key,
+    required this.symbol,
+    required this.shift,
+    required this.stellar,
+    required this.tv,
+    this.maxWidth = double.infinity,
+  });
+
+  final double symbol;
+  final double shift;
+  final double stellar;
+  final double tv;
+  final double maxWidth;
+
+  static Widget _part(String asset, BrandBox b, double scale, double left, double opacity) =>
+      Positioned(
+        left: left,
+        top: (b.y - kBrandFullBox.y) * scale,
+        child: Opacity(
+          opacity: opacity,
+          child: brandArt(asset, b.w * scale, b.h * scale, ''),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        final width = box.maxWidth.clamp(0.0, maxWidth).toDouble();
+        final full = kBrandFullBox;
+        final scale = width / full.w;
+        double at(BrandBox b) => (b.x - full.x) * scale;
+        final centred = (width - kBrandStarBox.w * scale) / 2;
+        final starLeft = centred * (1 - shift) + at(kBrandStarBox) * shift;
+        final starTop = (kBrandStarBox.y - full.y) * scale;
+        final starW = kBrandStarBox.w * scale;
+        final starH = kBrandStarBox.h * scale;
+        final glow = starW * 0.28;
+        return SizedBox(
+          width: width,
+          height: full.h * scale,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: starLeft - glow,
+                top: starTop - glow,
+                width: starW + glow * 2,
+                height: starH + glow * 2,
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: symbol,
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          colors: [Color(0x73F2C55A), Color(0x00F2C55A)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: starLeft,
+                top: starTop,
+                child: Opacity(
+                  opacity: symbol,
+                  child: Transform.scale(
+                    scale: 0.94 + 0.06 * symbol,
+                    child: brandArt(kBrandSymbolAsset, starW, starH, ''),
+                  ),
+                ),
+              ),
+              _part(kBrandStellarAsset, kBrandStellarBox, scale, at(kBrandStellarBox), stellar),
+              _part(kBrandTvAsset, kBrandTvBox, scale, at(kBrandTvBox), tv),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 class BrandWordmark extends StatelessWidget {
@@ -48,7 +134,17 @@ class BrandWordmark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final h = fontSize * 1.9;
-    return brandArt(kBrandWordmarkAsset, h * kBrandWordmarkAspect, h, 'STELLAR TV');
+    return Semantics(
+      label: 'STELLAR TV',
+      image: true,
+      child: ExcludeSemantics(
+        child: SizedBox(
+          width: h * kBrandWordmarkAspect,
+          height: h,
+          child: const BrandLockup(symbol: 1, shift: 1, stellar: 1, tv: 1),
+        ),
+      ),
+    );
   }
 }
 
@@ -59,7 +155,17 @@ class BrandLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final h = size * 1.35;
-    return brandArt(kBrandWordmarkAsset, h * kBrandWordmarkAspect, h, 'STELLAR TV');
+    return Semantics(
+      label: 'STELLAR TV',
+      image: true,
+      child: ExcludeSemantics(
+        child: SizedBox(
+          width: h * kBrandWordmarkAspect,
+          height: h,
+          child: const BrandLockup(symbol: 1, shift: 1, stellar: 1, tv: 1),
+        ),
+      ),
+    );
   }
 }
 

@@ -6,10 +6,10 @@ import '../providers/history_provider.dart';
 import '../providers/profile_provider.dart';
 import '../providers/sync_provider.dart';
 import '../providers/ui_settings.dart';
-import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
 import '../services/tv_render_policy.dart';
 import '../widgets/brand_intro.dart';
+import '../widgets/brand_logo.dart';
 import 'account_screen.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
@@ -179,16 +179,11 @@ class _SplashScreenState extends State<SplashScreen>
       _animController.value = 1;
     }
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: kBrandCanvas,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(
-            'assets/branding/stellar_space.jpg',
-            fit: BoxFit.cover,
-            cacheWidth: DeviceTypeService.isTv ? 960 : 1920,
-            excludeFromSemantics: true,
-          ),
+          const ColoredBox(color: kBrandCanvas),
           Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),

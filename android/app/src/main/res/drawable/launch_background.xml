@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- StellarTV launch: deep cosmic background with the orbit star mark. -->
+<!-- StellarTV launch: flat canvas with the star mark. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">

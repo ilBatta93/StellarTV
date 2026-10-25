@@ -227,17 +227,11 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: kBrandCanvas,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(
-            'assets/branding/stellar_space.jpg',
-            fit: BoxFit.cover,
-            cacheWidth: 1920,
-            excludeFromSemantics: true,
-          ),
-          ColoredBox(color: AppColors.background.withValues(alpha: .45)),
+          const ColoredBox(color: kBrandCanvas),
           SafeArea(
             child: _waitingPhone
                 ? Center(child: _phoneWait())

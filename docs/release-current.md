@@ -1,3 +1,4 @@
+- L'icona e la schermata di avvio usano il segno aggiornato, più nitido e su uno sfondo uniforme.
 - L'ordine per voto della sezione aperta è immediato e si aggiorna quando arrivano voti nuovi.
 - Le classifiche della Home mostrano il voto appena è noto sul dispositivo.
 - Scheda, sottotitoli e loghi usano i dati già presenti sul dispositivo.
