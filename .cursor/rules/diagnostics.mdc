@@ -1,0 +1,14 @@
+---
+description: Vincoli della diagnostica locale e degli invii espliciti
+globs: lib/services/live_diagnostics_service.dart,lib/services/live_diagnostics_log.dart,lib/services/live_diagnostics_tracker.dart,lib/services/vod_diagnostics_service.dart,lib/services/vod_diagnostics_log.dart,lib/services/frame_telemetry_service.dart,lib/services/frame_telemetry_store.dart,lib/screens/vod_diagnostics_screen.dart,lib/screens/live_diagnostics_screen.dart,lib/models/diagnostic_guide.dart
+alwaysApply: false
+---
+
+# Diagnostica
+
+Aggiorna la frase del vincolo. Non aggiungere un paragrafo di cronologia.
+
+- La diagnostica della diretta osserva PlaybackSession senza cambiare il recupero del motore. La raccolta è opt-in e solo sul dispositivo. Gli eventi strutturati escludono URL, errori grezzi e identità. L'invio autenticato ed esplicito è limitato al proprietario, per l'export dal sito.
+- La diagnostica guidata aggiunge solo un problema opzionale, tra quelli previsti, agli export e agli invii espliciti. Prove tecniche e comportamento del player restano invariati.
+- La telemetria dei frame registra solo aggregati durante una sessione esplicita, con stop automatico, e li invia tramite la stessa tabella di report del proprietario. Niente polling né tabelle aggiuntive.
+- I checkpoint scrivono aggregati limitati in privato, con un writer atomico coalescente, e ruotano il corrente nel precedente prima dell'avvio automatico. Il recupero è un invio esplicito, senza rete in background.

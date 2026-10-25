@@ -1,0 +1,33 @@
+---
+description: Focus del telecomando, Home TV, cataloghi e finestre
+globs: lib/screens/**/*.dart,lib/widgets/**/*.dart,lib/navigation/**/*.dart
+alwaysApply: false
+---
+
+# Interfaccia TV
+
+Aggiorna la frase del vincolo. Non aggiungere un paragrafo di cronologia.
+
+- La presentazione TV dipende dalla modalità di interfaccia Android. Layout e comportamento touch restano quelli attuali.
+- I pannelli categoria TV condividono un solo cassetto per telecomando, con rilevamento del bordo sinistro e ripristino esplicito del focus.
+- I tasti al confine del catalogo risalgono a un antenato non focalizzabile prima della traversata geometrica. Il menu in alto della Home collega ogni tappa, inclusi gli spazi vuoti: Su torna al tab attivo e il movimento laterale non seleziona un tab da solo.
+- I cataloghi TV condividono una griglia filtri lazy con bersagli espliciti nelle quattro direzioni. Indietro restituisce il focus a chi ha aperto il pannello. Sinistra nelle impostazioni torna alla voce attiva della sidebar.
+- La scheda persona TV riusa lo sfondo fisso del titolo e una griglia di poster compatta. Il layout touch della persona resta invariato.
+- La Home TV semina il banner dall'ultimo elemento idoneo della cronologia finché l'utente non prende il focus. HorizontalRow rivela in orizzontale la scheda focalizzata, indipendentemente dal titolo di riga.
+- Le pagine secondarie usano ApplePageScaffold, con larghezza leggibile limitata e il loro scorrimento/focus originale. Tema e controlli condivisi possiedono lo stile. Non duplicare logica di playback o sync.
+- Il focus TV rispetta l'impostazione delle animazioni e la riduzione di movimento di sistema, un solo anello ad alto contrasto per azione, senza blur su video o catalogo.
+- Righe della guida e anteprima espongono i marcatori di confine. Su dalla prima riga o dall'anteprima raggiunge gli strumenti, poi il menu. Giù dagli strumenti salta gli elementi non-ingresso (l'anteprima) e atterra sui canali. I loghi dei canali usano la cache immagini su disco e non sono tappe di focus.
+- Il primo piano della Home TV inizia sotto il menu reale. TvHomeRows ha un viewport verticale a scatto e conserva il focus di riga. Ogni riga occupa lo spazio restante.
+- TvHomeLayout limita le dimensioni adattive del carosello della Home. Sinossi e schede condividono l'altezza disponibile, senza cambiare i default touch o del catalogo. Le etichette degli episodi recenti usano numeri strutturati, con fallback al titolo esplicito, e non modificano gli id della cronologia.
+- I selettori in alto usano ruoli di focus di runtime e transizioni esplicite tra selettore e poster dentro il pager a scatto. I tasti laterali non cambiano riga.
+- Le immagini della Home sono solo orizzontali. I loghi ufficiali arrivano dalla cache al focus, con fallback testuale. La formattazione del titolo mostrato non muta gli id di catalogo o sync.
+- HomePresentation limita le preferenze di layout alle schede della Home e tiene immagine e didascalia dentro le righe a scatto.
+- UiScale avvolge solo le shell di presentazione, mai il navigator né le superfici del player. Layout logico e hit test scalano insieme. La scala del testo alla radice ha un solo proprietario.
+- I selettori delle opzioni montano subito l'elenco dentro uno scroll, così il valore corrente fuori schermo riceve il focus TV.
+- Indietro di un pannello catalogo risolve la toolbar della stessa route, col contesto Home, anche se il focus primario si stacca. I token di transizione annullano i callback stantii. Le frecce del pannello restano della griglia esplicita.
+- La gestione visione ha una tappa di focus per stagione/episodio e dialoghi separati per le modifiche di massa.
+- La Home TV decodifica i poster su richiesta, tiene un vicino verticale completo e vicini orizzontali limitati, e sostituisce solo le immagini ferme cambiate. Sotto pressione di memoria resta un solo sfondo Home, tramite TvRenderPolicy, finché il processo non riparte. Non nascondere schede selezionabili e non cancellare dati utente o immagini su disco.
+- La memoria delle immagini decodificate si riduce ai segnali nativi di pressione. Il lavoro speculativo controlla playback e visibilità e riusa i file in cache.
+- Il focus TV usa un sollevamento statico e l'anello del tema, senza ombre animate sfocate. I riempimenti decorativi doppi dei poster e la dissolvenza dello splash sono solo touch.
+- La finestra di aggiornamento ha uno scroll limitato delle note e nodi di focus espliciti. Il focus iniziale è su Aggiorna. Su entra nelle note dall'alto. Giù alla fine torna su Aggiorna. I tasti orizzontali scelgono le azioni. Il touch mantiene pulsanti e scorrimento nativi. Le note si generano dai punti versionati di release-current, con una sintesi breve.
+- Discover TV dipinge un solo scrim di contrasto e non cambia lo stile touch né quello del player.

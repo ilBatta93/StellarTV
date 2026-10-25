@@ -1,0 +1,20 @@
+---
+description: Vincoli della guida programmi e della diretta
+globs: lib/services/epg_timeline.dart,lib/services/epg_downloader.dart,lib/services/epg_service.dart,lib/services/epg_channel_match.dart,lib/screens/live_page.dart,lib/services/recent_live_channels.dart,lib/services/live_preview_policy.dart,lib/widgets/player/live_channel_picker.dart,lib/widgets/expiry_banner.dart,lib/models/channel.dart
+alwaysApply: false
+---
+
+# Guida programmi e diretta
+
+Aggiorna la frase del vincolo. Non aggiungere un paragrafo di cronologia.
+
+- I promemoria di scadenza si calcolano in un planner puro dalla data di scadenza della sorgente. Arrivano come notifiche locali più un banner in Home. Su Google TV le notifiche di sistema restano nascoste. Ogni soglia scatta una volta per data di scadenza.
+- La capacità d'archivio resta nei metadati Channel in cache. Il replay di un programma usa il fuso della sorgente e sorgenti d'archivio finite, e rifiuta richieste future o scadute.
+- La guida in diretta è una sola finestra temporale proporzionale, con il passato limitato, e una linea dell'ora nel colore del tema. Le celle passate partono solo dal replay d'archivio reale. La griglia non inventa un archivio.
+- Le anteprime in diretta aspettano l'inizializzazione della guida e gli scaricamenti attivi di guida e catalogo, e riprendono tramite i listener del provider. Una pianificazione iniziale bloccata conserva il lavoro dovuto, così chiudere la riproduzione non perde un refresh.
+- HTTP della guida, gzip, eventi XML incrementali, merge e serializzazione JSON girano in un worker interrompibile. Ne escono solo errori classificati e limitati. La sostituzione della cache a stadi segue il guard di primo piano e playback, e in caso di errore conserva la guida precedente.
+- La guida cede la priorità ai refresh attivi del catalogo e si annulla o rimanda tramite la coda esistente, senza un polling nuovo.
+- La timeline mostra intervalli ritagliati solo per la presentazione e conserva gli oggetti programma originali per la riproduzione. Geometria e identità degli eventi evitano le sovrapposizioni senza cambiare i timestamp d'archivio.
+- I file della guida sono per sorgente, nell'application support, con freschezza propria.
+- I canali con timeshift (+1/+2) restano separati dalla guida base anche se condividono il tvg-id. Se manca la guida timeshift si riusa la base spostata delle ore indicate.
+- «Visti di recente» della diretta è un elenco di id solo sul dispositivo, separato dalla cronologia di visione. I canali in diretta restano fuori da cronologia, righe della Home e cloud.
