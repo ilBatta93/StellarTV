@@ -1,0 +1,10 @@
+---
+description: Build Android significa il workflow GitHub, seguito fino all'esito
+alwaysApply: true
+---
+
+# Build Android
+
+«Build Android», «fai build android» o una richiesta equivalente avvia il workflow `StellarTV Android Release` (`.github/workflows/build.yml`) sul branch già tracciato, con `workflow_dispatch`. Non compilare l'APK in locale al posto di quel workflow.
+
+Dopo l'avvio controlla l'esecuzione fino al termine. Se un passo fallisce, correggi la causa, fai commit e push senza riscrivere la storia pubblicata, e rilancia o attendi il nuovo run. Ripeti finché il workflow termina con successo. Non chiudere il compito su un run ancora in corso o fallito.
