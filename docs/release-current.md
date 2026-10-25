@@ -1,7 +1,4 @@
-- Nomi dei titoli puliti: niente punti, anni o sigle tecniche; restano 3D e versioni speciali.
-- Locandine ufficiali usate quando manca l'immagine della lista.
-- Copertina dedicata per gli audiolibri.
-- Voti senza valori 10 falsi: archivio voti ricalcolato con la regola dei 20 voti.
-- Accesso: frecce lineari tra campi e pulsante mostra/nascondi, nessun microfono nei campi riservati, indirizzo del sito visibile.
-- Fire TV: microfono a schermo nascosto, perché il tasto vocale appartiene ad Alexa.
-- MultiView: i riquadri non si fermano più ciclicamente per qualche secondo.
+- I voti nella scheda titolo arrivano subito, senza attendere lo scorrimento del catalogo.
+- L'ordine per voto resta salvato: non ricomincia cambiando sezione o riaprendo l'app.
+- La cache delle locandine resta entro un limite, anche dopo uno scorrimento lungo.
+- Un episodio già visto si riconosce subito, nella scheda e durante la riproduzione.

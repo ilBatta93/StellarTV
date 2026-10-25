@@ -205,7 +205,7 @@ class ImdbRatingBadge extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: ImdbRatingService.instance.store,
     builder: (_, __) => RatingValue(
-      imdb: ImdbRatingService.instance.ratingOf(item),
+      imdb: ImdbRatingService.instance.ratingOf(item, priority: true),
       fallback: item.voteAverage,
       height: height,
     ),
@@ -256,8 +256,11 @@ class _ChannelRatingBadgeState extends State<ChannelRatingBadge> {
       ]),
       builder: (_, __) {
         final item = service.itemOf(widget.channel);
+        // Posters read the device cache only. A full lookup is reserved for
+        // the open title, so scrolling cannot delay that page.
+        if (item != null) ImdbRatingService.instance.prime([item]);
         return RatingValue(
-          imdb: item == null ? null : ImdbRatingService.instance.ratingOf(item),
+          imdb: item == null ? null : ImdbRatingService.instance.peek(item),
           fallback: service.ratingOf(widget.channel) ?? item?.voteAverage ?? 0,
           height: widget.height,
           framed: widget.framed,
@@ -280,6 +283,7 @@ class EpisodeRatingBadge extends StatelessWidget {
         metadata.season,
         metadata.episode,
         request: request,
+        priority: request,
       ),
       fallback: metadata.tmdbRating,
       height: 16,

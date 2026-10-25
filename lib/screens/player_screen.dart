@@ -32,6 +32,7 @@ import '../services/movie_hash.dart';
 import '../services/subtitles_service.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/episode_still_overlay.dart';
 import '../widgets/player/live_channel_picker.dart';
 import '../services/recent_live_channels.dart';
 import '../widgets/player/player_controls.dart';
@@ -2450,6 +2451,10 @@ class _EpisodePickerState extends State<_EpisodePicker> {
                           fallbackUrls: images.skip(1).toList(),
                           fallbackIcon: Icons.movie_outlined,
                         ),
+                        EpisodeStillOverlay(
+                          watched: watched,
+                          progress: progress,
+                        ),
                         if (current)
                           const ColoredBox(
                             color: AppColors.overlay,
@@ -2457,38 +2462,6 @@ class _EpisodePickerState extends State<_EpisodePicker> {
                               child: Icon(
                                 Icons.graphic_eq_rounded,
                                 color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                        if (watched)
-                          Positioned(
-                            top: 6,
-                            right: 6,
-                            child: Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: const BoxDecoration(
-                                color: AppColors.success,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.check_rounded,
-                                size: 14,
-                                color: AppColors.background,
-                              ),
-                            ),
-                          ),
-                        if (progress != null)
-                          Positioned(
-                            left: 8,
-                            right: 8,
-                            bottom: 6,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(2),
-                              child: LinearProgressIndicator(
-                                value: progress,
-                                minHeight: 3,
-                                color: AppColors.primary,
-                                backgroundColor: AppColors.track,
                               ),
                             ),
                           ),

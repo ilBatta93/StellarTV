@@ -5,7 +5,6 @@ import '../models/episode_metadata.dart';
 import '../models/tmdb_item.dart';
 import 'title_metadata_store.dart';
 import 'tmdb_service.dart';
-import 'imdb_rating_service.dart';
 import 'playback_work_policy.dart';
 
 /// Season-sized requests before playback; the player only reads device data.
@@ -43,11 +42,6 @@ class EpisodeMetadataService {
         await store.load();
         if (PlaybackWorkPolicy.instance.blocksGuide) return;
         final known = channels.where((c) => c.episode != null).toList();
-        for (final c in known) {
-          final number = c.episode;
-          if (number != null)
-            ImdbRatingService.instance.episodeRating(item.id, season, number);
-        }
         if (known.isNotEmpty &&
             known.every(
               (c) => store.isFresh('tv:${item.id}:$season:${c.episode}'),
@@ -57,7 +51,6 @@ class EpisodeMetadataService {
         for (final e in data) {
           if (PlaybackWorkPolicy.instance.blocksGuide) return;
           store.put(e.key, e);
-          ImdbRatingService.instance.episodeRating(item.id, season, e.episode);
         }
       } catch (_) {
         /* Provider episode plots remain available offline. */

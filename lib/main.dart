@@ -1,6 +1,7 @@
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
+import 'services/image_cache_service.dart';
 import 'services/image_warmup_service.dart';
 import 'services/frame_telemetry_service.dart';
 
@@ -65,6 +66,7 @@ Future<void> main() async {
   perf.mark('migrazione');
   await DeviceTypeService.initialize();
   perf.mark('tipo dispositivo');
+  AppImageCache.enforceBudget();
   if (DeviceTypeService.isTv) {
     // TV boxes have little RAM: cap decoded images to avoid being killed.
     PaintingBinding.instance.imageCache

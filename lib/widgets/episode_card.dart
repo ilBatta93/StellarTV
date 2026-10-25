@@ -9,6 +9,7 @@ import '../services/episode_metadata_service.dart';
 import 'title_facets.dart';
 import '../theme/app_theme.dart';
 import 'poster_card.dart';
+import 'episode_still_overlay.dart';
 import 'tv_focusable.dart';
 import 'download_button.dart';
 
@@ -182,23 +183,10 @@ class _EpisodeCardState extends State<EpisodeCard> {
                                   url: images.firstOrNull,
                                   fallbackUrls: images.skip(1).toList(),
                                 ),
-                                if (progress case final value?)
-                                  Align(
-                                    alignment: Alignment.bottomCenter,
-                                    child: LinearProgressIndicator(
-                                      value: value,
-                                      minHeight: 4,
-                                    ),
-                                  ),
-                                Align(
-                                  alignment: Alignment.center,
-                                  child: Icon(
-                                    watched
-                                        ? Icons.check_circle_rounded
-                                        : Icons.play_circle_fill_rounded,
-                                    size: 42,
-                                    color: AppColors.textPrimary,
-                                  ),
+                                EpisodeStillOverlay(
+                                  watched: watched,
+                                  progress: progress,
+                                  showPlay: true,
                                 ),
                               ],
                             ),

@@ -102,12 +102,15 @@ class CatalogRatingService extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Disk ratings and title identities. Safe to await more than once.
+  Future<void> ensureLoaded() => _loading ??= _load();
+
   Future<void> request(
     Iterable<Channel> channels, {
     bool priority = false,
   }) async {
     final snapshot = channels.toList(growable: false);
-    await (_loading ??= _load());
+    await ensureLoaded();
     for (final c in snapshot) {
       if (c.type != ContentType.movie && c.type != ContentType.series) continue;
       final key = _key(c);

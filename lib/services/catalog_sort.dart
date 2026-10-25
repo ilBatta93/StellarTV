@@ -88,3 +88,39 @@ Future<List<Channel>> sortLiveBackground(
   List<Channel> channels,
   CatalogSort? order,
 ) => Isolate.run(() => sortCatalog(channels, order, (c) => c));
+
+/// Highest score first. Equal scores keep alphabetical order. A missing
+/// score is 0 and therefore lands after every rated title.
+List<int> indicesByRating(List<double> scores, List<String> names) {
+  final order = List<int>.generate(scores.length, (i) => i);
+  order.sort((a, b) {
+    final byScore = scores[b].compareTo(scores[a]);
+    if (byScore != 0) return byScore;
+    final byName = names[a].compareTo(names[b]);
+    return byName != 0 ? byName : a.compareTo(b);
+  });
+  return order;
+}
+
+/// Reorders [entries] with a previously saved id list. Unknown titles keep
+/// their incoming order at the end, so a new title never disappears.
+List<CatalogEntry> applyCatalogOrder(
+  List<CatalogEntry> entries,
+  List<String> ids,
+) {
+  final byId = <String, CatalogEntry>{};
+  for (final entry in entries) {
+    byId.putIfAbsent(entry.primary.id, () => entry);
+  }
+  final used = <String>{};
+  final ordered = <CatalogEntry>[];
+  for (final id in ids) {
+    final entry = byId[id];
+    if (entry != null && used.add(id)) ordered.add(entry);
+  }
+  if (ordered.length == entries.length) return ordered;
+  for (final entry in entries) {
+    if (used.add(entry.primary.id)) ordered.add(entry);
+  }
+  return ordered;
+}

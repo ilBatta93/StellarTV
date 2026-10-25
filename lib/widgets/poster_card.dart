@@ -58,6 +58,7 @@ class PosterImage extends StatelessWidget {
       return fallback;
     }
     if (url == null || url!.isEmpty) return fallback;
+    AppImageCache.noteActivity();
     // Decode images at their on-screen size: full-size decoding of every
     // poster exhausts memory on TV boxes and makes the app close.
     // Pressure bounds apply on the next natural card build: do not reload all

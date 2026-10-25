@@ -80,6 +80,19 @@ Future<void> main() async {
     'large ordering wrong',
   );
   require(large.first.primary.id == '0', 'large source mutated');
+  final indices = indicesByRating(
+    const [5, 9, 0],
+    const ['b', 'a', 'c'],
+  );
+  require(indices.join(',') == '1,0,2', 'rating indices');
+  final applied = applyCatalogOrder(
+    [for (final c in source) CatalogEntry(primary: c, variants: [c])],
+    const ['new', 'missing', 'old', 'ghost'],
+  );
+  require(
+    applied.map((e) => e.primary.id).join(',') == 'new,missing,old',
+    'saved order',
+  );
   print(
     'PASS: eight isolate orders, release dates, rating snapshots and 100000 entries',
   );

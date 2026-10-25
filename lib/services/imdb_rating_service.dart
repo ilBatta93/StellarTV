@@ -12,6 +12,9 @@ import 'title_metadata_store.dart';
 /// Official IMDb ratings, saved on the device (30 days) and requested in
 /// small batches only for titles actually shown. Null rating = unknown on
 /// IMDb, so the UI waits until that lookup completes before using TMDB.
+///
+/// The open title and its visible episodes go first. Catalog scrolling only
+/// reads the shared cache and never waits in front of a title page.
 class ImdbRatingService {
   ImdbRatingService._();
   static final instance = ImdbRatingService._();
@@ -22,11 +25,14 @@ class ImdbRatingService {
     decode: (raw) => raw is num ? raw.toDouble() : null,
   );
   final _http = ForegroundHttpClient();
+  final List<String> _titlePriority = [];
+  final List<String> _episodePriority = [];
   final Set<String> _queued = {};
   final Set<String> _settled = {};
   final Set<String> _asked = {};
-  // Keys only looked up in the shared cloud cache (sorting): never trigger
-  // an external IMDb request, so a 10k title sort costs zero OMDb calls.
+  final Set<String> _inflight = {};
+  // Keys only looked up in the shared cloud cache (posters and sorting):
+  // never trigger an external IMDb request.
   final Set<String> _cacheQueued = {};
   final Set<String> _cacheAsked = {};
   Timer? _timer;
@@ -37,23 +43,73 @@ class ImdbRatingService {
 
   static String episodeKey(int id, int season, int episode) =>
       'tv:$id:$season:$episode';
+
+  /// Stored value, or 0 once a lookup confirmed IMDb has none. No request.
+  double? peek(TmdbItem item) => _value(keyOf(item));
+
+  double? _value(String key) {
+    final v = store.valueOf(key);
+    return v ?? (_settled.contains(key) ? 0 : null);
+  }
+
+  /// The title currently on screen. Jumps ahead of episode and catalog work.
+  void prioritizeTitle(String key) {
+    if (!_enqueue(_titlePriority, key)) return;
+    _episodePriority.remove(key);
+    _kick(const Duration(milliseconds: 40));
+  }
+
+  /// Episodes of the open season, behind the series or film rating.
+  void prioritizeEpisodes(Iterable<String> keys) {
+    var added = false;
+    for (final key in keys) {
+      if (_titlePriority.contains(key)) continue;
+      added = _enqueue(_episodePriority, key) || added;
+    }
+    if (added) _kick(const Duration(milliseconds: 40));
+  }
+
+  bool _enqueue(List<String> lane, String key) {
+    if (TitleMetadataStore.disabled || store.isFresh(key)) return false;
+    if (_settled.contains(key) ||
+        _inflight.contains(key) ||
+        lane.contains(key)) {
+      return false;
+    }
+    _queued.remove(key);
+    _cacheQueued.remove(key);
+    lane.add(key);
+    _asked.add(key);
+    return true;
+  }
+
   double? episodeRating(
     int id,
     int season,
     int episode, {
     bool request = true,
+    bool priority = false,
   }) {
     final key = episodeKey(id, season, episode);
-    if (request) _requestKey(key);
-    return store.valueOf(key) ?? (_settled.contains(key) ? 0 : null);
+    if (request) {
+      if (priority) {
+        prioritizeEpisodes([key]);
+      } else {
+        _requestKey(key);
+      }
+    }
+    return _value(key);
   }
 
   void _requestKey(String key) {
     if (!TitleMetadataStore.disabled &&
         !store.isFresh(key) &&
+        !_titlePriority.contains(key) &&
+        !_episodePriority.contains(key) &&
+        !_inflight.contains(key) &&
         _asked.add(key)) {
       _queued.add(key);
-      _timer ??= Timer(const Duration(milliseconds: 400), _flush);
+      _kick(const Duration(milliseconds: 400));
     }
   }
 
@@ -62,21 +118,47 @@ class ImdbRatingService {
     if (TitleMetadataStore.disabled) return;
     for (final item in items) {
       final key = keyOf(item);
-      if (store.valueOf(key) == null && _cacheAsked.add(key)) {
-        _cacheQueued.add(key);
+      if (store.valueOf(key) != null ||
+          _titlePriority.contains(key) ||
+          _settled.contains(key)) {
+        continue;
       }
+      if (_cacheAsked.add(key)) _cacheQueued.add(key);
     }
-    if (_cacheQueued.isNotEmpty) {
-      _timer ??= Timer(const Duration(milliseconds: 400), _flush);
-    }
+    if (_cacheQueued.isNotEmpty) _kick(const Duration(milliseconds: 400));
   }
 
   /// IMDb rating, 0 when IMDb has none, null while unknown.
-  double? ratingOf(TmdbItem item) {
+  /// [priority] is the open title: it is served before catalog lookups.
+  double? ratingOf(TmdbItem item, {bool request = true, bool priority = false}) {
     final key = keyOf(item);
-    final v = store.valueOf(key);
-    _requestKey(key);
-    return v ?? (_settled.contains(key) ? 0 : null);
+    if (request) {
+      if (priority) {
+        prioritizeTitle(key);
+      } else {
+        _requestKey(key);
+      }
+    }
+    return _value(key);
+  }
+
+  void _kick(Duration delay) {
+    if (_running) return;
+    _timer ??= Timer(delay, _flush);
+  }
+
+  bool get _hasWork =>
+      _titlePriority.isNotEmpty ||
+      _episodePriority.isNotEmpty ||
+      _queued.isNotEmpty ||
+      _cacheQueued.isNotEmpty;
+
+  List<String> _take(List<String> lane, int count) {
+    if (count <= 0 || lane.isEmpty) return const [];
+    final n = count < lane.length ? count : lane.length;
+    final batch = lane.sublist(0, n);
+    lane.removeRange(0, n);
+    return batch;
   }
 
   Future<void> _flush() async {
@@ -85,15 +167,35 @@ class ImdbRatingService {
     _running = true;
     try {
       await store.load();
-      while (_queued.isNotEmpty || _cacheQueued.isNotEmpty) {
+      while (_hasWork) {
         if (PlaybackWorkPolicy.instance.blocksGuide) {
           _timer = Timer(const Duration(seconds: 30), _flush);
           return;
         }
-        final cacheOnly = _queued.isEmpty;
-        final source = cacheOnly ? _cacheQueued : _queued;
-        final batch = source.take(40).toList();
-        source.removeAll(batch);
+        final priority = [
+          ..._take(_titlePriority, 40),
+          ..._take(_episodePriority, 40),
+        ];
+        final List<String> batch;
+        final bool cacheOnly;
+        if (priority.isNotEmpty) {
+          batch = priority.take(40).toList();
+          if (priority.length > 40) {
+            _episodePriority.insertAll(0, priority.skip(40));
+          }
+          cacheOnly = false;
+        } else if (_queued.isNotEmpty) {
+          batch = _queued.take(40).toList();
+          _queued.removeAll(batch);
+          cacheOnly = false;
+        } else {
+          batch = _cacheQueued.take(40).toList();
+          _cacheQueued.removeAll(batch);
+          cacheOnly = true;
+        }
+        batch.removeWhere(store.isFresh);
+        if (batch.isEmpty) continue;
+        _inflight.addAll(batch);
         String bearer = SupabaseConfig.anonKey;
         try {
           bearer =
@@ -124,8 +226,9 @@ class ImdbRatingService {
                 }),
               )
               .timeout(const Duration(seconds: 25));
-          if (res.statusCode != 200)
-            throw const FormatException("IMDb unavailable");
+          if (res.statusCode != 200) {
+            throw const FormatException('IMDb unavailable');
+          }
           final body = jsonDecode(res.body);
           for (final r
               in (body is Map ? body['results'] as List? : null) ?? const []) {
@@ -145,6 +248,7 @@ class ImdbRatingService {
         } catch (_) {
           // Do not persist transport failures as confirmed IMDb absence.
         } finally {
+          _inflight.removeAll(batch);
           if (!cacheOnly) {
             _settled.addAll(batch);
             store.notifyAvailabilityChanged();
@@ -153,6 +257,7 @@ class ImdbRatingService {
       }
     } finally {
       _running = false;
+      if (_hasWork && _timer == null) _kick(const Duration(milliseconds: 40));
     }
   }
 }

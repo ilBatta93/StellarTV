@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:isolate';
 
-import '../services/catalog_sort.dart' show sortCatalogBackground;
+import '../services/catalog_sort.dart';
+import '../services/catalog_order_store.dart';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -333,7 +335,9 @@ class _CatalogPageState extends State<CatalogPage> {
   List<CatalogEntry>? _sortedSource;
   List<CatalogEntry>? _sortedEntries;
   CatalogSort? _sortedOrder;
-  int _sortedVersion = -1;
+  String? _ratingKey;
+  String? _ratingJobKey;
+  int _ratingJob = 0;
   String _query = '';
   String? _selectedCategory;
   int? _genreId;
@@ -366,9 +370,13 @@ class _CatalogPageState extends State<CatalogPage> {
   @override
   void initState() {
     super.initState();
-    CatalogRatingService.instance.addListener(_ratingsChanged);
-    ImdbRatingService.instance.store.addListener(_imdbChanged);
     PlatformCatalogService.instance.addListener(_platformsChanged);
+    CatalogOrderStore.instance.addListener(_savedOrderLoaded);
+    unawaited(CatalogOrderStore.instance.load());
+  }
+
+  void _savedOrderLoaded() {
+    if (mounted && _sort == CatalogSort.rating) setState(() {});
   }
 
   void _platformsChanged() {
@@ -465,40 +473,10 @@ class _CatalogPageState extends State<CatalogPage> {
     _selectPlatform(platform);
   }
 
-  Timer? _ratingsTimer;
-  DateTime _lastRatingsSort = DateTime.fromMillisecondsSinceEpoch(0);
-
-  /// Re-sorts at most every few seconds while ratings stream in, so the grid
-  /// does not rebuild and reshuffle continuously under the remote focus.
-  // IMDb values change the sort key too: bump the version so the sorted
-  // snapshot is recomputed through the same throttle.
-  void _imdbChanged() {
-    if (_sort != CatalogSort.rating) return;
-    CatalogRatingService.instance.version++;
-    _ratingsChanged();
-  }
-
-  void _ratingsChanged() {
-    if (!mounted || !DeviceTypeService.isTv || _sort != CatalogSort.rating) {
-      return;
-    }
-    if (_ratingsTimer != null) return;
-    final wait =
-        const Duration(seconds: 6) -
-        DateTime.now().difference(_lastRatingsSort);
-    _ratingsTimer = Timer(wait.isNegative ? Duration.zero : wait, () {
-      _ratingsTimer = null;
-      _lastRatingsSort = DateTime.now();
-      if (mounted && _sort == CatalogSort.rating) setState(() {});
-    });
-  }
-
   @override
   void dispose() {
-    CatalogRatingService.instance.removeListener(_ratingsChanged);
-    ImdbRatingService.instance.store.removeListener(_imdbChanged);
+    CatalogOrderStore.instance.removeListener(_savedOrderLoaded);
     PlatformCatalogService.instance.removeListener(_platformsChanged);
-    _ratingsTimer?.cancel();
     _searchController.dispose();
     _spotlight.dispose();
     super.dispose();
@@ -1111,42 +1089,26 @@ class _CatalogPageState extends State<CatalogPage> {
     return _filterResult = compute();
   }
 
+  /// One saved order per catalog view: category, genre and filters included,
+  /// so changing view does not reuse another list.
+  String _ratingOrderKey() =>
+      '${widget.type.name}|${_selectedCategory ?? _recentLabel}|'
+      '$_genreId|${_platform?.name ?? ''}|$_only4k|$_query';
+
   List<CatalogEntry> _ordered(List<CatalogEntry> entries) {
     if (!DeviceTypeService.isTv || _sort == null) return entries;
-    final service = CatalogRatingService.instance;
+    if (_sort == CatalogSort.rating) return _orderedByRating(entries);
     _requestedSortSource = entries;
-    if (identical(entries, _sortedSource) &&
-        _sort == _sortedOrder &&
-        (_sort != CatalogSort.rating || _sortedVersion == service.version)) {
+    if (identical(entries, _sortedSource) && _sort == _sortedOrder) {
       return _sortedEntries ?? entries;
     }
     if (!_sorting) {
       _sorting = true;
-      if (_sort == CatalogSort.rating) {
-        service.request(entries.map((e) => e.primary));
-        // Shared cache only: sorting never spends external IMDb calls.
-        ImdbRatingService.instance.prime(
-          entries.map((e) => service.itemOf(e.primary)).whereType<TmdbItem>(),
-        );
-      }
       final order = _sort;
-      final version = service.version;
-      // No provider, context or native object enters the isolate.
       unawaited(() async {
         List<CatalogEntry>? result;
         try {
-          final ratings = <String, double>{};
-          if (order == CatalogSort.rating) {
-            for (var i = 0; i < entries.length; i++) {
-              final c = entries[i].primary;
-              ratings[c.id] = service.sortRatingOf(c);
-              if (i % 200 == 199) {
-                await Future<void>.delayed(Duration.zero);
-                if (!mounted) return;
-              }
-            }
-          }
-          result = await sortCatalogBackground(entries, order, ratings);
+          result = await sortCatalogBackground(entries, order, const {});
         } catch (error, stack) {
           result = entries;
           FlutterError.reportError(
@@ -1157,29 +1119,120 @@ class _CatalogPageState extends State<CatalogPage> {
             ),
           );
         } finally {
-          // Wait for a real pause in remote input before publishing.
           while (mounted && RemoteNavigation.moving) {
             await Future<void>.delayed(const Duration(milliseconds: 100));
           }
           _sorting = false;
-          if (mounted)
+          if (mounted) {
             setState(() {
               if (result != null &&
                   order == _sort &&
-                  identical(entries, _requestedSortSource) &&
-                  (order != CatalogSort.rating || version == service.version)) {
+                  identical(entries, _requestedSortSource)) {
                 _sortedSource = entries;
                 _sortedOrder = order;
-                _sortedVersion = version;
                 _sortedEntries = result;
               }
             });
+          }
         }
       }());
     }
     return identical(entries, _sortedSource) && _sort == _sortedOrder
         ? _sortedEntries ?? entries
         : entries;
+  }
+
+  /// Shows the last saved IMDb order immediately. A fresh order is computed
+  /// from ratings already on disk and stored for the next visit; the grid
+  /// already on screen is not reshuffled while the remote is moving through it.
+  List<CatalogEntry> _orderedByRating(List<CatalogEntry> entries) {
+    final key = _ratingOrderKey();
+    if (identical(entries, _sortedSource) &&
+        _sortedOrder == CatalogSort.rating &&
+        _ratingKey == key &&
+        _sortedEntries != null) {
+      return _sortedEntries!;
+    }
+    final saved = CatalogOrderStore.instance.idsFor(key);
+    if (saved != null) {
+      final ordered = applyCatalogOrder(entries, saved);
+      _sortedSource = entries;
+      _sortedOrder = CatalogSort.rating;
+      _ratingKey = key;
+      _sortedEntries = ordered;
+      _refreshRatingOrder(entries, key, publish: false);
+      return ordered;
+    }
+    _refreshRatingOrder(entries, key, publish: true);
+    return identical(entries, _sortedSource) &&
+            _sortedOrder == CatalogSort.rating &&
+            _ratingKey == key
+        ? _sortedEntries ?? entries
+        : entries;
+  }
+
+  void _refreshRatingOrder(
+    List<CatalogEntry> entries,
+    String key, {
+    required bool publish,
+  }) {
+    if (_ratingJobKey == key) return;
+    _ratingJobKey = key;
+    final job = ++_ratingJob;
+    final snapshot = entries;
+    unawaited(() async {
+      List<String>? ids;
+      try {
+        await CatalogRatingService.instance.ensureLoaded();
+        if (!mounted || job != _ratingJob) return;
+        final scores = List<double>.filled(snapshot.length, 0);
+        final names = List<String>.filled(snapshot.length, '');
+        final service = CatalogRatingService.instance;
+        for (var i = 0; i < snapshot.length; i++) {
+          final channel = snapshot[i].primary;
+          scores[i] = service.sortRatingOf(channel);
+          names[i] = channel.displaySeriesName.toLowerCase();
+          if (i % 400 == 399) {
+            await Future<void>.delayed(Duration.zero);
+            if (!mounted || job != _ratingJob) return;
+          }
+        }
+        final order = await Isolate.run(() => indicesByRating(scores, names));
+        ids = [for (final index in order) snapshot[index].primary.id];
+        final missing = <TmdbItem>[];
+        for (final entry in snapshot) {
+          final item = service.itemOf(entry.primary);
+          if (item != null && ImdbRatingService.instance.peek(item) == null) {
+            missing.add(item);
+          }
+        }
+        ImdbRatingService.instance.prime(missing);
+      } catch (error, stack) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stack,
+            library: 'catalog_sort',
+          ),
+        );
+      } finally {
+        if (!mounted || job != _ratingJob || ids == null) return;
+        CatalogOrderStore.instance.save(key, ids);
+        if (!publish || _sort != CatalogSort.rating) return;
+        while (mounted && RemoteNavigation.moving) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        if (!mounted || job != _ratingJob || _sort != CatalogSort.rating) {
+          return;
+        }
+        setState(() {
+          _sortedSource = snapshot;
+          _sortedOrder = CatalogSort.rating;
+          _ratingKey = key;
+          _sortedEntries = applyCatalogOrder(snapshot, ids!);
+        });
+      }
+    }());
   }
 
   Widget _gridItem(AppProvider app, CatalogEntry entry, int index) =>

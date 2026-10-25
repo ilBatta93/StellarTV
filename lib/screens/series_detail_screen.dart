@@ -29,6 +29,7 @@ import '../widgets/title_facets.dart';
 import '../widgets/tv_wrap_navigation.dart';
 import '../widgets/series_watch_sheet.dart';
 import '../services/episode_metadata_service.dart';
+import '../services/imdb_rating_service.dart';
 import '../services/catalog_rating_service.dart';
 
 class SeriesDetailScreen extends StatefulWidget {
@@ -214,6 +215,12 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     if (item == null || seasons == null || _selectedSeason >= seasons.length)
       return;
     final season = seasons[_selectedSeason];
+    final imdb = ImdbRatingService.instance;
+    imdb.prioritizeTitle(ImdbRatingService.keyOf(item));
+    imdb.prioritizeEpisodes([
+      for (final e in season.episodes)
+        ImdbRatingService.episodeKey(item.id, season.number, e.number),
+    ]);
     EpisodeMetadataService.instance.prepare(item, season.number, [
       for (final e in season.episodes) e.channel,
     ]);
