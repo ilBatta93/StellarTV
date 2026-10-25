@@ -29,6 +29,8 @@ import '../services/series_grouping.dart';
 import '../services/kids_content_service.dart';
 import '../services/catalog_cache_service.dart';
 import '../services/catalog_publication.dart';
+import '../services/catalog_rating_service.dart';
+import '../services/title_facet_index.dart';
 import '../services/frame_telemetry_service.dart';
 import '../services/device_type_service.dart';
 import '../services/image_warmup_service.dart' show RemoteNavigation;
@@ -297,6 +299,7 @@ class AppProvider extends ChangeNotifier {
             _groupedCache[type] = result.groups;
             _recentCache[type] = result.recent;
             _allCache[type] = result.all;
+            _joinTitleFacets(type, result.all);
             FrameTelemetryService.instance.mark('catalog preparation ready');
             notifyListeners();
             unawaited(_ensureGenreCounts(type));
@@ -312,6 +315,23 @@ class AppProvider extends ChangeNotifier {
     _preparing[type] = job;
     _preparationTail = job;
     return job;
+  }
+
+  /// Scores and the ordered id list are ready before the sort button is pressed.
+  void _joinTitleFacets(ContentType type, List<CatalogEntry> entries) {
+    if (type != ContentType.movie &&
+        type != ContentType.series &&
+        type != ContentType.anime) {
+      return;
+    }
+    final ids = [for (final entry in entries) entry.primary.id];
+    final names = [for (final entry in entries) entry.primary.displaySeriesName];
+    final channels = [for (final entry in entries) entry.primary];
+    unawaited(() async {
+      await CatalogRatingService.instance.ensureLoaded();
+      await TitleFacetIndex.instance.rank(type, ids, names);
+      CatalogRatingService.instance.warm(channels);
+    }());
   }
 
   void _invalidateCaches() {

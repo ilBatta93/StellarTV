@@ -1,2 +1,3 @@
-- L'ordine per voto si applica alla sezione aperta e si aggiorna quando arrivano voti nuovi.
+- L'ordine per voto della sezione aperta è immediato e si aggiorna quando arrivano voti nuovi.
+- Le classifiche della Home mostrano il voto appena è noto sul dispositivo.
 - Sulle locandine la risoluzione resta in basso, sul fondo scuro del voto, separata dal voto.

@@ -37,6 +37,9 @@ class TitleMetadataStore<T> extends ChangeNotifier {
   Map<String, T> snapshot() => {
     for (final entry in _values.entries) entry.key: entry.value.$1,
   };
+
+  /// Values with the device timestamp, for the local facet index.
+  Map<String, (T, int)> timedSnapshot() => Map<String, (T, int)>.from(_values);
   bool isFresh(String key) {
     final at = _values[key]?.$2;
     return at != null &&

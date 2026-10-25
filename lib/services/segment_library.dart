@@ -7,6 +7,7 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import 'catalog_rating_service.dart';
 import 'foreground_http_client.dart';
+import 'title_facet_index.dart';
 import 'imdb_resolver.dart';
 import 'introdb_service.dart';
 import 'playback_assistance.dart';
@@ -206,6 +207,10 @@ class SegmentLibrary {
     required bool movie,
   }) async {
     final kind = movie ? 'movie' : 'tv';
+    if (tmdbId != null) {
+      final known = TitleFacetIndex.instance.imdbIdOf('$kind:$tmdbId');
+      if (known != null) return known;
+    }
     final keys = <String>[
       if (tmdbId != null) '$kind:$tmdbId',
       if (title.isNotEmpty) '$kind:t:${title.toLowerCase()}',

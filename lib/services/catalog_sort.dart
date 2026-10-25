@@ -126,6 +126,31 @@ List<CatalogEntry> _sortByKnownRatings(
   );
 }
 
+/// Highest known score first. A missing or zero score is omitted so the
+/// caller can leave those titles in their current order.
+List<String> rankKnownTitleIds(
+  List<String> ids,
+  List<String> names,
+  String typeName,
+  Map<String, double> scoresByTitle,
+) {
+  final scores = List<double>.generate(ids.length, (i) {
+    if (i >= names.length) return 0;
+    return scoresByTitle[parseTitle(names[i]).key(typeName)] ?? 0;
+  }, growable: false);
+  final order = <int>[];
+  for (var i = 0; i < scores.length; i++) {
+    if (scores[i] > 0) order.add(i);
+  }
+  order.sort((a, b) {
+    final byScore = scores[b].compareTo(scores[a]);
+    if (byScore != 0) return byScore;
+    final byName = names[a].toLowerCase().compareTo(names[b].toLowerCase());
+    return byName != 0 ? byName : ids[a].compareTo(ids[b]);
+  });
+  return [for (final i in order) ids[i]];
+}
+
 /// Highest score first. Equal scores keep alphabetical order. A missing
 /// score is 0 and therefore lands after every rated title.
 List<int> indicesByRating(List<double> scores, List<String> names) {

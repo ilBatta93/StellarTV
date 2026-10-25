@@ -193,12 +193,15 @@ class TmdbPosterCard extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           PosterImage(url: homePosterUrl(context, item), rememberWidth: home),
-          if (item.voteAverage > 0)
-            Positioned(
-              top: 6,
-              left: 6,
-              child: RatingBadge(value: item.voteAverage, item: item),
+          Positioned(
+            top: 6,
+            left: 6,
+            child: RatingBadge(
+              value: item.voteAverage,
+              item: item,
+              reveal: true,
             ),
+          ),
         ],
       ),
     );
@@ -332,15 +335,14 @@ class RankedPosterCard extends StatelessWidget {
                             ? item.backdropUrl ?? item.posterUrl
                             : item.posterUrl,
                       ),
-                      if (DeviceTypeService.isTv && item.voteAverage > 0)
-                        Positioned(
-                          top: 6,
-                          left: 6,
-                          child: RatingBadge(
-                            value: item.voteAverage,
-                            item: item,
-                          ),
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: RatingBadge(
+                          value: item.voteAverage,
+                          item: item,
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -356,20 +358,27 @@ class RankedPosterCard extends StatelessWidget {
 class RatingBadge extends StatelessWidget {
   final double value;
   final TmdbItem? item;
+  final bool priority;
+  final bool reveal;
 
-  const RatingBadge({super.key, required this.value, this.item});
+  const RatingBadge({
+    super.key,
+    required this.value,
+    this.item,
+    this.priority = false,
+    this.reveal = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final it = item;
     if (it != null) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-        decoration: BoxDecoration(
-          color: AppColors.overlayControl,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: ImdbRatingBadge(it, height: 14),
+      return ImdbRatingBadge(
+        it,
+        height: 14,
+        priority: priority,
+        reveal: reveal,
+        framed: true,
       );
     }
     return Container(

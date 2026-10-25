@@ -1,7 +1,9 @@
 import '../services/title_providers_service.dart';
 import '../services/imdb_rating_service.dart';
+import '../services/title_facet_index.dart';
 import '../services/segment_library.dart';
 import '../services/platform_catalog_service.dart';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -19,7 +21,7 @@ class DiscoverProvider extends ChangeNotifier {
     // Platform badges must not depend on opening a filter: per-title
     // answers and the saved platform catalogs load right after start.
     TitleProvidersService.instance.attach(tmdb);
-    ImdbRatingService.instance.store.load();
+    unawaited(_openScores());
     SegmentLibrary.instance.load();
     PlatformCatalogService.instance.warmUpAll(tmdb);
   }
@@ -48,6 +50,32 @@ class DiscoverProvider extends ChangeNotifier {
   List<TmdbItem> get forYouSeries => _forYouSeries;
   String? get forYouSeriesSource => _forYouSeriesSource;
   bool get hasData => _topMovies.isNotEmpty || _topSeries.isNotEmpty;
+
+  Future<void> _openScores() async {
+    await Future.wait([
+      ImdbRatingService.instance.store.load(),
+      TitleFacetIndex.instance.load(),
+    ]);
+    final index = TitleFacetIndex.instance;
+    index.beginBulk();
+    index.mergeImdb(ImdbRatingService.instance.store.timedSnapshot());
+    index.endBulk();
+    _primeVisible();
+  }
+
+  /// One shared-cache pass for the Top candidate lists, not one request per poster.
+  /// The rows keep only titles present on the device, so the whole fetched
+  /// page is primed, not merely the first ten names.
+  void _primeVisible() {
+    final items = <TmdbItem>[
+      ..._topMovies,
+      ..._topSeries,
+      for (final tops in _platformTops.values) ...tops.movies,
+      for (final tops in _platformTops.values) ...tops.series,
+    ];
+    if (items.isEmpty) return;
+    ImdbRatingService.instance.prime(items);
+  }
 
   TmdbItem? get featured {
     final pool = [
@@ -100,6 +128,7 @@ class DiscoverProvider extends ChangeNotifier {
         );
       }
       notifyListeners();
+      _primeVisible();
       final at = DateTime.tryParse(m['at']?.toString() ?? '');
       // A platform added by an update (e.g. Disney+) has no saved Top yet:
       // refresh now instead of waiting for the cache to expire.
@@ -173,6 +202,7 @@ class DiscoverProvider extends ChangeNotifier {
       }();
       await Future.wait([trending, platforms]);
       _freshAt = complete ? DateTime.now() : null;
+      _primeVisible();
       await _writeCache();
     } catch (e) {
       if (!hasData) _error = e.toString();

@@ -7,6 +7,7 @@ import '../config/supabase_config.dart';
 import '../models/tmdb_item.dart';
 import 'foreground_http_client.dart';
 import 'playback_work_policy.dart';
+import 'title_facet_index.dart';
 import 'title_metadata_store.dart';
 
 /// Official IMDb ratings, saved on the device (30 days) and requested in
@@ -158,7 +159,8 @@ class ImdbRatingService {
     if (TitleMetadataStore.disabled) return;
     for (final item in items) {
       final key = keyOf(item);
-      if (store.valueOf(key) != null ||
+      if (store.isFresh(key) ||
+          TitleFacetIndex.instance.imdbFresh(key) ||
           _titlePriority.contains(key) ||
           _settled.contains(key)) {
         continue;
@@ -284,7 +286,13 @@ class ImdbRatingService {
                   )
                 : '${r['type']}:${r['id']}';
             stored.add(key);
-            store.put(key, rating is num ? rating.toDouble() : 0);
+            final score = rating is num ? rating.toDouble() : 0.0;
+            store.put(key, score);
+            TitleFacetIndex.instance.putImdb(
+              mediaKey: key,
+              rating: score,
+              imdbId: r['imdb_id'] is String ? r['imdb_id'] as String : null,
+            );
           }
           if (cacheOnly) {
             for (final key in batch) {

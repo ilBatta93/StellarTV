@@ -16,6 +16,7 @@ import '../config/supabase_config.dart';
 import 'tmdb_service.dart';
 import 'title_matching.dart';
 import 'imdb_rating_service.dart';
+import 'title_facet_index.dart';
 import 'title_metadata_store.dart';
 import '../models/tmdb_item.dart';
 
@@ -29,8 +30,14 @@ class CatalogRatingService extends ChangeNotifier {
   CatalogRatingService._() {
     PlaybackWorkPolicy.instance.addListener(_resume);
   }
+  List<Channel> _warmHeld = const [];
+
   void _resume() {
-    if (!PlaybackWorkPolicy.instance.blocksGuide) _drain();
+    if (PlaybackWorkPolicy.instance.blocksGuide) return;
+    final held = _warmHeld;
+    _warmHeld = const [];
+    if (held.isNotEmpty) unawaited(request(held));
+    _drain();
   }
 
   static final instance = CatalogRatingService._();
@@ -42,7 +49,20 @@ class CatalogRatingService extends ChangeNotifier {
         v is Map ? TmdbItem.tryParse(Map<String, dynamic>.from(v)) : null,
   );
   TmdbItem? itemOf(Channel c) => identities.valueOf(_key(c));
-  void remember(Channel c, TmdbItem item) => identities.put(_key(c), item);
+  void remember(Channel c, TmdbItem item) {
+    final key = _key(c);
+    identities.put(key, item);
+    TitleFacetIndex.instance.link(
+      titleKey: key,
+      mediaKey: ImdbRatingService.keyOf(item),
+      tmdbId: item.id,
+      tmdb: _ratings.containsKey(key)
+          ? _ratings[key]
+          : item.voteAverage > 0
+          ? item.voteAverage
+          : null,
+    );
+  }
   final Map<String, double> _ratings = {};
   final LinkedHashMap<String, Channel> _queue = LinkedHashMap();
   final Set<String> _active = {};
@@ -59,7 +79,30 @@ class CatalogRatingService extends ChangeNotifier {
       _notifyTimer = null;
       version++;
       notifyListeners();
+      _primeImdb();
     });
+  }
+
+  /// Shared-cache IMDb scores for identities that are due, never during playback.
+  void _primeImdb() {
+    if (PlaybackWorkPolicy.instance.blocksGuide) return;
+    final items = <TmdbItem>[];
+    for (final item in identities.snapshot().values) {
+      if (!TitleFacetIndex.instance.imdbFresh(ImdbRatingService.keyOf(item))) {
+        items.add(item);
+      }
+    }
+    if (items.isNotEmpty) ImdbRatingService.instance.prime(items);
+  }
+
+  /// Fills missing scores for the published catalog while the player is closed.
+  void warm(Iterable<Channel> channels) {
+    final list = channels.toList(growable: false);
+    if (PlaybackWorkPolicy.instance.blocksGuide) {
+      _warmHeld = list;
+      return;
+    }
+    unawaited(request(list));
   }
 
   final Expando<String> _keys = Expando('tvRating');
@@ -79,6 +122,8 @@ class CatalogRatingService extends ChangeNotifier {
 
   /// Sort value: IMDb when known (>0), otherwise the TMDB vote.
   double sortRatingOf(Channel c) {
+    final scored = TitleFacetIndex.instance.scoreOfTitle(_key(c));
+    if (scored > 0) return scored;
     final item = itemOf(c);
     final imdb = item == null
         ? null
@@ -96,18 +141,41 @@ class CatalogRatingService extends ChangeNotifier {
     await Future.wait([
       identities.load(),
       ImdbRatingService.instance.store.load(),
+      TitleFacetIndex.instance.load(),
     ]);
     try {
       final path = await _path();
+      final file = File(path);
+      final stamp = file.existsSync()
+          ? file.lastModifiedSync().millisecondsSinceEpoch
+          : DateTime.now().millisecondsSinceEpoch;
       final data = await Isolate.run(() {
-        final file = File(path);
-        if (!file.existsSync()) return <String, double>{};
-        final map = jsonDecode(file.readAsStringSync()) as Map;
+        final stored = File(path);
+        if (!stored.existsSync()) return <String, double>{};
+        final map = jsonDecode(stored.readAsStringSync()) as Map;
         return map.map((k, v) => MapEntry(k.toString(), (v as num).toDouble()));
       });
       _ratings.addAll(data);
+      final index = TitleFacetIndex.instance;
+      index.beginBulk();
+      index.mergeImdb(ImdbRatingService.instance.store.timedSnapshot());
+      data.forEach(
+        (key, value) => index.putTmdb(key, value, at: stamp, quiet: true),
+      );
+      for (final entry in identities.timedSnapshot().entries) {
+        index.link(
+          titleKey: entry.key,
+          mediaKey: ImdbRatingService.keyOf(entry.value.$1),
+          tmdbId: entry.value.$1.id,
+          tmdb: data[entry.key],
+          tmdbAt: data.containsKey(entry.key) ? stamp : null,
+          quiet: true,
+        );
+      }
+      index.endBulk();
       version++;
       notifyListeners();
+      _primeImdb();
     } catch (_) {}
   }
 
@@ -121,10 +189,14 @@ class CatalogRatingService extends ChangeNotifier {
     final snapshot = channels.toList(growable: false);
     await ensureLoaded();
     for (final c in snapshot) {
-      if (c.type != ContentType.movie && c.type != ContentType.series) continue;
+      if (c.type != ContentType.movie &&
+          c.type != ContentType.series &&
+          c.type != ContentType.anime) {
+        continue;
+      }
       final key = _key(c);
       final failed = _failed[key];
-      if ((_ratings.containsKey(key) && itemOf(c) != null) ||
+      if ((TitleFacetIndex.instance.tmdbFresh(key) && itemOf(c) != null) ||
           _active.contains(key) ||
           (failed != null && DateTime.now().difference(failed).inMinutes < 5)) {
         continue;
@@ -229,6 +301,7 @@ class CatalogRatingService extends ChangeNotifier {
         final v = list[i];
         if (v is num) {
           _ratings[entries[i].key] = v.toDouble();
+          TitleFacetIndex.instance.putTmdb(entries[i].key, v.toDouble());
           final identity = ids != null && i < ids.length ? ids[i] : null;
           if (identity is Map && identity['id'] is num) {
             final c = entries[i].value;
@@ -283,8 +356,9 @@ class CatalogRatingService extends ChangeNotifier {
         _queue[key] = c;
         return;
       }
-      if (item != null) remember(c, item);
       _ratings[key] = item?.voteAverage ?? 0;
+      TitleFacetIndex.instance.putTmdb(key, item?.voteAverage ?? 0);
+      if (item != null) remember(c, item);
       _scheduleNotify();
       _saveTimer ??= Timer(const Duration(seconds: 10), () {
         _saveTimer = null;

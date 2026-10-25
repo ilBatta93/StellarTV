@@ -23,8 +23,7 @@ import '../widgets/tv_catalog_toolbar.dart';
 import '../widgets/tv_filter_panel.dart';
 import '../widgets/tv_catalog_navigation.dart';
 import '../widgets/tv_focusable.dart';
-import '../services/catalog_rating_service.dart';
-import '../services/imdb_rating_service.dart';
+import '../services/title_facet_index.dart';
 import '../services/image_warmup_service.dart';
 import '../services/platform_catalog_service.dart';
 import '../models/streaming_platform.dart';
@@ -306,11 +305,9 @@ class _CatalogPageState extends State<CatalogPage> {
   List<CatalogEntry>? _sortedSource;
   List<CatalogEntry>? _sortedEntries;
   CatalogSort? _sortedOrder;
+  List<String>? _publishedIds;
+  int _publishedRank = -1;
   String? _ratingKey;
-  String? _ratingJobKey;
-  String? _ratingEnqueuedKey;
-  int _ratingJob = 0;
-  bool _ratingDirty = false;
   Timer? _ratingDebounce;
   String _query = '';
   String? _selectedCategory;
@@ -346,23 +343,38 @@ class _CatalogPageState extends State<CatalogPage> {
     super.initState();
     PlatformCatalogService.instance.addListener(_platformsChanged);
     CatalogOrderStore.instance.addListener(_savedOrderLoaded);
-    CatalogRatingService.instance.addListener(_ratingsChanged);
-    ImdbRatingService.instance.store.addListener(_ratingsChanged);
+    TitleFacetIndex.instance.addListener(_onFacetRank);
     unawaited(CatalogOrderStore.instance.load());
   }
 
-  void _ratingsChanged() {
+  /// A newer score list waits until the remote is still, so the grid does
+  /// not jump under the thumb. The sort button itself does not wait.
+  void _onFacetRank() {
     if (!mounted || _sort != CatalogSort.rating) return;
+    final generation = TitleFacetIndex.instance.generationOf(widget.type);
+    if (generation == _publishedRank) return;
     _ratingDebounce?.cancel();
-    _ratingDebounce = Timer(const Duration(milliseconds: 900), () {
+    _ratingDebounce = Timer(const Duration(milliseconds: 900), () async {
+      await RemoteNavigation.idle();
       if (!mounted || _sort != CatalogSort.rating) return;
-      _ratingDirty = true;
-      setState(() {});
+      setState(_publishRatingIds);
     });
   }
 
+  void _publishRatingIds() {
+    final ids = TitleFacetIndex.instance.idsFor(widget.type);
+    _publishedRank = TitleFacetIndex.instance.generationOf(widget.type);
+    _publishedIds = ids == null ? null : List<String>.from(ids);
+    _sortedSource = null;
+    _sortedEntries = null;
+  }
+
   void _savedOrderLoaded() {
-    if (mounted && _sort == CatalogSort.rating) setState(() {});
+    if (!mounted || _sort != CatalogSort.rating || _publishedIds != null) return;
+    setState(() {
+      _sortedSource = null;
+      _sortedEntries = null;
+    });
   }
 
   void _platformsChanged() {
@@ -462,8 +474,7 @@ class _CatalogPageState extends State<CatalogPage> {
   @override
   void dispose() {
     _ratingDebounce?.cancel();
-    CatalogRatingService.instance.removeListener(_ratingsChanged);
-    ImdbRatingService.instance.store.removeListener(_ratingsChanged);
+    TitleFacetIndex.instance.removeListener(_onFacetRank);
     CatalogOrderStore.instance.removeListener(_savedOrderLoaded);
     PlatformCatalogService.instance.removeListener(_platformsChanged);
     _searchController.dispose();
@@ -592,7 +603,11 @@ class _CatalogPageState extends State<CatalogPage> {
               sort: _sort,
               onSort: (value) {
                 if (_sort == value) return;
-                setState(() => _sort = value);
+                _ratingDebounce?.cancel();
+                setState(() {
+                  _sort = value;
+                  if (value == CatalogSort.rating) _publishRatingIds();
+                });
               },
               viewMode: context.watch<UiSettings>().viewMode,
               onViewMode: (mode) =>
@@ -1129,110 +1144,21 @@ class _CatalogPageState extends State<CatalogPage> {
         : entries;
   }
 
-  /// Shows a saved order at once, then replaces it from the rating snapshot.
-  /// A later snapshot (new votes) is published again once the remote is still.
+  /// Applies the id list already in memory. No isolate and no remote wait.
   List<CatalogEntry> _orderedByRating(List<CatalogEntry> entries) {
     final key = _ratingOrderKey();
-    if (_sortedSource != null && !identical(entries, _sortedSource)) {
-      _ratingJobKey = null;
-      _ratingDirty = true;
-    }
+    final ids = _publishedIds;
     final current = identical(entries, _sortedSource) &&
         _sortedOrder == CatalogSort.rating &&
         _ratingKey == key &&
         _sortedEntries != null;
-    if (current && !_ratingDirty) return _sortedEntries!;
-    if (!current) {
-      final saved = CatalogOrderStore.instance.idsFor(key);
-      if (saved != null) {
-        _sortedSource = entries;
-        _sortedOrder = CatalogSort.rating;
-        _ratingKey = key;
-        _sortedEntries = applyCatalogOrder(entries, saved);
-      }
-    }
-    if (_ratingDirty) _ratingJobKey = null;
-    _ratingDirty = false;
-    _refreshRatingOrder(entries, key);
-    return _sortedEntries ?? entries;
-  }
-
-  bool _sameOrder(List<CatalogEntry>? current, List<CatalogEntry> next) {
-    if (current == null || current.length != next.length) return false;
-    for (var i = 0; i < next.length; i++) {
-      if (current[i].primary.id != next[i].primary.id) return false;
-    }
-    return true;
-  }
-
-  void _refreshRatingOrder(List<CatalogEntry> entries, String key) {
-    if (_ratingJobKey == key) return;
-    _ratingJobKey = key;
-    final job = ++_ratingJob;
-    final snapshot = entries;
-    unawaited(() async {
-      List<CatalogEntry>? ordered;
-      try {
-        final service = CatalogRatingService.instance;
-        await service.ensureLoaded();
-        await ImdbRatingService.instance.store.load();
-        if (!mounted || job != _ratingJob) return;
-        final tables = service.ratingTables();
-        final scores = ImdbRatingService.instance.exportScores();
-        if (_ratingEnqueuedKey != key) {
-          _ratingEnqueuedKey = key;
-          unawaited(_enqueueRatingView(snapshot, job));
-        }
-        ordered = await sortCatalogByKnownRatings(
-          snapshot,
-          tables.tmdb,
-          tables.imdbKeys,
-          scores,
-        );
-      } catch (error, stack) {
-        FlutterError.reportError(
-          FlutterErrorDetails(
-            exception: error,
-            stack: stack,
-            library: 'catalog_sort',
-          ),
-        );
-      } finally {
-        if (!mounted || job != _ratingJob || ordered == null) return;
-        if (_sort != CatalogSort.rating) return;
-        CatalogOrderStore.instance.save(key, [
-          for (final entry in ordered) entry.primary.id,
-        ]);
-        await RemoteNavigation.idle();
-        if (!mounted || job != _ratingJob || _sort != CatalogSort.rating) {
-          return;
-        }
-        if (_sameOrder(_sortedEntries, ordered) &&
-            identical(_sortedSource, snapshot) &&
-            _ratingKey == key) {
-          return;
-        }
-        setState(() {
-          _sortedSource = snapshot;
-          _sortedOrder = CatalogSort.rating;
-          _ratingKey = key;
-          _sortedEntries = ordered;
-        });
-      }
-    }());
-  }
-
-  Future<void> _enqueueRatingView(List<CatalogEntry> snapshot, int job) async {
-    final service = CatalogRatingService.instance;
-    const step = 800;
-    for (var i = 0; i < snapshot.length; i += step) {
-      if (!mounted || job != _ratingJob) return;
-      final end = i + step < snapshot.length ? i + step : snapshot.length;
-      await service.request([
-        for (var j = i; j < end; j++) snapshot[j].primary,
-      ]);
-      await Future<void>.delayed(Duration.zero);
-    }
+    if (current) return _sortedEntries!;
+    final saved = ids ?? CatalogOrderStore.instance.idsFor(key);
+    _sortedSource = entries;
+    _sortedOrder = CatalogSort.rating;
+    _ratingKey = key;
+    if (saved == null) return _sortedEntries = entries;
+    return _sortedEntries = applyCatalogOrder(entries, saved);
   }
 
   Widget _gridItem(AppProvider app, CatalogEntry entry, int index) =>

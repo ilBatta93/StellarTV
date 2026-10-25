@@ -14,6 +14,7 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import 'kids_policy.dart';
 import 'catalog_work_queue.dart';
+import 'title_facet_index.dart';
 
 final _foregroundHttp = ForegroundHttpClient();
 
@@ -113,6 +114,8 @@ class KidsContentService {
       }
     } catch (_) {}
     // Refresh lists/genre bar right away with the saved data.
+    await TitleFacetIndex.instance.load();
+    TitleFacetIndex.instance.importGenres(_genres);
     _loaded = true;
     if (_verdicts.isNotEmpty || _genres.isNotEmpty) onVerdicts?.call();
   }
@@ -126,7 +129,8 @@ class KidsContentService {
     );
     if (banned) return false;
     final key = keyOf(item);
-    final genres = _genres[key] ?? const <int>[];
+    final genres =
+        TitleFacetIndex.instance.genresOf(key) ?? _genres[key] ?? const <int>[];
     if (!KidsPolicy.allows(
       category: item.group,
       genres: genres,
@@ -142,7 +146,10 @@ class KidsContentService {
   bool isKnown(Channel item) => _verdicts.containsKey(keyOf(item));
 
   /// TMDB genre ids of a movie/series, or null while not yet checked.
-  List<int>? genresOf(Channel item) => _genres[keyOf(item)];
+  List<int>? genresOf(Channel item) {
+    final key = keyOf(item);
+    return TitleFacetIndex.instance.genresOf(key) ?? _genres[key];
+  }
 
   /// Starts filling the shared/local cache as soon as a playlist is loaded,
   /// without requiring the kids profile or the player to be open.
@@ -161,8 +168,8 @@ class KidsContentService {
       }
       final key = keyOf(c);
       if (_verdicts.containsKey(key) &&
-          _genres.containsKey(key) &&
-          _certifications.containsKey(key)) {
+          _certifications.containsKey(key) &&
+          TitleFacetIndex.instance.genresFresh(key)) {
         continue;
       }
       _work.add(
@@ -209,7 +216,10 @@ class KidsContentService {
           _verdicts[key] = r['is_kids'] as bool;
           _certifications[key] = r['certification'] as String;
           final g = r['genre_ids'];
-          _genres[key] = g is List ? g.whereType<int>().toList() : const [];
+          _genres[key] = g is List
+              ? [for (final n in g) if (n is num) n.toInt()]
+              : const [];
+          TitleFacetIndex.instance.putGenres(key, _genres[key]!);
           if (keys.containsKey(key)) _work.complete(key);
           changed = true;
         }
@@ -271,7 +281,10 @@ class KidsContentService {
             _verdicts[key] = r['is_kids'] as bool;
             _certifications[key] = r['certification'] as String;
             final g = r['genre_ids'];
-            _genres[key] = g is List ? g.whereType<int>().toList() : const [];
+            _genres[key] = g is List
+                ? [for (final n in g) if (n is num) n.toInt()]
+                : const [];
+            TitleFacetIndex.instance.putGenres(key, _genres[key]!);
             resolved.add(key);
           }
           await _save();

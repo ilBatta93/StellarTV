@@ -337,7 +337,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                       _Chip(label: '${series.episodeCount} episodi'),
                     if (item != null && item.year.isNotEmpty)
                       _Chip(label: item.year),
-                    if (item != null) ImdbRatingBadge(item),
+                    if (item != null) ImdbRatingBadge(item, priority: true),
                     _Chip(label: series.group),
                   ],
                 ),

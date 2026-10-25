@@ -9,6 +9,7 @@ import '../models/rating_policy.dart';
 import '../providers/app_provider.dart';
 import '../services/imdb_rating_service.dart';
 import '../services/catalog_rating_service.dart';
+import '../services/title_facet_index.dart';
 import '../services/title_metadata_store.dart';
 import '../models/episode_metadata.dart';
 import '../services/platform_catalog_service.dart';
@@ -200,15 +201,43 @@ class RatingValue extends StatelessWidget {
 class ImdbRatingBadge extends StatelessWidget {
   final TmdbItem item;
   final double height;
-  const ImdbRatingBadge(this.item, {super.key, this.height = 20});
+
+  /// The open title. Home and catalog posters stay on the shared cache.
+  final bool priority;
+
+  /// One shared-cache lookup, then a single full attempt if the poster is visible.
+  final bool reveal;
+  final bool framed;
+  const ImdbRatingBadge(
+    this.item, {
+    super.key,
+    this.height = 20,
+    this.priority = false,
+    this.reveal = false,
+    this.framed = false,
+  });
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: ImdbRatingService.instance.store,
-    builder: (_, __) => RatingValue(
-      imdb: ImdbRatingService.instance.ratingOf(item, priority: true),
-      fallback: item.voteAverage,
-      height: height,
-    ),
+    listenable: Listenable.merge([
+      ImdbRatingService.instance.store,
+      TitleFacetIndex.instance,
+    ]),
+    builder: (_, __) {
+      if (priority) {
+        ImdbRatingService.instance.ratingOf(item, priority: true);
+      } else if (reveal) {
+        ImdbRatingService.instance.reveal(item);
+      }
+      final key = ImdbRatingService.keyOf(item);
+      return RatingValue(
+        imdb:
+            TitleFacetIndex.instance.imdbOfMedia(key) ??
+            ImdbRatingService.instance.peek(item),
+        fallback: item.voteAverage,
+        height: height,
+        framed: framed,
+      );
+    },
   );
 }
 
@@ -253,14 +282,21 @@ class _ChannelRatingBadgeState extends State<ChannelRatingBadge> {
         service,
         service.identities,
         ImdbRatingService.instance.store,
+        TitleFacetIndex.instance,
       ]),
       builder: (_, __) {
         final item = service.itemOf(widget.channel);
         // Posters read the device cache only. A full lookup is reserved for
         // the open title, so scrolling cannot delay that page.
         if (item != null) ImdbRatingService.instance.reveal(item);
+        final imdb = item == null
+            ? null
+            : TitleFacetIndex.instance.imdbOfMedia(
+                    ImdbRatingService.keyOf(item),
+                  ) ??
+                  ImdbRatingService.instance.peek(item);
         return RatingValue(
-          imdb: item == null ? null : ImdbRatingService.instance.peek(item),
+          imdb: imdb,
           fallback: service.ratingOf(widget.channel) ?? item?.voteAverage ?? 0,
           height: widget.height,
           framed: widget.framed,
