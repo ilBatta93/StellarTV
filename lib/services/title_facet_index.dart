@@ -23,6 +23,11 @@ class _Facet {
   String? imdbId;
   List<int>? genres;
   int genresAt = 0;
+  List<String>? platforms;
+  int platformsAt = 0;
+  String? logoUrl;
+  bool logoKnown = false;
+  int logoExpires = 0;
 
   void copyImdbFrom(_Facet other) {
     imdb = other.imdb;
@@ -82,11 +87,108 @@ class TitleFacetIndex extends ChangeNotifier {
     return _now() - row.imdbAt < imdbTtl.inMilliseconds;
   }
 
-  /// IMDb id already resolved for this TMDB title, when the index has one.
-  String? imdbIdOf(String mediaKey) {
-    final id = _rows[mediaKey]?.imdbId;
+  /// IMDb id already resolved for this key, when the index has one.
+  String? imdbIdOf(String key) {
+    final id = _rows[key]?.imdbId;
     if (id == null || !RegExp(r'^tt\d+$').hasMatch(id)) return null;
     return id;
+  }
+
+  /// TMDB id already joined to a catalog title.
+  ({int tmdbId, String mediaKey})? linkOf(String titleKey) {
+    final row = _rows[titleKey];
+    final id = row?.tmdbId;
+    final media = row?.mediaKey;
+    if (row == null || id == null || media == null) return null;
+    return (tmdbId: id, mediaKey: media);
+  }
+
+  void putImdbId(String key, String imdbId, {bool quiet = false}) {
+    if (key.isEmpty || !RegExp(r'^tt\d+$').hasMatch(imdbId)) return;
+    final row = _row(key);
+    if (row.imdbId == imdbId) return;
+    row.imdbId = imdbId;
+    if (key.split(':').length == 2) {
+      for (final titleKey in _titleKeysByMedia[key] ?? const <String>{}) {
+        _row(titleKey).imdbId = imdbId;
+      }
+    }
+    if (quiet) {
+      _dirty = true;
+    } else {
+      _touch(rank: false);
+    }
+  }
+
+  List<String>? platformsOf(String mediaKey) => _rows[mediaKey]?.platforms;
+
+  bool platformsFresh(String mediaKey) {
+    final row = _rows[mediaKey];
+    if (row == null || row.platforms == null || row.platformsAt == 0) {
+      return false;
+    }
+    return _now() - row.platformsAt < tmdbTtl.inMilliseconds;
+  }
+
+  void putPlatforms(
+    String mediaKey,
+    List<String> names, {
+    int? at,
+    bool quiet = false,
+  }) {
+    if (mediaKey.split(':').length != 2) return;
+    final row = _row(mediaKey);
+    final stamp = at ?? _now();
+    if (row.platforms != null && row.platformsAt > stamp) return;
+    row.platforms = List<String>.from(names);
+    row.platformsAt = stamp;
+    if (quiet) {
+      _dirty = true;
+    } else {
+      _touch(rank: false);
+    }
+  }
+
+  void importPlatforms(Map<String, (List<String>, int)> rows) {
+    rows.forEach((key, value) {
+      putPlatforms(key, value.$1, at: value.$2, quiet: true);
+    });
+  }
+
+  /// A logo already resolved. Null means the index has no fresh answer.
+  /// [url] inside the record is null when a lookup confirmed there is none.
+  ({String? url})? logoOf(String mediaKey) {
+    final row = _rows[mediaKey];
+    if (row == null || !row.logoKnown || row.logoExpires <= _now()) return null;
+    return (url: row.logoUrl);
+  }
+
+  void putLogo(
+    String mediaKey,
+    String? url, {
+    int? expiresAt,
+    bool quiet = false,
+  }) {
+    if (mediaKey.split(':').length != 2) return;
+    if (url != null && !url.startsWith('https://image.tmdb.org/t/p/')) return;
+    final row = _row(mediaKey);
+    final expires =
+        expiresAt ??
+        _now() +
+            (url == null
+                ? const Duration(hours: 6).inMilliseconds
+                : const Duration(days: 30).inMilliseconds);
+    if (row.logoKnown && row.logoUrl == url && row.logoExpires >= expires) {
+      return;
+    }
+    row.logoKnown = true;
+    row.logoUrl = url;
+    row.logoExpires = expires;
+    if (quiet) {
+      _dirty = true;
+    } else {
+      _touch(rank: false);
+    }
   }
 
   bool tmdbFresh(String titleKey) {
@@ -361,6 +463,17 @@ class TitleFacetIndex extends ChangeNotifier {
         row.genres = incoming.genres;
         row.genresAt = incoming.genresAt;
       }
+      if (incoming.platforms != null &&
+          (row.platforms == null || incoming.platformsAt >= row.platformsAt)) {
+        row.platforms = incoming.platforms;
+        row.platformsAt = incoming.platformsAt;
+      }
+      if (incoming.logoKnown &&
+          (!row.logoKnown || incoming.logoExpires >= row.logoExpires)) {
+        row.logoKnown = true;
+        row.logoUrl = incoming.logoUrl;
+        row.logoExpires = incoming.logoExpires;
+      }
     });
     _relink();
     _dirty = true;
@@ -398,6 +511,10 @@ Map<String, Object?> _encode(_Facet row) => {
   if (row.imdbId != null) 'tt': row.imdbId,
   if (row.genres != null) 'g': row.genres,
   if (row.genresAt != 0) 'ga': row.genresAt,
+  if (row.platforms != null) 'p': row.platforms,
+  if (row.platformsAt != 0) 'pa': row.platformsAt,
+  if (row.logoKnown) 'l': row.logoUrl,
+  if (row.logoExpires != 0) 'le': row.logoExpires,
 };
 
 _Facet _decode(Map<String, Object?> raw) {
@@ -422,6 +539,20 @@ _Facet _decode(Map<String, Object?> raw) {
     row.genres = [for (final n in genres) if (n is num) n.toInt()];
   }
   if (raw['ga'] is num) row.genresAt = (raw['ga'] as num).toInt();
+  final platforms = raw['p'];
+  if (platforms is List) {
+    row.platforms = [for (final name in platforms) if (name is String) name];
+  }
+  if (raw['pa'] is num) row.platformsAt = (raw['pa'] as num).toInt();
+  if (raw.containsKey('l')) {
+    final url = raw['l'];
+    if (url == null ||
+        (url is String && url.startsWith('https://image.tmdb.org/t/p/'))) {
+      row.logoKnown = true;
+      row.logoUrl = url as String?;
+    }
+  }
+  if (raw['le'] is num) row.logoExpires = (raw['le'] as num).toInt();
   return row;
 }
 

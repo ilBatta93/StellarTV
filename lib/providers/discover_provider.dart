@@ -1,6 +1,7 @@
 import '../services/title_providers_service.dart';
 import '../services/imdb_rating_service.dart';
 import '../services/title_facet_index.dart';
+import '../services/title_logo_cache.dart';
 import '../services/segment_library.dart';
 import '../services/platform_catalog_service.dart';
 import 'dart:async';
@@ -59,6 +60,7 @@ class DiscoverProvider extends ChangeNotifier {
     final index = TitleFacetIndex.instance;
     index.beginBulk();
     index.mergeImdb(ImdbRatingService.instance.store.timedSnapshot());
+    await TitleLogoCache.importResolved();
     index.endBulk();
     _primeVisible();
   }

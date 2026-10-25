@@ -49,6 +49,42 @@ class CatalogRatingService extends ChangeNotifier {
         v is Map ? TmdbItem.tryParse(Map<String, dynamic>.from(v)) : null,
   );
   TmdbItem? itemOf(Channel c) => identities.valueOf(_key(c));
+
+  /// TMDB id already joined to this catalog title.
+  ({int id, bool movie})? linkedIdentity(Channel c) {
+    final link = TitleFacetIndex.instance.linkOf(_key(c));
+    if (link == null) return null;
+    return (id: link.tmdbId, movie: link.mediaKey.startsWith('movie:'));
+  }
+
+  /// IMDb id already stored for this title. No network.
+  String? imdbIdOf(Channel c) {
+    final key = _key(c);
+    final direct = TitleFacetIndex.instance.imdbIdOf(key);
+    if (direct != null) return direct;
+    final link = TitleFacetIndex.instance.linkOf(key);
+    if (link != null) {
+      final fromMedia = TitleFacetIndex.instance.imdbIdOf(link.mediaKey);
+      if (fromMedia != null) return fromMedia;
+    }
+    final item = identities.valueOf(key);
+    if (item == null) return null;
+    return TitleFacetIndex.instance.imdbIdOf(ImdbRatingService.keyOf(item));
+  }
+
+  void noteImdbId(Channel c, String imdbId) {
+    final key = _key(c);
+    TitleFacetIndex.instance.putImdbId(key, imdbId);
+    final link = TitleFacetIndex.instance.linkOf(key);
+    if (link != null) TitleFacetIndex.instance.putImdbId(link.mediaKey, imdbId);
+    final item = identities.valueOf(key);
+    if (item != null) {
+      TitleFacetIndex.instance.putImdbId(
+        ImdbRatingService.keyOf(item),
+        imdbId,
+      );
+    }
+  }
   void remember(Channel c, TmdbItem item) {
     final key = _key(c);
     identities.put(key, item);

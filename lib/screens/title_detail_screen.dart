@@ -73,10 +73,18 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
       var item = _item;
       final channel = widget.channel;
       if (item == null && channel != null) {
-        item = await tmdb.findByTitle(
-          channel.name,
-          isMovie: channel.type == ContentType.movie,
-        );
+        await CatalogRatingService.instance.ensureLoaded();
+        item = CatalogRatingService.instance.itemOf(channel);
+        if (item == null) {
+          final link = CatalogRatingService.instance.linkedIdentity(channel);
+          item = link == null
+              ? null
+              : await tmdb.itemById(link.id, movie: link.movie);
+          item ??= await tmdb.findByTitle(
+            channel.name,
+            isMovie: channel.type == ContentType.movie,
+          );
+        }
         // Series always use the combined page with seasons and episodes.
         if (channel.type == ContentType.series ||
             channel.type == ContentType.anime) {

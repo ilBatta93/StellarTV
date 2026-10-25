@@ -98,7 +98,21 @@ class SegmentLibrary {
   final _http = ForegroundHttpClient();
   final _pending = <String, Future<EpisodeSegments?>>{};
 
-  Future<void> load() => Future.wait([store.load(), _ids.load()]);
+  Future<void> load() async {
+    await Future.wait([
+      store.load(),
+      _ids.load(),
+      TitleFacetIndex.instance.load(),
+    ]);
+    final index = TitleFacetIndex.instance;
+    index.beginBulk();
+    for (final entry in _ids.timedSnapshot().entries) {
+      if (_ids.isFresh(entry.key)) {
+        index.putImdbId(entry.key, entry.value.$1, quiet: true);
+      }
+    }
+    index.endBulk();
+  }
 
   /// Visible season, one episode at a time, and never while a video is open.
   Future<void> prepareSeason({
@@ -207,16 +221,13 @@ class SegmentLibrary {
     required bool movie,
   }) async {
     final kind = movie ? 'movie' : 'tv';
-    if (tmdbId != null) {
-      final known = TitleFacetIndex.instance.imdbIdOf('$kind:$tmdbId');
-      if (known != null) return known;
-    }
     final keys = <String>[
       if (tmdbId != null) '$kind:$tmdbId',
       if (title.isNotEmpty) '$kind:t:${title.toLowerCase()}',
     ];
     for (final key in keys) {
-      if (_ids.isFresh(key)) return _ids.valueOf(key);
+      final known = TitleFacetIndex.instance.imdbIdOf(key);
+      if (known != null) return known;
     }
     final id = await ImdbResolver.getImdbId(
       tmdbId: tmdbId,
@@ -225,7 +236,7 @@ class SegmentLibrary {
     );
     if (id == null) return null;
     for (final key in keys) {
-      _ids.put(key, id);
+      TitleFacetIndex.instance.putImdbId(key, id);
     }
     return id;
   }

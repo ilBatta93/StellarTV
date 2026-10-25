@@ -3,6 +3,7 @@ import 'foreground_http_client.dart';
 import 'dart:convert';
 
 import 'title_logo_cache.dart';
+import 'title_facet_index.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -97,6 +98,17 @@ class TmdbService {
     return _dedupe([
       for (final p in pages) ..._parseResults(p, type: mediaType),
     ]);
+  }
+
+  /// One title by its TMDB id. Used when the catalog index already knows the id.
+  Future<TmdbItem?> itemById(int id, {required bool movie}) async {
+    try {
+      final type = movie ? 'movie' : 'tv';
+      final body = await _get('$type/$id');
+      return TmdbItem.tryParse(body, fallbackType: type);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Most popular films and series of a streaming platform, kept separate.
@@ -233,11 +245,18 @@ class TmdbService {
     }
     return _titleLogos.putIfAbsent(item.key, () async {
       try {
+        final media = '${item.isMovie ? 'movie' : 'tv'}:${item.id}';
+        final indexed = TitleFacetIndex.instance.logoOf(media);
+        if (indexed != null) return indexed.url;
         final cached = await TitleLogoCache.read(item.key);
-        if (cached != null) return cached.url;
+        if (cached != null) {
+          TitleFacetIndex.instance.putLogo(media, cached.url);
+          return cached.url;
+        }
         final shared = await sharedLogo(item);
         if (shared != null) {
           await TitleLogoCache.write(item.key, shared.url);
+          TitleFacetIndex.instance.putLogo(media, shared.url);
           return shared.url;
         }
         final body = await _get('${item.mediaType}/${item.id}/images', {
@@ -247,6 +266,7 @@ class TmdbService {
         });
         final url = selectTitleLogo(body);
         await TitleLogoCache.write(item.key, url);
+        TitleFacetIndex.instance.putLogo(media, url);
         return url;
       } catch (_) {
         _titleLogos.remove(item.key);

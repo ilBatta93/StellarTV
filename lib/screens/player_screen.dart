@@ -21,6 +21,7 @@ import '../player/playback_engine.dart';
 import '../player/tv_playback_shortcuts.dart';
 import '../providers/history_provider.dart';
 import '../services/imdb_resolver.dart';
+import '../services/catalog_rating_service.dart';
 import '../services/introdb_service.dart';
 import '../services/playback_assistance.dart';
 import '../services/segment_library.dart';
@@ -1104,10 +1105,15 @@ class _PlayerScreenState extends State<PlayerScreen>
       final title = _isEpisode
           ? (c.seriesName?.isNotEmpty == true ? c.seriesName! : c.name)
           : c.name;
-      final imdbId = await ImdbResolver.getImdbId(
-        title: title,
-        isMovie: !_isEpisode,
-      );
+      final saved = CatalogRatingService.instance.imdbIdOf(c);
+      final imdbId = saved ??
+          await ImdbResolver.getImdbId(
+            title: title,
+            isMovie: !_isEpisode,
+          );
+      if (saved == null && imdbId != null) {
+        CatalogRatingService.instance.noteImdbId(c, imdbId);
+      }
       if (imdbId == null) throw 'titolo non trovato su TMDB';
       final variant = _onlineCues == null ? 0 : (_onlineVariant + 1) % 5;
       // Livello 2: impronta esatta del file (solo alla prima richiesta).

@@ -3,6 +3,7 @@ import 'dart:async';
 import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
 import 'playback_work_policy.dart';
+import 'title_facet_index.dart';
 import 'title_metadata_store.dart';
 import 'tmdb_service.dart';
 
@@ -25,7 +26,15 @@ class TitleProvidersService {
 
   void attach(TmdbService tmdb) {
     _tmdb ??= tmdb;
-    unawaited(store.load());
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    await Future.wait([store.load(), TitleFacetIndex.instance.load()]);
+    final index = TitleFacetIndex.instance;
+    index.beginBulk();
+    index.importPlatforms(store.timedSnapshot());
+    index.endBulk();
   }
 
   static String keyOf(TmdbItem item) =>
@@ -34,8 +43,14 @@ class TitleProvidersService {
   /// Platforms that verifiably offer [item], or null while not checked yet.
   List<StreamingPlatform>? platformsOf(TmdbItem item) {
     final key = keyOf(item);
-    final names = store.valueOf(key);
-    if (!TitleMetadataStore.disabled && !store.isFresh(key) && _asked.add(key)) {
+    final indexed = TitleFacetIndex.instance.platformsOf(key);
+    final names = indexed ?? store.valueOf(key);
+    if (indexed == null && names != null) {
+      TitleFacetIndex.instance.putPlatforms(key, names);
+    }
+    final fresh =
+        TitleFacetIndex.instance.platformsFresh(key) || store.isFresh(key);
+    if (!TitleMetadataStore.disabled && !fresh && _asked.add(key)) {
       _queue.add((key, item));
       if (!_running) unawaited(_run());
     }
@@ -60,10 +75,12 @@ class TitleProvidersService {
         final (key, item) = _queue.removeAt(0);
         final ids = await tmdb.watchProviderIds(item);
         if (ids == null) continue;
-        store.put(key, [
+        final names = [
           for (final p in StreamingPlatform.all)
             if (p.providerIds.split('|').any(ids.contains)) p.name,
-        ]);
+        ];
+        store.put(key, names);
+        TitleFacetIndex.instance.putPlatforms(key, names);
       }
     } finally {
       _running = false;

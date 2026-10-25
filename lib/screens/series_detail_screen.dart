@@ -158,12 +158,20 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   Future<void> _loadInfo() async {
     try {
       final tmdb = context.read<DiscoverProvider>().tmdb;
-      final item =
-          _item ??
-          await tmdb.findByTitle(
-            widget.series.displaySeriesName,
-            isMovie: false,
-          );
+      await CatalogRatingService.instance.ensureLoaded();
+      var item = _item ?? CatalogRatingService.instance.itemOf(widget.series);
+      if (item == null) {
+        final link = CatalogRatingService.instance.linkedIdentity(
+          widget.series,
+        );
+        item = link == null
+            ? null
+            : await tmdb.itemById(link.id, movie: link.movie);
+        item ??= await tmdb.findByTitle(
+          widget.series.displaySeriesName,
+          isMovie: false,
+        );
+      }
       if (item == null || !mounted) return;
       setState(() => _item = item);
       CatalogRatingService.instance.remember(widget.series, item);

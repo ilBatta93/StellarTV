@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'title_facet_index.dart';
+
 class TitleLogoEntry {
   const TitleLogoEntry(this.url);
   final String? url;
@@ -27,6 +29,30 @@ class TitleLogoCache {
           RegExp(
             r'^https://image\.tmdb\.org/t/p/w500/[a-zA-Z0-9_.-]+\.(png|jpg|webp)$',
           ).hasMatch(url));
+
+  /// Copies logos already saved into the memory index. Expired rows are skipped.
+  static Future<void> importResolved() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final entries = _decode(prefs.getString(storageKey));
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final index = TitleFacetIndex.instance;
+      index.beginBulk();
+      entries.forEach((key, value) {
+        if (value is! Map) return;
+        final expiry = value['expires'];
+        if (expiry is! int || expiry <= now || !value.containsKey('url')) {
+          return;
+        }
+        final url = value['url'];
+        if (!validUrl(url)) return;
+        final media = key.replaceFirst('_', ':');
+        if (!RegExp(r'^(movie|tv):\d+$').hasMatch(media)) return;
+        index.putLogo(media, url as String?, expiresAt: expiry, quiet: true);
+      });
+      index.endBulk();
+    } catch (_) {}
+  }
 
   static Future<TitleLogoEntry?> read(String key, {DateTime? now}) async {
     try {
