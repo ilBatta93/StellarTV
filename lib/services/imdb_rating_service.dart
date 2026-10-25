@@ -32,9 +32,11 @@ class ImdbRatingService {
   final Set<String> _asked = {};
   final Set<String> _inflight = {};
   // Keys only looked up in the shared cloud cache (posters and sorting):
-  // never trigger an external IMDb request.
+  // never trigger an external IMDb request, except one attempt for a
+  // poster actually on screen when the shared cache has no vote.
   final Set<String> _cacheQueued = {};
   final Set<String> _cacheAsked = {};
+  final Set<String> _reveal = {};
   Timer? _timer;
   bool _running = false;
 
@@ -46,6 +48,8 @@ class ImdbRatingService {
 
   /// Stored value, or 0 once a lookup confirmed IMDb has none. No request.
   double? peek(TmdbItem item) => _value(keyOf(item));
+
+  Map<String, double> exportScores() => store.snapshot();
 
   double? _value(String key) {
     final v = store.valueOf(key);
@@ -111,6 +115,42 @@ class ImdbRatingService {
       _queued.add(key);
       _kick(const Duration(milliseconds: 400));
     }
+  }
+
+  /// Poster on screen. Shared cache first; one full lookup if that cache
+  /// has no vote, so the badge can leave the pending state.
+  void reveal(TmdbItem item) {
+    if (TitleMetadataStore.disabled) return;
+    final key = keyOf(item);
+    if (store.valueOf(key) != null ||
+        _settled.contains(key) ||
+        _inflight.contains(key) ||
+        _queued.contains(key) ||
+        _titlePriority.contains(key)) {
+      return;
+    }
+    if (!_cacheAsked.contains(key) || _cacheQueued.contains(key)) {
+      _reveal.add(key);
+      prime([item]);
+      return;
+    }
+    _promoteReveal(key);
+    if (_queued.isNotEmpty) _kick(const Duration(milliseconds: 400));
+  }
+
+  bool _promoteReveal(String key) {
+    if (!_reveal.remove(key)) return false;
+    if (store.valueOf(key) != null ||
+        _settled.contains(key) ||
+        _inflight.contains(key) ||
+        _queued.contains(key) ||
+        _titlePriority.contains(key) ||
+        _episodePriority.contains(key)) {
+      return false;
+    }
+    if (!_asked.add(key)) return false;
+    _queued.add(key);
+    return true;
   }
 
   /// Fills the device cache from the shared cache only (no external call).
@@ -196,6 +236,7 @@ class ImdbRatingService {
         batch.removeWhere(store.isFresh);
         if (batch.isEmpty) continue;
         _inflight.addAll(batch);
+        final promote = <String>[];
         String bearer = SupabaseConfig.anonKey;
         try {
           bearer =
@@ -230,25 +271,42 @@ class ImdbRatingService {
             throw const FormatException('IMDb unavailable');
           }
           final body = jsonDecode(res.body);
+          final stored = <String>{};
           for (final r
               in (body is Map ? body['results'] as List? : null) ?? const []) {
             if (r is! Map || r['known'] != true) continue;
             final rating = r['rating'];
-            store.put(
-              r['season'] is num && r['episode'] is num
-                  ? episodeKey(
-                      (r['id'] as num).toInt(),
-                      (r['season'] as num).toInt(),
-                      (r['episode'] as num).toInt(),
-                    )
-                  : '${r['type']}:${r['id']}',
-              rating is num ? rating.toDouble() : 0,
-            );
+            final key = r['season'] is num && r['episode'] is num
+                ? episodeKey(
+                    (r['id'] as num).toInt(),
+                    (r['season'] as num).toInt(),
+                    (r['episode'] as num).toInt(),
+                  )
+                : '${r['type']}:${r['id']}';
+            stored.add(key);
+            store.put(key, rating is num ? rating.toDouble() : 0);
+          }
+          if (cacheOnly) {
+            for (final key in batch) {
+              if (stored.contains(key)) {
+                _reveal.remove(key);
+              } else if (_reveal.contains(key)) {
+                promote.add(key);
+              }
+            }
           }
         } catch (_) {
           // Do not persist transport failures as confirmed IMDb absence.
+          if (cacheOnly) {
+            for (final key in batch) {
+              if (_reveal.contains(key)) _cacheAsked.remove(key);
+            }
+          }
         } finally {
           _inflight.removeAll(batch);
+          for (final key in promote) {
+            _promoteReveal(key);
+          }
           if (!cacheOnly) {
             _settled.addAll(batch);
             store.notifyAvailabilityChanged();

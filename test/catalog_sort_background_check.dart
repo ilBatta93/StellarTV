@@ -2,6 +2,7 @@ import '../lib/models/channel.dart';
 import '../lib/models/content_type.dart';
 import '../lib/services/catalog_builder.dart';
 import '../lib/services/catalog_sort.dart';
+import '../lib/services/title_matching.dart';
 
 void require(bool ok, String message) {
   if (!ok) throw StateError(message);
@@ -92,6 +93,18 @@ Future<void> main() async {
   require(
     applied.map((e) => e.primary.id).join(',') == 'new,missing,old',
     'saved order',
+  );
+  final aKey = parseTitle('A').key(ContentType.movie.name);
+  final bKey = parseTitle('B').key(ContentType.movie.name);
+  final byRating = await sortCatalogByKnownRatings(
+    [for (final c in source) CatalogEntry(primary: c, variants: [c])],
+    {aKey: 4},
+    {bKey: 'movie:2'},
+    {'movie:2': 9},
+  );
+  require(
+    byRating.map((e) => e.primary.id).join(',') == 'new,old,missing',
+    'known ratings prefer IMDb, then the stored vote, unknown last',
   );
   print(
     'PASS: eight isolate orders, release dates, rating snapshots and 100000 entries',

@@ -18,6 +18,7 @@ class ChannelCard extends StatelessWidget {
   final bool isFavorite;
   final VoidCallback onTap;
   final VoidCallback onFavoriteTap;
+  final String? qualityLabel;
 
   const ChannelCard({
     super.key,
@@ -25,6 +26,7 @@ class ChannelCard extends StatelessWidget {
     required this.isFavorite,
     required this.onTap,
     required this.onFavoriteTap,
+    this.qualityLabel,
   });
 
   bool get _isLive => channel.type == ContentType.live;
@@ -58,7 +60,7 @@ class ChannelCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // Subscribes to the poster preferences; [_card] reads them.
     context.select<UiSettings, String>(
-      (ui) => '${ui.showRatings}${ui.showTitles}',
+      (ui) => '${ui.showRatings}${ui.showTitles}${ui.showQuality}',
     );
     if (DeviceTypeService.isTv && !_isLive) {
       return _TvRatedPoster(
@@ -115,6 +117,14 @@ class ChannelCard extends StatelessWidget {
                         left: 6,
                         top: 6,
                         child: ChannelRatingBadge(channel, framed: true),
+                      ),
+                    if (!_isLive &&
+                        qualityLabel != null &&
+                        context.read<UiSettings>().showQuality)
+                      Positioned(
+                        left: 6,
+                        bottom: 6,
+                        child: _QualityBadge(qualityLabel!),
                       ),
                     if (_isLive)
                       const Positioned(left: 6, bottom: 6, child: LiveBadge()),
@@ -187,6 +197,29 @@ class _FavoriteButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _QualityBadge extends StatelessWidget {
+  final String label;
+  const _QualityBadge(this.label);
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+    decoration: BoxDecoration(
+      color: AppColors.overlayControl,
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        color: AppColors.primary,
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.4,
+      ),
+    ),
+  );
 }
 
 class LiveBadge extends StatelessWidget {

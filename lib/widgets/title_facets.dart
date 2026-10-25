@@ -258,7 +258,7 @@ class _ChannelRatingBadgeState extends State<ChannelRatingBadge> {
         final item = service.itemOf(widget.channel);
         // Posters read the device cache only. A full lookup is reserved for
         // the open title, so scrolling cannot delay that page.
-        if (item != null) ImdbRatingService.instance.prime([item]);
+        if (item != null) ImdbRatingService.instance.reveal(item);
         return RatingValue(
           imdb: item == null ? null : ImdbRatingService.instance.peek(item),
           fallback: service.ratingOf(widget.channel) ?? item?.voteAverage ?? 0,

@@ -68,6 +68,15 @@ class CatalogRatingService extends ChangeNotifier {
       _keys[c] ??= parseTitle(c.displaySeriesName).key(c.type.name);
   double? ratingOf(Channel c) => _ratings[_key(c)];
 
+  /// Title-key tables for the sort isolate. IMDb wins when its score is > 0.
+  ({Map<String, double> tmdb, Map<String, String> imdbKeys}) ratingTables() {
+    final imdbKeys = <String, String>{};
+    for (final entry in identities.snapshot().entries) {
+      imdbKeys[entry.key] = ImdbRatingService.keyOf(entry.value);
+    }
+    return (tmdb: Map<String, double>.of(_ratings), imdbKeys: imdbKeys);
+  }
+
   /// Sort value: IMDb when known (>0), otherwise the TMDB vote.
   double sortRatingOf(Channel c) {
     final item = itemOf(c);

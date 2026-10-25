@@ -32,6 +32,11 @@ class TitleMetadataStore<T> extends ChangeNotifier {
   void notifyAvailabilityChanged() => notifyListeners();
 
   T? valueOf(String key) => _values[key]?.$1;
+
+  /// Plain copy safe to send across an isolate boundary.
+  Map<String, T> snapshot() => {
+    for (final entry in _values.entries) entry.key: entry.value.$1,
+  };
   bool isFresh(String key) {
     final at = _values[key]?.$2;
     return at != null &&

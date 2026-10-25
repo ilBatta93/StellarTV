@@ -248,9 +248,8 @@ class _Chip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
     decoration: BoxDecoration(
-      color: AppColors.card,
-      borderRadius: BorderRadius.circular(5),
-      border: Border.all(color: AppColors.border),
+      color: AppColors.overlayControl,
+      borderRadius: BorderRadius.circular(6),
     ),
     child: Text(
       text,

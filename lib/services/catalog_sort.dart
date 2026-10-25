@@ -2,6 +2,7 @@ import 'dart:isolate';
 
 import '../models/channel.dart';
 import 'catalog_builder.dart';
+import 'title_matching.dart';
 
 /// "Aggiunto" uses the provider's addition date; "Uscita" uses the real
 /// release date of the title (VOD catalogs only).
@@ -88,6 +89,42 @@ Future<List<Channel>> sortLiveBackground(
   List<Channel> channels,
   CatalogSort? order,
 ) => Isolate.run(() => sortCatalog(channels, order, (c) => c));
+
+/// IMDb when the snapshot has a positive score, otherwise the stored vote.
+/// A missing score stays 0 and sorts after every rated title.
+Future<List<CatalogEntry>> sortCatalogByKnownRatings(
+  List<CatalogEntry> entries,
+  Map<String, double> tmdbByTitle,
+  Map<String, String> imdbKeyByTitle,
+  Map<String, double> imdbByKey,
+) => Isolate.run(
+  () => _sortByKnownRatings(entries, tmdbByTitle, imdbKeyByTitle, imdbByKey),
+);
+
+List<CatalogEntry> _sortByKnownRatings(
+  List<CatalogEntry> entries,
+  Map<String, double> tmdbByTitle,
+  Map<String, String> imdbKeyByTitle,
+  Map<String, double> imdbByKey,
+) {
+  final scores = <String, double>{};
+  for (final entry in entries) {
+    final channel = entry.primary;
+    final titleKey = parseTitle(channel.displaySeriesName).key(channel.type.name);
+    final imdbKey = imdbKeyByTitle[titleKey];
+    final imdb = imdbKey == null ? null : imdbByKey[imdbKey];
+    final score = imdb != null && imdb > 0
+        ? imdb
+        : (tmdbByTitle[titleKey] ?? 0);
+    if (score > 0) scores[channel.id] = score;
+  }
+  return sortCatalog(
+    entries,
+    CatalogSort.rating,
+    (entry) => entry.primary,
+    ratingOf: (channel) => scores[channel.id] ?? 0,
+  );
+}
 
 /// Highest score first. Equal scores keep alphabetical order. A missing
 /// score is 0 and therefore lands after every rated title.
