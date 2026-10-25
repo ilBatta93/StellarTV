@@ -23,6 +23,7 @@ import '../providers/history_provider.dart';
 import '../services/imdb_resolver.dart';
 import '../services/introdb_service.dart';
 import '../services/playback_assistance.dart';
+import '../services/segment_library.dart';
 import '../services/foreground_policy.dart';
 import '../widgets/player/provider_check_button.dart';
 import '../services/playback_work_policy.dart';
@@ -142,7 +143,10 @@ class _PlayerScreenState extends State<PlayerScreen>
   // IntroDB skip segments (empty when unavailable: no buttons are shown).
   EpisodeSegments _segments = EpisodeSegments.empty;
   EpisodeSegments _chapterSegments = EpisodeSegments.empty;
-  PlaybackEngine? _chaptersReadFor;
+  PlaybackEngine? _chaptersEngine;
+  int _chapterAttempts = 0;
+  bool _chapterReadInFlight = false;
+  DateTime _chaptersNotBefore = DateTime(2000);
   bool _outroVerified = false;
   bool _outroDisabled = false;
   bool _outroActive = false;
@@ -255,12 +259,22 @@ class _PlayerScreenState extends State<PlayerScreen>
     return KeyEventResult.handled;
   }
 
-  bool _introActive(PlaybackSession session) {
-    final intro = _effectiveSegments.intro;
-    return session.status == SessionStatus.playing &&
-        intro != null &&
-        intro.contains(session.value.position);
+  bool _introActive(PlaybackSession session) => _skipChoice(session) != null;
+
+  SkipChoice? _skipChoice(PlaybackSession session) {
+    if (session.status != SessionStatus.playing) return null;
+    return activeSkip(_effectiveSegments, session.value.position);
   }
+
+  /// Last episode and films have no "next" card, so the credits button is
+  /// the way into a scene that follows them.
+  SkipChoice? _creditsChoice(PlaybackSession session) {
+    if (_next != null || session.status != SessionStatus.playing) return null;
+    return postCreditsSkip(_effectiveSegments, session.value.position);
+  }
+
+  SkipChoice? _visibleSkip(PlaybackSession session) =>
+      _skipChoice(session) ?? _creditsChoice(session);
 
   bool _canSeek(PlaybackSession session) =>
       !_isLive && session.value.duration > Duration.zero;
@@ -350,7 +364,7 @@ class _PlayerScreenState extends State<PlayerScreen>
               : TvHiddenKey.down,
           live: _isLive,
           repeat: repeat,
-          intro: _introActive(session),
+          intro: _visibleSkip(session) != null,
           outro: outro,
         );
         switch (action) {
@@ -830,11 +844,11 @@ class _PlayerScreenState extends State<PlayerScreen>
             label: '+${step.inSeconds} s',
             onPressed: () => _tvSeekBy(step, false),
           ),
-        if (_introActive(session))
+        if (_visibleSkip(session) case final skip?)
           TvPlayerAction(
             id: 'skipIntro',
             icon: Icons.fast_forward_rounded,
-            label: 'Salta sigla',
+            label: skip.label,
             onPressed: _skipIntro,
           ),
         if (_next != null)
@@ -1055,8 +1069,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  /// IntroDB: resolve the IMDb id of the series, then fetch intro/outro.
-  /// Any failure is ignored silently and playback continues normally.
+  /// Local copy first, then the shared cache. A miss does not block playback.
   Future<void> _loadSegments() async {
     final source = widget.segmentsSource;
     if (source != null) {
@@ -1066,18 +1079,11 @@ class _PlayerScreenState extends State<PlayerScreen>
       _onSessionChanged();
       return;
     }
-    final c = widget.channel;
-    if (!_isEpisode || c.season == null || c.episode == null) return;
-    final title = c.seriesName?.isNotEmpty == true ? c.seriesName! : c.name;
-    final imdbId = await ImdbResolver.getImdbId(
-      title: segmentLookupTitle(title),
-    );
-    if (imdbId == null) return;
-    final segments = await IntroDbService.fetch(imdbId, c.season!, c.episode!);
-    if (mounted) {
+    await SegmentLibrary.instance.deliver(widget.channel, (segments) {
+      if (!mounted) return;
       setState(() => _segments = segments);
       _onSessionChanged();
-    }
+    });
   }
 
   /// Cerca e scarica i sottotitoli in italiano da OpenSubtitles (via cloud).
@@ -1167,47 +1173,62 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   EpisodeSegments get _effectiveSegments {
     final duration = _session?.value.duration ?? Duration.zero;
-    final remote = validSegments(_segments, duration);
-    final local = validSegments(_chapterSegments, duration);
-    return EpisodeSegments(
-      intro: remote.intro ?? local.intro,
-      outro: remote.outro ?? local.outro,
+    return mergeSkipSegments(
+      validSegments(_segments, duration),
+      validSegments(_chapterSegments, duration),
     );
   }
 
   Future<void> _readLocalChapters(PlaybackSession session) async {
     final engine = session.engine;
-    if (!_isEpisode ||
-        engine == null ||
-        identical(engine, _chaptersReadFor) ||
-        !session.value.isReady ||
-        session.value.duration <= Duration.zero)
+    final movie = widget.channel.type == ContentType.movie;
+    if ((!_isEpisode && !movie) || engine == null || _chapterReadInFlight)
       return;
-    _chaptersReadFor = engine;
+    if (!identical(engine, _chaptersEngine)) {
+      _chaptersEngine = engine;
+      _chapterAttempts = 0;
+      _chapterSegments = EpisodeSegments.empty;
+      _chaptersNotBefore = DateTime(2000);
+    }
+    if (!session.value.isReady ||
+        session.value.duration <= Duration.zero ||
+        DateTime.now().isBefore(_chaptersNotBefore) ||
+        _chapterAttempts >= 3 ||
+        _chapterSegments.all.isNotEmpty)
+      return;
+    _chapterReadInFlight = true;
+    _chapterAttempts++;
     try {
       final chapters = await engine.chapters();
       if (!mounted ||
           !identical(_session, session) ||
           !identical(session.engine, engine))
         return;
-      setState(
-        () => _chapterSegments = chapterSegments(
-          chapters,
-          session.value.duration,
-        ),
-      );
+      final parsed = chapterSegments(chapters, session.value.duration);
+      if (parsed.all.isEmpty) {
+        if (_chapterAttempts < 3) {
+          _chaptersNotBefore = DateTime.now().add(const Duration(seconds: 2));
+        }
+        return;
+      }
+      _chapterAttempts = 3;
+      setState(() => _chapterSegments = parsed);
       _onSessionChanged();
     } catch (_) {
       /* Local chapter support is optional. */
+    } finally {
+      _chapterReadInFlight = false;
     }
   }
 
   void _skipIntro() {
-    final intro = _effectiveSegments.intro;
-    if (intro == null) return;
+    final session = _session;
+    if (session == null) return;
+    final choice = _visibleSkip(session);
+    if (choice == null) return;
     _hideTimer?.cancel();
     setState(() => _controlsVisible = false);
-    _session?.seekTo(intro.end);
+    session.seekTo(choice.target);
     if (DeviceTypeService.isTv) _remoteFocus.requestFocus();
   }
 
@@ -1470,7 +1491,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (session == null || settings == null || !mounted) return;
     final v = session.value;
     unawaited(_readLocalChapters(session));
-    final introActive = _introActive(session);
+    final introActive = _visibleSkip(session) != null;
     if (introActive && !_introWasActive) {
       _hideTimer?.cancel();
       _controlsVisible = false;
@@ -1581,6 +1602,8 @@ class _PlayerScreenState extends State<PlayerScreen>
       v.caption,
       _outroActive,
       _introActive(session),
+      _visibleSkip(session)?.label,
+      _visibleSkip(session)?.target.inSeconds,
     ]);
     final now = DateTime.now();
     if (signature != _lastSignature) {
@@ -1999,8 +2022,8 @@ class _PlayerScreenState extends State<PlayerScreen>
             playing: session.value.isPlaying,
           ),
         ),
-      if (status == SessionStatus.playing &&
-          _effectiveSegments.intro?.contains(session.value.position) == true)
+      if (_visibleSkip(session) case final skip?
+          when status == SessionStatus.playing)
         Positioned(
           right: 24,
           bottom: 96,
@@ -2017,9 +2040,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                   ),
                 ),
                 icon: const Icon(Icons.fast_forward_rounded),
-                label: const Text(
-                  'Salta Sigla',
-                  style: TextStyle(fontWeight: FontWeight.w700),
+                label: Text(
+                  skip.label,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 onPressed: _skipIntro,
               ),

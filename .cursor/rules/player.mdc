@@ -1,6 +1,6 @@
 ---
 description: Vincoli del player, dei motori e dei controlli durante la riproduzione
-globs: lib/player/**/*.dart,lib/widgets/player/**/*.dart,lib/screens/player_screen.dart,lib/screens/multiview_settings_screen.dart,lib/services/playback_assistance.dart,lib/services/player_settings_service.dart,lib/services/playback_work_policy.dart,lib/services/subtitles_service.dart,lib/services/live_preview_policy.dart,packages/video_player_android/**
+globs: lib/player/**/*.dart,lib/widgets/player/**/*.dart,lib/screens/player_screen.dart,lib/screens/multiview_settings_screen.dart,lib/services/playback_assistance.dart,lib/services/segment_library.dart,lib/services/introdb_service.dart,lib/services/player_settings_service.dart,lib/services/playback_work_policy.dart,lib/services/subtitles_service.dart,lib/services/live_preview_policy.dart,packages/video_player_android/**
 alwaysApply: false
 ---
 
@@ -29,6 +29,6 @@ Aggiorna la frase del vincolo. Non aggiungere un paragrafo di cronologia.
 - PlayerScreen inoltra la factory opzionale a PlaybackSession. OK a comandi nascosti mette in pausa e rivela Play, con priorità a sigla e coda e senza ripetizioni. Le scorciatoie verticali del film usano un overlay temporaneo e un selettore modale verso i pannelli già esistenti di audio, sottotitoli ed episodi.
 - La scelta dei sottotitoli appartiene alla sessione e sopravvive al cambio motore. I cue esterni seguono il tempo di riproduzione, con ritardo locale per contenuto e scaricamenti alternativi limitati.
 - Ogni PlaybackSession registra i cancelli di lavoro in background. Guida e playlist aspettano le sessioni chiuse. Il cloud aspetta pausa esplicita o fine. Le modifiche locali pendenti passano dalla sync serializzata.
-- Il passaggio automatico all'episodio successivo è locale e obbedisce alla preferenza sia sui crediti sia sulla fine naturale. Una chiusura non verificata propone solo la continuazione manuale. La lettura dei capitoli è una tantum per motore, con coordinate validate.
+- Il passaggio automatico all'episodio successivo è locale e obbedisce alla preferenza sia sui crediti sia sulla fine naturale. Una chiusura non verificata propone solo la continuazione manuale. Sigla e titoli di coda usano prima i capitoli del file, riletti finché il file è aperto, poi i tempi già salvati sul dispositivo e nella cache condivisa. Un tempo che sborda si accorcia alla durata. Il riepilogo attaccato alla sigla si salta insieme. I film usano la stessa coda.
 - Il controllo dell'account in riproduzione è una sola richiesta locale, su azione manuale o errore finale. Niente probe del flusso, polling o database. In caso di incertezza lo dice e rifiuta un account diverso da quello in riproduzione.
 - L'episodio successivo automatico è un booleano portabile, fuori dai blob tecnici del player. In caricamento entra nelle impostazioni film; le impostazioni della diretta non lo sovrascrivono.

@@ -29,6 +29,7 @@ import '../widgets/title_facets.dart';
 import '../widgets/tv_wrap_navigation.dart';
 import '../widgets/series_watch_sheet.dart';
 import '../services/episode_metadata_service.dart';
+import '../services/segment_library.dart';
 import '../services/imdb_rating_service.dart';
 import '../services/catalog_rating_service.dart';
 
@@ -224,6 +225,12 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     EpisodeMetadataService.instance.prepare(item, season.number, [
       for (final e in season.episodes) e.channel,
     ]);
+    SegmentLibrary.instance.prepareSeason(
+      tmdbId: item.id,
+      title: item.title,
+      season: season.number,
+      episodes: [for (final e in season.episodes) e.number],
+    );
   }
 
   void _selectSeason(int i) {

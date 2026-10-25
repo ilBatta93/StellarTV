@@ -1,5 +1,6 @@
 import '../services/title_providers_service.dart';
 import '../services/imdb_rating_service.dart';
+import '../services/segment_library.dart';
 import '../services/platform_catalog_service.dart';
 import 'dart:convert';
 
@@ -19,6 +20,7 @@ class DiscoverProvider extends ChangeNotifier {
     // answers and the saved platform catalogs load right after start.
     TitleProvidersService.instance.attach(tmdb);
     ImdbRatingService.instance.store.load();
+    SegmentLibrary.instance.load();
     PlatformCatalogService.instance.warmUpAll(tmdb);
   }
 

@@ -63,6 +63,77 @@ void main() {
       ).intro,
       null,
     );
+    final clamped = validSegments(
+      const EpisodeSegments(
+        outro: SkipSegment(
+          'outro',
+          Duration(seconds: 800),
+          Duration(seconds: 910),
+        ),
+      ),
+      const Duration(seconds: 900),
+    );
+    expect(clamped.outro?.end, const Duration(seconds: 900));
+    expect(
+      validSegments(
+        const EpisodeSegments(
+          intro: SkipSegment('intro', Duration.zero, Duration(seconds: 40)),
+        ),
+        Duration.zero,
+      ).intro?.end,
+      const Duration(seconds: 40),
+    );
+  });
+  test('a weak match is ignored and a recap stays separate from the intro', () {
+    final parsed = IntroDbService.parse({
+      'intro': {'start_sec': 30, 'end_sec': 90, 'confidence': 0.2},
+      'recap': {'start_sec': 0, 'end_sec': 28, 'confidence': 0.9},
+    });
+    expect(parsed.intro, null);
+    expect(parsed.all.single.type, 'recap');
+    final glued = validSegments(
+      IntroDbService.parse({
+        'recap': {'start_sec': 0, 'end_sec': 20},
+        'intro': {'start_sec': 21, 'end_sec': 80},
+      }),
+      const Duration(minutes: 40),
+    );
+    final choice = activeSkip(glued, const Duration(seconds: 5));
+    expect(choice?.label, 'Salta sigla');
+    expect(choice?.target, const Duration(seconds: 80));
+  });
+  test('chapters of this file win and opening credits are recognized', () {
+    final local = chapterSegments([
+      {'title': 'Opening Credits', 'time': 12},
+      {'title': 'Story', 'time': 70},
+      {'title': 'End credits', 'time': 550},
+    ], const Duration(seconds: 600));
+    expect(local.intro?.start, const Duration(seconds: 12));
+    final remote = validSegments(
+      const EpisodeSegments(
+        intro: SkipSegment('intro', Duration(seconds: 90), Duration(seconds: 140)),
+        all: [
+          SkipSegment('intro', Duration(seconds: 90), Duration(seconds: 140)),
+        ],
+      ),
+      const Duration(seconds: 600),
+    );
+    expect(mergeSkipSegments(remote, local).intro?.start, const Duration(seconds: 12));
+    final scene = postCreditsSkip(
+      validSegments(
+        const EpisodeSegments(
+          outro: SkipSegment('outro', Duration(seconds: 500), Duration(seconds: 600)),
+          all: [
+            SkipSegment('outro', Duration(seconds: 500), Duration(seconds: 600)),
+            SkipSegment('post_credits', Duration(seconds: 560), Duration(seconds: 590)),
+          ],
+        ),
+        const Duration(seconds: 600),
+      ),
+      const Duration(seconds: 520),
+    );
+    expect(scene?.target, const Duration(seconds: 560));
+    expect(scene?.label, 'Salta titoli');
   });
   test('only explicit bounded local chapters become skips', () {
     final s = chapterSegments([

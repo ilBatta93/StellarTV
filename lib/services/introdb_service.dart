@@ -72,6 +72,9 @@ class IntroDbService {
 
   static SkipSegment? _segment(String type, Object? raw) {
     if (raw is! Map) return null;
+    final confidence = raw['confidence'];
+    // A weak community match is worse than no button.
+    if (confidence is num && confidence < 0.55) return null;
     final s =
         raw['start_sec'] ??
         (raw['start_ms'] is num ? raw['start_ms'] / 1000 : null);
@@ -117,10 +120,16 @@ class IntroDbService {
       }
     }
     if (all.isEmpty) return EpisodeSegments.empty;
+    for (var i = 0; i < all.length; i++) {
+      final type = all[i].type.replaceAll('-', '_');
+      if (type != all[i].type) {
+        all[i] = SkipSegment(type, all[i].start, all[i].end);
+      }
+    }
     SkipSegment? first(Set<String> types) =>
         all.where((s) => types.contains(s.type)).firstOrNull;
     return EpisodeSegments(
-      intro: first({'intro'}) ?? first({'recap'}),
+      intro: first({'intro'}),
       outro: first({'outro', 'credits'}),
       all: all,
     );

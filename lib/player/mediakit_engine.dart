@@ -443,7 +443,7 @@ class MediaKitEngine extends PlaybackEngine {
     try {
       final deadline = Stopwatch()..start();
       Future<String> read(String property) {
-        final remaining = 800 - deadline.elapsedMilliseconds;
+        final remaining = 2200 - deadline.elapsedMilliseconds;
         if (_disposed || remaining <= 0)
           throw TimeoutException('Chapter read deadline');
         return platform
@@ -463,7 +463,7 @@ class MediaKitEngine extends PlaybackEngine {
           result.add({'title': title, 'time': time});
         }
         return result;
-      })().timeout(const Duration(milliseconds: 800));
+      })().timeout(const Duration(milliseconds: 2200));
     } catch (_) {
       return const [];
     }

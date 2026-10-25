@@ -13,7 +13,7 @@ Aggiorna la frase del vincolo. Non aggiungere un paragrafo di cronologia.
 - La selezione bambino in cache si applica prima dell'inizializzazione del catalogo. Un profilo offline non risolto non annuncia la deselezione.
 - I voti sui poster TV usano una coda condivisa di due richieste e una cache sul dispositivo scritta in isolate. I voti sconosciuti vanno in fondo. Si accoda solo la categoria selezionata per l'ordinamento per voto.
 - I voti dei poster si risolvono a gruppi tramite la cache TMDB condivisa del backend, con fallback diretto a TMDB se il backend non risponde.
-- I metadati episodio sono per serie, stagione ed episodio. Si preparano per la stagione selezionata prima della riproduzione e il player li legge in locale. Non sostituire il voto della serie a quello dell'episodio.
+- I metadati episodio sono per serie, stagione ed episodio. Si preparano per la stagione selezionata prima della riproduzione e il player li legge in locale. I tempi di sigla della stagione visibile seguono lo stesso preparo, con copia sul dispositivo e cache condivisa. Non sostituire il voto della serie a quello dell'episodio.
 - Il trailer usa il proxy TMDB condiviso e un URL YouTube convalidato, lanciato all'esterno, separato da playback e cronologia dell'app.
 - L'URL del logo è una cache su disco versionata, limitata e sicura sulla lingua, con piccoli preriscaldamenti vicini. Il primo disegno del catalogo non aspetta lo scaricamento del logo.
 - La cache opzionale di dettagli, crediti e video TMDB include endpoint e lingua nella chiave. Si mette in cache solo una risposta già richiesta. La scrittura richiede un account verificato. Se lo schema manca si usa il proxy esistente, senza prefetch di massa.

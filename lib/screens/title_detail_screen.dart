@@ -1,6 +1,7 @@
 import '../widgets/ui_scale.dart';
 import '../services/image_cache_service.dart';
 import '../services/catalog_rating_service.dart';
+import '../services/segment_library.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -89,6 +90,9 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
       final resolvedChannel = widget.channel;
       if (item != null && resolvedChannel != null) {
         CatalogRatingService.instance.remember(resolvedChannel, item);
+      }
+      if (item != null && item.isMovie) {
+        SegmentLibrary.instance.prepareMovie(tmdbId: item.id, title: item.title);
       }
       final similar = item == null
           ? <TmdbItem>[]
