@@ -1,0 +1,11 @@
+﻿.dart_tool/
+build/
+android/.gradle/
+android/app/build/
+android/build/
+ios/Pods/
+ios/.symlinks/
+**/ephemeral/
+coverage/
+.pub-cache/
+*.iml
