@@ -1,3 +1,5 @@
+<!-- 25/10/2026 - Progetto sincronizzato con successo tramite Cursor e Gemini API -->
+
 # StellarTV
 
 Player multimediale per contenuti TV configurati dall’utente sui propri dispositivi.
