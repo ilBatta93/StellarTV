@@ -1,6 +1,2 @@
 - L'ordine per voto si applica alla sezione aperta e si aggiorna quando arrivano voti nuovi.
 - Sulle locandine la risoluzione resta in basso, sul fondo scuro del voto, separata dal voto.
-- I voti nella scheda titolo arrivano subito, senza attendere lo scorrimento del catalogo.
-- L'ordine per voto resta salvato: non ricomincia cambiando sezione o riaprendo l'app.
-- La cache delle locandine resta entro un limite, anche dopo uno scorrimento lungo.
-- Un episodio già visto si riconosce subito, nella scheda e durante la riproduzione.

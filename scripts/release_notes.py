@@ -11,19 +11,24 @@ def bullets(text):
         raise ValueError('Release notes must contain neutral feature bullets')
     return lines
 
-def _neutral(text):
+def fresh_lines(current_text, previous_text):
+    """Bullets present now and absent from the previous release."""
+    current = bullets(current_text)
+    if not previous_text.strip():
+        return current
     try:
-        bullets(text)
-        return True
+        previous = set(bullets(previous_text))
     except ValueError:
-        return False
+        previous = set()
+    fresh = [line for line in current if line not in previous]
+    if not fresh:
+        raise ValueError('Release notes must describe what changed since the previous build')
+    return fresh
 
-def render(version, texts):
-    lines = list(dict.fromkeys(line for text in texts for line in bullets(text)))
-    summary = '\n'.join('- ' + line[:140] for line in lines[:3])
-    return (f'## StellarTV v{version}\n\n<!-- stellar-summary -->\n{summary}\n'
-            '<!-- /stellar-summary -->\n\n## Modifiche\n\n' +
-            '\n'.join('- ' + line for line in lines) + '\n')
+def render(version, lines):
+    body = '\n'.join('- ' + line[:140] for line in lines)
+    return (f'## StellarTV v{version}\n\n<!-- stellar-summary -->\n{body}\n'
+            '<!-- /stellar-summary -->\n')
 
 def git(*args):
     return subprocess.check_output(['git', *args], text=True).strip()
@@ -53,15 +58,15 @@ def main():
     changed = git('diff', '--name-only', previous, 'HEAD') if previous else ''
     if not commits and any(p.startswith('lib/') for p in changed.splitlines()):
         raise ValueError('Update docs/release-current.md for this build before publishing')
-    texts = [git('show', c + ':docs/release-current.md') for c in commits]
-    if texts:
-        # A later commit may replace non-neutral wording: keep only valid
-        # versions, but the current file must always be valid itself.
-        bullets(texts[-1])
-        texts = [t for t in texts if _neutral(t)]
-    if not texts:
-        texts = [Path('docs/release-current.md').read_text()]
-    Path('RELEASE_NOTES.md').write_text(render(version, texts))
+    current_text = Path('docs/release-current.md').read_text()
+    bullets(current_text)
+    previous_text = ''
+    if previous:
+        try:
+            previous_text = git('show', previous + ':docs/release-current.md')
+        except subprocess.CalledProcessError:
+            previous_text = ''
+    Path('RELEASE_NOTES.md').write_text(render(version, fresh_lines(current_text, previous_text)))
 
 if __name__ == '__main__':
     main()

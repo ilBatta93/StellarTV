@@ -12,6 +12,6 @@ Al termine di ogni modifica richiesta, crea un commit git e fai push sul branch 
 - Una sola sessione di riproduzione nativa alla volta: prima il rilascio completo, poi il flusso successivo.
 - La diretta non entra nella cronologia di visione né nel cloud. La pausa chiesta dallo spettatore non va riavviata dal controllo di salute.
 - Un episodio non eredita il voto della serie. Un voto IMDb non ancora arrivato non si mostra.
-- Le note di rilascio pubbliche elencano ogni commit incluso, in linguaggio neutro, a partire da docs/release-current.md, senza copiare il testo dei commit.
+- Le note di rilascio pubbliche descrivono solo le novità rispetto alla release precedente, una volta sola e in linguaggio neutro, a partire da docs/release-current.md, senza copiare il testo dei commit.
 
 Aree: `player.mdc`, `tv-ui.mdc`, `catalog-data.mdc`, `live-guide.mdc`, `sync-account.mdc`, `metadata-kids.mdc`, `history.mdc`, `diagnostics.mdc`.
