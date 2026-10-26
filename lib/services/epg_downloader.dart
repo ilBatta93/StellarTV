@@ -4,8 +4,10 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:xml/xml_events.dart';
+
 import '../models/epg_data.dart';
 import 'epg_channel_match.dart';
+import 'epg_timeline.dart';
 
 class EpgRefreshDeferred implements Exception {}
 
@@ -120,9 +122,8 @@ Future<void> _downloadEntry((SendPort, List<String>, String) job) async {
     var read = 0;
     for (final url in job.$2) {
       try {
-        final parsed = await _readSource(
-          url,
-        ).timeout(const Duration(minutes: 6));
+        final parsed = await _readSource(url)
+            .timeout(const Duration(minutes: 6));
         for (final key in ['p', 'n']) {
           (parsed[key] as Map<String, dynamic>).forEach(
             (k, v) =>
@@ -140,7 +141,10 @@ Future<void> _downloadEntry((SendPort, List<String>, String) job) async {
     merged['t'] = DateTime.now().toIso8601String();
     // Entire JSON conversion and programme construction stay off the UI.
     File(job.$3).writeAsStringSync(jsonEncode(merged), flush: true);
-    Isolate.exit(job.$1, EpgData.fromJson(merged));
+    Isolate.exit(
+      job.$1,
+      epgDataInGuideWindow(EpgData.fromJson(merged), DateTime.now()),
+    );
   } catch (error) {
     Isolate.exit(job.$1, friendlyEpgError(error));
   }
@@ -331,8 +335,9 @@ Future<Map<String, dynamic>> parseXmltvStream(
           final prior = names[channelId] as String?;
           if (value.isNotEmpty &&
               !(prior?.split(epgNameSeparator).contains(value) ?? false))
-            names[channelId] =
-                prior == null || prior.isEmpty ? value : '$prior$epgNameSeparator$value';
+            names[channelId] = prior == null || prior.isEmpty
+                ? value
+                : '$prior$epgNameSeparator$value';
         }
         end(name);
       }

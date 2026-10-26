@@ -6,6 +6,7 @@ import '../models/channel.dart';
 import '../models/epg_program.dart';
 import '../services/epg_channel_match.dart';
 import '../services/epg_service.dart';
+import '../services/epg_timeline.dart';
 import '../services/playback_work_policy.dart';
 import '../services/frame_telemetry_service.dart';
 import 'app_provider.dart';
@@ -64,7 +65,11 @@ class EpgProvider extends ChangeNotifier {
   int _playlistRefreshRevision = 0;
   EpgMatcher? _nameIndex;
   final Map<String, EpgMatch?> _channelMatch = {};
-  final Map<EpgMatch, List<EpgProgram>> _shifted = {};
+  final Map<EpgMatch, List<EpgProgram>> _gridLists = {};
+  final Map<EpgMatch, List<EpgTimelineSlot>> _timelines = {};
+  final Map<EpgMatch, _TrimmedTimeline> _trimmed = {};
+  DateTime? _gridFrom;
+  DateTime? _gridTo;
 
   bool get isLoading => _loading;
   bool get isReady => _ready;
@@ -101,6 +106,13 @@ class EpgProvider extends ChangeNotifier {
     _manual = await _service.manualSources();
     _intervalMinutes = await _service.intervalMinutes();
     _lastRun = await _service.lastRun();
+    if (_disposed) return;
+    await _loadCachedGuide();
+    if (_disposed) return;
+    _schedule();
+  }
+
+  Future<void> _loadCachedGuide() async {
     final sources = _activeSources;
     final cached = await _service.loadCache(sources);
     if (_disposed) return;
@@ -110,7 +122,6 @@ class EpgProvider extends ChangeNotifier {
     _ready = true;
     _setData(cached);
     notifyListeners();
-    _schedule();
   }
 
   void _onAppChanged() {
@@ -139,19 +150,54 @@ class EpgProvider extends ChangeNotifier {
   Future<void> _restoreSourceCache() async {
     final epoch = ++_cacheEpoch;
     final sources = _activeSources;
+    final applied = await _applyCache(sources, epoch);
+    if (applied && !_disposed) _schedule();
+  }
+
+  Future<bool> _applyCache(List<String> sources, int epoch) async {
     final data = await _service.loadCache(sources);
-    if (_disposed || epoch != _cacheEpoch || sources.join('|') != _cacheSource) return;
-    _setData(data);
+    if (_disposed ||
+        epoch != _cacheEpoch ||
+        sources.join('|') != _cacheSource) {
+      return false;
+    }
     _lastRun = data.fetchedAt;
+    _setData(data);
     notifyListeners();
-    _schedule();
+    return true;
   }
 
   void _setData(EpgData data) {
-    _data = data;
+    final now = DateTime.now();
+    _data = epgDataInGuideWindow(data, now);
     _nameIndex = null;
     _channelMatch.clear();
-    _shifted.clear();
+    _gridLists.clear();
+    _timelines.clear();
+    _trimmed.clear();
+    _gridFrom = epgGridOrigin(now);
+    _gridTo = now.add(epgGuideFuture);
+  }
+
+  /// Drops programmes that have left the grid horizon. Descriptions already
+  /// omitted stay omitted. Skipped while a playback session owns the device.
+  bool rollGuideWindow() {
+    if (_playbackBlocked || _disposed || !_ready) return false;
+    final now = DateTime.now();
+    final from = epgGridOrigin(now);
+    if (_gridFrom == from) return false;
+    final next = epgDataInGuideWindow(_data, now);
+    _gridFrom = from;
+    _gridTo = now.add(epgGuideFuture);
+    _gridLists.clear();
+    _timelines.clear();
+    _trimmed.clear();
+    if (identical(next, _data)) return false;
+    _data = next;
+    _nameIndex = null;
+    _channelMatch.clear();
+    notifyListeners();
+    return true;
   }
 
   void _schedule() {
@@ -286,21 +332,52 @@ class EpgProvider extends ChangeNotifier {
   }
 
   List<EpgProgram> programmesFor(Channel channel) {
-    final m = _guideIdFor(channel);
-    if (m == null) return const [];
-    final base = _data.programmes[m.id] ?? const <EpgProgram>[];
-    if (m.shiftHours == 0) return base;
-    return _shifted[m] ??= [
-      for (final p in base)
-        EpgProgram(
-          id: '${p.id}+${m.shiftHours}',
-          channelId: p.channelId,
-          title: p.title,
-          description: p.description,
-          startTime: p.startTime.add(Duration(hours: m.shiftHours)),
-          endTime: p.endTime.add(Duration(hours: m.shiftHours)),
-        ),
-    ];
+    final match = _guideIdFor(channel);
+    if (match == null) return const [];
+    return _gridLists[match] ??= _gridProgrammes(match);
+  }
+
+  List<EpgProgram> _gridProgrammes(EpgMatch match) {
+    final source = _data.programmes[match.id] ?? const <EpgProgram>[];
+    final from = _gridFrom ?? epgGridOrigin(DateTime.now());
+    final to = _gridTo ?? DateTime.now().add(epgGuideFuture);
+    if (match.shiftHours == 0) return epgSliceGuide(source, from, to);
+    final shift = Duration(hours: match.shiftHours);
+    return epgSliceGuide(
+      [
+        for (final program in source)
+          if (program.endTime.isAfter(program.startTime))
+            EpgProgram(
+              id: '${program.id}+${match.shiftHours}',
+              channelId: program.channelId,
+              title: program.title,
+              description: program.description,
+              startTime: program.startTime.add(shift),
+              endTime: program.endTime.add(shift),
+            ),
+      ],
+      from,
+      to,
+    );
+  }
+
+  /// Slots for [channel], built once per guide snapshot. [notBefore] only
+  /// hides rows the grid cannot scroll to; it does not sort again.
+  List<EpgTimelineSlot> timelineFor(Channel channel, {DateTime? notBefore}) {
+    final match = _guideIdFor(channel);
+    if (match == null) return const [];
+    final slots = _timelines[match] ??= epgTimelineSlots(
+      programmesFor(channel),
+    );
+    if (notBefore == null) return slots;
+    final cached = _trimmed[match];
+    if (cached != null && cached.origin == notBefore) return cached.slots;
+    final trimmed = List<EpgTimelineSlot>.unmodifiable([
+      for (final slot in slots)
+        if (slot.end.isAfter(notBefore)) slot,
+    ]);
+    _trimmed[match] = _TrimmedTimeline(notBefore, trimmed);
+    return trimmed;
   }
 
   EpgProgram? nowFor(Channel channel) {
@@ -328,4 +405,10 @@ class EpgProvider extends ChangeNotifier {
     _app.removeListener(_onAppChanged);
     super.dispose();
   }
+}
+
+class _TrimmedTimeline {
+  final DateTime origin;
+  final List<EpgTimelineSlot> slots;
+  const _TrimmedTimeline(this.origin, this.slots);
 }

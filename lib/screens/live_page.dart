@@ -411,9 +411,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     final end = start.add(_epgSpan);
     final min = _epgMin;
     final now = DateTime.now();
-    final slots = epgTimelineSlots(epg.programmesFor(c))
-        .where((slot) => slot.end.isAfter(min))
-        .toList();
+    final slots = epg.timelineFor(c, notBefore: min);
     final all = [for (final slot in slots) slot.program];
     final visibleSlots = [
       for (final slot in slots)
@@ -837,7 +835,8 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     OpenRoutesObserver.instance.changes.addListener(_routeChanged);
     // Keep "now on" and progress bars current.
     _tick = Timer.periodic(const Duration(seconds: 60), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      if (!_epg.rollGuideWindow()) setState(() {});
     });
   }
 
