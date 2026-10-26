@@ -13,6 +13,7 @@ import '../services/key_handoff.dart';
 import 'package:cryptography/cryptography.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/phone_tap.dart';
 import '../widgets/tv_focusable.dart';
 import 'login_screen.dart';
 import 'profile_picker_screen.dart';
@@ -216,9 +217,12 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
         TvFocusable(
           autofocus: true,
           onPressed: () => _finish(null),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-            child: Text('Salta'),
+          child: PhoneTap(
+            onTap: () => _finish(null),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+              child: Text('Salta'),
+            ),
           ),
         ),
     ],
@@ -280,7 +284,9 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
                       autofocus: true,
                       focusedScale: 1,
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Padding(
+                      child: PhoneTap(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: const Padding(
                         padding: EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 12,
@@ -300,6 +306,7 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
                             ),
                           ],
                         ),
+                        ),
                       ),
                     ),
                   ],
@@ -317,9 +324,12 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
                       const SizedBox(height: 16),
                       TvFocusable(
                         onPressed: _start,
-                        child: const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Text('Riprova'),
+                        child: PhoneTap(
+                          onTap: _start,
+                          child: const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Text('Riprova'),
+                          ),
                         ),
                       ),
                     ],

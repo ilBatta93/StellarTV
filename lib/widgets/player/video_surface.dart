@@ -36,8 +36,9 @@ class VideoSurface extends StatelessWidget {
         if (engine == null || box.maxHeight == 0) return const SizedBox.expand();
         session.updateBoxRatio(box.maxWidth / box.maxHeight);
         final size = _targetSize(box.maxWidth, box.maxHeight);
-        // The structure stays identical across fit modes so the native
-        // surface is never remounted.
+        // The structure stays identical across fit modes and resizes
+        // (rotation, notch). The key is the engine, so the native surface
+        // is never remounted.
         return Stack(
           fit: StackFit.expand,
           children: [

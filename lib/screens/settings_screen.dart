@@ -14,6 +14,7 @@ import '../models/watch_completion_policy.dart';
 import '../services/playlist_refresh_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings_tiles.dart';
+import '../widgets/phone_tap.dart';
 import '../widgets/tv_focusable.dart';
 import '../services/device_type_service.dart';
 import 'account_screen.dart';
@@ -758,6 +759,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _categoryTile(int i, {required bool tv}) {
     final (icon, title, subtitle) = _categories[i];
     final selected = tv && i == _category;
+    void open() => setState(() {
+      _category = i;
+      if (!tv) _phoneDetail = true;
+    });
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: TvFocusable(
@@ -769,11 +774,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (f && _category != i) setState(() => _category = i);
               }
             : null,
-        onPressed: () => setState(() {
-          _category = i;
-          if (!tv) _phoneDetail = true;
-        }),
-        child: AnimatedContainer(
+        onPressed: open,
+        child: PhoneTap(
+          onTap: open,
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           padding: EdgeInsets.symmetric(horizontal: 14, vertical: tv ? 14 : 12),
           decoration: BoxDecoration(
@@ -821,6 +826,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
             ],
+          ),
           ),
         ),
       ),

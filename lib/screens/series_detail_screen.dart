@@ -33,6 +33,13 @@ import '../services/segment_library.dart';
 import '../services/imdb_rating_service.dart';
 import '../services/catalog_rating_service.dart';
 
+double _phoneBackdropHeight(BuildContext context) {
+  final height = MediaQuery.sizeOf(context).height * 0.32;
+  if (height < 168) return 168;
+  if (height > 220) return 220;
+  return height;
+}
+
 class SeriesDetailScreen extends StatefulWidget {
   final Channel series;
 
@@ -274,9 +281,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
           )
         else
           SliverAppBar(
-            pinned: !DeviceTypeService.isTv,
-            automaticallyImplyLeading: !DeviceTypeService.isTv,
-            expandedHeight: DeviceTypeService.isTv ? 180 : 280,
+            pinned: true,
+            automaticallyImplyLeading: true,
+            expandedHeight: _phoneBackdropHeight(context),
             backgroundColor: AppColors.background,
             leading: DeviceTypeService.isTv ? null : const BackButton(),
             actions: [
@@ -326,12 +333,17 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                     constraints: const BoxConstraints(maxWidth: 420),
                     child: HomeTitleArt(item: item),
                   )
+                else if (DeviceTypeService.isTv)
+                  Text(
+                    displayTitle(series.displaySeriesName),
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  )
                 else
                   Text(
-                    DeviceTypeService.isTv
-                        ? displayTitle(series.displaySeriesName)
-                        : series.displaySeriesName,
-                    style: Theme.of(context).textTheme.headlineMedium,
+                    series.displaySeriesName,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -356,13 +368,18 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                   const SizedBox(height: 16),
                 ] else ...[
                   _buildPlaybackButton(context),
-                  _manageWatchButton(),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _manageWatchButton(),
+                      if (item != null) TrailerButton(item: item),
+                      CategoryAssignButton(item: widget.series),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                 ],
-                if (!DeviceTypeService.isTv && item != null)
-                  TrailerButton(item: item),
-                if (!DeviceTypeService.isTv)
-                  CategoryAssignButton(item: widget.series),
                 if (_item case final reactionItem?)
                   ReactionButtons(item: reactionItem),
                 if (plot.trim().isNotEmpty) ...[
@@ -514,7 +531,15 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         ],
         if (_similar.isNotEmpty)
           SliverToBoxAdapter(child: _buildSimilar(context)),
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height:
+                32 +
+                (DeviceTypeService.isTv
+                    ? 0
+                    : MediaQuery.paddingOf(context).bottom),
+          ),
+        ),
       ],
     );
     if (DeviceTypeService.isTv) {
@@ -574,14 +599,24 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       );
     }
 
+    final button = ElevatedButton.icon(
+      icon: const Icon(Icons.play_arrow_rounded),
+      label: Text(label, textAlign: TextAlign.center),
+      style: DeviceTypeService.isTv
+          ? null
+          : ElevatedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+      onPressed: episode == null ? null : play,
+    );
+    if (!DeviceTypeService.isTv) {
+      return SizedBox(width: double.infinity, child: button);
+    }
     return TvFocusable(
-      autofocus: DeviceTypeService.isTv,
+      autofocus: true,
       onPressed: play,
-      child: ElevatedButton.icon(
-        icon: const Icon(Icons.play_arrow_rounded),
-        label: Text(label, textAlign: TextAlign.center),
-        onPressed: episode == null ? null : play,
-      ),
+      child: button,
     );
   }
 

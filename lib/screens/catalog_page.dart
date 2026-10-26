@@ -671,7 +671,7 @@ class _CatalogPageState extends State<CatalogPage> {
                     ),
                   IconButton(
                     tooltip: 'Categorie',
-                    icon: const Icon(Icons.category_outlined),
+                    icon: const Icon(Icons.reorder_rounded),
                     onPressed: _openCategories,
                   ),
                 ],

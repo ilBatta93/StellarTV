@@ -1,6 +1,7 @@
 import '../widgets/ui_scale.dart';
 
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -97,6 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _syncLayout(context.watch<UiSettings>());
     if (DeviceTypeService.isTv) return _buildTv(context);
     return Scaffold(
+      extendBody: true,
       appBar: AppBar(
         toolbarHeight: 68,
         titleSpacing: 20,
@@ -131,24 +133,38 @@ class _HomeScreenState extends State<HomeScreen> {
           const FavoritesPage(),
         ],
       ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AppColors.border, width: 0.5)),
-        ),
-        child: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (i) => setState(() {
-            _currentIndex = i;
-            if (i >= 0 && i < _order.length) _visited.add(_order[i]);
-          }),
-          destinations: [
-            for (final section in _order) _mobileDestination(section),
-            const NavigationDestination(
-              icon: Icon(Icons.favorite_border_rounded),
-              selectedIcon: Icon(Icons.favorite_rounded),
-              label: 'Preferiti',
+      bottomNavigationBar: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              color: Color(0x991C1C1E),
+              border: Border(top: BorderSide(color: Color(0x2EFFFFFF))),
             ),
-          ],
+            child: SafeArea(
+              top: false,
+              child: NavigationBar(
+                backgroundColor: const Color(0x00000000),
+                surfaceTintColor: const Color(0x00000000),
+                shadowColor: const Color(0x00000000),
+                indicatorColor: const Color(0x00000000),
+                elevation: 0,
+                selectedIndex: _currentIndex,
+                onDestinationSelected: (i) => setState(() {
+                  _currentIndex = i;
+                  if (i >= 0 && i < _order.length) _visited.add(_order[i]);
+                }),
+                destinations: [
+                  for (final section in _order) _mobileDestination(section),
+                  const NavigationDestination(
+                    icon: Icon(Icons.favorite_border_rounded),
+                    selectedIcon: Icon(Icons.favorite_rounded),
+                    label: 'Preferiti',
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

@@ -336,6 +336,7 @@ class PlaybackSession extends ChangeNotifier {
           isLive: isLive,
           previewMode: previewMode,
           softwareDecode: _softwareDecode,
+          hardwareCopy: _phoneHardwareCopy,
         ),
       };
 
@@ -345,6 +346,7 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> _releaseCurrent() {
     final old = _engine;
     _firstPictureTimer?.cancel();
+    _phoneCopyTimer?.cancel();
     if (old == null) return _releasing;
     _diagnostics?.end();
     _vod?.end();
@@ -436,6 +438,7 @@ class PlaybackSession extends ChangeNotifier {
     _liveStartedAt = isLive ? DateTime.now() : null;
     _playingSince = DateTime.now();
     _watchFirstPicture(engine, gen);
+    _watchPhoneHardwareCopy(engine, gen);
     if (isLive && _softwareDecode) {
       // Persist only after the fallback actually opens, not on the original
       // failure: broken provider connections must not poison decoder memory.
@@ -573,6 +576,8 @@ class PlaybackSession extends ChangeNotifier {
       : 'Nessun video dal server per questo canale';
 
   Timer? _firstPictureTimer;
+  Timer? _phoneCopyTimer;
+  bool _phoneHardwareCopy = false;
 
   /// Black screens of the TCL logs: the player opened in ~0.4 s, then
   /// buffered forever without a frame. The decoder black-screen checks
@@ -599,6 +604,37 @@ class PlaybackSession extends ChangeNotifier {
         ),
       );
     });
+  }
+
+  /// iPhone film/series: zero-copy VideoToolbox, then the copy decoder if
+  /// the first picture never arrives. Live and TV keep their own paths.
+  void _watchPhoneHardwareCopy(PlaybackEngine engine, int gen) {
+    _phoneCopyTimer?.cancel();
+    if (_phoneHardwareCopy || engine is! MediaKitEngine) return;
+    if (!engine.canRetryHardwareCopy) return;
+    _phoneCopyTimer = Timer(firstPictureDeadline(engine.type), () {
+      if (_disposed || gen != _generation || _engine != engine) return;
+      if (engine.videoFrameRendered != false || engine.audioOnly) return;
+      final position = engine.value.position;
+      unawaited(
+        _retryPhoneHardwareCopy(
+          gen,
+          position > Duration.zero ? position : startAt,
+        ),
+      );
+    });
+  }
+
+  Future<void> _retryPhoneHardwareCopy(int gen, Duration? resumeAt) async {
+    if (_disposed || gen != _generation || _phoneHardwareCopy) return;
+    _phoneHardwareCopy = true;
+    _phoneCopyTimer?.cancel();
+    _status = SessionStatus.switching;
+    _notice = null;
+    _notify();
+    await _releaseCurrent();
+    if (_disposed || gen != _generation) return;
+    await _openAttempt(resumeAt: resumeAt);
   }
 
   /// Pause before reopening a live channel that dropped mid-play.
@@ -1104,6 +1140,7 @@ class PlaybackSession extends ChangeNotifier {
     if (_disposed || _streamStopped) return;
     _streamStopped = true;
     _firstPictureTimer?.cancel();
+    _phoneCopyTimer?.cancel();
     _diagnosticTimer?.cancel();
     _delayTick?.cancel();
     _generation++;
@@ -1118,6 +1155,7 @@ class PlaybackSession extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _firstPictureTimer?.cancel();
+    _phoneCopyTimer?.cancel();
     _diagnosticTimer?.cancel();
     _diagnostics?.end();
     _vod?.end();

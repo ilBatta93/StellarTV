@@ -33,6 +33,13 @@ import '../widgets/tv_wrap_navigation.dart';
 import '../widgets/category_assign_button.dart';
 import '../widgets/title_facets.dart';
 
+double _phoneBackdropHeight(BuildContext context) {
+  final height = MediaQuery.sizeOf(context).height * 0.32;
+  if (height < 168) return 168;
+  if (height > 220) return 220;
+  return height;
+}
+
 class TitleDetailScreen extends StatefulWidget {
   final TmdbItem? item;
   final Channel? channel;
@@ -149,9 +156,9 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
           SliverAppBar(
             // TV: no pinned bar with a back arrow above the content (Back is
             // on the remote); going up always lands on "Guarda ora".
-            pinned: !DeviceTypeService.isTv,
-            automaticallyImplyLeading: !DeviceTypeService.isTv,
-            expandedHeight: DeviceTypeService.isTv ? 180 : 280,
+            pinned: true,
+            automaticallyImplyLeading: true,
+            expandedHeight: _phoneBackdropHeight(context),
             backgroundColor: AppColors.background,
             actions: [
               if (playable != null && !DeviceTypeService.isTv)
@@ -193,7 +200,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
           ),
         SliverToBoxAdapter(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -201,12 +208,21 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                 if (item != null)
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 420),
-                    child: HomeTitleArt(item: item),
+                    child: HomeTitleArt(
+                      item: item,
+                      height: DeviceTypeService.isTv ? null : 56,
+                    ),
                   )
                 else
                   Text(
                     displayTitle(title),
-                    style: Theme.of(context).textTheme.headlineMedium,
+                    maxLines: DeviceTypeService.isTv ? null : 3,
+                    overflow: DeviceTypeService.isTv
+                        ? null
+                        : TextOverflow.ellipsis,
+                    style: DeviceTypeService.isTv
+                        ? Theme.of(context).textTheme.headlineMedium
+                        : Theme.of(context).textTheme.titleLarge,
                   ),
                 const SizedBox(height: 8),
                 _Meta(item: item, channel: widget.channel),
@@ -235,7 +251,15 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
           ),
         SliverToBoxAdapter(child: _buildCast()),
         SliverToBoxAdapter(child: _buildSimilar()),
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height:
+                32 +
+                (DeviceTypeService.isTv
+                    ? 0
+                    : MediaQuery.paddingOf(context).bottom),
+          ),
+        ),
       ],
     );
     if (DeviceTypeService.isTv) {
@@ -454,25 +478,35 @@ class _Actions extends StatelessWidget {
         : 'Guarda ora · $remaining min rim.';
     final inList = item != null && app.isTmdbFavorite(item!);
     if (DeviceTypeService.isTv) return _tvActions(context, app, playLabel);
+    final compact = OutlinedButton.styleFrom(
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      foregroundColor: AppColors.textPrimary,
+      side: const BorderSide(color: AppColors.border),
+    );
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (playable != null) ...[
-          TvFocusable(
-            autofocus: DeviceTypeService.isTv,
-            onPressed: () => _play(context),
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: Text(playLabel, textAlign: TextAlign.center),
+        if (playable != null)
+          SizedBox(
+            width: double.infinity,
+            child: TvFocusable(
               onPressed: () => _play(context),
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: Text(playLabel, textAlign: TextAlign.center),
+                style: ElevatedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+                onPressed: () => _play(context),
+              ),
             ),
-          ),
-          if (playable!.type == ContentType.movie &&
-              DownloadService.canDownload(playable!)) ...[
-            const SizedBox(height: 8),
-            DownloadButton(channel: playable!, expanded: true),
-          ],
-        ] else
+          )
+        else
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -499,9 +533,39 @@ class _Actions extends StatelessWidget {
               ],
             ),
           ),
-        if (item case final trailerItem?) TrailerButton(item: trailerItem),
-        if (playable case final assignable?)
-          CategoryAssignButton(item: assignable),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (playable != null &&
+                playable!.type == ContentType.movie &&
+                DownloadService.canDownload(playable!))
+              DownloadButton(channel: playable!, expanded: true),
+            if (item case final trailerItem?) TrailerButton(item: trailerItem),
+            if (playable case final assignable?)
+              CategoryAssignButton(item: assignable),
+            if (item != null)
+              TvFocusable(
+                onPressed: () => app.toggleTmdbFavorite(item!),
+                child: OutlinedButton.icon(
+                  icon: Icon(inList ? Icons.check_rounded : Icons.add_rounded),
+                  label: Text(inList ? 'Nella mia lista' : 'La mia lista'),
+                  style: compact.copyWith(
+                    foregroundColor: WidgetStatePropertyAll(
+                      inList ? AppColors.success : AppColors.textPrimary,
+                    ),
+                    side: WidgetStatePropertyAll(
+                      BorderSide(
+                        color: inList ? AppColors.success : AppColors.border,
+                      ),
+                    ),
+                  ),
+                  onPressed: () => app.toggleTmdbFavorite(item!),
+                ),
+              ),
+          ],
+        ),
         if (variants.length > 1) ...[
           const SizedBox(height: 8),
           const Text(
@@ -558,31 +622,6 @@ class _Actions extends StatelessWidget {
                 ),
               ),
               onPressed: () => app.toggleFavorite(playable!),
-            ),
-          ),
-        ],
-        if (item != null) ...[
-          const SizedBox(height: 8),
-          TvFocusable(
-            onPressed: () => app.toggleTmdbFavorite(item!),
-            child: OutlinedButton.icon(
-              icon: Icon(inList ? Icons.check_rounded : Icons.add_rounded),
-              label: Text(
-                inList ? 'Nella mia lista' : 'Aggiungi alla mia lista',
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: inList
-                    ? AppColors.success
-                    : AppColors.textPrimary,
-                side: BorderSide(
-                  color: inList ? AppColors.success : AppColors.border,
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              onPressed: () => app.toggleTmdbFavorite(item!),
             ),
           ),
         ],

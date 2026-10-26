@@ -20,6 +20,7 @@ class MediaKitEngine extends PlaybackEngine {
     this.isLive = false,
     this.previewMode = false,
     this.softwareDecode = false,
+    this.hardwareCopy = false,
   }) : _settings = settings,
        _player = Player(
          configuration: PlayerConfiguration(
@@ -41,7 +42,14 @@ class MediaKitEngine extends PlaybackEngine {
         // asynchronously and silently overrode the one set at open.
         hwdec: softwareDecode
             ? 'no'
-            : _hwdec(settings.hardwareDecoding, vod: !isLive && !previewMode),
+            : hardwareDecoder(
+                mode: settings.hardwareDecoding,
+                tv: DeviceTypeService.isTv,
+                vod: !isLive && !previewMode,
+                ios: Platform.isIOS || Platform.isMacOS,
+                android: Platform.isAndroid,
+                copy: hardwareCopy,
+              ),
         vo: null,
       ),
     );
@@ -151,6 +159,19 @@ class MediaKitEngine extends PlaybackEngine {
   /// FFmpeg decoding on the CPU: used when the TV's hardware decoder gave
   /// audio with a black picture (MPEG-2 / interlaced broadcast channels).
   final bool softwareDecode;
+
+  /// Phone iOS film/series retry: copy each frame when zero-copy draws nothing.
+  final bool hardwareCopy;
+
+  /// iPhone film/series can reopen once with the copy decoder.
+  bool get canRetryHardwareCopy =>
+      hardwareCopy == false &&
+      softwareDecode == false &&
+      isLive == false &&
+      previewMode == false &&
+      DeviceTypeService.isTv == false &&
+      (Platform.isIOS || Platform.isMacOS) &&
+      _settings.hardwareDecoding != HardwareDecoding.disabled;
   final PlayerSettings _settings;
   final String url;
   late final Player _player;
@@ -388,18 +409,29 @@ class MediaKitEngine extends PlaybackEngine {
   /// the copy variant moved every decoded frame through shared TV RAM
   /// (micro-stutter, confirmed by diagnostics); mpv falls back to copy
   /// automatically when zero-copy cannot start. Live keeps copy only.
-  static String _hwdec(HardwareDecoding mode, {bool vod = false}) =>
-      switch (mode) {
-        HardwareDecoding.disabled => 'no',
-        // "mediacodec" exists only on Android: on iPhone it decoded audio with
-        // a black picture. VideoToolbox is Apple's hardware decoder.
-        _ =>
-          Platform.isIOS || Platform.isMacOS
-              ? 'videotoolbox-copy'
-              : Platform.isAndroid
-              ? (vod ? 'mediacodec,mediacodec-copy' : 'mediacodec-copy')
-              : 'auto-safe',
-      };
+  /// TV strings stay on the television path. Phones use their own decoder:
+  /// iOS film/series start on VideoToolbox and can fall back to the copy
+  /// path; iOS live and every Android phone stay on the copy decoder.
+  @visibleForTesting
+  static String hardwareDecoder({
+    required HardwareDecoding mode,
+    required bool tv,
+    required bool vod,
+    required bool ios,
+    required bool android,
+    bool copy = false,
+  }) {
+    if (mode == HardwareDecoding.disabled) return 'no';
+    if (!tv) {
+      if (ios) return (!vod || copy) ? 'videotoolbox-copy' : 'videotoolbox';
+      if (android) return 'mediacodec-copy';
+    }
+    if (ios) return 'videotoolbox-copy';
+    if (android) {
+      return vod ? 'mediacodec,mediacodec-copy' : 'mediacodec-copy';
+    }
+    return 'auto-safe';
+  }
 
   /// Opt-in diagnostics: numeric mpv metrics only. Every property is read
   /// under its own guard and with its own deadline, because a build without
