@@ -12,6 +12,9 @@ class PhoneTap extends StatelessWidget {
     this.borderRadius = const BorderRadius.all(Radius.circular(14)),
   });
 
+  /// Phone touch target. Television keeps the child at its own density.
+  static const minExtent = 48.0;
+
   final VoidCallback onTap;
   final Widget child;
   final BorderRadius borderRadius;
@@ -24,7 +27,13 @@ class PhoneTap extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: borderRadius,
-        child: child,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: minExtent,
+            minHeight: minExtent,
+          ),
+          child: child,
+        ),
       ),
     );
   }

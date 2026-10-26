@@ -38,10 +38,10 @@ class TvPlayerRow {
 /// Remote-only player overlay.
 ///
 /// It owns no focus nodes: the player screen keeps the keyboard focus and
-/// moves a highlighted (row, column) selection itself. This avoids every
-/// focus trap of the generic widgets (sliders eating the arrows, buttons
-/// disappearing while buffering, scrollable rows, overlays stealing focus),
-/// which made the player controls unreachable with a remote.
+/// moves a highlighted (row, column) selection itself, so the arrows are
+/// not captured by a Flutter focus tree. The center row is the only
+/// high-contrast transport. Audio, subtitles, speed and picture fit stay
+/// on the bottom row, quieter, because Down already opens that panel.
 class TvPlayerControls extends StatelessWidget {
   final List<TvPlayerRow> rows;
   final TvPlayerRowKind selectedRow;
@@ -229,6 +229,7 @@ class _TvActionStrip extends StatelessWidget {
             child: _TvPill(
               action: action,
               selected: row.kind == selectedRow && index == selectedColumn,
+              secondary: row.kind == TvPlayerRowKind.bottom,
             ),
           ),
         ),
@@ -239,35 +240,45 @@ class _TvActionStrip extends StatelessWidget {
 class _TvPill extends StatelessWidget {
   final TvPlayerAction action;
   final bool selected;
-  const _TvPill({required this.action, required this.selected});
+  final bool secondary;
+  const _TvPill({
+    required this.action,
+    required this.selected,
+    required this.secondary,
+  });
 
   @override
   Widget build(BuildContext context) {
     final enabled = action.enabled;
-    final fg = selected
-        ? AppColors.background
-        : enabled
-        ? AppColors.onOverlay.withValues(alpha: 0.9)
-        : AppColors.onOverlayDisabled;
+    final fg = !enabled
+        ? AppColors.onOverlayDisabled
+        : selected
+        ? AppColors.onOverlay
+        : secondary
+        ? AppColors.onOverlaySecondary
+        : AppColors.onOverlay.withValues(alpha: 0.9);
+    final fill = secondary
+        ? AppColors.overlayControl.withValues(alpha: selected ? 0.5 : 0.34)
+        : AppColors.overlayControl;
     return AnimatedContainer(
       duration: MediaQuery.disableAnimationsOf(context)
           ? Duration.zero
           : const Duration(milliseconds: 110),
-      height: 76,
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      height: secondary ? 68 : 76,
+      padding: EdgeInsets.symmetric(horizontal: 6, vertical: secondary ? 6 : 8),
       decoration: BoxDecoration(
-        color: selected ? AppColors.textPrimary : AppColors.overlayControl,
-        borderRadius: BorderRadius.circular(22),
+        color: fill,
+        borderRadius: BorderRadius.circular(secondary ? 16 : 22),
         border: Border.all(
-          color: selected ? AppColors.onOverlay : AppColors.clear,
-          width: 2,
+          color: selected ? AppColors.primary : AppColors.clear,
+          width: AppTheme.focusRingWidth,
         ),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(action.icon, size: 22, color: fg),
-          const SizedBox(height: 4),
+          Icon(action.icon, size: secondary ? 18 : 22, color: fg),
+          SizedBox(height: secondary ? 2 : 4),
           Text(
             action.label,
             maxLines: 2,
@@ -275,9 +286,9 @@ class _TvPill extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: fg,
-              fontSize: 12,
-              height: 1.2,
-              fontWeight: FontWeight.w600,
+              fontSize: secondary ? 11 : 12,
+              height: 1.15,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
             ),
           ),
         ],
@@ -316,8 +327,8 @@ class _TvRoundButton extends StatelessWidget {
                   ? AppColors.primary.withValues(alpha: 0.55)
                   : AppColors.overlayControl,
               border: Border.all(
-                color: selected ? AppColors.onOverlay : AppColors.track,
-                width: selected ? 3 : 1,
+                color: selected ? AppColors.primary : AppColors.track,
+                width: selected ? AppTheme.focusRingWidth : 1,
               ),
             ),
             child: Icon(

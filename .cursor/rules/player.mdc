@@ -8,7 +8,7 @@ alwaysApply: false
 
 Aggiorna la frase del vincolo. Non aggiungere un paragrafo di cronologia.
 
-- Il player TV legge il telecomando con un gestore precoce e sposta la propria selezione (riga, colonna) su un overlay senza focus. I pannelli sopra usano il focus normale. Indietro chiede conferma, così la riproduzione non si chiude per errore.
+- Il player TV legge il telecomando con un gestore precoce e sposta la propria selezione (riga, colonna) su un overlay senza focus: la riga di trasporto è l’unica ad alto contrasto e audio, sottotitoli, velocità e formato restano nella riga bassa. Le frecce a comandi visibili continuano il seek. I pannelli sopra usano il focus normale. Indietro chiede conferma, così la riproduzione non si chiude per errore.
 - I flag di completamento della diretta non entrano nei controlli di replay. La pausa esplicita annulla le scadenze di avvio e di stallo e rimanda il recupero al resume manuale.
 - MPV riceve lo stato diretta/film prima dell'apertura e applica la taratura nativa in serie, prima della riproduzione. Il buffer della diretta è diverso da quello del film e non corre contro l'avvio del flusso.
 - Le impostazioni TV del player hanno ambiti separati per diretta e film/serie, inizializzati dalle preferenze legacy. La riproduzione sceglie il proprio ambito. Il touch continua con l'ambito legacy condiviso.

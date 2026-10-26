@@ -8,4 +8,4 @@ alwaysApply: false
 
 Aggiorna la frase del vincolo. Non aggiungere un paragrafo di cronologia.
 
-- Layout, gesture e taratura del player sul telefono stanno nei rami in cui la modalità TV è disattiva. Il decoder del telefono distingue iOS e Android. Menu, focus, buffer e stringhe hardware di Fire TV, Google TV e Chromecast restano quelli attuali.
+- Layout, gesture e taratura del player sul telefono stanno nei rami in cui la modalità TV è disattiva. Il blocco schermo è un bersaglio da 48 dp e resta l’interruttore che spegne i gesti, senza un pulsante di luminosità. Il decoder del telefono distingue iOS e Android. Menu, focus, buffer e stringhe hardware di Fire TV, Google TV e Chromecast restano quelli attuali.

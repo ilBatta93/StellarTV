@@ -17,10 +17,10 @@ class AppColors {
   static const bufferedTrack = Color(0xFF929296);
   static const border = Color(0xFF38383A);
 
-  /// The accent currently chosen in settings. Updated by UiSettings; widgets
-  /// that paint with `AppColors.primary` follow the user's color choice.
-  static Color primary = const Color(0xFFFF6A1A);
-  static const Color primaryDefault = Color(0xFFFF6A1A);
+  /// Accent chosen in settings. UiSettings writes the same value here, and
+  /// the theme reads it too. The default matches the «arancio» choice.
+  static Color primary = primaryDefault;
+  static const Color primaryDefault = Color(0xFFFF5A1F);
   static const primaryDark = Color(0xFFD94C00);
   static const primaryLight = Color(0xFFFF9A62);
   static const secondary = Color(0xFFFFB627);
@@ -46,6 +46,20 @@ class AppColors {
 }
 
 class AppTheme {
+  /// One TV focus ring, the same stroke TvFocusable paints.
+  static const focusRingWidth = 2.5;
+
+  static BorderSide focusRing(
+    Set<WidgetState> states,
+    Color accent, {
+    BorderSide idle = BorderSide.none,
+  }) {
+    if (states.contains(WidgetState.focused)) {
+      return BorderSide(color: accent, width: focusRingWidth);
+    }
+    return idle;
+  }
+
   static bool get _isApple =>
       defaultTargetPlatform == TargetPlatform.iOS ||
       defaultTargetPlatform == TargetPlatform.macOS;
@@ -166,6 +180,7 @@ class AppTheme {
               backgroundColor: accent,
               foregroundColor: onAccent,
               elevation: 0,
+              minimumSize: isTv ? null : const Size(48, 48),
               padding: EdgeInsets.symmetric(
                 horizontal: isTv ? 18 : 24,
                 vertical: isTv ? 10 : 14,
@@ -176,11 +191,13 @@ class AppTheme {
             ).copyWith(
               side: isTv
                   ? WidgetStateProperty.resolveWith(
-                      (states) => BorderSide(
-                        color: states.contains(WidgetState.focused)
-                            ? AppColors.textPrimary
-                            : Colors.transparent,
-                        width: 3,
+                      (states) => focusRing(
+                        states,
+                        accent,
+                        idle: const BorderSide(
+                          color: AppColors.clear,
+                          width: focusRingWidth,
+                        ),
                       ),
                     )
                   : null,
@@ -194,14 +211,19 @@ class AppTheme {
               minimumSize: const Size(48, 48),
               shape: const StadiumBorder(),
             ).copyWith(
-              side: WidgetStateProperty.resolveWith(
-                (states) => BorderSide(
-                  color: isTv && states.contains(WidgetState.focused)
-                      ? AppColors.textPrimary
-                      : AppColors.clear,
-                  width: 3,
-                ),
-              ),
+              side: WidgetStateProperty.resolveWith((states) {
+                if (!isTv) {
+                  return const BorderSide(color: AppColors.clear, width: 3);
+                }
+                return focusRing(
+                  states,
+                  accent,
+                  idle: const BorderSide(
+                    color: AppColors.clear,
+                    width: focusRingWidth,
+                  ),
+                );
+              }),
             ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -209,32 +231,28 @@ class AppTheme {
             OutlinedButton.styleFrom(
               foregroundColor: AppColors.textPrimary,
               backgroundColor: AppColors.surface,
-              minimumSize: const Size(48, 44),
+              minimumSize: Size(48, isTv ? 44 : 48),
               shape: const StadiumBorder(),
             ).copyWith(
-              side: WidgetStateProperty.resolveWith(
-                (states) => BorderSide(
-                  color: isTv && states.contains(WidgetState.focused)
-                      ? accent
-                      : AppColors.border,
-                  width: isTv && states.contains(WidgetState.focused) ? 3 : 1,
-                ),
-              ),
+              side: WidgetStateProperty.resolveWith((states) {
+                const idle = BorderSide(color: AppColors.border);
+                if (!isTv) return idle;
+                return focusRing(states, accent, idle: idle);
+              }),
             ),
       ),
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(
           shape: const WidgetStatePropertyAll(CircleBorder()),
-          minimumSize: const WidgetStatePropertyAll(Size(44, 44)),
-          backgroundColor: WidgetStateProperty.resolveWith(
-            (states) => isTv && states.contains(WidgetState.focused)
-                ? AppColors.textPrimary
-                : null,
+          minimumSize: WidgetStatePropertyAll(
+            Size(isTv ? 44 : 48, isTv ? 44 : 48),
           ),
-          foregroundColor: WidgetStateProperty.resolveWith(
-            (states) => isTv && states.contains(WidgetState.focused)
-                ? AppColors.background
-                : AppColors.textPrimary,
+          tapTargetSize: isTv ? null : MaterialTapTargetSize.padded,
+          foregroundColor: const WidgetStatePropertyAll(AppColors.textPrimary),
+          side: WidgetStateProperty.resolveWith(
+            (states) => isTv
+                ? focusRing(states, accent)
+                : BorderSide.none,
           ),
         ),
       ),
@@ -243,12 +261,13 @@ class AppTheme {
             TextButton.styleFrom(
               foregroundColor: accent,
               shape: const StadiumBorder(),
-              minimumSize: const Size(44, 44),
+              minimumSize: Size(isTv ? 44 : 48, isTv ? 44 : 48),
+              tapTargetSize: isTv ? null : MaterialTapTargetSize.padded,
             ).copyWith(
-              overlayColor: WidgetStateProperty.resolveWith(
-                (states) => isTv && states.contains(WidgetState.focused)
-                    ? accent.withValues(alpha: 0.3)
-                    : null,
+              side: WidgetStateProperty.resolveWith(
+                (states) => isTv
+                    ? focusRing(states, accent)
+                    : BorderSide.none,
               ),
             ),
       ),

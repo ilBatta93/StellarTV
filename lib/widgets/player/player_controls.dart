@@ -344,11 +344,7 @@ class PlayerControls extends StatelessWidget {
                 label: session.muted ? 'Muto' : 'Volume',
                 onPressed: () => _act(session.toggleMute),
               ),
-              _BarButton(
-                icon: Icons.lock_open_rounded,
-                label: 'Blocca',
-                onPressed: () => _act(onToggleLock),
-              ),
+              _LockButton(onPressed: () => _act(onToggleLock)),
               Expanded(
                 child: Align(
                   alignment: Alignment.centerRight,
@@ -359,6 +355,7 @@ class PlayerControls extends StatelessWidget {
                         _BarButton(
                           icon: Icons.audiotrack_rounded,
                           label: 'Audio',
+                          quiet: true,
                           onPressed: () =>
                               _act(() => showAudioSheet(context, session)),
                         ),
@@ -367,6 +364,7 @@ class PlayerControls extends StatelessWidget {
                           label: onlineSubsActive
                               ? 'ITA online'
                               : 'Sottotitoli',
+                          quiet: true,
                           onPressed: () => _act(
                             () => showSubtitleSheet(
                               context,
@@ -382,12 +380,14 @@ class PlayerControls extends StatelessWidget {
                           _BarButton(
                             icon: Icons.speed_rounded,
                             label: formatSpeed(session.speed),
+                            quiet: true,
                             onPressed: () =>
                                 _act(() => showSpeedSheet(context, session)),
                           ),
                         _BarButton(
                           icon: Icons.aspect_ratio_rounded,
                           label: session.fitMode.label,
+                          quiet: true,
                           onPressed: () =>
                               _act(() => showFitSheet(context, session)),
                         ),
@@ -644,26 +644,60 @@ class _RoundButton extends StatelessWidget {
   }
 }
 
+/// Screen lock. On a phone the target is 48 dp and it stays the switch that
+/// turns gestures off. The brightness gesture does not grow a button here.
+class _LockButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _LockButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final phone = !DeviceTypeService.isTv;
+    final button = TextButton.icon(
+      style: TextButton.styleFrom(
+        foregroundColor: AppColors.onOverlay,
+        minimumSize: phone ? const Size(48, 48) : null,
+        tapTargetSize: phone ? MaterialTapTargetSize.padded : null,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+      icon: const Icon(Icons.lock_open_rounded, size: 22),
+      label: const Text('Blocca'),
+      onPressed: onPressed,
+    );
+    if (!DeviceTypeService.isTv) return button;
+    return TvFocusable(onPressed: onPressed, child: button);
+  }
+}
+
 class _BarButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
+  final bool quiet;
 
   const _BarButton({
     required this.icon,
     required this.label,
     required this.onPressed,
+    this.quiet = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final button = TextButton.icon(
       style: TextButton.styleFrom(
-        foregroundColor: AppColors.onOverlay,
+        foregroundColor: quiet
+            ? AppColors.onOverlaySecondary
+            : AppColors.onOverlay,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+        textStyle: TextStyle(
+          fontSize: quiet ? 11 : 12,
+          fontWeight: quiet ? FontWeight.w500 : FontWeight.w600,
+        ),
       ),
-      icon: Icon(icon, size: 20),
+      icon: Icon(icon, size: quiet ? 18 : 20),
       label: Text(label),
       onPressed: onPressed,
     );
