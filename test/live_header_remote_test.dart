@@ -159,7 +159,7 @@ void main() {
             tester
                 .widget<PosterImage>(
                   find.descendant(
-                    of: find.byKey(const ValueKey('live-logo-uno-30.0')),
+                    of: find.byKey(const ValueKey('live-logo-uno-28.0')),
                     matching: find.byType(PosterImage),
                   ),
                 )

@@ -16,7 +16,15 @@ class TvHomeLayout extends InheritedWidget {
   static TvHomeLayout? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<TvHomeLayout>();
 
-  double get carouselHeight => (rowHeight - 12 - 64).clamp(100.0, rowHeight);
+  /// Title padding (14+8) plus one 26px line. The face is taller than the
+  /// caption box, so the carousel yields that space instead of overflowing.
+  double get _titleBlock {
+    final line = captionHeight * (26 / 15) * (1.5 / 1.2);
+    return (22 + line).ceilToDouble();
+  }
+
+  double get carouselHeight =>
+      (rowHeight - 12 - _titleBlock).clamp(100.0, rowHeight);
   double get posterHeight =>
       (showTitles
               ? carouselHeight - 16 - 17 - captionHeight - 10

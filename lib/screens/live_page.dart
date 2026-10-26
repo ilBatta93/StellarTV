@@ -65,6 +65,12 @@ class LivePage extends StatefulWidget {
 class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
   Timer? _queryTimer;
+  final Map<String, FocusNode> _channelFocus = {};
+
+  FocusNode _channelNode(String id) => _channelFocus.putIfAbsent(
+    id,
+    () => FocusNode(debugLabel: 'live-channel-$id'),
+  );
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   FocusNode? _drawerReturn;
   void _openCategories() {
@@ -604,7 +610,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                         itemCount: channels.length,
                         findChildIndexCallback: (key) {
                           if (key is! ValueKey<String>) return null;
-                          final index = channels.indexWhere((channel) => channel.id == key.value);
+                          final index = channels.indexWhere(
+                            (channel) => channel.id == key.value,
+                          );
                           return index < 0 ? null : index;
                         },
                         itemBuilder: (context, i) {
@@ -613,74 +621,118 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                             key: ValueKey(c.id),
                             padding: const EdgeInsets.only(bottom: 6),
                             child: TvCatalogItem(
-                            index: i,
-                            columns: 1,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 148,
-                                  child: TvCategoryEdge(
-                                    scaffoldKey: _scaffoldKey,
-                                    onOpen: _openCategories,
-                                    child: TvFocusable(
-                                      onFocusChange: (focus) {
-                                        if (focus) _select(c);
-                                      },
-                                      onPressed: () => _watch(c),
-                                      onLongPress: showWatched
-                                          ? () => _confirmRemoveRecent(c)
-                                          : null,
-                                      child: GestureDetector(
-                                        onTap: () => _watch(c),
-                                        child: Container(
-                                          constraints: const BoxConstraints(
-                                            minHeight: 56,
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.surface,
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                            border: Border.all(
-                                              color: AppColors.border,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              if (c.logo.isNotEmpty) ...[
-                                                _channelLogo(c, size: 28),
-                                                const SizedBox(width: 8),
-                                              ],
-                                              Expanded(
-                                                child: TvPosterTitle(c.name),
+                              index: i,
+                              columns: 1,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 148,
+                                    child: TvCategoryEdge(
+                                      scaffoldKey: _scaffoldKey,
+                                      onOpen: _openCategories,
+                                      child: Focus(
+                                        canRequestFocus: false,
+                                        skipTraversal: true,
+                                        onKeyEvent: (_, event) {
+                                          if (event is! KeyDownEvent &&
+                                              event is! KeyRepeatEvent) {
+                                            return KeyEventResult.ignored;
+                                          }
+                                          final down =
+                                              event.logicalKey ==
+                                              LogicalKeyboardKey.arrowDown;
+                                          final up =
+                                              event.logicalKey ==
+                                              LogicalKeyboardKey.arrowUp;
+                                          if (!down && !up) {
+                                            return KeyEventResult.ignored;
+                                          }
+                                          final next = i + (down ? 1 : -1);
+                                          if (next < 0 ||
+                                              next >= channels.length) {
+                                            return KeyEventResult.ignored;
+                                          }
+                                          final node =
+                                              _channelFocus[channels[next].id];
+                                          if (node == null ||
+                                              node.context == null) {
+                                            return KeyEventResult.ignored;
+                                          }
+                                          node.requestFocus();
+                                          return KeyEventResult.handled;
+                                        },
+                                        child: TvFocusable(
+                                          focusNode: _channelNode(c.id),
+                                          onFocusChange: (focus) {
+                                            if (!focus) return;
+                                            if (_epgFocus != null)
+                                              _epgFocus = null;
+                                            _select(c);
+                                          },
+                                          onPressed: () => _watch(c),
+                                          onLongPress: showWatched
+                                              ? () => _confirmRemoveRecent(c)
+                                              : null,
+                                          child: GestureDetector(
+                                            onTap: () => _watch(c),
+                                            child: Container(
+                                              constraints: const BoxConstraints(
+                                                minHeight: 56,
                                               ),
-                                            ],
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 6,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.surface,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: AppColors.border,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  if (c.logo.isNotEmpty) ...[
+                                                    _channelLogo(c, size: 28),
+                                                    const SizedBox(width: 8),
+                                                  ],
+                                                  Expanded(
+                                                    child: TvPosterTitle(
+                                                      c.name,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 56,
-                                    child: RepaintBoundary(
-                                      child: LayoutBuilder(
-                                        builder: (context, b) =>
-                                            _timelineRow(c, epg, b.maxWidth),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: FocusTraversalGroup(
+                                      child: SizedBox(
+                                        height: 56,
+                                        child: RepaintBoundary(
+                                          child: LayoutBuilder(
+                                            builder: (context, b) =>
+                                                _timelineRow(
+                                                  c,
+                                                  epg,
+                                                  b.maxWidth,
+                                                ),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
                           );
                         },
                       ),
@@ -876,7 +928,8 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     return [
       for (final channel in channels)
         if (named.contains(channel.id) ||
-            (guideHits.isNotEmpty && guideHits.contains(epg.guideIdFor(channel))))
+            (guideHits.isNotEmpty &&
+                guideHits.contains(epg.guideIdFor(channel))))
           channel,
     ];
   }
@@ -912,6 +965,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   void dispose() {
     _queryTimer?.cancel();
     _searchController.dispose();
+    for (final node in _channelFocus.values) {
+      node.dispose();
+    }
     _epg.removeListener(_guideWorkChanged);
     _app.removeListener(_guideWorkChanged);
     _recentLive.removeListener(_recentChanged);
@@ -1184,19 +1240,19 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Dismissible(
-                        key: ValueKey('recent-${c.id}'),
-                        direction: DismissDirection.endToStart,
-                        onDismissed: (_) => _recentLive.remove(c.id),
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          child: const Icon(
-                            Icons.delete_outline_rounded,
-                            color: AppColors.error,
+                          key: ValueKey('recent-${c.id}'),
+                          direction: DismissDirection.endToStart,
+                          onDismissed: (_) => _recentLive.remove(c.id),
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 20),
+                            child: const Icon(
+                              Icons.delete_outline_rounded,
+                              color: AppColors.error,
+                            ),
                           ),
+                          child: tile,
                         ),
-                        child: tile,
-                      ),
                       );
                     }
                     return Padding(
@@ -1809,7 +1865,7 @@ class _EpgCellState extends State<_EpgCell> {
   void _claim() {
     if (!widget.focus) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_node.hasFocus) _node.requestFocus();
+      if (mounted && widget.focus && !_node.hasFocus) _node.requestFocus();
     });
   }
 

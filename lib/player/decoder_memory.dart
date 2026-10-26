@@ -14,6 +14,7 @@ class DecoderMemory {
 
   static final List<String> _keys = [];
   static Future<void>? _loading;
+  static var _ready = false;
 
   static final _xtreamLive = RegExp(
     r'^https?://([^/]+)/(?:live/)?[^/]+/[^/]+/(\d+)(?:\.(?:m3u8|ts))?$',
@@ -30,6 +31,7 @@ class DecoderMemory {
   }
 
   static Future<void> ensureLoaded() {
+    if (_ready) return Future<void>.value();
     return _loading ??= () async {
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -37,6 +39,7 @@ class DecoderMemory {
           ..clear()
           ..addAll(prefs.getStringList(_prefsKey) ?? const []);
       } catch (_) {}
+      _ready = true;
     }();
   }
 

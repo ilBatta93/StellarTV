@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -109,9 +110,8 @@ void main() {
           final image = await boundary.toImage(pixelRatio: 1);
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
           if (bytes != null)
-            await File(
-              '/tmp/stv/apple-player-${size.width.toInt()}.png',
-            ).writeAsBytes(bytes.buffer.asUint8List());
+            await File('/tmp/stv/apple-player-${size.width.toInt()}.png')
+                .writeAsBytes(bytes.buffer.asUint8List());
           image.dispose();
         });
       }
@@ -224,9 +224,13 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final scale = tester.widget<AnimatedScale>(find.byType(AnimatedScale));
-    expect(scale.scale, 1);
-    expect(scale.duration, Duration.zero);
+    final scale = tester.widget<Transform>(
+      find.descendant(
+        of: find.byType(TvFocusable),
+        matching: find.byType(Transform),
+      ),
+    );
+    expect(scale.transform.getMaxScaleOnAxis(), 1);
     await tester.pumpWidget(const SizedBox());
     settings.dispose();
   });
