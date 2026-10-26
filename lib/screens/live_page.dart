@@ -788,6 +788,10 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                         '${_hm(program.startTime)} – ${_hm(program.endTime)}',
                         style: const TextStyle(color: AppColors.textMuted),
                       ),
+                      if (program.isNow) ...[
+                        const SizedBox(height: 8),
+                        _onAirStrip(_progressOf(program)),
+                      ],
                     ],
                   ],
                 ),
@@ -1215,11 +1219,24 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   }
 }
 
-double _progressOf(EpgProgram p) {
-  final total = p.endTime.difference(p.startTime).inSeconds;
+double _elapsedFraction(DateTime start, DateTime end) {
+  final total = end.difference(start).inSeconds;
   if (total <= 0) return 0;
-  final done = DateTime.now().difference(p.startTime).inSeconds;
+  final done = DateTime.now().difference(start).inSeconds;
   return (done / total).clamp(0.0, 1.0);
+}
+
+double _progressOf(EpgProgram p) => _elapsedFraction(p.startTime, p.endTime);
+
+Widget _onAirStrip(double value, {double radius = 2}) {
+  final bar = LinearProgressIndicator(
+    value: value,
+    minHeight: 3,
+    backgroundColor: AppColors.border,
+    valueColor: AlwaysStoppedAnimation(AppColors.primary),
+  );
+  if (radius == 0) return bar;
+  return ClipRRect(borderRadius: BorderRadius.circular(radius), child: bar);
 }
 
 String _hm(DateTime t) =>
@@ -1748,9 +1765,7 @@ class _EpgCellState extends State<_EpgCell> {
         child: GestureDetector(
           onTap: widget.onPressed,
           child: Container(
-            padding: widget.compact
-                ? EdgeInsets.zero
-                : const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(8),
@@ -1760,51 +1775,71 @@ class _EpgCellState extends State<_EpgCell> {
                     : AppColors.border,
               ),
             ),
-            child: widget.compact
-                ? const SizedBox.expand()
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Row(
-                        children: [
-                          if (widget.catchup && past) ...[
-                            Icon(
-                              Icons.replay_rounded,
-                              size: 13,
-                              color: AppColors.primary,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Padding(
+                  padding: widget.compact
+                      ? EdgeInsets.zero
+                      : EdgeInsets.fromLTRB(10, 8, 10, live ? 12 : 8),
+                  child: widget.compact
+                      ? const SizedBox.expand()
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Row(
+                              children: [
+                                if (widget.catchup && past) ...[
+                                  Icon(
+                                    Icons.replay_rounded,
+                                    size: 13,
+                                    color: AppColors.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    p.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      height: 1.2,
+                                      fontWeight: FontWeight.w600,
+                                      color: past
+                                          ? AppColors.textMuted
+                                          : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 4),
-                          ],
-                          Expanded(
-                            child: Text(
-                              p.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                height: 1.2,
-                                fontWeight: FontWeight.w600,
-                                color: past
-                                    ? AppColors.textMuted
-                                    : AppColors.textPrimary,
+                            const SizedBox(height: 4),
+                            Text(
+                              '${_hm(widget.start)} – ${_hm(widget.end)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.clip,
+                              style: const TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 11,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${_hm(widget.start)} – ${_hm(widget.end)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.clip,
-                        style: const TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 11,
+                          ],
                         ),
-                      ),
-                    ],
+                ),
+                if (live)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _onAirStrip(
+                      _elapsedFraction(widget.start, widget.end),
+                      radius: 0,
+                    ),
                   ),
+              ],
+            ),
           ),
         ),
       ),

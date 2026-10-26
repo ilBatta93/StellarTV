@@ -423,10 +423,14 @@ class _Meta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMovie = item?.isMovie ?? channel?.type == ContentType.movie;
+    final quality = channel == null
+        ? null
+        : CatalogBuilder.qualityLabel(channel!.name);
     final chips = <Widget>[
       _Chip(label: isMovie ? 'Film' : 'Serie TV'),
       if (item != null && item!.year.isNotEmpty) _Chip(label: item!.year),
       if (item != null) ImdbRatingBadge(item!, priority: true),
+      if (quality != null) _Chip(label: quality),
       if (channel != null) _Chip(label: channel!.group),
     ];
     return Wrap(spacing: 8, runSpacing: 8, children: chips);
