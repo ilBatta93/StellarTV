@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Versione (es. 3.0.12). Vuoto = ultima release esistente (l'IPA si aggiunge accanto all'APK)"
+        description: "Versione (es. 3.8.12). Vuoto = ultima release esistente (l'IPA si aggiunge accanto all'APK)"
         required: false
         default: ""
 
@@ -35,7 +35,7 @@ jobs:
           if [ -z "$V" ]; then
             V=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName 2>/dev/null | sed 's/^v//' || true)
           fi
-          if [ -z "$V" ]; then V="3.0.${{ github.run_number }}"; fi
+          if [ -z "$V" ]; then V="3.8.${{ github.run_number }}"; fi
           BUILD="${V##*.}"
           echo "VERSION=$V" >> "$GITHUB_ENV"
           echo "BUILD_NUM=$BUILD" >> "$GITHUB_ENV"
