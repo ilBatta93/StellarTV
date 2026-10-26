@@ -1,18 +1,31 @@
 import 'epg_program.dart';
 
 /// Device cache contract remains p/n/t, independently of the download worker.
+/// A channel index with [declaredCount] is the on-disk guide: programme
+/// bodies stay in the channel file and are not part of this object.
 class EpgData {
   final Map<String, List<EpgProgram>> programmes;
   final Map<String, String> displayNames;
   final DateTime? fetchedAt;
+  final bool degraded;
+  final int declaredCount;
+  final List<String> channelIndex;
   const EpgData({
     this.programmes = const {},
     this.displayNames = const {},
     this.fetchedAt,
+    this.degraded = false,
+    this.declaredCount = 0,
+    this.channelIndex = const [],
   });
-  bool get isEmpty => programmes.isEmpty;
-  int get programmeCount =>
-      programmes.values.fold(0, (sum, list) => sum + list.length);
+  bool get isEmpty => programmes.isEmpty && channelIndex.isEmpty;
+  List<String> get guideIds => channelIndex.isNotEmpty
+      ? channelIndex
+      : programmes.keys.toList(growable: false);
+  int get programmeCount {
+    if (channelIndex.isNotEmpty || declaredCount > 0) return declaredCount;
+    return programmes.values.fold(0, (sum, list) => sum + list.length);
+  }
   static EpgData fromJson(Map<String, dynamic> json) {
     final progs = <String, List<EpgProgram>>{};
     final raw = json['p'];

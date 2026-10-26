@@ -154,6 +154,7 @@ EpgData epgDataInGuideWindow(EpgData data, DateTime now) {
     programmes: programmes,
     displayNames: data.displayNames,
     fetchedAt: data.fetchedAt,
+    degraded: data.degraded,
   );
 }
 

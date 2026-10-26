@@ -11,6 +11,7 @@ import '../models/tmdb_item.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/discover_provider.dart';
+import '../providers/epg_provider.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
@@ -65,6 +66,7 @@ class _SearchScreenState extends State<SearchScreen> {
   String _localQuery = '';
   Map<ContentType, List<Channel>> _local = const {};
   int? _localStamp;
+  int? _epgRevision;
   String? _computedFor;
   int _localToken = 0;
   bool _localPending = false;
@@ -119,7 +121,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   /// One indexed lookup per debounced query. The scan stays off the UI isolate.
-  void _loadLocal(AppProvider app) {
+  void _loadLocal(AppProvider app, EpgProvider epg) {
     final query = _localQuery;
     final token = ++_localToken;
     if (query.length < 2) {
@@ -128,7 +130,19 @@ class _SearchScreenState extends State<SearchScreen> {
     }
     _localPending = true;
     unawaited(() async {
-      final found = await app.searchCatalog(query);
+      final found = Map<ContentType, List<Channel>>.from(
+        await app.searchCatalog(query),
+      );
+      final live = [...?found[ContentType.live]];
+      final seen = {for (final channel in live) channel.id};
+      for (final id in epg.catalogIdsForProgrammeQuery(query)) {
+        if (!seen.add(id)) continue;
+        final channel = app.channelById(id);
+        if (channel == null || channel.type != ContentType.live) continue;
+        live.add(channel);
+        if (live.length >= 40) break;
+      }
+      if (live.isNotEmpty) found[ContentType.live] = live;
       if (!mounted || token != _localToken) return;
       _localStamp = app.searchStamp;
       setState(() {
@@ -150,13 +164,17 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildContent(BuildContext context) {
     final app = context.watch<AppProvider>();
+    final epg = context.watch<EpgProvider>();
     final stamp = app.searchStamp;
-    if (_localStamp != stamp || _computedFor != _localQuery) {
+    if (_localStamp != stamp ||
+        _epgRevision != epg.searchRevision ||
+        _computedFor != _localQuery) {
       final queryChanged = _computedFor != _localQuery;
       _localStamp = stamp;
+      _epgRevision = epg.searchRevision;
       _computedFor = _localQuery;
       if (queryChanged) _local = const {};
-      _loadLocal(app);
+      _loadLocal(app, epg);
     }
     final tv = DeviceTypeService.isTv;
     final side = tv ? 32.0 : 16.0;

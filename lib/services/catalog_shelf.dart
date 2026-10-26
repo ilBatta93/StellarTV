@@ -372,6 +372,14 @@ _ShelfImage _finishImage({
     if (channel.isSeriesFolder || channel.type == ContentType.live) {
       _addWords(words, channel.group, target);
     }
+    if (channel.type == ContentType.live) {
+      final tvgName = channel.tvgName;
+      if (tvgName != null && tvgName.isNotEmpty) {
+        _addWords(words, tvgName, target);
+      }
+      final tvgId = channel.tvgId;
+      if (tvgId != null && tvgId.isNotEmpty) _addWords(words, tvgId, target);
+    }
   }
 
   final flatWords = _flatten(words);
@@ -812,6 +820,40 @@ class CatalogShelf implements CatalogChannelSource {
     return matched!.toList(growable: false);
   }
 
+  /// Channel ids of [typeIndex] that the prefix index hits inside [among].
+  /// The walk stays on the posting lists already in memory.
+  Set<String> idsMatching(
+    String query, {
+    required int typeIndex,
+    required Set<String> among,
+  }) {
+    if (among.isEmpty) return const {};
+    final out = <String>{};
+    for (final slot in searchSlots(query)) {
+      if (slot < 0 || slot >= _image.types.length) continue;
+      if (_image.types[slot] != typeIndex) continue;
+      final id = _image.ids[slot];
+      if (!among.contains(id)) continue;
+      out.add(id);
+      if (out.length == among.length) break;
+    }
+    return out;
+  }
+
+  /// Live channel identity (id, name, guide ids) read off the UI isolate.
+  Future<List<Map<String, String>>> liveIdentities() {
+    if (isEmpty || _image.paths.isEmpty) return Future.value(const []);
+    final paths = _image.paths;
+    final fileOf = _image.fileOf;
+    final offsets = _image.offsets;
+    final lengths = _image.lengths;
+    final types = _image.types;
+    final live = ContentType.live.index;
+    return Isolate.run(
+      () => _readLiveIdentities(paths, fileOf, offsets, lengths, types, live),
+    );
+  }
+
   Set<int> _prefixHits(String token) {
     final words = _image.words;
     var index = _lowerBound(words, token);
@@ -844,6 +886,47 @@ class CatalogShelf implements CatalogChannelSource {
     }
     _files.clear();
     _window.clear();
+  }
+}
+
+List<Map<String, String>> _readLiveIdentities(
+  List<String> paths,
+  List<int> fileOf,
+  List<int> offsets,
+  List<int> lengths,
+  List<int> types,
+  int liveType,
+) {
+  final files = <int, RandomAccessFile>{};
+  try {
+    final out = <Map<String, String>>[];
+    for (var i = 0; i < types.length && i < offsets.length; i++) {
+      if (types[i] != liveType || lengths[i] <= 0) continue;
+      final fileIndex = fileOf[i];
+      if (fileIndex < 0 || fileIndex >= paths.length) continue;
+      final handle = files[fileIndex] ??= File(paths[fileIndex]).openSync();
+      handle.setPositionSync(offsets[i]);
+      final decoded = jsonDecode(utf8.decode(handle.readSync(lengths[i])));
+      if (decoded is! Map) continue;
+      final id = decoded['id']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      final row = <String, String>{
+        'id': id,
+        'name': decoded['name']?.toString() ?? '',
+      };
+      final tvgId = decoded['tvg_id']?.toString();
+      final tvgName = decoded['tvg_name']?.toString();
+      if (tvgId != null && tvgId.isNotEmpty) row['tvgId'] = tvgId;
+      if (tvgName != null && tvgName.isNotEmpty) row['tvgName'] = tvgName;
+      out.add(row);
+    }
+    return out;
+  } finally {
+    for (final file in files.values) {
+      try {
+        file.closeSync();
+      } catch (_) {}
+    }
   }
 }
 

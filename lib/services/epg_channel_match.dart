@@ -116,3 +116,26 @@ class EpgMatcher {
     return base == null ? null : EpgMatch(base, shift);
   }
 }
+
+/// Guide id to catalog ids. Runs off the UI isolate; the lists it returns
+/// are the only data the search path keeps.
+Map<String, List<String>> epgCatalogIdsByGuide(
+  List<String> guideIds,
+  Map<String, String> displayNames,
+  List<Map<String, String>> rows,
+) {
+  final matcher = EpgMatcher(guideIds: guideIds.toSet(), displayNames: displayNames);
+  final out = <String, List<String>>{};
+  for (final row in rows) {
+    final id = row['id'];
+    if (id == null || id.isEmpty) continue;
+    final match = matcher.match(
+      name: row['name'] ?? '',
+      tvgName: row['tvgName'],
+      tvgId: row['tvgId'],
+    );
+    if (match == null) continue;
+    (out[match.id] ??= <String>[]).add(id);
+  }
+  return out;
+}

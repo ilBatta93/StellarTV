@@ -1117,6 +1117,18 @@ class AppProvider extends ChangeNotifier {
     return buckets;
   }
 
+  /// Live ids inside [among] answered by the shelf prefix index.
+  Set<String> matchingChannelIds(
+    ContentType type,
+    String query,
+    Set<String> among,
+  ) {
+    if (!_shelfReady || query.trim().length < 2 || among.isEmpty) return const {};
+    return _shelf.idsMatching(query, typeIndex: type.index, among: among);
+  }
+
+  Future<List<Map<String, String>>> liveIdentities() => _shelf.liveIdentities();
+
   void _startCatalogIndex() {}
 
   Channel? seriesFolderFor(String seriesKey, {bool wait = true}) {

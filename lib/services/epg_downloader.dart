@@ -5,9 +5,15 @@ import 'dart:isolate';
 
 import 'package:xml/xml_events.dart';
 
-import '../models/epg_data.dart';
+import 'epg_archive.dart';
 import 'epg_channel_match.dart';
 import 'epg_timeline.dart';
+
+export 'epg_archive.dart' show EpgGuideSnapshot;
+
+/// Programmes kept from one guide. Past this point the guide stays partial
+/// instead of failing the whole download.
+const epgProgrammeCap = 200000;
 
 class EpgRefreshDeferred implements Exception {}
 
@@ -29,7 +35,7 @@ class EpgDownloadJob {
     this.deadline = const Duration(minutes: 8),
   });
   Isolate? _isolate;
-  final _done = Completer<EpgData>();
+  final _done = Completer<EpgGuideSnapshot>();
   bool _canceled = false;
   void cancel() {
     _canceled = true;
@@ -37,7 +43,7 @@ class EpgDownloadJob {
     if (!_done.isCompleted) _done.completeError(EpgRefreshDeferred());
   }
 
-  Future<EpgData> run() async {
+  Future<EpgGuideSnapshot> run() async {
     final port = ReceivePort();
     final errors = ReceivePort();
     final exits = ReceivePort();
@@ -49,7 +55,7 @@ class EpgDownloadJob {
 
     port.listen((value) {
       if (_done.isCompleted) return;
-      if (value is EpgData) _done.complete(value);
+      if (value is Map) _done.complete(EpgGuideSnapshot.fromHeader(value));
       if (value is EpgDownloadException) fail(value);
     });
     errors.listen(
@@ -113,21 +119,27 @@ class EpgDownloadJob {
 }
 
 Future<void> _downloadEntry((SendPort, List<String>, String) job) async {
+  final part = '${job.$3}.part';
   try {
     final merged = <String, dynamic>{
       'p': <String, dynamic>{},
       'n': <String, dynamic>{},
+      'd': false,
     };
     EpgDownloadException? lastError;
     var read = 0;
     for (final url in job.$2) {
       try {
-        final parsed = await _readSource(url)
-            .timeout(const Duration(minutes: 6));
+        final parsed = await _readSource(url).timeout(const Duration(minutes: 6));
+        if (parsed['d'] == true) merged['d'] = true;
         for (final key in ['p', 'n']) {
-          (parsed[key] as Map<String, dynamic>).forEach(
-            (k, v) =>
-                (merged[key] as Map<String, dynamic>).putIfAbsent(k, () => v),
+          final source = parsed[key];
+          if (source is! Map) continue;
+          source.forEach(
+            (k, v) => (merged[key] as Map<String, dynamic>).putIfAbsent(
+              k.toString(),
+              () => v,
+            ),
           );
         }
         read++;
@@ -135,17 +147,17 @@ Future<void> _downloadEntry((SendPort, List<String>, String) job) async {
         lastError = friendlyEpgError(error);
       }
     }
-    if (read == 0)
-      throw lastError ??
-          const EpgDownloadException('Nessuna guida configurata.');
+    if (read == 0) {
+      throw lastError ?? const EpgDownloadException('Nessuna guida configurata.');
+    }
     merged['t'] = DateTime.now().toIso8601String();
-    // Entire JSON conversion and programme construction stay off the UI.
-    File(job.$3).writeAsStringSync(jsonEncode(merged), flush: true);
-    Isolate.exit(
-      job.$1,
-      epgDataInGuideWindow(EpgData.fromJson(merged), DateTime.now()),
-    );
+    final header = writeEpgArchive(job.$3, merged);
+    Isolate.exit(job.$1, header);
   } catch (error) {
+    try {
+      final leftover = Directory(part);
+      if (leftover.existsSync()) leftover.deleteSync(recursive: true);
+    } catch (_) {}
     Isolate.exit(job.$1, friendlyEpgError(error));
   }
 }
@@ -248,18 +260,24 @@ Stream<List<int>> _decodeBody(Stream<List<int>> source) async* {
 /// SAX-style incremental parsing: no whole-document string or regex scans.
 Future<Map<String, dynamic>> parseXmltvStream(
   Stream<List<int>> source,
-  DateTime now,
-) async {
+  DateTime now, {
+  int programmeCap = epgProgrammeCap,
+}) async {
   final names = <String, dynamic>{};
   final programmes = <String, dynamic>{};
-  final from = now.subtract(const Duration(hours: 6)).millisecondsSinceEpoch;
-  final to = now.add(const Duration(hours: 36)).millisecondsSinceEpoch;
+  final cap = programmeCap < 1 ? 1 : programmeCap;
+  // Past includes the timeshift margin so a "+N" channel can still fill the
+  // visible grid after its programmes move forward.
+  final from = now.subtract(epgGuidePast + epgMaxTimeshift).millisecondsSinceEpoch;
+  final to = now.add(epgGuideFuture).millisecondsSinceEpoch;
   String? channel;
   Map<String, String>? programme;
   String? field;
   final fields = <String, StringBuffer>{};
   var rootSeen = false;
   var count = 0;
+  var degraded = false;
+  var capped = false;
   void end(String name) {
     if (name == field) field = null;
     if (name == 'channel') channel = null;
@@ -280,15 +298,20 @@ Future<Map<String, dynamic>> parseXmltvStream(
         stop <= from ||
         start >= to)
       return;
-    if (++count > 200000)
-      throw const EpgDownloadException(
-        'Guida troppo grande per una lettura sicura.',
-      );
+    if (count >= cap) {
+      degraded = true;
+      capped = true;
+      return;
+    }
+    count++;
+    final description = fields['desc']?.toString().trim() ?? '';
     ((programmes[id] ??= <dynamic>[]) as List).add([
       start,
       stop,
       title,
-      fields['desc']?.toString().trim() ?? '',
+      description.length <= epgDescriptionLimit
+          ? description
+          : epgClipDescription(description),
     ]);
   }
 
@@ -296,7 +319,9 @@ Future<Map<String, dynamic>> parseXmltvStream(
       in source
           .transform(utf8.decoder)
           .toXmlEvents(validateNesting: true, validateDocument: true)) {
+    if (capped) break;
     for (final event in batch) {
+      if (capped) break;
       if (event is XmlStartElementEvent) {
         final name = event.localName;
         final attrs = {for (final a in event.attributes) a.localName: a.value};
@@ -349,7 +374,7 @@ Future<Map<String, dynamic>> parseXmltvStream(
     );
   for (final list in programmes.values)
     (list as List).sort((a, b) => (a[0] as int).compareTo(b[0] as int));
-  return {'p': programmes, 'n': names};
+  return {'p': programmes, 'n': names, 'd': degraded};
 }
 
 int? parseXmltvTime(String? raw) {

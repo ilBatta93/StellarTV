@@ -1,11 +1,16 @@
 import 'dart:async';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 
 import '../models/channel.dart';
+import '../models/content_type.dart';
 import '../models/epg_program.dart';
+import '../services/epg_archive.dart';
 import '../services/epg_channel_match.dart';
+import '../services/epg_prefix_index.dart';
 import '../services/epg_service.dart';
+import '../services/epg_short.dart';
 import '../services/epg_timeline.dart';
 import '../services/playback_work_policy.dart';
 import '../services/frame_telemetry_service.dart';
@@ -53,6 +58,20 @@ class EpgProvider extends ChangeNotifier {
   }
 
   EpgData _data = const EpgData();
+  EpgArchive? _archive;
+  EpgPrefixIndex? _prefix;
+  Map<String, List<String>>? _catalogIdsByGuide;
+  int _searchRevision = 0;
+  int _prefixToken = 0;
+  int _boundCatalog = -1;
+  int? _bindingRevision;
+  final Map<String, List<EpgProgram>> _short = {};
+  final Map<String, List<EpgTimelineSlot>> _shortSlots = {};
+  final Map<String, _TrimmedTimeline> _shortTrimmed = {};
+  final Set<String> _shortTried = {};
+  final Set<String> _shortQueued = {};
+  final List<Channel> _shortQueue = [];
+  var _shortActive = 0;
   bool _loading = false;
   String? _error;
   bool _usePlaylist = true;
@@ -76,12 +95,16 @@ class EpgProvider extends ChangeNotifier {
   bool get refreshDeferred => _deferred;
   String? get error => _error;
   bool get hasData => !_data.isEmpty;
+  bool get hasListings =>
+      hasData || _short.values.any((list) => list.isNotEmpty);
+  bool get degraded => _data.degraded;
+  int get searchRevision => _searchRevision;
   bool get usePlaylistGuide => _usePlaylist;
   List<String> get manualSources => _manual;
   int get intervalMinutes => _intervalMinutes;
   DateTime? get lastUpdate => _data.fetchedAt ?? _lastRun;
   int get programmeCount => _data.programmeCount;
-  int get channelCount => _data.programmes.length;
+  int get channelCount => _data.guideIds.length;
 
   /// XMLTV address provided by the Xtream account, when logged in.
   String? get playlistSource {
@@ -120,7 +143,7 @@ class EpgProvider extends ChangeNotifier {
     _lastRun = cached.fetchedAt;
     _playlistRefreshRevision = _app.playlistRefreshRevision;
     _ready = true;
-    _setData(cached);
+    _adopt(cached);
     notifyListeners();
   }
 
@@ -132,7 +155,7 @@ class EpgProvider extends ChangeNotifier {
     if (signature != _cacheSource) {
       _timer?.cancel();
       _cacheSource = signature;
-      _setData(const EpgData());
+      _adopt(EpgGuideSnapshot.empty);
       _service.deferActiveDownload();
       unawaited(_restoreSourceCache());
     } else if (signature != _scheduledFor) {
@@ -145,6 +168,7 @@ class EpgProvider extends ChangeNotifier {
       _timer = Timer(const Duration(seconds: 20), refresh);
     }
     _channelMatch.clear();
+    if (_archive != null) unawaited(_bindCatalog(_prefixToken));
   }
 
   Future<void> _restoreSourceCache() async {
@@ -162,14 +186,73 @@ class EpgProvider extends ChangeNotifier {
       return false;
     }
     _lastRun = data.fetchedAt;
-    _setData(data);
+    _adopt(data);
     notifyListeners();
     return true;
   }
 
+  void _adopt(EpgGuideSnapshot snapshot) {
+    _archive?.close();
+    _archive = snapshot.archive;
+    _prefix = null;
+    _catalogIdsByGuide = null;
+    _boundCatalog = -1;
+    _prefixToken++;
+    _short.clear();
+    _shortSlots.clear();
+    _shortTrimmed.clear();
+    _shortTried.clear();
+    _shortQueued.clear();
+    _shortQueue.clear();
+    _setData(snapshot.data);
+    final token = _prefixToken;
+    final archive = snapshot.archive;
+    if (archive != null) {
+      unawaited(_loadPrefix(archive, token));
+      unawaited(_bindCatalog(token));
+    } else {
+      _searchRevision++;
+    }
+  }
+
+  Future<void> _loadPrefix(EpgArchive archive, int token) async {
+    final index = await archive.loadPrefix();
+    if (_disposed || token != _prefixToken || !identical(archive, _archive)) return;
+    _prefix = index;
+    _searchRevision++;
+    notifyListeners();
+  }
+
+  Future<void> _bindCatalog(int token) async {
+    final revision = _app.catalogIndexRevision;
+    if (_bindingRevision == revision) return;
+    if (_boundCatalog == revision && _catalogIdsByGuide != null) return;
+    _bindingRevision = revision;
+    try {
+      final rows = await _app.liveIdentities();
+      if (_disposed || token != _prefixToken) return;
+      final ids = _data.guideIds;
+      final names = _data.displayNames;
+      final reverse = rows.isEmpty || ids.isEmpty
+          ? <String, List<String>>{}
+          : await Isolate.run(() => epgCatalogIdsByGuide(ids, names, rows));
+      if (_disposed || token != _prefixToken || revision != _app.catalogIndexRevision) {
+        return;
+      }
+      _catalogIdsByGuide = reverse;
+      _boundCatalog = revision;
+      _searchRevision++;
+      notifyListeners();
+    } catch (_) {
+      return;
+    } finally {
+      if (_bindingRevision == revision) _bindingRevision = null;
+    }
+  }
+
   void _setData(EpgData data) {
     final now = DateTime.now();
-    _data = epgDataInGuideWindow(data, now);
+    _data = _archive == null ? epgDataInGuideWindow(data, now) : data;
     _nameIndex = null;
     _channelMatch.clear();
     _gridLists.clear();
@@ -192,6 +275,12 @@ class EpgProvider extends ChangeNotifier {
     _gridLists.clear();
     _timelines.clear();
     _trimmed.clear();
+    _shortSlots.clear();
+    _shortTrimmed.clear();
+    if (_archive != null) {
+      notifyListeners();
+      return true;
+    }
     if (identical(next, _data)) return false;
     _data = next;
     _nameIndex = null;
@@ -255,11 +344,19 @@ class EpgProvider extends ChangeNotifier {
     try {
       FrameTelemetryService.instance.mark('guida: download avviato');
       final data = await _service.fetch(sources);
-      if (_disposed) return;
+      if (_disposed) {
+        await _service.discard(data);
+        return;
+      }
       if (_playbackBlocked || sources.join('|') != _activeSources.join('|')) {
+        await _service.discard(data);
         throw EpgRefreshDeferred();
       }
-      _setData(data);
+      final previous = _archive;
+      _archive = null;
+      previous?.close();
+      await _service.publish(data, sources);
+      _adopt(data);
       FrameTelemetryService.instance.mark('guida: pronta');
       await _service.markRun();
       _lastRun = DateTime.now();
@@ -319,26 +416,80 @@ class EpgProvider extends ChangeNotifier {
   EpgMatch? _guideIdFor(Channel channel) {
     if (_channelMatch.containsKey(channel.id)) return _channelMatch[channel.id];
     final matcher = _nameIndex ??= EpgMatcher(
-      guideIds: _data.programmes.keys.toSet(),
+      guideIds: _data.guideIds.toSet(),
       displayNames: _data.displayNames,
     );
-    final m = matcher.match(
+    final match = matcher.match(
       name: channel.name,
       tvgName: channel.tvgName,
       tvgId: channel.tvgId,
     );
-    _channelMatch[channel.id] = m;
-    return m;
+    _channelMatch[channel.id] = match;
+    return match;
   }
 
-  List<EpgProgram> programmesFor(Channel channel) {
+  String? guideIdFor(Channel channel) => _guideIdFor(channel)?.id;
+
+  Set<String> guideIdsMatching(String query) {
+    final prefix = _prefix;
+    if (prefix == null) return const {};
+    final ids = _data.guideIds;
+    final out = <String>{};
+    for (final ordinal in prefix.ordinals(query)) {
+      if (ordinal >= 0 && ordinal < ids.length) out.add(ids[ordinal]);
+    }
+    return out;
+  }
+
+  /// Catalog ids whose guide channel matches [query]. Empty until the prefix
+  /// index and the channel map have been built off the UI isolate.
+  List<String> catalogIdsForProgrammeQuery(String query) {
+    final prefix = _prefix;
+    final reverse = _catalogIdsByGuide;
+    if (prefix == null || reverse == null || query.trim().length < 2) return const [];
+    final ids = _data.guideIds;
+    final out = <String>[];
+    final seen = <String>{};
+    for (final ordinal in prefix.ordinals(query)) {
+      if (ordinal < 0 || ordinal >= ids.length) continue;
+      for (final id in reverse[ids[ordinal]] ?? const <String>[]) {
+        if (seen.add(id)) out.add(id);
+        if (out.length >= 40) return out;
+      }
+    }
+    return out;
+  }
+
+  List<EpgProgram> programmesFor(Channel channel) =>
+      _programmes(channel, synopsis: false);
+
+  /// Programme sheet: same window as the grid, with the synopsis kept on disk
+  /// until the row is opened.
+  List<EpgProgram> listingsFor(Channel channel) =>
+      _programmes(channel, synopsis: true);
+
+  List<EpgProgram> _programmes(Channel channel, {required bool synopsis}) {
     final match = _guideIdFor(channel);
-    if (match == null) return const [];
-    return _gridLists[match] ??= _gridProgrammes(match);
+    if (match != null) {
+      final full = _windowed(_readGuide(match.id), match);
+      if (full.isNotEmpty) {
+        if (synopsis) return full;
+        return _gridLists[match] ??= _titlesOnly(full);
+      }
+    }
+    if (_short.containsKey(channel.id)) return _short[channel.id] ?? const [];
+    _requestShort(channel);
+    return const [];
   }
 
-  List<EpgProgram> _gridProgrammes(EpgMatch match) {
-    final source = _data.programmes[match.id] ?? const <EpgProgram>[];
+  List<EpgProgram> _readGuide(String id) {
+    final archive = _archive;
+    if (archive != null) return archive.read(id);
+    return _data.programmes[id] ?? const <EpgProgram>[];
+  }
+
+  List<EpgProgram> _windowed(List<EpgProgram> source, EpgMatch match) {
+    if (source.isEmpty) return const [];
     final from = _gridFrom ?? epgGridOrigin(DateTime.now());
     final to = _gridTo ?? DateTime.now().add(epgGuideFuture);
     if (match.shiftHours == 0) return epgSliceGuide(source, from, to);
@@ -361,37 +512,128 @@ class EpgProvider extends ChangeNotifier {
     );
   }
 
+  List<EpgProgram> _titlesOnly(List<EpgProgram> source) {
+    var clean = true;
+    for (final program in source) {
+      if (program.description.isNotEmpty) {
+        clean = false;
+        break;
+      }
+    }
+    if (clean) return source;
+    return List.unmodifiable([
+      for (final program in source)
+        program.description.isEmpty
+            ? program
+            : EpgProgram(
+                id: program.id,
+                channelId: program.channelId,
+                title: program.title,
+                description: '',
+                startTime: program.startTime,
+                endTime: program.endTime,
+              ),
+    ]);
+  }
+
+  void _requestShort(Channel channel) {
+    if (_disposed || channel.type != ContentType.live) return;
+    if (_short.containsKey(channel.id) || _shortTried.contains(channel.id)) return;
+    if (_shortQueued.contains(channel.id)) return;
+    if (epgStreamId(channel.id) == null) {
+      _shortTried.add(channel.id);
+      return;
+    }
+    final credentials = _app.xtreamCredentials;
+    if (_app.authMethod != AuthMethod.xtream || credentials == null) return;
+    if (_shortQueued.length + _shortActive >= 24) return;
+    _shortQueued.add(channel.id);
+    _shortQueue.add(channel);
+    _kickShort();
+  }
+
+  void _kickShort() {
+    while (_shortActive < 3 && _shortQueue.isNotEmpty && !_disposed) {
+      final channel = _shortQueue.removeAt(0);
+      _shortQueued.remove(channel.id);
+      if (!_shortTried.add(channel.id)) continue;
+      _shortActive++;
+      unawaited(
+        _fetchShort(channel).whenComplete(() {
+          _shortActive--;
+          if (!_disposed) _kickShort();
+        }),
+      );
+    }
+  }
+
+  Future<void> _fetchShort(Channel channel) async {
+    final streamId = epgStreamId(channel.id);
+    final credentials = _app.xtreamCredentials;
+    if (streamId == null || credentials == null) return;
+    final list = await EpgShortGuide.fetch(
+      server: credentials['server'] ?? '',
+      username: credentials['username'] ?? '',
+      password: credentials['password'] ?? '',
+      streamId: streamId,
+    );
+    if (_disposed) return;
+    _short[channel.id] = list;
+    if (list.isEmpty) return;
+    final match = _channelMatch[channel.id];
+    if (match != null) {
+      _timelines.remove(match);
+      _trimmed.remove(match);
+      _gridLists.remove(match);
+    }
+    _shortSlots.remove(channel.id);
+    _shortTrimmed.remove(channel.id);
+    notifyListeners();
+  }
+
   /// Slots for [channel], built once per guide snapshot. [notBefore] only
   /// hides rows the grid cannot scroll to; it does not sort again.
   List<EpgTimelineSlot> timelineFor(Channel channel, {DateTime? notBefore}) {
+    final programmes = programmesFor(channel);
+    if (programmes.isEmpty) return const [];
     final match = _guideIdFor(channel);
-    if (match == null) return const [];
-    final slots = _timelines[match] ??= epgTimelineSlots(
-      programmesFor(channel),
-    );
+    final fromGuide = match != null && _gridLists.containsKey(match);
+    final slots = fromGuide
+        ? (_timelines[match] ??= epgTimelineSlots(programmes))
+        : (_shortSlots[channel.id] ??= epgTimelineSlots(programmes));
     if (notBefore == null) return slots;
-    final cached = _trimmed[match];
+    if (fromGuide) {
+      final cached = _trimmed[match];
+      if (cached != null && cached.origin == notBefore) return cached.slots;
+      final trimmed = _trim(slots, notBefore);
+      _trimmed[match] = _TrimmedTimeline(notBefore, trimmed);
+      return trimmed;
+    }
+    final cached = _shortTrimmed[channel.id];
     if (cached != null && cached.origin == notBefore) return cached.slots;
-    final trimmed = List<EpgTimelineSlot>.unmodifiable([
-      for (final slot in slots)
-        if (slot.end.isAfter(notBefore)) slot,
-    ]);
-    _trimmed[match] = _TrimmedTimeline(notBefore, trimmed);
+    final trimmed = _trim(slots, notBefore);
+    _shortTrimmed[channel.id] = _TrimmedTimeline(notBefore, trimmed);
     return trimmed;
   }
 
+  List<EpgTimelineSlot> _trim(List<EpgTimelineSlot> slots, DateTime notBefore) =>
+      List<EpgTimelineSlot>.unmodifiable([
+        for (final slot in slots)
+          if (slot.end.isAfter(notBefore)) slot,
+      ]);
+
   EpgProgram? nowFor(Channel channel) {
     final now = DateTime.now();
-    for (final p in programmesFor(channel)) {
-      if (!p.startTime.isAfter(now) && p.endTime.isAfter(now)) return p;
+    for (final program in programmesFor(channel)) {
+      if (!program.startTime.isAfter(now) && program.endTime.isAfter(now)) return program;
     }
     return null;
   }
 
   EpgProgram? nextFor(Channel channel) {
     final now = DateTime.now();
-    for (final p in programmesFor(channel)) {
-      if (p.startTime.isAfter(now)) return p;
+    for (final program in programmesFor(channel)) {
+      if (program.startTime.isAfter(now)) return program;
     }
     return null;
   }
@@ -399,6 +641,7 @@ class EpgProvider extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _archive?.close();
     _service.deferActiveDownload();
     PlaybackWorkPolicy.instance.removeListener(_onPlaybackChanged);
     _timer?.cancel();

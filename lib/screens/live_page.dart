@@ -35,6 +35,23 @@ import '../widgets/tv_catalog_navigation.dart';
 import 'epg_settings_screen.dart';
 import 'multiview_screen.dart';
 
+final _liveWord = RegExp(r'[^a-z0-9à-ÿ]+');
+
+bool _nameHasTokens(String name, List<String> tokens) {
+  final words = name.toLowerCase().split(_liveWord);
+  for (final token in tokens) {
+    var hit = false;
+    for (final word in words) {
+      if (word.startsWith(token)) {
+        hit = true;
+        break;
+      }
+    }
+    if (!hit) return false;
+  }
+  return true;
+}
+
 /// "Diretta" tab: channel list with what is on now, a progress bar and what
 /// comes next, plus a full guide per channel.
 class LivePage extends StatefulWidget {
@@ -47,6 +64,7 @@ class LivePage extends StatefulWidget {
 
 class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
+  Timer? _queryTimer;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   FocusNode? _drawerReturn;
   void _openCategories() {
@@ -581,16 +599,20 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                     ),
                     const Divider(height: 1, color: AppColors.border),
                     Expanded(
-                      child: ListView.separated(
+                      child: ListView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 6, 8, 16),
                         itemCount: channels.length,
-                        separatorBuilder: (_, _) => const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 5),
-                          child: Divider(height: 1, color: AppColors.border),
-                        ),
+                        findChildIndexCallback: (key) {
+                          if (key is! ValueKey<String>) return null;
+                          final index = channels.indexWhere((channel) => channel.id == key.value);
+                          return index < 0 ? null : index;
+                        },
                         itemBuilder: (context, i) {
                           final c = channels[i];
-                          return TvCatalogItem(
+                          return Padding(
+                            key: ValueKey(c.id),
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: TvCatalogItem(
                             index: i,
                             columns: 1,
                             child: Row(
@@ -648,14 +670,17 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                 Expanded(
                                   child: SizedBox(
                                     height: 56,
-                                    child: LayoutBuilder(
-                                      builder: (context, b) =>
-                                          _timelineRow(c, epg, b.maxWidth),
+                                    child: RepaintBoundary(
+                                      child: LayoutBuilder(
+                                        builder: (context, b) =>
+                                            _timelineRow(c, epg, b.maxWidth),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ],
                             ),
+                          ),
                           );
                         },
                       ),
@@ -809,6 +834,53 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     ),
   );
 
+  void _onQuery(String value) {
+    final next = value.trim();
+    _queryTimer?.cancel();
+    if (next.isEmpty) {
+      if (_query.isNotEmpty) setState(() => _query = '');
+      return;
+    }
+    _queryTimer = Timer(const Duration(milliseconds: 160), () {
+      if (mounted && _query != next) setState(() => _query = next);
+    });
+  }
+
+  List<Channel> _channelsForQuery(
+    List<Channel> channels,
+    AppProvider app,
+    EpgProvider epg,
+  ) {
+    final query = _query.trim();
+    if (query.length < 2) {
+      final needle = query.toLowerCase();
+      return [
+        for (final channel in channels)
+          if (channel.name.toLowerCase().contains(needle)) channel,
+      ];
+    }
+    if (!app.catalogIndexReady) {
+      final tokens = [
+        for (final token in query.toLowerCase().split(_liveWord))
+          if (token.length >= 2) token,
+      ];
+      if (tokens.isEmpty) return const [];
+      return [
+        for (final channel in channels)
+          if (_nameHasTokens(channel.name, tokens)) channel,
+      ];
+    }
+    final among = {for (final channel in channels) channel.id};
+    final named = app.matchingChannelIds(ContentType.live, query, among);
+    final guideHits = epg.guideIdsMatching(query);
+    return [
+      for (final channel in channels)
+        if (named.contains(channel.id) ||
+            (guideHits.isNotEmpty && guideHits.contains(epg.guideIdFor(channel))))
+          channel,
+    ];
+  }
+
   final _recentLive = RecentLiveChannels.instance;
   void _recentChanged() {
     if (mounted) setState(() {});
@@ -838,6 +910,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _queryTimer?.cancel();
     _searchController.dispose();
     _epg.removeListener(_guideWorkChanged);
     _app.removeListener(_guideWorkChanged);
@@ -889,7 +962,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     final showWatched = _category == _watchedLabel;
     final selected = groups.where((g) => g.label == _category).firstOrNull;
     final listKey =
-        '$_category|$_query|${_query.isEmpty ? 0 : DateTime.now().minute}|${showWatched ? _recentLive.ids.join(',') : ''}';
+        '$_category|$_query|${epg.searchRevision}|${app.catalogIndexRevision}|${showWatched ? _recentLive.ids.join(',') : ''}';
     final reusable = identical(_listGroups, groups) && _listKey == listKey;
     var channels = reusable
         ? (_listCache ?? const <Channel>[])
@@ -902,14 +975,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
               for (final e in g.entries) e.primary,
           ];
     if (!reusable && _query.isNotEmpty) {
-      final q = _query.toLowerCase();
-      channels = channels
-          .where(
-            (c) =>
-                c.name.toLowerCase().contains(q) ||
-                (epg.nowFor(c)?.title.toLowerCase().contains(q) ?? false),
-          )
-          .toList();
+      channels = _channelsForQuery(channels, app, epg);
     }
 
     if (!reusable) {
@@ -943,7 +1009,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
             controller: _searchController,
             hint: 'Cerca canale o programma',
             category: _category ?? 'Tutti',
-            onChanged: (v) => setState(() => _query = v),
+            onChanged: _onQuery,
             sort: _sort,
             allowRating: false,
             filters: (_) => TvFilterPanel(
@@ -1004,7 +1070,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                 Expanded(
                   child: TvTextField(
                     controller: _searchController,
-                    onChanged: (v) => setState(() => _query = v),
+                    onChanged: _onQuery,
                     decoration: const InputDecoration(
                       hintText: 'Cerca canale o programma',
                       prefixIcon: Icon(Icons.search_rounded, size: 20),
@@ -1070,12 +1136,20 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
               ],
             ),
           ),
-        if (!epg.hasData && !epg.isLoading)
+        if (!epg.hasListings && !epg.isLoading)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
             child: Text(
               epg.error ?? 'Guida TV non ancora disponibile.',
               style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+            ),
+          )
+        else if (epg.degraded)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: Text(
+              'Guida parziale: i canali senza programmi si completano uno alla volta.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
             ),
           ),
         Expanded(
@@ -1087,10 +1161,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                 )
               : DeviceTypeService.isTv
               ? _tvGuide(channels, epg, app)
-              : ListView.separated(
+              : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   itemCount: channels.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
                     final tile = _LiveTile(
                       channel: channels[i],
@@ -1108,7 +1181,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                     );
                     if (showWatched) {
                       final c = channels[i];
-                      return Dismissible(
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Dismissible(
                         key: ValueKey('recent-${c.id}'),
                         direction: DismissDirection.endToStart,
                         onDismissed: (_) => _recentLive.remove(c.id),
@@ -1121,9 +1196,13 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                           ),
                         ),
                         child: tile,
+                      ),
                       );
                     }
-                    return TvCatalogItem(index: i, columns: 1, child: tile);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: TvCatalogItem(index: i, columns: 1, child: tile),
+                    );
                   },
                 ),
         ),
@@ -1396,7 +1475,7 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
       final epg = ctx.watch<EpgProvider>();
       final now = DateTime.now();
       final list = epg
-          .programmesFor(channel)
+          .listingsFor(channel)
           .where(
             (p) =>
                 p.endTime.isAfter(now) ||

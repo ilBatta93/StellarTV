@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/services/epg_archive.dart';
 import '../lib/services/epg_downloader.dart';
 
 String fixture() {
@@ -43,6 +44,16 @@ void main() {
       expect((parsed['n'] as Map)['c'], 'C & é');
     },
   );
+  test('a guide past the programme cap stays partial instead of failing', () async {
+    final parsed = await parseXmltvStream(
+      Stream.value(utf8.encode(fixture())),
+      DateTime.now(),
+      programmeCap: 1,
+    );
+    expect(parsed['d'], isTrue);
+    expect((parsed['p'] as Map)['c'], hasLength(1));
+    expect(((parsed['p'] as Map)['c'] as List).first[2], 'Past <title>');
+  });
   test(
     'download handles redirect and gzip, stages cache and uses explicit headers',
     () async {
@@ -64,18 +75,19 @@ void main() {
         }
         await request.response.close();
       });
+      EpgGuideSnapshot? data;
       try {
         final path = '${directory.path}/cache.pending';
-        final data = await EpgDownloadJob([
+        final loaded = await EpgDownloadJob([
           'http://127.0.0.1:${server.port}/redirect',
         ], path).run();
-        expect(data.programmeCount, 2);
+        data = loaded;
+        expect(loaded.programmeCount, 2);
+        expect(loaded.programmesOf('c'), hasLength(2));
+        expect(File('$path${Platform.pathSeparator}index.json').existsSync(), isTrue);
         expect(headers.every((h) => h == 'StellarTV/1.0'), true);
-        expect(
-          jsonDecode(await File(path).readAsString())['p']['c'],
-          hasLength(2),
-        );
       } finally {
+        data?.archive?.close();
         await server.close(force: true);
         await directory.delete(recursive: true);
       }
