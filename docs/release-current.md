@@ -1,3 +1,4 @@
+- La diretta si apre con il riproduttore più adatto al flusso televisivo. Se un canale non parte, l'app prova l'altro riproduttore.
 - Il catalogo personale compare una sezione alla volta e l'interfaccia resta utilizzabile mentre il resto arriva.
 - Il telecomando resta attivo sulla diretta già aperta durante l'arrivo delle sezioni successive.
 - Il profilo bambino filtra il catalogo senza attendere la lettura di ogni titolo.

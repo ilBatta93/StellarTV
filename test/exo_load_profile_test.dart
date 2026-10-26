@@ -24,6 +24,14 @@ void main() {
     expect(preview.backBufferRequiresSeekable, isFalse);
     expect(preview.targetBufferBytes, ExoLoadProfile.previewTargetBytes);
     expect(live.maxBufferMs, lessThan(film.maxBufferMs));
+    expect(live.minBufferMs, 800);
+    expect(live.bufferForPlaybackMs, 400);
+    expect(live.bufferForPlaybackAfterRebufferMs, 600);
+    expect(live.bufferForPlaybackAfterRebufferMs, lessThan(1000));
+    expect(
+      live.bufferForPlaybackAfterRebufferMs,
+      lessThanOrEqualTo(live.minBufferMs),
+    );
     expect(live.backBufferMs, 30000);
     expect(live.backBufferRequiresSeekable, isTrue);
     expect(film.backBufferRequiresSeekable, isFalse);

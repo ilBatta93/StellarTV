@@ -42,10 +42,10 @@ class PlayerSettingsService {
       final decoded = jsonDecode(raw);
       if (decoded is Map<String, dynamic>) {
         final settings = PlayerSettings.fromJson(decoded);
-        // One-time switch of TV live channels to ExoPlayer (see
-        // _liveDefaults); later choices of the user are kept.
+        // One-time switch of TV live channels to mpv (see _liveDefaults);
+        // later choices of the user are kept.
         if (scope == PlayerSettingsScope.liveTv &&
-            decoded['liveEngineV'] != 5) {
+            decoded['liveEngineV'] != 6) {
           _liveDefaults(settings);
           await save(settings, scope: scope);
         }
@@ -126,12 +126,12 @@ class PlayerSettingsService {
     SyncHooks.settingsChanged();
   }
 
-  /// TV live channels start with ExoPlayer, the device's native decoder:
-  /// on Fire TV mpv kept a black picture while ExoPlayer drew the channel.
-  /// mpv remains the automatic fallback for streams ExoPlayer rejects.
+  /// TV live playback starts with mpv. ExoPlayer stays the automatic
+  /// fallback when mpv cannot open the stream. Preview and MultiView keep
+  /// their own ExoPlayer start and are not affected here.
   static void _liveDefaults(PlayerSettings s) {
     if (!DeviceTypeService.isTv) return;
-    s.primaryEngine = PlayerEngineType.exo;
+    s.primaryEngine = PlayerEngineType.mediakit;
     s.autoFallback = true;
   }
 

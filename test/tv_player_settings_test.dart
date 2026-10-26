@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stellar_tv/models/player_settings.dart';
 import 'package:stellar_tv/player/mediakit_engine.dart';
+import 'package:stellar_tv/services/device_type_service.dart';
 import 'package:stellar_tv/services/player_settings_service.dart';
 
 void main() {
@@ -129,4 +132,50 @@ void main() {
     expect(PlayerEngineType.exo.supportsCacheBuffer, isFalse);
     expect(PlayerEngineType.mediakit.supportsBackBuffer, isFalse);
   });
+
+  test('TV live migrates once from the previous engine to mpv', () async {
+    await _setTelevision(true);
+    addTearDown(() => _setTelevision(false));
+    final previous = PlayerSettings()
+      ..primaryEngine = PlayerEngineType.exo
+      ..autoFallback = false
+      ..startTimeoutSeconds = 11;
+    final stored = previous.toJson()..['liveEngineV'] = 5;
+    SharedPreferences.setMockInitialValues({
+      'player_settings_tv_live_v1': jsonEncode(stored),
+    });
+    final service = PlayerSettingsService();
+    final live = await service.load(scope: PlayerSettingsScope.liveTv);
+    expect(live.primaryEngine, PlayerEngineType.mediakit);
+    expect(live.autoFallback, isTrue);
+    expect(live.startTimeoutSeconds, 11);
+    final again = await service.load(scope: PlayerSettingsScope.liveTv);
+    expect(again.primaryEngine, PlayerEngineType.mediakit);
+
+    final chosen = PlayerSettings()..primaryEngine = PlayerEngineType.exo;
+    SharedPreferences.setMockInitialValues({
+      'player_settings_tv_live_v1': jsonEncode(chosen.toJson()),
+    });
+    expect(
+      (await PlayerSettingsService().load(
+        scope: PlayerSettingsScope.liveTv,
+      )).primaryEngine,
+      PlayerEngineType.exo,
+    );
+    expect(chosen.toJson()['liveEngineV'], 6);
+  });
+}
+
+Future<void> _setTelevision(bool television) async {
+  debugDefaultTargetPlatformOverride = TargetPlatform.android;
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(const MethodChannel('stellartv/device'), (
+        call,
+      ) async {
+        if (call.method == 'isTv') return television;
+        if (call.method == 'isFireTv') return false;
+        return null;
+      });
+  await DeviceTypeService.initialize();
+  debugDefaultTargetPlatformOverride = null;
 }

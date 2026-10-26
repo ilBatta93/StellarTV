@@ -425,11 +425,13 @@ class ExoLoadProfile {
       );
     }
     if (live) {
+      // Stay near the live edge. A multi-second floor paused the picture
+      // for the whole rebuffer wait whenever the buffer dipped.
       return ExoLoadProfile(
-        minBufferMs: 2500,
-        maxBufferMs: 12000,
-        bufferForPlaybackMs: 1000,
-        bufferForPlaybackAfterRebufferMs: 2000,
+        minBufferMs: 800,
+        maxBufferMs: 8000,
+        bufferForPlaybackMs: 400,
+        bufferForPlaybackAfterRebufferMs: 600,
         backBufferMs: back,
         backBufferRequiresSeekable: true,
         targetBufferBytes: 0,
