@@ -1,4 +1,12 @@
-- La diretta si apre con il riproduttore più adatto al flusso televisivo. Se un canale non parte, l'app prova l'altro riproduttore.
+- Banner e locandine tornano visibili. Senza codice il profilo bambino resta chiuso. Il riavvolgimento compare solo se è possibile.
+- Il catalogo si ordina fuori dall'interfaccia, che resta scorrevole mentre l'elenco si prepara.
+- Con più collegamenti ammessi il flusso successivo parte senza attendere la chiusura del precedente.
+- La guida programmi si apre dai titoli già pronti e resta utilizzabile anche quando è molto estesa.
+- La ricerca in diretta trova un programma mentre si scrive, senza scorrere tutta la programmazione.
+- La descrizione di un programma compare quando lo si apre.
+- Il telecomando resta sul canale aperto, la Home non sborda e una seconda apertura non resta in attesa.
 - Il catalogo personale compare una sezione alla volta e l'interfaccia resta utilizzabile mentre il resto arriva.
 - Il telecomando resta attivo sulla diretta già aperta durante l'arrivo delle sezioni successive.
 - Il profilo bambino filtra il catalogo senza attendere la lettura di ogni titolo.
+- All'avvio la diretta e il catalogo compaiono dai dati già salvati, senza ripetere lo scaricamento.
+- La diretta si apre con il riproduttore più adatto al flusso televisivo. Se un canale non parte, l'app prova l'altro riproduttore.
