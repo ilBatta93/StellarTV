@@ -8,8 +8,8 @@ enum PlayerEngineType {
   ),
   mediakit(
     'mpv (media-kit)',
-    'Consigliato per le dirette, decodifica ogni canale: sottotitoli, tracce audio, ritardi audio/sottotitoli '
-        'e pausa/riavvolgimento della diretta',
+    'Consigliato per le dirette: sottotitoli, tracce audio e ritardi. '
+        'Pausa e riavvolgimento solo se il buffer locale è reale',
   );
 
   final String label;

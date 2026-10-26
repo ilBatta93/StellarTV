@@ -8,7 +8,7 @@ alwaysApply: false
 
 Aggiorna la frase del vincolo. Non aggiungere un paragrafo di cronologia.
 
-- La visibilità bambino usa una sola politica stretta di genere, categoria e certificazione, su cataloghi, risultati esterni, cronologia, episodi e navigazione. Le cache sul dispositivo portano le certificazioni in una versione nuova. I verdetti in cloud si rivalutano, così un vecchio consenso basato solo sul rating non passa.
+- La visibilità bambino usa una sola politica stretta di genere, categoria e certificazione, su cataloghi, risultati esterni, cronologia, episodi e navigazione. Un PIN assente non autorizza l'uscita dal profilo né le azioni protette. Le cache sul dispositivo portano le certificazioni in una versione nuova. I verdetti in cloud si rivalutano, così un vecchio consenso basato solo sul rating non passa.
 - Le scansioni bambino deduplicano le chiavi normalizzate in attesa o in corso e raffreddano i fallimenti irrisolti in locale. Un verdetto sconosciuto resta nascosto. Una richiesta successiva può ritentare, senza un ciclo stretto.
 - La selezione bambino in cache si applica prima dell'inizializzazione del catalogo. Un profilo offline non risolto non annuncia la deselezione.
 - I voti sui poster usano una coda condivisa di due richieste e l'indice locale dei metadati. I voti sconosciuti vanno in fondo. I punteggi di film e serie si preparano a riposo, e il tasto di ordinamento legge la lista di id già in memoria.

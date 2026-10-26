@@ -47,8 +47,9 @@ class XtreamDownloadException implements Exception {
 /// Downloads one Xtream section (live / movie / series) in a background
 /// isolate. The JSON list is parsed while it streams in, element by element,
 /// so huge playlists never sit in memory as one giant string and the UI
-/// thread never decodes them. A truncated response keeps every complete
-/// element instead of failing.
+/// thread never decodes them. A short truncated response keeps every complete
+/// element. A truncated or failed list of 500 titles or more is an error, so
+/// the section stays retryable instead of being marked ready.
 Future<List<Channel>> downloadXtreamSection({
   required String base,
   required String username,
@@ -219,13 +220,13 @@ Future<List<Channel>> _runJob(_Job job) async {
       lastError = e;
     }
     if (items.length > best.length) best = items;
-    // A list that is almost complete beats retrying a slow server forever.
-    if (best.length >= 500 && attempt >= 1) break;
     if (attempt < _userAgents.length - 1) {
       await Future<void>.delayed(Duration(seconds: 2 + attempt * 3));
     }
   }
-  if (best.isNotEmpty) return best;
+  // A large incomplete list must stay retryable. Publishing it would mark
+  // the section ready and hide every title that never arrived.
+  if (best.isNotEmpty && best.length < 500) return best;
   throw lastError ?? const _Truncated();
 }
 
@@ -533,7 +534,10 @@ class _ChannelMapper {
           type: ContentType.movie,
           addedAt: int.tryParse(item['added']?.toString() ?? '') ?? 0,
           releaseDate: Channel.parseReleaseDate(
-            item['releasedate'] ?? item['releaseDate'] ?? item['release_date'] ?? item['year'],
+            item['releasedate'] ??
+                item['releaseDate'] ??
+                item['release_date'] ??
+                item['year'],
           ),
         );
       default:
@@ -561,7 +565,10 @@ class _ChannelMapper {
               ) ??
               0,
           releaseDate: Channel.parseReleaseDate(
-            item['releaseDate'] ?? item['release_date'] ?? item['releasedate'] ?? item['year'],
+            item['releaseDate'] ??
+                item['release_date'] ??
+                item['releasedate'] ??
+                item['year'],
           ),
         );
     }

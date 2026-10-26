@@ -785,7 +785,10 @@ class _EngineFeatures extends StatelessWidget {
       ('Sottotitoli incorporati', engine.supportsSubtitles),
       ('Scelta qualità', engine.supportsQuality),
       ('Ritardo audio e sottotitoli', engine.supportsDelays),
-      ('Pausa e riavvolgimento diretta', engine.supportsTimeshift),
+      (
+        'Pausa e riavvolgimento diretta',
+        engine.supportsTimeshift && !DeviceTypeService.isTv,
+      ),
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),

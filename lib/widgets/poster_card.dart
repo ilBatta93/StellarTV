@@ -338,10 +338,7 @@ class RankedPosterCard extends StatelessWidget {
                       Positioned(
                         top: 6,
                         left: 6,
-                        child: RatingBadge(
-                          value: item.voteAverage,
-                          item: item,
-                        ),
+                        child: RatingBadge(value: item.voteAverage, item: item),
                       ),
                     ],
                   ),
@@ -421,56 +418,31 @@ double tmdbPosterRowHeight(BuildContext context, {double mobile = 210}) {
   }
   final home = TvHomeLayout.maybeOf(context);
   if (home != null) return home.carouselHeight;
-  final line = MediaQuery.textScalerOf(context).scale(14) * 1.2;
-  // 112px poster (2:3) + title padding + three lines + list vertical padding.
-  return 112 * 3 / 2 + 17 + line * 3 + 16 + 10;
+  final line = MediaQuery.textScalerOf(context).scale(15) * 1.2;
+  // 112px poster (2:3) + title padding + one line + list vertical padding.
+  return 112 * 3 / 2 + 17 + line + 16 + 10;
 }
 
-/// A fixed title box keeps adjacent posters aligned; long names fit in full.
+/// One line under the poster. Long names ellipsize so the artwork can grow.
 class TvPosterTitle extends StatelessWidget {
   const TvPosterTitle(this.title, {super.key});
   final String title;
   @override
   Widget build(BuildContext context) {
-    final height = MediaQuery.textScalerOf(context).scale(14) * 1.2 * 3;
+    final height = MediaQuery.textScalerOf(context).scale(15) * 1.2;
     return SizedBox(
       height: height,
       width: double.infinity,
-      child: LayoutBuilder(
-        builder: (context, box) {
-          var font = 14.0;
-          TextStyle style() => TextStyle(
-            fontSize: font,
-            height: 1.2,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          );
-          TextPainter painter() => TextPainter(
-            text: TextSpan(text: title, style: style()),
-            maxLines: 3,
-            textDirection: Directionality.of(context),
-            textScaler: MediaQuery.textScalerOf(context),
-          )..layout(maxWidth: box.maxWidth);
-          var measured = painter();
-          while (measured.didExceedMaxLines && font > 8) {
-            measured.dispose();
-            font -= 0.5;
-            measured = painter();
-          }
-          final stillLong = measured.didExceedMaxLines;
-          measured.dispose();
-          if (stillLong) {
-            return FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.topLeft,
-              child: SizedBox(
-                width: box.maxWidth,
-                child: Text(title, style: style()),
-              ),
-            );
-          }
-          return Text(title, maxLines: 3, style: style());
-        },
+      child: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontSize: 15,
+          height: 1.2,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
       ),
     );
   }

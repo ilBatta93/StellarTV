@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -96,6 +97,7 @@ void mainSetupForRemote() {
     debugDefaultTargetPlatformOverride = null;
   });
 }
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   mainSetupForRemote();
@@ -146,9 +148,7 @@ void main() {
     ui.dispose();
     restored.dispose();
   });
-  testWidgets('Poster shows extremely long name without dropped lines', (
-    tester,
-  ) async {
+  testWidgets('Poster title stays on a single line', (tester) async {
     final title = List.filled(
       10,
       'Un titolo estremamente lungo senza parti nascoste',
@@ -161,7 +161,7 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
     final paragraph = tester.renderObject<RenderParagraph>(find.text(title));
-    expect(paragraph.didExceedMaxLines, false);
+    expect(paragraph.maxLines, 1);
   });
   for (final size in [const Size(960, 540), const Size(1280, 720)]) {
     testWidgets(
@@ -191,7 +191,9 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.text('Guarda ora'), findsNothing);
         final first = find.widgetWithText(TvFocusable, 'Canale uno').first;
-        final focusElement = tester.element(find.descendant(of: first, matching: find.byType(ExcludeFocus)).first);
+        final focusElement = tester.element(
+          find.descendant(of: first, matching: find.byType(ExcludeFocus)).first,
+        );
         Focus.of(focusElement).requestFocus();
         await tester.pumpAndSettle();
         // Reach each interactive focus stop by the real directional traversal.

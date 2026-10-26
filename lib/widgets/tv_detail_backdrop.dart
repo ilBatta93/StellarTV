@@ -10,7 +10,8 @@ import '../theme/app_theme.dart';
 /// TV only: movie, series and person pages fill the screen with a still
 /// backdrop (no picture cut at the top while scrolling). Decode and the
 /// requested width follow [TvRenderPolicy], the same ceilings as Home.
-/// Soft shadows on the left and at the bottom keep the text readable.
+/// The artwork stays visible past mid-screen. Black covers only the text
+/// side: the left edge, and the bottom of the page.
 class TvDetailBackdrop extends StatelessWidget {
   final String? image;
   final Widget child;
@@ -76,11 +77,11 @@ class TvDetailBackdrop extends StatelessWidget {
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                       colors: [
-                        Color(0xF209090D),
-                        Color(0xB309090D),
-                        Color(0x3309090D),
+                        AppColors.background,
+                        AppColors.background,
+                        AppColors.clear,
                       ],
-                      stops: [0, 0.45, 1],
+                      stops: [0, 0.28, 0.58],
                     ),
                   ),
                 ),
@@ -90,12 +91,11 @@ class TvDetailBackdrop extends StatelessWidget {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Color(0x6609090D),
-                        Color(0x0009090D),
-                        Color(0xCC09090D),
+                        AppColors.clear,
+                        AppColors.clear,
                         AppColors.background,
                       ],
-                      stops: [0, 0.25, 0.75, 1],
+                      stops: [0, 0.55, 1],
                     ),
                   ),
                 ),

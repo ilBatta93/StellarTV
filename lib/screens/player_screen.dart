@@ -1582,15 +1582,15 @@ class _PlayerScreenState extends State<PlayerScreen>
           if (mounted) _remoteFocus.requestFocus();
         });
       }
-      if (!_needsRebuild(session)) return;
     }
+    if (!_needsRebuild(session)) return;
     setState(() {});
   }
 
-  /// TV boxes are slow: the engines report the position many times per
-  /// second and rebuilding the whole player each time stole CPU from the
-  /// video (stutter). Rebuild on real state changes, and for the position
-  /// only when something on screen shows it.
+  /// The engines report the position many times per second. Rebuilding the
+  /// whole player each time steals CPU from the video. Rebuild on real
+  /// state changes, and for the position only when something on screen
+  /// shows it. Phone and TV share this gate.
   bool _needsRebuild(PlaybackSession session) {
     final v = session.value;
     final signature = Object.hashAll([
@@ -2090,7 +2090,7 @@ class _PlayerScreenState extends State<PlayerScreen>
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: selected ? AppColors.primary : Colors.transparent,
-            width: 3,
+            width: AppTheme.focusRingWidth,
           ),
         ),
         child: child,
@@ -2214,6 +2214,9 @@ class _ConnectingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final engine = session.engine?.type.label ?? '';
+    final label = DeviceTypeService.isTv && engine.isNotEmpty
+        ? 'Connessione con $engine...'
+        : 'Connessione...';
     return IgnorePointer(
       child: Center(
         child: Column(
@@ -2229,7 +2232,7 @@ class _ConnectingView extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Connessione con $engine...',
+              label,
               style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
           ],

@@ -4,8 +4,12 @@ import 'package:flutter/services.dart';
 import '../services/kids_pin_service.dart';
 import '../theme/app_theme.dart';
 
-Future<String?> _askPin(BuildContext context,
-    {required String title, required String message, String? error}) {
+Future<String?> _askPin(
+  BuildContext context, {
+  required String title,
+  required String message,
+  String? error,
+}) {
   final controller = TextEditingController();
   return showDialog<String>(
     context: context,
@@ -17,8 +21,7 @@ Future<String?> _askPin(BuildContext context,
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(message,
-              style: const TextStyle(color: AppColors.textSecondary)),
+          Text(message, style: const TextStyle(color: AppColors.textSecondary)),
           const SizedBox(height: 16),
           TextField(
             controller: controller,
@@ -38,8 +41,9 @@ Future<String?> _askPin(BuildContext context,
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annulla')),
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Annulla'),
+        ),
         ElevatedButton(
           onPressed: () {
             if (controller.text.length == 4) {
@@ -53,17 +57,27 @@ Future<String?> _askPin(BuildContext context,
   );
 }
 
-/// Asks for the kids PIN. Returns true when correct (or when no PIN exists).
+/// Asks for the kids PIN. Returns true only after the stored PIN matches.
+/// A missing PIN never authorizes the action: the parent must create one
+/// and then enter it.
 Future<bool> verifyKidsPin(BuildContext context) async {
-  final pin = await KidsPinService.get();
-  if (pin == null) return true;
+  var pin = await KidsPinService.get();
+  if (pin == null) {
+    if (!context.mounted) return false;
+    final created = await ensureKidsPin(context);
+    if (!created || !context.mounted) return false;
+    pin = await KidsPinService.get();
+    if (pin == null) return false;
+  }
   String? error;
   for (var i = 0; i < 5; i++) {
     if (!context.mounted) return false;
-    final v = await _askPin(context,
-        title: 'Inserisci il PIN',
-        message: 'Serve il PIN a 4 cifre per uscire dal profilo bambini.',
-        error: error);
+    final v = await _askPin(
+      context,
+      title: 'Inserisci il PIN',
+      message: 'Serve il PIN a 4 cifre per uscire dal profilo bambini.',
+      error: error,
+    );
     if (v == null) return false;
     if (v == pin) return true;
     error = 'PIN errato';
@@ -75,18 +89,25 @@ Future<bool> verifyKidsPin(BuildContext context) async {
 Future<bool> ensureKidsPin(BuildContext context) async {
   if (await KidsPinService.get() != null) return true;
   if (!context.mounted) return false;
-  final first = await _askPin(context,
-      title: 'Crea un PIN',
-      message:
-          'Scegli un PIN a 4 cifre: servirà per passare dal profilo bambini a un profilo adulto.');
+  final first = await _askPin(
+    context,
+    title: 'Crea un PIN',
+    message: 'Scegli un PIN a 4 cifre: servirà per passare dal profilo bambini a un profilo adulto.',
+  );
   if (first == null || !context.mounted) return false;
-  final second = await _askPin(context,
-      title: 'Conferma il PIN', message: 'Inserisci di nuovo lo stesso PIN.');
+  final second = await _askPin(
+    context,
+    title: 'Conferma il PIN',
+    message: 'Inserisci di nuovo lo stesso PIN.',
+  );
   if (second != first) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
           behavior: SnackBarBehavior.floating,
-          content: Text('I PIN non coincidono, riprova.')));
+          content: Text('I PIN non coincidono, riprova.'),
+        ),
+      );
     }
     return false;
   }

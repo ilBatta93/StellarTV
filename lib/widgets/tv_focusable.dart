@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import '../providers/ui_settings.dart';
+
 import 'package:provider/provider.dart';
 
 /// Production focus roles: debug labels are stripped from release builds.
@@ -49,7 +50,7 @@ class TvFocusable extends StatefulWidget {
     required this.onPressed,
     this.onLongPress,
     this.autofocus = false,
-    this.focusedScale = 1.04,
+    this.focusedScale = 1.06,
     this.borderRadius = const BorderRadius.all(Radius.circular(10)),
     this.onFocusChange,
     this.revealOnFocus = true,

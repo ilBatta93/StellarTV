@@ -1353,7 +1353,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
             c.maxHeight * context.watch<UiSettings>().homeBannerSize.fraction;
         return TvHomeLayout(
           rowHeight: c.maxHeight - heroHeight,
-          captionHeight: MediaQuery.textScalerOf(context).scale(14) * 1.2 * 3,
+          captionHeight: MediaQuery.textScalerOf(context).scale(15) * 1.2,
           showTitles: context.watch<UiSettings>().homeTitles,
           child: Stack(
             children: [
@@ -1409,7 +1409,10 @@ class _TvDiscoverState extends State<_TvDiscover> {
                           });
                         }
                         final sections = <Widget>[];
-                        void add(bool visible, Widget Function(int index) build) {
+                        void add(
+                          bool visible,
+                          Widget Function(int index) build,
+                        ) {
                           if (!visible) return;
                           final index = sections.length;
                           sections.add(build(index));
@@ -1581,7 +1584,7 @@ class _TvTopRowState extends State<_TvTopRow> {
                         style: const TextStyle(
                           fontFamily: 'Sora',
                           color: AppColors.textPrimary,
-                          fontSize: 18,
+                          fontSize: 26,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -1716,7 +1719,7 @@ class _TvRowTitle extends StatelessWidget {
             style: const TextStyle(
               fontFamily: 'Sora',
               color: AppColors.textPrimary,
-              fontSize: 18,
+              fontSize: 26,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.2,
             ),
@@ -1750,8 +1753,8 @@ class _TvHeroBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Full-screen artwork; scrims keep the menu, the text and the rows
-    // readable without cropping the image into a corner.
+    // Full-screen artwork. One scrim: solid black on the text side, clear
+    // past the middle so the picture stays readable from the sofa.
     return RepaintBoundary(
       child: item == null
           ? const SizedBox.expand()
@@ -1763,18 +1766,17 @@ class _TvHeroBackdrop extends StatelessWidget {
                   url: item?.backdropUrl,
                   maxDecodeWidth: decodeWidth,
                 ),
-                DecoratedBox(
+                const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
                       colors: [
                         AppColors.background,
-                        AppColors.background.withValues(alpha: 0.82),
-                        AppColors.background.withValues(alpha: 0.55),
                         AppColors.background,
+                        AppColors.clear,
                       ],
-                      stops: const [0, 0.3, 0.6, 1],
+                      stops: [0, 0.28, 0.58],
                     ),
                   ),
                 ),
@@ -1846,34 +1848,34 @@ class _TvHeroInfo extends StatelessWidget {
                       PlatformCatalogService.instance,
                     ]),
                     builder: (context, _) {
-                    final facets = TitleFacets.of(
-                      context.read<AppProvider>(),
-                      item: it,
-                      includeCategories: false,
-                    );
-                    return Row(
-                    children: [
-                      ImdbRatingBadge(it, height: 18),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: Text(
-                          metaText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 14,
-                            height: 1.25,
-                            fontWeight: FontWeight.w600,
+                      final facets = TitleFacets.of(
+                        context.read<AppProvider>(),
+                        item: it,
+                        includeCategories: false,
+                      );
+                      return Row(
+                        children: [
+                          ImdbRatingBadge(it, height: 18),
+                          const SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              metaText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 14,
+                                height: 1.25,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      for (final p in facets.platforms.take(3)) ...[
-                        const SizedBox(width: 8),
-                        PlatformBadge(p, height: 22),
-                      ],
-                    ],
-                  );
+                          for (final p in facets.platforms.take(3)) ...[
+                            const SizedBox(width: 8),
+                            PlatformBadge(p, height: 22),
+                          ],
+                        ],
+                      );
                     },
                   ),
                   if (note != null) ...[

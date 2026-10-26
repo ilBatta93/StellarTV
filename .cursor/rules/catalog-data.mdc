@@ -8,7 +8,7 @@ alwaysApply: false
 
 Aggiorna la frase del vincolo. Non aggiungere un paragrafo di cronologia.
 
-- Le sezioni della playlist si scaricano in un isolate, con parser JSON in streaming, tollerante al troncato e con timeout limitati. Una alla volta, in coda condivisa. Pubblicazione e cache sono per sezione e si possono ritentare da sole. La pagina usa una cornice condivisa con progresso reale, nuovo tentativo e copia salvata, su touch e TV.
+- Le sezioni della playlist si scaricano in un isolate, con parser JSON in streaming e timeout limitati. Una lista di almeno 500 titoli troncata o fallita non viene pubblicata come pronta e resta ritentabile. Una alla volta, in coda condivisa. Pubblicazione e cache sono per sezione e si possono ritentare da sole. La pagina usa una cornice condivisa con progresso reale, nuovo tentativo e copia salvata, su touch e TV.
 - All'avvio la playlist si apre dalla copia sul dispositivo. Si scaricano subito solo le sezioni mai salvate. Un refresh completo parte solo se è passato l'intervallo scelto dall'ultimo download completo.
 - Le cache derivate grandi (verdetti bambino, sezioni playlist) vanno su file tramite isolate, a lotti. Mai nelle preferenze né sul thread UI.
 - Ogni immagine di rete passa da un solo gestore di cache su disco ed è decodificata alla dimensione di visualizzazione.

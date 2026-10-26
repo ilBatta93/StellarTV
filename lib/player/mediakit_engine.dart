@@ -11,8 +11,8 @@ import '../services/device_type_service.dart';
 import 'playback_engine.dart';
 import 'video_health.dart';
 
-/// mpv-backed engine (media_kit): full subtitle and multi-audio-track
-/// support for IPTV streams, far more tolerant than the old VLC engine.
+/// mpv-backed engine (media_kit): subtitles and several audio tracks,
+/// more tolerant of difficult live streams than the previous engine.
 class MediaKitEngine extends PlaybackEngine {
   MediaKitEngine({
     required this.url,
@@ -234,7 +234,8 @@ class MediaKitEngine extends PlaybackEngine {
   bool get supportsDelays => true;
 
   @override
-  bool get supportsTimeshift => isLive && !previewMode;
+  bool get supportsTimeshift =>
+      isLive && !previewMode && !DeviceTypeService.isTv;
 
   /// Local timeshift window kept by mpv behind the playback point.
   static const timeshiftBackBytes = 256 * 1024 * 1024;

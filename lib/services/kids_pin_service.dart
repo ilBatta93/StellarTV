@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// 4-digit PIN that protects leaving a kids profile. Synced with the cloud
-/// settings so every device asks for the same PIN.
+/// 4-digit PIN that protects leaving a kids profile and the other protected
+/// actions. An absent or invalid value does not authorize those actions.
 class KidsPinService {
   static const key = 'kids_pin';
 

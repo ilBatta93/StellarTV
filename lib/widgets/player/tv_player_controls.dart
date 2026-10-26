@@ -257,41 +257,29 @@ class _TvPill extends StatelessWidget {
         : secondary
         ? AppColors.onOverlaySecondary
         : AppColors.onOverlay.withValues(alpha: 0.9);
-    final fill = secondary
-        ? AppColors.overlayControl.withValues(alpha: selected ? 0.5 : 0.34)
-        : AppColors.overlayControl;
-    return AnimatedContainer(
+    return AnimatedScale(
+      scale: selected && !MediaQuery.disableAnimationsOf(context) ? 1.06 : 1,
       duration: MediaQuery.disableAnimationsOf(context)
           ? Duration.zero
           : const Duration(milliseconds: 110),
-      height: secondary ? 68 : 76,
-      padding: EdgeInsets.symmetric(horizontal: 6, vertical: secondary ? 6 : 8),
-      decoration: BoxDecoration(
-        color: fill,
-        borderRadius: BorderRadius.circular(secondary ? 16 : 22),
-        border: Border.all(
-          color: selected ? AppColors.primary : AppColors.clear,
-          width: AppTheme.focusRingWidth,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(action.icon, size: secondary ? 18 : 22, color: fg),
-          SizedBox(height: secondary ? 2 : 4),
-          Text(
-            action.label,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: fg,
-              fontSize: secondary ? 11 : 12,
-              height: 1.15,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-            ),
+      child: AnimatedContainer(
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 110),
+        height: 52,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.overlayControl.withValues(
+            alpha: secondary ? 0.34 : 1,
           ),
-        ],
+          borderRadius: BorderRadius.circular(secondary ? 16 : 22),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.clear,
+            width: AppTheme.focusRingWidth,
+          ),
+        ),
+        child: Icon(action.icon, size: secondary ? 20 : 22, color: fg),
       ),
     );
   }
@@ -311,7 +299,7 @@ class _TvRoundButton extends StatelessWidget {
       children: [
         AnimatedScale(
           scale: selected && !MediaQuery.disableAnimationsOf(context)
-              ? 1.12
+              ? 1.06
               : 1,
           duration: MediaQuery.disableAnimationsOf(context)
               ? Duration.zero
@@ -321,22 +309,18 @@ class _TvRoundButton extends StatelessWidget {
             height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: selected
-                  ? AppColors.textPrimary
-                  : action.primary
+              color: action.primary
                   ? AppColors.primary.withValues(alpha: 0.55)
                   : AppColors.overlayControl,
               border: Border.all(
                 color: selected ? AppColors.primary : AppColors.track,
-                width: selected ? AppTheme.focusRingWidth : 1,
+                width: AppTheme.focusRingWidth,
               ),
             ),
             child: Icon(
               action.icon,
               size: size * 0.52,
-              color: selected
-                  ? AppColors.background
-                  : enabled
+              color: enabled
                   ? AppColors.onOverlay
                   : AppColors.onOverlayDisabled,
             ),

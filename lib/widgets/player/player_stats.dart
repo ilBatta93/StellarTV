@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../player/playback_session.dart';
+import '../../services/device_type_service.dart';
 import 'player_format.dart';
 
 class PlayerStats extends StatelessWidget {
@@ -15,11 +16,22 @@ class PlayerStats extends StatelessWidget {
         ? v.bufferedUntil - v.position
         : Duration.zero;
     final rows = <(String, String)>[
-      ('Motore', session.engine?.type.label ?? '-'),
-      ('Risoluzione',
-          v.hasVideoSize ? '${v.size.width.round()}x${v.size.height.round()}' : '-'),
+      if (DeviceTypeService.isTv) ('Motore', session.engine?.type.label ?? '-'),
+      (
+        'Risoluzione',
+        v.hasVideoSize
+            ? '${v.size.width.round()}x${v.size.height.round()}'
+            : '-',
+      ),
       ('Proporzioni', v.hasVideoSize ? v.aspectRatio.toStringAsFixed(2) : '-'),
-      ('Stato', v.isBuffering ? 'Buffering' : v.isPlaying ? 'In riproduzione' : 'In pausa'),
+      (
+        'Stato',
+        v.isBuffering
+            ? 'Buffering'
+            : v.isPlaying
+            ? 'In riproduzione'
+            : 'In pausa',
+      ),
       ('Posizione', session.isLive ? 'Diretta' : formatDuration(v.position)),
       if (buffer > Duration.zero) ('Buffer', '${buffer.inSeconds} s'),
       ('Velocità', formatSpeed(v.speed)),
@@ -48,8 +60,10 @@ class PlayerStats extends StatelessWidget {
                 children: [
                   SizedBox(
                     width: 84,
-                    child: Text(label,
-                        style: const TextStyle(color: Colors.white60)),
+                    child: Text(
+                      label,
+                      style: const TextStyle(color: Colors.white60),
+                    ),
                   ),
                   Text(value),
                 ],

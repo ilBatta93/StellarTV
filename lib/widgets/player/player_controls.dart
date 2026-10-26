@@ -190,13 +190,10 @@ class PlayerControls extends StatelessWidget {
               ),
             ),
           if (engine != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: _TopChip(
-                icon: Icons.memory_rounded,
-                label: engine.type.label,
-                onPressed: () => _act(() => showEngineSheet(context, session)),
-              ),
+            _TopButton(
+              icon: Icons.memory_rounded,
+              tooltip: 'Motore di riproduzione',
+              onPressed: () => _act(() => showEngineSheet(context, session)),
             ),
           if (pipSupported)
             _TopButton(
@@ -266,7 +263,11 @@ class PlayerControls extends StatelessWidget {
                 focusNode: playFocusNode,
                 size: 72,
                 filled: true,
-                tooltip: ended ? 'Riproduci di nuovo' : playing ? 'Pausa' : 'Riproduci',
+                tooltip: ended
+                    ? 'Riproduci di nuovo'
+                    : playing
+                    ? 'Pausa'
+                    : 'Riproduci',
                 onPressed: () => _act(session.togglePlay),
               ),
         const SizedBox(width: 32),

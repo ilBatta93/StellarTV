@@ -467,7 +467,6 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                 skipTraversal: true,
                 onKeyEvent: (_, e) => _epgKey(e, c, null, all, visible),
                 child: TvFocusable(
-                  focusedScale: 1,
                   onFocusChange: (focus) {
                     if (focus) _select(c);
                   },
@@ -602,7 +601,6 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                     scaffoldKey: _scaffoldKey,
                                     onOpen: _openCategories,
                                     child: TvFocusable(
-                                      focusedScale: 1,
                                       onFocusChange: (focus) {
                                         if (focus) _select(c);
                                       },
@@ -614,32 +612,25 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                         onTap: () => _watch(c),
                                         child: Container(
                                           constraints: const BoxConstraints(
-                                            minHeight: 92,
+                                            minHeight: 56,
                                           ),
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 8,
-                                            vertical: 10,
+                                            vertical: 6,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: c.id == selected?.id
-                                                ? AppColors.primary.withValues(
-                                                    alpha: 0.12,
-                                                  )
-                                                : AppColors.surface,
+                                            color: AppColors.surface,
                                             borderRadius: BorderRadius.circular(
                                               8,
                                             ),
                                             border: Border.all(
-                                              color: c.id == selected?.id
-                                                  ? AppColors.primary
-                                                        .withValues(alpha: 0.55)
-                                                  : AppColors.border,
+                                              color: AppColors.border,
                                             ),
                                           ),
                                           child: Row(
                                             children: [
                                               if (c.logo.isNotEmpty) ...[
-                                                _channelLogo(c, size: 30),
+                                                _channelLogo(c, size: 28),
                                                 const SizedBox(width: 8),
                                               ],
                                               Expanded(
@@ -655,7 +646,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: SizedBox(
-                                    height: 92,
+                                    height: 56,
                                     child: LayoutBuilder(
                                       builder: (context, b) =>
                                           _timelineRow(c, epg, b.maxWidth),
@@ -1756,7 +1747,6 @@ class _EpgCellState extends State<_EpgCell> {
     return RepaintBoundary(
       child: TvFocusable(
         focusNode: _node,
-        focusedScale: 1,
         borderRadius: BorderRadius.circular(8),
         onFocusChange: (focus) {
           if (focus) widget.onFocused();
@@ -1769,11 +1759,7 @@ class _EpgCellState extends State<_EpgCell> {
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: live
-                    ? AppColors.primary.withValues(alpha: 0.7)
-                    : AppColors.border,
-              ),
+              border: Border.all(color: AppColors.border),
             ),
             child: Stack(
               fit: StackFit.expand,
@@ -1781,7 +1767,7 @@ class _EpgCellState extends State<_EpgCell> {
                 Padding(
                   padding: widget.compact
                       ? EdgeInsets.zero
-                      : EdgeInsets.fromLTRB(10, 8, 10, live ? 12 : 8),
+                      : const EdgeInsets.fromLTRB(8, 4, 8, 4),
                   child: widget.compact
                       ? const SizedBox.expand()
                       : Column(
@@ -1801,11 +1787,11 @@ class _EpgCellState extends State<_EpgCell> {
                                 Expanded(
                                   child: Text(
                                     p.title,
-                                    maxLines: 2,
+                                    maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 13,
-                                      height: 1.2,
+                                      height: 1.15,
                                       fontWeight: FontWeight.w600,
                                       color: past
                                           ? AppColors.textMuted
@@ -1815,7 +1801,6 @@ class _EpgCellState extends State<_EpgCell> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
                             Text(
                               '${_hm(widget.start)} – ${_hm(widget.end)}',
                               maxLines: 1,
@@ -1823,6 +1808,7 @@ class _EpgCellState extends State<_EpgCell> {
                               style: const TextStyle(
                                 color: AppColors.textMuted,
                                 fontSize: 11,
+                                height: 1.1,
                               ),
                             ),
                           ],
