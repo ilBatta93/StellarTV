@@ -11,7 +11,7 @@ Aggiorna la frase del vincolo. Non aggiungere un paragrafo di cronologia.
 - La presentazione TV dipende dalla modalità di interfaccia Android. Layout e comportamento touch restano quelli attuali.
 - I pannelli categoria TV condividono un solo cassetto per telecomando, con rilevamento del bordo sinistro e ripristino esplicito del focus.
 - I tasti al confine del catalogo risalgono a un antenato non focalizzabile prima della traversata geometrica. Il menu in alto della Home collega ogni tappa, inclusi gli spazi vuoti: Su torna al tab attivo e il movimento laterale non seleziona un tab da solo.
-- I cataloghi TV condividono una griglia filtri lazy con bersagli espliciti nelle quattro direzioni. Indietro restituisce il focus a chi ha aperto il pannello. Sinistra nelle impostazioni torna alla voce attiva della sidebar.
+- I cataloghi TV condividono una griglia filtri lazy con bersagli espliciti nelle quattro direzioni: le categorie si montano man mano e la griglia dei titoli tiene in memoria la riga sotto. Indietro restituisce il focus a chi ha aperto il pannello. Sinistra nelle impostazioni torna alla voce attiva della sidebar.
 - La scheda persona TV riusa lo sfondo fisso del titolo e una griglia di poster compatta. Il layout touch della persona resta invariato.
 - La Home TV semina il banner dall'ultimo elemento idoneo della cronologia finché l'utente non prende il focus. HorizontalRow rivela in orizzontale la scheda focalizzata, indipendentemente dal titolo di riga.
 - Le pagine secondarie usano ApplePageScaffold, con larghezza leggibile limitata e il loro scorrimento/focus originale. Tema e controlli condivisi possiedono lo stile. Non duplicare logica di playback o sync.

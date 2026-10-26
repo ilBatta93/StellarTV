@@ -358,6 +358,9 @@ class AppProvider extends ChangeNotifier {
     _indexEpoch++;
     _matchCache.clear();
     _seriesFolderIndex = null;
+    _searchReady = false;
+    _searchSnapshot = null;
+    _searchEpoch++;
   }
 
   List<Channel> channelsOf(ContentType type) => _byType[type] ??= _allChannels
@@ -463,7 +466,9 @@ class AppProvider extends ChangeNotifier {
         refreshPlaylist();
       });
     }
-    if (!value && _titleIndex == null && _allChannels.isNotEmpty) {
+    if (!value &&
+        _allChannels.isNotEmpty &&
+        (_titleIndex == null || !_searchReady)) {
       // Index skipped while the video played: build it once it closes.
       Timer(const Duration(seconds: 2), _startCatalogIndex);
     }
@@ -1205,36 +1210,288 @@ class AppProvider extends ChangeNotifier {
 
   final Map<ContentType, List<CatalogEntry>> _allCache = {};
 
-  List<Channel> searchChannels(String query, {ContentType? type}) {
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) return [];
-    if (type == ContentType.series || type == ContentType.anime) {
-      // One pass over the playlist to find series whose episodes match,
-      // instead of scanning every episode for every series (very slow).
-      final episodeHits = <String>{};
-      for (final e in _allChannels) {
-        final key = e.seriesKey;
-        if (key != null && e.name.toLowerCase().contains(q)) {
-          episodeHits.add(key);
+  Isolate? _searchIsolate;
+  ReceivePort? _searchInbox;
+  Future<SendPort>? _searchPortFuture;
+  int _searchEpoch = 0;
+  int _searchQueryId = 0;
+  bool _searchReady = false;
+  bool _searchFeeding = false;
+  List<Channel>? _searchSnapshot;
+  final Map<int, Completer<CatalogSearchAnswer>> _searchQueries = {};
+  final Map<int, Completer<void>> _searchCommits = {};
+
+  /// Changes when the snapshot, the search index, or the series folders change.
+  int get searchStamp => Object.hash(
+    identityHashCode(_allChannels),
+    _searchEpoch,
+    _searchReady,
+    identityHashCode(_seriesCatalogCache[ContentType.series]),
+    identityHashCode(_seriesCatalogCache[ContentType.anime]),
+  );
+
+  /// One query against the snapshot index. The scan runs off the UI isolate.
+  Future<Map<ContentType, List<Channel>>> searchCatalog(String query) async {
+    final q = query.trim();
+    if (q.isEmpty || _disposed || _allChannels.isEmpty) return const {};
+    final snapshot = _allChannels;
+    final deadline = DateTime.now().add(const Duration(seconds: 30));
+    while (!_searchReady || !identical(_searchSnapshot, snapshot)) {
+      if (_disposed || !identical(_allChannels, snapshot)) return const {};
+      if (DateTime.now().isAfter(deadline)) return const {};
+      if (_playbackActive || !ForegroundPolicy.instance.active) {
+        _scheduleSearchIndex();
+        return const {};
+      }
+      _scheduleSearchIndex();
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+    }
+    final epoch = _searchEpoch;
+    final SendPort port;
+    try {
+      port = await _searchPort();
+    } catch (_) {
+      return const {};
+    }
+    if (_disposed || epoch != _searchEpoch || !identical(_allChannels, snapshot)) {
+      return const {};
+    }
+    final id = ++_searchQueryId;
+    final done = Completer<CatalogSearchAnswer>();
+    _searchQueries[id] = done;
+    port.send(CatalogSearchQuery(id, epoch, q));
+    final CatalogSearchAnswer answer;
+    try {
+      answer = await done.future.timeout(const Duration(seconds: 10));
+    } catch (_) {
+      _searchQueries.remove(id);
+      return const {};
+    }
+    _searchQueries.remove(id);
+    if (answer.stale ||
+        answer.epoch != epoch ||
+        !identical(_allChannels, snapshot)) {
+      return const {};
+    }
+    return {
+      ContentType.live: _channelsAt(snapshot, answer.live),
+      ContentType.movie: _channelsAt(snapshot, answer.movie),
+      ContentType.series: _foldersNamed(
+        ContentType.series,
+        answer.seriesIds,
+      ),
+      ContentType.anime: _foldersNamed(ContentType.anime, answer.animeIds),
+    };
+  }
+
+  List<Channel> _channelsAt(List<Channel> snapshot, List<int> indexes) {
+    final out = <Channel>[];
+    for (final index in indexes) {
+      if (index >= 0 && index < snapshot.length) out.add(snapshot[index]);
+    }
+    return out;
+  }
+
+  List<Channel> _foldersNamed(ContentType type, List<String> ids) {
+    if (ids.isEmpty) return const [];
+    final wanted = ids.toSet();
+    final out = <Channel>[];
+    for (final channel in catalogOf(type)) {
+      if (wanted.contains(channel.id)) out.add(channel);
+    }
+    return out;
+  }
+
+  void _scheduleSearchIndex() {
+    if (_disposed || _searchFeeding) return;
+    if (_playbackActive || !ForegroundPolicy.instance.active) return;
+    final snapshot = _allChannels;
+    if (snapshot.isEmpty) return;
+    if (_searchReady && identical(_searchSnapshot, snapshot)) return;
+    _searchFeeding = true;
+    _searchReady = false;
+    _searchSnapshot = snapshot;
+    final epoch = ++_searchEpoch;
+    unawaited(_feedSearchIndex(snapshot, epoch));
+  }
+
+  Future<void> _feedSearchIndex(List<Channel> snapshot, int epoch) async {
+    var failed = false;
+    try {
+      final port = await _searchPort();
+      if (epoch != _searchEpoch ||
+          _disposed ||
+          !identical(snapshot, _allChannels)) {
+        return;
+      }
+      port.send(CatalogSearchReset(epoch));
+      const size = 600;
+      for (var start = 0; start < snapshot.length; start += size) {
+        while (epoch == _searchEpoch &&
+            !_disposed &&
+            (_playbackActive || !ForegroundPolicy.instance.active)) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        if (epoch != _searchEpoch ||
+            _disposed ||
+            !identical(snapshot, _allChannels)) {
+          return;
+        }
+        final end = start + size < snapshot.length
+            ? start + size
+            : snapshot.length;
+        port.send(_searchChunk(snapshot, start, end, epoch));
+        await Future<void>.delayed(Duration.zero);
+      }
+      if (epoch != _searchEpoch ||
+          _disposed ||
+          !identical(snapshot, _allChannels)) {
+        return;
+      }
+      final done = Completer<void>();
+      _searchCommits[epoch] = done;
+      port.send(CatalogSearchCommit(epoch));
+      await done.future.timeout(const Duration(seconds: 20));
+      if (epoch != _searchEpoch ||
+          _disposed ||
+          !identical(snapshot, _allChannels)) {
+        return;
+      }
+      _searchReady = true;
+      _searchSnapshot = snapshot;
+      notifyListeners();
+    } catch (_) {
+      failed = true;
+      _searchReady = false;
+    } finally {
+      _searchCommits.remove(epoch);
+      _searchFeeding = false;
+      if (!failed &&
+          !_disposed &&
+          (!_searchReady || !identical(_searchSnapshot, _allChannels))) {
+        _scheduleSearchIndex();
+      }
+    }
+  }
+
+  CatalogSearchChunk _searchChunk(
+    List<Channel> snapshot,
+    int start,
+    int end,
+    int epoch,
+  ) {
+    final count = end - start;
+    return CatalogSearchChunk(
+      epoch: epoch,
+      names: List<String>.generate(
+        count,
+        (i) => snapshot[start + i].name,
+        growable: false,
+      ),
+      groups: List<String>.generate(
+        count,
+        (i) => snapshot[start + i].group,
+        growable: false,
+      ),
+      seriesNames: List<String>.generate(
+        count,
+        (i) => snapshot[start + i].seriesName ?? '',
+        growable: false,
+      ),
+      seriesKeys: List<String>.generate(
+        count,
+        (i) => snapshot[start + i].seriesKey ?? '',
+        growable: false,
+      ),
+      ids: List<String>.generate(
+        count,
+        (i) => snapshot[start + i].id,
+        growable: false,
+      ),
+      types: List<int>.generate(
+        count,
+        (i) => snapshot[start + i].type.index,
+        growable: false,
+      ),
+      seasons: List<int>.generate(
+        count,
+        (i) => snapshot[start + i].season ?? 0,
+        growable: false,
+      ),
+      episodes: List<int>.generate(
+        count,
+        (i) => snapshot[start + i].episode ?? 0,
+        growable: false,
+      ),
+      folders: List<bool>.generate(
+        count,
+        (i) => snapshot[start + i].isSeriesFolder,
+        growable: false,
+      ),
+    );
+  }
+
+  Future<SendPort> _searchPort() {
+    final pending = _searchPortFuture;
+    if (pending != null) return pending;
+    final completer = Completer<SendPort>();
+    _searchPortFuture = completer.future;
+    final inbox = ReceivePort();
+    _searchInbox = inbox;
+    inbox.listen((message) {
+      if (message is SendPort) {
+        if (!completer.isCompleted) completer.complete(message);
+        return;
+      }
+      if (message is CatalogSearchReady) {
+        final pendingCommit = _searchCommits[message.epoch];
+        if (pendingCommit != null && !pendingCommit.isCompleted) {
+          pendingCommit.complete();
+        }
+        return;
+      }
+      if (message is CatalogSearchAnswer) {
+        final pendingQuery = _searchQueries.remove(message.id);
+        if (pendingQuery != null && !pendingQuery.isCompleted) {
+          pendingQuery.complete(message);
         }
       }
-      return catalogOf(type!)
-          .where(
-            (c) =>
-                c.name.toLowerCase().contains(q) ||
-                c.group.toLowerCase().contains(q) ||
-                episodeHits.contains(c.seriesKey),
-          )
-          .toList();
+    });
+    unawaited(
+      Isolate.spawn(
+        catalogSearchWorker,
+        inbox.sendPort,
+        debugName: 'catalog-search',
+      ).then(
+        (isolate) => _searchIsolate = isolate,
+        onError: (Object error, StackTrace stack) {
+          if (!completer.isCompleted) completer.completeError(error, stack);
+          _searchPortFuture = null;
+        },
+      ),
+    );
+    return completer.future;
+  }
+
+  void _closeSearchIndex() {
+    _searchEpoch++;
+    for (final pending in _searchQueries.values) {
+      if (!pending.isCompleted) {
+        pending.complete(
+          CatalogSearchAnswer.empty(0, _searchEpoch, stale: true),
+        );
+      }
     }
-    return _allChannels
-        .where(
-          (c) =>
-              (type == null || c.type == type) &&
-              !c.isSeriesFolder &&
-              c.name.toLowerCase().contains(q),
-        )
-        .toList();
+    _searchQueries.clear();
+    for (final pending in _searchCommits.values) {
+      if (!pending.isCompleted) pending.complete();
+    }
+    _searchCommits.clear();
+    _searchIsolate?.kill(priority: Isolate.immediate);
+    _searchIsolate = null;
+    _searchInbox?.close();
+    _searchInbox = null;
+    _searchPortFuture = null;
   }
 
   /// Normalized title -> playlist movies / series folders, built once per
@@ -1250,6 +1507,7 @@ class AppProvider extends ChangeNotifier {
   /// Starts (once) the off-thread grouping + title normalization. Never
   /// during playback: the result is applied after the player closes.
   void _startCatalogIndex() {
+    _scheduleSearchIndex();
     if (_indexBuilding || _titleIndex != null || _disposed) return;
     if (_playbackActive || !ForegroundPolicy.instance.active) return;
     if (_largeCatalog) {
@@ -2247,6 +2505,7 @@ class AppProvider extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _closeSearchIndex();
     _titleCategoriesTimer?.cancel();
     _cancelVisibilityWaits();
     _startupEpoch++;

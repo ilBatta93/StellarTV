@@ -4,6 +4,7 @@ import '../services/catalog_sort.dart';
 import '../services/catalog_order_store.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 
 import '../models/channel.dart';
@@ -58,6 +59,17 @@ SliverGridDelegateWithMaxCrossAxisExtent channelGridDelegate(
     childAspectRatio: isLive ? 0.9 : (compact ? 0.62 : 0.58),
     crossAxisSpacing: compact ? 8 : 12,
     mainAxisSpacing: compact ? 10 : 16,
+  );
+}
+
+/// Just the next row: Down on the remote finds a tile that is already built.
+ScrollCacheExtent? tvCatalogCacheExtent(
+  SliverGridDelegateWithMaxCrossAxisExtent delegate,
+) {
+  if (!DeviceTypeService.isTv) return null;
+  return ScrollCacheExtent.pixels(
+    delegate.maxCrossAxisExtent / delegate.childAspectRatio +
+        delegate.mainAxisSpacing,
   );
 }
 
@@ -182,13 +194,15 @@ class ChannelGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final ui = context.watch<UiSettings>();
+    final delegate = channelGridDelegate(
+      type,
+      maxExtent: ui.gridMaxExtent,
+      compact: ui.compact,
+    );
     return GridView.builder(
       padding: padding,
-      gridDelegate: channelGridDelegate(
-        type,
-        maxExtent: ui.gridMaxExtent,
-        compact: ui.compact,
-      ),
+      scrollCacheExtent: tvCatalogCacheExtent(delegate),
+      gridDelegate: delegate,
       itemCount: channels.length,
       itemBuilder: (context, i) {
         final c = channels[i];
@@ -199,11 +213,6 @@ class ChannelGrid extends StatelessWidget {
           onFavoriteTap: () => app.toggleFavorite(c),
         );
         if (!DeviceTypeService.isTv) return card;
-        final delegate = channelGridDelegate(
-          type,
-          maxExtent: ui.gridMaxExtent,
-          compact: ui.compact,
-        );
         final usable = MediaQuery.sizeOf(context).width - padding.horizontal;
         final columns =
             (usable / (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
@@ -873,14 +882,16 @@ class _CatalogPageState extends State<CatalogPage> {
     }
     if (ui.viewMode == CatalogViewMode.landscape) {
       final tv = DeviceTypeService.isTv;
+      final delegate = SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: (tv ? 380 : 340) * (ui.gridMaxExtent / 140),
+        childAspectRatio: 16 / 9,
+        crossAxisSpacing: tv ? 18 : 12,
+        mainAxisSpacing: tv ? 18 : 12,
+      );
       return GridView.builder(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: (tv ? 380 : 340) * (ui.gridMaxExtent / 140),
-          childAspectRatio: 16 / 9,
-          crossAxisSpacing: tv ? 18 : 12,
-          mainAxisSpacing: tv ? 18 : 12,
-        ),
+        scrollCacheExtent: tvCatalogCacheExtent(delegate),
+        gridDelegate: delegate,
         itemCount: entries.length,
         itemBuilder: (context, i) {
           final e = entries[i];
@@ -908,15 +919,17 @@ class _CatalogPageState extends State<CatalogPage> {
         ui.compact ||
         ui.viewMode == CatalogViewMode.compact ||
         ui.viewMode == CatalogViewMode.spotlight;
+    final delegate = channelGridDelegate(
+      widget.type,
+      maxExtent: ui.viewMode == CatalogViewMode.compact
+          ? ui.gridMaxExtent * 0.82
+          : ui.gridMaxExtent,
+      compact: dense,
+    );
     final grid = GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      gridDelegate: channelGridDelegate(
-        widget.type,
-        maxExtent: ui.viewMode == CatalogViewMode.compact
-            ? ui.gridMaxExtent * 0.82
-            : ui.gridMaxExtent,
-        compact: dense,
-      ),
+      scrollCacheExtent: tvCatalogCacheExtent(delegate),
+      gridDelegate: delegate,
       itemCount: entries.length,
       itemBuilder: (context, i) {
         final item = _gridItem(app, entries[i], i);

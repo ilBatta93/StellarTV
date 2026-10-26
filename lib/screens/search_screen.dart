@@ -64,8 +64,10 @@ class _SearchScreenState extends State<SearchScreen> {
   Timer? _localDebounce;
   String _localQuery = '';
   Map<ContentType, List<Channel>> _local = const {};
-  Object? _localSource;
+  int? _localStamp;
   String? _computedFor;
+  int _localToken = 0;
+  bool _localPending = false;
   SearchFilter _filter = SearchFilter.all;
 
   @override
@@ -116,22 +118,26 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
-  /// Playlist results are computed once per (debounced) query, not on
-  /// every keystroke / rebuild.
-  void _computeLocal(AppProvider app) {
-    _localSource = app.allChannels;
-    _computedFor = _localQuery;
-    _local = {
-      for (final type in const [
-        ContentType.live,
-        ContentType.movie,
-        ContentType.series,
-        ContentType.anime,
-      ])
-        type: _localQuery.length < 2
-            ? const <Channel>[]
-            : app.searchChannels(_localQuery, type: type),
-    };
+  /// One indexed lookup per debounced query. The scan stays off the UI isolate.
+  void _loadLocal(AppProvider app) {
+    final query = _localQuery;
+    final token = ++_localToken;
+    if (query.length < 2) {
+      _localPending = false;
+      return;
+    }
+    _localPending = true;
+    unawaited(() async {
+      final found = await app.searchCatalog(query);
+      if (!mounted || token != _localToken) return;
+      _localStamp = app.searchStamp;
+      setState(() {
+        _local = found;
+        _localPending = false;
+      });
+    }());
+    // Scheduling the index bumps the stamp before the next frame.
+    _localStamp = app.searchStamp;
   }
 
   void _clear() {
@@ -144,8 +150,13 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildContent(BuildContext context) {
     final app = context.watch<AppProvider>();
-    if (_localSource != app.allChannels || _computedFor != _localQuery) {
-      _computeLocal(app);
+    final stamp = app.searchStamp;
+    if (_localStamp != stamp || _computedFor != _localQuery) {
+      final queryChanged = _computedFor != _localQuery;
+      _localStamp = stamp;
+      _computedFor = _localQuery;
+      if (queryChanged) _local = const {};
+      _loadLocal(app);
     }
     final tv = DeviceTypeService.isTv;
     final side = tv ? 32.0 : 16.0;
@@ -263,7 +274,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
     final wantsCatalog =
         _filter.showsCatalogMovies || _filter.showsCatalogSeries;
-    if (_searchingTmdb && wantsCatalog) {
+    if ((_searchingTmdb && wantsCatalog) || (_localPending && rows.isEmpty)) {
       rows.add(
         SliverToBoxAdapter(
           child: Padding(
