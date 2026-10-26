@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
+import 'load_control_header.dart';
 import 'messages.g.dart' hide videoEvents;
 import 'messages.g.dart' as pigeon show videoEvents;
 import 'platform_view_player.dart';
@@ -98,12 +99,23 @@ class AndroidVideoPlayer extends VideoPlayerPlatform {
     if (uri == null) {
       throw ArgumentError('Unable to construct a video asset from $options');
     }
+    final headers = Map<String, String>.from(httpHeaders);
+    final load = ExoLoadControlHeader.parse(takeExoLoadControlHeader(headers));
     final pigeonCreationOptions = CreationOptions(
       uri: uri,
-      httpHeaders: httpHeaders,
+      httpHeaders: headers,
       userAgent: userAgent,
       formatHint: formatHint,
-      backBufferDurationMs: options.videoPlayerOptions?.backBufferDurationMs,
+      backBufferDurationMs:
+          load?.backBufferMs ?? options.videoPlayerOptions?.backBufferDurationMs,
+      minBufferMs: load?.minBufferMs,
+      maxBufferMs: load?.maxBufferMs,
+      bufferForPlaybackMs: load?.bufferForPlaybackMs,
+      bufferForPlaybackAfterRebufferMs: load?.bufferForPlaybackAfterRebufferMs,
+      backBufferRequiresSeekable: load?.backBufferRequiresSeekable,
+      targetBufferBytes: load == null || load.targetBufferBytes <= 0
+          ? null
+          : load.targetBufferBytes,
     );
 
     final int playerId;

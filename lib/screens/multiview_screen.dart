@@ -34,10 +34,12 @@ class _Slot {
 
   // Per-tile health, used by the MultiView watchdog.
   Duration? lastPosition;
+  int? lastFrames;
   DateTime? stallSince;
   DateTime? playingSince;
   DateTime? retryAt;
   int autoRetries = 0;
+  int stallRestarts = 0;
 
   void dispose() {
     session.dispose();
@@ -83,6 +85,12 @@ class _MultiViewScreenState extends State<MultiViewScreen>
       if (session.status != SessionStatus.playing) {
         slot.stallSince = null;
         slot.lastPosition = null;
+        slot.lastFrames = null;
+        continue;
+      }
+      if (session.viewerPausedLive) {
+        slot.stallSince = null;
+        slot.lastFrames = null;
         continue;
       }
       slot.retryAt = null;
@@ -94,9 +102,31 @@ class _MultiViewScreenState extends State<MultiViewScreen>
       if (!v.isPlaying && !v.isEnded && !v.isBuffering) {
         unawaited(session.ensurePlaying());
       }
-      // Some live engines keep reporting the same position while the
-      // picture plays normally: a tile that is playing and not buffering is
-      // healthy, so it is never restarted (that caused cyclic pauses).
+      final frames = session.engine?.renderedFrameCount;
+      if (frames != null) {
+        final previous = slot.lastFrames;
+        slot.lastFrames = frames;
+        if (previous != null && frames > previous) {
+          slot.stallRestarts = 0;
+          slot.lastPosition = v.position;
+          slot.stallSince = now;
+          continue;
+        }
+        if (previous != null &&
+            frames <= previous &&
+            v.isPlaying &&
+            !v.isBuffering &&
+            slot.stallRestarts < 2) {
+          slot.stallSince ??= now;
+          if (now.difference(slot.stallSince!) > const Duration(seconds: 12)) {
+            slot.stallRestarts++;
+            _restart(slot);
+          }
+          continue;
+        }
+      }
+      // Position can sit still on a live tile while the picture is fine.
+      // Without a frame counter, a playing tile is left alone.
       if (v.isPlaying && !v.isBuffering) {
         slot.lastPosition = v.position;
         slot.stallSince = now;
@@ -118,6 +148,7 @@ class _MultiViewScreenState extends State<MultiViewScreen>
     slot
       ..stallSince = null
       ..lastPosition = null
+      ..lastFrames = null
       ..playingSince = null;
     unawaited(slot.session.retry().then((_) => _syncAudio()));
   }
@@ -202,8 +233,8 @@ class _MultiViewScreenState extends State<MultiViewScreen>
       setState(() => _adding = false);
       return;
     }
-    // Isolated settings, no timeshift allocation for parallel tiles.
-    // Small buffers: several streams share the TV's memory and network.
+    // Isolated settings. Shared Exo players use the short forward buffer,
+    // and a tile does not keep a back buffer.
     final settings = PlayerSettings.fromJson(saved.toJson())
       ..audioPassthrough = false
       ..backgroundAudio = false

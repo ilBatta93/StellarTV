@@ -23,16 +23,14 @@ class ExoEngine extends PlaybackEngine {
        _controller = VideoPlayerController.networkUrl(
          Uri.parse(url),
          formatHint: _formatHint(url),
-         httpHeaders: {
-           'User-Agent': effectiveStreamUserAgent(settings.userAgent),
-         },
+         httpHeaders: _streamHeaders(settings, shared: shared, live: isLive),
          videoPlayerOptions: VideoPlayerOptions(
            // Without this every new player steals the audio focus and
            // Android pauses the others: the MultiView tiles froze.
            mixWithOthers: shared,
            allowBackgroundPlayback: settings.backgroundAudio,
            preventsDisplaySleepDuringVideoPlayback: settings.keepScreenOn,
-           backBufferDurationMs: settings.backBufferSeconds * 1000,
+           backBufferDurationMs: shared ? 0 : settings.backBufferSeconds * 1000,
          ),
          // Texture on every device. The native-surface (platform view) mode
          // showed a black picture and crashed when released/clipped on Fire
@@ -42,6 +40,26 @@ class ExoEngine extends PlaybackEngine {
 
   final bool isLive;
   final VideoPlayerController _controller;
+
+  /// Android-only. Other platforms must not receive this header: they would
+  /// forward it to the stream. The Android player removes it before the request.
+  static Map<String, String> _streamHeaders(
+    PlayerSettings settings, {
+    required bool shared,
+    required bool live,
+  }) {
+    final headers = <String, String>{
+      'User-Agent': effectiveStreamUserAgent(settings.userAgent),
+    };
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      headers[exoLoadControlHeader] = ExoLoadProfile.forPlayback(
+        preview: shared,
+        live: live,
+        backBufferMs: shared ? 0 : settings.backBufferSeconds * 1000,
+      ).wire;
+    }
+    return headers;
+  }
   final int _blackStrikes;
   final Map<String, VideoTrack> _videoTracks = {};
   PlaybackSnapshot _value = const PlaybackSnapshot();
@@ -112,9 +130,14 @@ class ExoEngine extends PlaybackEngine {
   bool get audioOnly =>
       _window['tracksKnown'] == true && _window['hasVideoTrack'] == false;
 
+  @override
+  int? get renderedFrameCount {
+    final rendered = _window['renderedFrames'];
+    if (rendered is num) return rendered.toInt();
+    return null;
+  }
+
   /// Opt-in diagnostics: how much film is already in the player buffer.
-  /// ExoPlayer exposes no frame counter, so the read-ahead is the only
-  /// numeric signal this engine can give.
   @override
   Future<Map<String, Object?>> metrics() async {
     if (_disposed) return const {};
@@ -218,6 +241,7 @@ class ExoEngine extends PlaybackEngine {
     _blackWatch?.cancel();
     final health = VideoHealth(missingLimit: _blackStrikes);
     int? lastRendered;
+    var sawMotion = false;
     _blackWatch = Timer.periodic(const Duration(seconds: 3), (_) {
       if (_disposed) {
         _blackWatch?.cancel();
@@ -226,18 +250,21 @@ class ExoEngine extends PlaybackEngine {
       final v = _controller.value;
       if (v.hasError || !v.isInitialized) return;
       final rendered = (_window['renderedFrames'] as num?)?.toInt();
+      if (rendered != null && lastRendered != null && rendered > lastRendered!) {
+        sawMotion = true;
+      }
+      lastRendered = rendered;
+      // After frames have moved, a later freeze is the session stall watch.
+      // This check stays on a picture that never started.
+      if (sawMotion) return;
       bool? hasFrame;
       if (_window.containsKey('firstFrameRendered')) {
         hasFrame = _window['firstFrameRendered'] == true;
-        if (hasFrame && rendered != null && lastRendered != null) {
-          hasFrame = rendered > (lastRendered ?? 0);
-        }
       } else if (v.size.width <= 0 || v.size.height <= 0) {
         // Other native platforms do not expose output telemetry. Unknown
         // metadata must not be presented as confirmed rendered video.
         hasFrame = false;
       }
-      lastRendered = rendered;
       if (health.check(
         playing: v.isPlaying,
         buffering: v.isBuffering,
@@ -380,4 +407,74 @@ class ExoEngine extends PlaybackEngine {
     } catch (_) {}
     super.dispose();
   }
+}
+
+/// Same wire format as the Android player header parser.
+const exoLoadControlHeader = 'X-StellarTV-LoadControl';
+
+/// Forward buffer for one ExoPlayer. Preview and MultiView stay short so four
+/// tiles do not each keep a film-sized buffer. Live keeps its back buffer only
+/// when the native window is seekable.
+class ExoLoadProfile {
+  const ExoLoadProfile({
+    required this.minBufferMs,
+    required this.maxBufferMs,
+    required this.bufferForPlaybackMs,
+    required this.bufferForPlaybackAfterRebufferMs,
+    required this.backBufferMs,
+    required this.backBufferRequiresSeekable,
+    required this.targetBufferBytes,
+  });
+
+  static const previewTargetBytes = 8 * 1024 * 1024;
+
+  factory ExoLoadProfile.forPlayback({
+    required bool preview,
+    required bool live,
+    required int backBufferMs,
+  }) {
+    final back = backBufferMs < 0 ? 0 : backBufferMs;
+    if (preview) {
+      return const ExoLoadProfile(
+        minBufferMs: 1500,
+        maxBufferMs: 4000,
+        bufferForPlaybackMs: 500,
+        bufferForPlaybackAfterRebufferMs: 1000,
+        backBufferMs: 0,
+        backBufferRequiresSeekable: false,
+        targetBufferBytes: previewTargetBytes,
+      );
+    }
+    if (live) {
+      return ExoLoadProfile(
+        minBufferMs: 2500,
+        maxBufferMs: 12000,
+        bufferForPlaybackMs: 1000,
+        bufferForPlaybackAfterRebufferMs: 2000,
+        backBufferMs: back,
+        backBufferRequiresSeekable: true,
+        targetBufferBytes: 0,
+      );
+    }
+    return ExoLoadProfile(
+      minBufferMs: 15000,
+      maxBufferMs: 50000,
+      bufferForPlaybackMs: 2500,
+      bufferForPlaybackAfterRebufferMs: 5000,
+      backBufferMs: back,
+      backBufferRequiresSeekable: false,
+      targetBufferBytes: 0,
+    );
+  }
+
+  final int minBufferMs;
+  final int maxBufferMs;
+  final int bufferForPlaybackMs;
+  final int bufferForPlaybackAfterRebufferMs;
+  final int backBufferMs;
+  final bool backBufferRequiresSeekable;
+  final int targetBufferBytes;
+
+  String get wire =>
+      '$minBufferMs,$maxBufferMs,$bufferForPlaybackMs,$bufferForPlaybackAfterRebufferMs,$backBufferMs,${backBufferRequiresSeekable ? 1 : 0},$targetBufferBytes';
 }

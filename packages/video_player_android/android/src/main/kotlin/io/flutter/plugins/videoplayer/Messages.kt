@@ -515,12 +515,20 @@ data class PlatformVideoViewCreationParams(val playerId: Long) {
 }
 
 /** Generated class from Pigeon that represents data sent in messages. */
-data class CreationOptions(
+data class CreationOptions
+@JvmOverloads
+constructor(
     val uri: String,
     val formatHint: PlatformVideoFormat? = null,
     val httpHeaders: Map<String, String>,
     val userAgent: String? = null,
-    val backBufferDurationMs: Long? = null
+    val backBufferDurationMs: Long? = null,
+    val minBufferMs: Long? = null,
+    val maxBufferMs: Long? = null,
+    val bufferForPlaybackMs: Long? = null,
+    val bufferForPlaybackAfterRebufferMs: Long? = null,
+    val backBufferRequiresSeekable: Boolean? = null,
+    val targetBufferBytes: Long? = null
 ) {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): CreationOptions {
@@ -529,7 +537,24 @@ data class CreationOptions(
       val httpHeaders = pigeonVar_list[2] as Map<String, String>
       val userAgent = pigeonVar_list[3] as String?
       val backBufferDurationMs = pigeonVar_list[4] as Long?
-      return CreationOptions(uri, formatHint, httpHeaders, userAgent, backBufferDurationMs)
+      val minBufferMs = pigeonVar_list.getOrNull(5) as Long?
+      val maxBufferMs = pigeonVar_list.getOrNull(6) as Long?
+      val bufferForPlaybackMs = pigeonVar_list.getOrNull(7) as Long?
+      val bufferForPlaybackAfterRebufferMs = pigeonVar_list.getOrNull(8) as Long?
+      val backBufferRequiresSeekable = pigeonVar_list.getOrNull(9) as Boolean?
+      val targetBufferBytes = pigeonVar_list.getOrNull(10) as Long?
+      return CreationOptions(
+          uri,
+          formatHint,
+          httpHeaders,
+          userAgent,
+          backBufferDurationMs,
+          minBufferMs,
+          maxBufferMs,
+          bufferForPlaybackMs,
+          bufferForPlaybackAfterRebufferMs,
+          backBufferRequiresSeekable,
+          targetBufferBytes)
     }
   }
 
@@ -540,6 +565,12 @@ data class CreationOptions(
         httpHeaders,
         userAgent,
         backBufferDurationMs,
+        minBufferMs,
+        maxBufferMs,
+        bufferForPlaybackMs,
+        bufferForPlaybackAfterRebufferMs,
+        backBufferRequiresSeekable,
+        targetBufferBytes,
     )
   }
 
@@ -555,7 +586,15 @@ data class CreationOptions(
         MessagesPigeonUtils.deepEquals(this.formatHint, other.formatHint) &&
         MessagesPigeonUtils.deepEquals(this.httpHeaders, other.httpHeaders) &&
         MessagesPigeonUtils.deepEquals(this.userAgent, other.userAgent) &&
-        MessagesPigeonUtils.deepEquals(this.backBufferDurationMs, other.backBufferDurationMs)
+        MessagesPigeonUtils.deepEquals(this.backBufferDurationMs, other.backBufferDurationMs) &&
+        MessagesPigeonUtils.deepEquals(this.minBufferMs, other.minBufferMs) &&
+        MessagesPigeonUtils.deepEquals(this.maxBufferMs, other.maxBufferMs) &&
+        MessagesPigeonUtils.deepEquals(this.bufferForPlaybackMs, other.bufferForPlaybackMs) &&
+        MessagesPigeonUtils.deepEquals(
+            this.bufferForPlaybackAfterRebufferMs, other.bufferForPlaybackAfterRebufferMs) &&
+        MessagesPigeonUtils.deepEquals(
+            this.backBufferRequiresSeekable, other.backBufferRequiresSeekable) &&
+        MessagesPigeonUtils.deepEquals(this.targetBufferBytes, other.targetBufferBytes)
   }
 
   override fun hashCode(): Int {
@@ -565,11 +604,17 @@ data class CreationOptions(
     result = 31 * result + MessagesPigeonUtils.deepHash(this.httpHeaders)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.userAgent)
     result = 31 * result + MessagesPigeonUtils.deepHash(this.backBufferDurationMs)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.minBufferMs)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.maxBufferMs)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.bufferForPlaybackMs)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.bufferForPlaybackAfterRebufferMs)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.backBufferRequiresSeekable)
+    result = 31 * result + MessagesPigeonUtils.deepHash(this.targetBufferBytes)
     return result
   }
 
   override fun toString(): String {
-    return "CreationOptions(uri=$uri, formatHint=$formatHint, httpHeaders=$httpHeaders, userAgent=$userAgent, backBufferDurationMs=$backBufferDurationMs)"
+    return "CreationOptions(uri=$uri, formatHint=$formatHint, httpHeaders=$httpHeaders, userAgent=$userAgent, backBufferDurationMs=$backBufferDurationMs, minBufferMs=$minBufferMs, maxBufferMs=$maxBufferMs, bufferForPlaybackMs=$bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs=$bufferForPlaybackAfterRebufferMs, backBufferRequiresSeekable=$backBufferRequiresSeekable, targetBufferBytes=$targetBufferBytes)"
   }
 }
 

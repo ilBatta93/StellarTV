@@ -542,6 +542,150 @@ void main() {
       const Duration(seconds: 14),
     );
   });
+
+  test('frame fermi e pausa dello spettatore non sono uno stallo', () {
+    expect(
+      PlaybackSession.frameProgressStalled(
+        viewerPaused: false,
+        audioOnly: false,
+        playing: true,
+        buffering: false,
+        ended: false,
+        seenMotion: true,
+        frames: 40,
+        baseline: 40,
+      ),
+      isTrue,
+    );
+    expect(
+      PlaybackSession.frameProgressStalled(
+        viewerPaused: false,
+        audioOnly: false,
+        playing: true,
+        buffering: false,
+        ended: false,
+        seenMotion: true,
+        frames: 48,
+        baseline: 40,
+      ),
+      isFalse,
+    );
+    expect(
+      PlaybackSession.frameProgressStalled(
+        viewerPaused: true,
+        audioOnly: false,
+        playing: false,
+        buffering: false,
+        ended: false,
+        seenMotion: true,
+        frames: 40,
+        baseline: 40,
+      ),
+      isFalse,
+    );
+    expect(
+      PlaybackSession.frameProgressStalled(
+        viewerPaused: false,
+        audioOnly: false,
+        playing: true,
+        buffering: true,
+        ended: false,
+        seenMotion: true,
+        frames: 40,
+        baseline: 40,
+      ),
+      isFalse,
+    );
+    expect(
+      PlaybackSession.frameProgressStalled(
+        viewerPaused: false,
+        audioOnly: false,
+        playing: true,
+        buffering: false,
+        ended: false,
+        seenMotion: false,
+        frames: 1,
+        baseline: 1,
+      ),
+      isFalse,
+    );
+  });
+
+  test('immagine ferma in play fa un solo recupero', () async {
+    final previous = PlaybackSession.frameStallSamples;
+    PlaybackSession.frameStallSamples = 2;
+    addTearDown(() => PlaybackSession.frameStallSamples = previous);
+    final engines = <_FrameEngine>[];
+    late PlaybackSession session;
+    session = PlaybackSession(
+      url: 'http://example.com/stream.m3u8',
+      isLive: true,
+      settings: PlayerSettings(
+        primaryEngine: PlayerEngineType.exo,
+        autoFallback: false,
+      ),
+      engineFactory: (type) {
+        final engine = _FrameEngine(type, session.currentUrl);
+        engines.add(engine);
+        return engine;
+      },
+    );
+    await session.start();
+    final first = engines.single;
+    first.frames = 4;
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    first.frames = 20;
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    await Future<void>.delayed(const Duration(seconds: 5));
+    expect(engines.length, 2);
+    expect(session.status, SessionStatus.playing);
+    expect(_FakeEngine.maxAlive, 1);
+    session.dispose();
+    await session.released;
+  });
+
+  test('la pausa dello spettatore in diretta non riapre il flusso', () async {
+    final previous = PlaybackSession.frameStallSamples;
+    PlaybackSession.frameStallSamples = 2;
+    addTearDown(() => PlaybackSession.frameStallSamples = previous);
+    final engines = <_FrameEngine>[];
+    late PlaybackSession session;
+    session = PlaybackSession(
+      url: 'http://example.com/stream.m3u8',
+      isLive: true,
+      settings: PlayerSettings(
+        primaryEngine: PlayerEngineType.exo,
+        autoFallback: false,
+      ),
+      engineFactory: (type) {
+        final engine = _FrameEngine(type, session.currentUrl);
+        engines.add(engine);
+        return engine;
+      },
+    );
+    await session.start();
+    final engine = engines.single;
+    engine.frames = 3;
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    engine.frames = 12;
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    await session.togglePlay();
+    await Future<void>.delayed(const Duration(seconds: 4));
+    expect(session.viewerPausedLive, isTrue);
+    expect(engines.length, 1);
+    expect(engine.playCalls, 0);
+    session.dispose();
+    await session.released;
+  });
+}
+
+class _FrameEngine extends _FakeEngine {
+  _FrameEngine(PlayerEngineType type, String url) : super(type, url, succeed: true);
+
+  int frames = 0;
+
+  @override
+  int? get renderedFrameCount => frames;
 }
 
 class _PausedNoPictureEngine extends _FakeEngine {

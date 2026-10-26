@@ -396,6 +396,12 @@ class CreationOptions {
     required this.httpHeaders,
     this.userAgent,
     this.backBufferDurationMs,
+    this.minBufferMs,
+    this.maxBufferMs,
+    this.bufferForPlaybackMs,
+    this.bufferForPlaybackAfterRebufferMs,
+    this.backBufferRequiresSeekable,
+    this.targetBufferBytes,
   });
 
   String uri;
@@ -408,8 +414,32 @@ class CreationOptions {
 
   int? backBufferDurationMs;
 
+  int? minBufferMs;
+
+  int? maxBufferMs;
+
+  int? bufferForPlaybackMs;
+
+  int? bufferForPlaybackAfterRebufferMs;
+
+  bool? backBufferRequiresSeekable;
+
+  int? targetBufferBytes;
+
   List<Object?> _toList() {
-    return <Object?>[uri, formatHint, httpHeaders, userAgent, backBufferDurationMs];
+    return <Object?>[
+      uri,
+      formatHint,
+      httpHeaders,
+      userAgent,
+      backBufferDurationMs,
+      minBufferMs,
+      maxBufferMs,
+      bufferForPlaybackMs,
+      bufferForPlaybackAfterRebufferMs,
+      backBufferRequiresSeekable,
+      targetBufferBytes,
+    ];
   }
 
   Object encode() {
@@ -424,6 +454,12 @@ class CreationOptions {
       httpHeaders: (result[2]! as Map<Object?, Object?>).cast<String, String>(),
       userAgent: result[3] as String?,
       backBufferDurationMs: result[4] as int?,
+      minBufferMs: result.length > 5 ? result[5] as int? : null,
+      maxBufferMs: result.length > 6 ? result[6] as int? : null,
+      bufferForPlaybackMs: result.length > 7 ? result[7] as int? : null,
+      bufferForPlaybackAfterRebufferMs: result.length > 8 ? result[8] as int? : null,
+      backBufferRequiresSeekable: result.length > 9 ? result[9] as bool? : null,
+      targetBufferBytes: result.length > 10 ? result[10] as int? : null,
     );
   }
 
@@ -440,7 +476,13 @@ class CreationOptions {
         _deepEquals(formatHint, other.formatHint) &&
         _deepEquals(httpHeaders, other.httpHeaders) &&
         _deepEquals(userAgent, other.userAgent) &&
-        _deepEquals(backBufferDurationMs, other.backBufferDurationMs);
+        _deepEquals(backBufferDurationMs, other.backBufferDurationMs) &&
+        _deepEquals(minBufferMs, other.minBufferMs) &&
+        _deepEquals(maxBufferMs, other.maxBufferMs) &&
+        _deepEquals(bufferForPlaybackMs, other.bufferForPlaybackMs) &&
+        _deepEquals(bufferForPlaybackAfterRebufferMs, other.bufferForPlaybackAfterRebufferMs) &&
+        _deepEquals(backBufferRequiresSeekable, other.backBufferRequiresSeekable) &&
+        _deepEquals(targetBufferBytes, other.targetBufferBytes);
   }
 
   @override
@@ -449,7 +491,7 @@ class CreationOptions {
 
   @override
   String toString() {
-    return 'CreationOptions(uri: $uri, formatHint: $formatHint, httpHeaders: $httpHeaders, userAgent: $userAgent, backBufferDurationMs: $backBufferDurationMs)';
+    return 'CreationOptions(uri: $uri, formatHint: $formatHint, httpHeaders: $httpHeaders, userAgent: $userAgent, backBufferDurationMs: $backBufferDurationMs, minBufferMs: $minBufferMs, maxBufferMs: $maxBufferMs, bufferForPlaybackMs: $bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs: $bufferForPlaybackAfterRebufferMs, backBufferRequiresSeekable: $backBufferRequiresSeekable, targetBufferBytes: $targetBufferBytes)';
   }
 }
 

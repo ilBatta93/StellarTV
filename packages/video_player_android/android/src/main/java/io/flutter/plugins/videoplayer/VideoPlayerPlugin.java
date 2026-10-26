@@ -6,6 +6,9 @@ package io.flutter.plugins.videoplayer;
 
 import android.content.Context;
 import android.util.LongSparseArray;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
@@ -88,7 +91,7 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
     long id = nextPlayerIdentifier++;
     final String streamInstance = Long.toString(id);
     VideoPlayerOptions playerOptions = new VideoPlayerOptions(sharedOptions);
-    playerOptions.backBufferDurationMs = options.getBackBufferDurationMs();
+    copyLoadControl(playerOptions, options);
 
     VideoPlayer videoPlayer =
         PlatformViewVideoPlayer.create(
@@ -110,7 +113,7 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
     final String streamInstance = Long.toString(id);
     TextureRegistry.SurfaceProducer handle = flutterState.textureRegistry.createSurfaceProducer();
     VideoPlayerOptions playerOptions = new VideoPlayerOptions(sharedOptions);
-    playerOptions.backBufferDurationMs = options.getBackBufferDurationMs();
+    copyLoadControl(playerOptions, options);
 
     VideoPlayer videoPlayer =
         TextureVideoPlayer.create(
@@ -122,6 +125,33 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
 
     registerPlayerInstance(videoPlayer, id);
     return new TexturePlayerIds(id, handle.id());
+  }
+
+  private static void copyLoadControl(
+      @NonNull VideoPlayerOptions playerOptions, @NonNull CreationOptions options) {
+    playerOptions.backBufferDurationMs = options.getBackBufferDurationMs();
+    playerOptions.minBufferMs = options.getMinBufferMs();
+    playerOptions.maxBufferMs = options.getMaxBufferMs();
+    playerOptions.bufferForPlaybackMs = options.getBufferForPlaybackMs();
+    playerOptions.bufferForPlaybackAfterRebufferMs =
+        options.getBufferForPlaybackAfterRebufferMs();
+    playerOptions.backBufferRequiresSeekable =
+        Boolean.TRUE.equals(options.getBackBufferRequiresSeekable());
+    playerOptions.targetBufferBytes = options.getTargetBufferBytes();
+  }
+
+  private static @NonNull Map<String, String> headersWithoutLoadControl(
+      @NonNull Map<String, String> headers) {
+    if (headers.isEmpty()) {
+      return headers;
+    }
+    Map<String, String> copy = new HashMap<>();
+    for (Map.Entry<String, String> entry : headers.entrySet()) {
+      if (!"x-stellartv-loadcontrol".equals(entry.getKey().toLowerCase(Locale.US))) {
+        copy.put(entry.getKey(), entry.getValue());
+      }
+    }
+    return copy;
   }
 
   private @NonNull VideoAsset videoAssetWithOptions(@NonNull CreationOptions options) {
@@ -147,7 +177,10 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
         }
       }
       return VideoAsset.fromRemoteUrl(
-          uri, streamingFormat, options.getHttpHeaders(), options.getUserAgent());
+          uri,
+          streamingFormat,
+          headersWithoutLoadControl(options.getHttpHeaders()),
+          options.getUserAgent());
     }
   }
 

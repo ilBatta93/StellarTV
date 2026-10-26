@@ -193,6 +193,9 @@ class MediaKitEngine extends PlaybackEngine {
   bool? get videoFrameRendered => _firstFrameRendered;
 
   @override
+  int? get renderedFrameCount => _outputFrames;
+
+  @override
   bool get audioOnly {
     final tracks = _player.state.tracks;
     bool real(String id) => id != 'auto' && id != 'no';
@@ -518,15 +521,50 @@ class MediaKitEngine extends PlaybackEngine {
 
   Timer? _blackWatch;
   bool _firstFrameRendered = false;
+  int? _outputFrames;
+  String? _outputToken;
+  String? _outputProperty;
+  bool _outputAdvanced = false;
 
-  /// True only when decoded frames really flow through mpv's video chain.
-  /// The old check used the track resolution, which mpv reads from the
-  /// stream headers before the decoder outputs anything: a channel with
-  /// audio and a black picture looked "fine" and the fallback never ran.
+  /// Output properties that change when a new frame is drawn. Playback time
+  /// and estimated-frame-number are not output, so they are not used.
+  static const _outputProperties = <String>[
+    'vo-passes/fresh/0/last',
+    'video-frame-info/gop-timecode',
+    'video-frame-info/smpte-timecode',
+  ];
+
+  /// Samples one output token per second. A change increments [renderedFrameCount].
+  /// After the first change the startup black-screen check stops treating a
+  /// later freeze as a decoder failure: the session stall watch owns that.
   Future<bool?> _framesFlowing() async {
-    // estimated-frame-number is derived from playback time, not output.
-    // Only the controller's rendering signal confirms startup succeeded.
+    await _sampleOutputSignal();
+    if (_outputAdvanced) return true;
     return _firstFrameRendered;
+  }
+
+  Future<void> _sampleOutputSignal() async {
+    final platform = _player.platform;
+    if (_disposed || platform is! NativePlayer) return;
+    final names = _outputProperty == null
+        ? _outputProperties
+        : <String>[_outputProperty!];
+    for (final name in names) {
+      try {
+        final value = await platform
+            .getProperty(name)
+            .timeout(const Duration(milliseconds: 400));
+        if (_disposed || value.isEmpty) continue;
+        _outputProperty = name;
+        if (value != _outputToken) {
+          _outputToken = value;
+          final next = (_outputFrames ?? 0) + 1;
+          _outputFrames = next;
+          if (next > 1) _outputAdvanced = true;
+        }
+        return;
+      } catch (_) {}
+    }
   }
 
   /// Audio playing but no decoded video frame = black screen. Checked every

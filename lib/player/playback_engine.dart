@@ -65,6 +65,10 @@ abstract class PlaybackEngine extends ChangeNotifier {
   /// Renderer confirmation, null when the platform does not expose it.
   bool? get videoFrameRendered => null;
 
+  /// Frames that reached the output. Null when the platform has no counter.
+  /// The value only moves when a new frame is drawn, not when playback time moves.
+  int? get renderedFrameCount => null;
+
   /// True only when the stream's tracks are known and none is video
   /// (radio channels): such streams never draw a picture by design.
   bool get audioOnly => false;

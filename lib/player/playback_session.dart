@@ -346,6 +346,7 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> _releaseCurrent() {
     final old = _engine;
     _firstPictureTimer?.cancel();
+    _frameWatch?.cancel();
     _phoneCopyTimer?.cancel();
     if (old == null) return _releasing;
     _diagnostics?.end();
@@ -438,6 +439,7 @@ class PlaybackSession extends ChangeNotifier {
     _liveStartedAt = isLive ? DateTime.now() : null;
     _playingSince = DateTime.now();
     _watchFirstPicture(engine, gen);
+    _watchFrameProgress(engine, gen);
     _watchPhoneHardwareCopy(engine, gen);
     if (isLive && _softwareDecode) {
       // Persist only after the fallback actually opens, not on the original
@@ -576,8 +578,91 @@ class PlaybackSession extends ChangeNotifier {
       : 'Nessun video dal server per questo canale';
 
   Timer? _firstPictureTimer;
+  Timer? _frameWatch;
   Timer? _phoneCopyTimer;
   bool _phoneHardwareCopy = false;
+
+  /// Frozen output samples before one mid-play recovery. The reconnect budget
+  /// itself stays the one already used for a dropped stream.
+  @visibleForTesting
+  static int frameStallSamples = 8;
+
+  /// True when play is active, frames were already moving, and the native
+  /// counter did not advance. A pause, a buffer, or an unknown counter is not
+  /// a stall.
+  @visibleForTesting
+  static bool frameProgressStalled({
+    required bool viewerPaused,
+    required bool audioOnly,
+    required bool playing,
+    required bool buffering,
+    required bool ended,
+    required bool seenMotion,
+    required int? frames,
+    required int? baseline,
+  }) {
+    if (viewerPaused || audioOnly || !playing || buffering || ended) {
+      return false;
+    }
+    if (!seenMotion || frames == null || baseline == null) return false;
+    return frames <= baseline;
+  }
+
+  /// Full-session stall watch. Preview and MultiView keep their own tile
+  /// check. A stream that is still drawing is never reopened.
+  void _watchFrameProgress(PlaybackEngine engine, int gen) {
+    _frameWatch?.cancel();
+    if (previewMode) return;
+    var seenMotion = false;
+    int? baseline;
+    var frozen = 0;
+    _frameWatch = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_disposed || gen != _generation || _engine != engine) return;
+      final v = engine.value;
+      final frames = engine.renderedFrameCount;
+      final previous = baseline;
+      if (previous != null && frames != null && frames > previous) {
+        seenMotion = true;
+      }
+      final stalled = frameProgressStalled(
+        viewerPaused: isLive && _userPausedLive,
+        audioOnly: engine.audioOnly,
+        playing: v.isPlaying,
+        buffering: v.isBuffering,
+        ended: v.isEnded,
+        seenMotion: seenMotion,
+        frames: frames,
+        baseline: previous,
+      );
+      if (!v.isPlaying ||
+          v.isBuffering ||
+          v.isEnded ||
+          engine.audioOnly ||
+          (isLive && _userPausedLive) ||
+          frames == null) {
+        frozen = 0;
+        baseline = null;
+        return;
+      }
+      baseline = frames;
+      if (!stalled) {
+        frozen = 0;
+        return;
+      }
+      frozen++;
+      if (frozen < frameStallSamples) return;
+      frozen = 0;
+      baseline = null;
+      unawaited(
+        _handleFailure(
+          gen,
+          'Immagine ferma',
+          isLive ? null : v.position,
+          midPlay: true,
+        ),
+      );
+    });
+  }
 
   /// Black screens of the TCL logs: the player opened in ~0.4 s, then
   /// buffered forever without a frame. The decoder black-screen checks
@@ -965,6 +1050,9 @@ class PlaybackSession extends ChangeNotifier {
   bool _userPausedLive = false;
   bool _deferredLiveFailure = false;
 
+  /// The viewer paused a live stream. Health recovery must not reopen it.
+  bool get viewerPausedLive => isLive && _userPausedLive;
+
   /// True while a paused live channel waits to reopen at LIVE.
   bool get liveResumePending => _deferredLiveFailure;
 
@@ -1140,6 +1228,7 @@ class PlaybackSession extends ChangeNotifier {
     if (_disposed || _streamStopped) return;
     _streamStopped = true;
     _firstPictureTimer?.cancel();
+    _frameWatch?.cancel();
     _phoneCopyTimer?.cancel();
     _diagnosticTimer?.cancel();
     _delayTick?.cancel();
@@ -1155,6 +1244,7 @@ class PlaybackSession extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _firstPictureTimer?.cancel();
+    _frameWatch?.cancel();
     _phoneCopyTimer?.cancel();
     _diagnosticTimer?.cancel();
     _diagnostics?.end();

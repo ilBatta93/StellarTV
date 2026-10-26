@@ -15,6 +15,8 @@ import androidx.media3.common.PlaybackParameters;
 import androidx.media3.common.Player;
 import androidx.media3.common.VideoSize;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.LoadControl;
+import androidx.media3.exoplayer.analytics.PlayerId;
 import io.flutter.plugins.videoplayer.texture.TextureVideoPlayer;
 import io.flutter.view.TextureRegistry;
 import org.junit.Before;
@@ -226,5 +228,43 @@ public final class TextureVideoPlayerTest {
       verify(builderMock).setLoadControl(any());
       player.dispose();
     }
+  }
+
+  @Test
+  public void create_withForwardBufferAndNoBackBuffer_setsLoadControl() {
+    android.content.Context mockContext = mock(android.content.Context.class);
+    VideoPlayerOptions options = new VideoPlayerOptions();
+    options.minBufferMs = 1500L;
+    options.maxBufferMs = 4000L;
+    options.bufferForPlaybackMs = 500L;
+    options.bufferForPlaybackAfterRebufferMs = 1000L;
+    options.backBufferDurationMs = 0L;
+    options.targetBufferBytes = 8L * 1024L * 1024L;
+
+    try (MockedConstruction<ExoPlayer.Builder> mockedBuilder =
+        mockConstruction(
+            ExoPlayer.Builder.class,
+            (mock, context) -> {
+              when(mock.setLoadControl(any())).thenReturn(mock);
+              when(mock.setTrackSelector(any())).thenReturn(mock);
+              when(mock.setMediaSourceFactory(any())).thenReturn(mock);
+              when(mock.build()).thenReturn(mockExoPlayer);
+            })) {
+      TextureVideoPlayer player =
+          TextureVideoPlayer.create(mockContext, mockEvents, mockProducer, fakeVideoAsset, options);
+      ExoPlayer.Builder builderMock = mockedBuilder.constructed().get(0);
+      verify(builderMock).setLoadControl(any(LoadControl.class));
+      player.dispose();
+    }
+  }
+
+  @Test
+  public void liveBackBufferStaysZeroUntilTheWindowIsSeekable() {
+    ExoLoadControls.SeekAwareLoadControl control =
+        new ExoLoadControls.SeekAwareLoadControl(2500, 12000, 1000, 2000, 30000, C.LENGTH_UNSET, false);
+    PlayerId id = new PlayerId("test");
+    assertEquals(0L, control.getBackBufferDurationUs(id));
+    control.setWindowSeekableForTest(true);
+    assertEquals(30_000_000L, control.getBackBufferDurationUs(id));
   }
 }
