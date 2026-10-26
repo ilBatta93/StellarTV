@@ -1042,18 +1042,19 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     final listKey =
         '$_category|$_query|${app.visibilityStamp}|${showWatched ? _recentLive.ids.join(',') : ''}';
     final reusable = identical(_listGroups, groups) && _listKey == listKey;
+    final entries = showWatched
+        ? watched
+        : selected != null
+        ? selected.entries
+        : [for (final group in groups) ...group.entries];
+    final slots = liveEntrySlots(entries);
     var channels = reusable
         ? (_listCache ?? const <Channel>[])
         : showWatched
-        ? [for (final e in watched) e.primary]
-        : app.bindChannels(
-            selected != null
-                ? liveEntrySlots(selected.entries)
-                : [
-                    for (final group in groups)
-                      ...liveEntrySlots(group.entries),
-                  ],
-          );
+        ? [for (final entry in watched) entry.primary]
+        : slots.isEmpty
+        ? [for (final entry in entries) entry.primary]
+        : app.bindChannels(slots);
     if (!reusable && _query.isNotEmpty) {
       channels = _channelsForQuery(channels, app, epg);
     }
