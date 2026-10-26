@@ -1091,6 +1091,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
   Timer? _debounce;
   int _heroRequest = 0;
   bool _userFocused = false;
+  bool _primedNextRow = false;
   String? _seededHistory;
   final Map<String, TmdbItem?> _historyInfo = {};
 
@@ -1233,7 +1234,43 @@ class _TvDiscoverState extends State<_TvDiscover> {
     });
   }
 
-  Widget _historySection(String title, List<ResumeItem> items) => Builder(
+  List<List<String?>> _tvRowPosters(BuildContext context) {
+    final rows = <List<String?>>[];
+    void history(List<ResumeItem> items) {
+      if (items.isEmpty) return;
+      rows.add([for (final item in items.take(6)) item.$2.logo]);
+    }
+
+    void posters(List<TmdbItem> items) {
+      if (items.isEmpty) return;
+      rows.add([
+        for (final item in items.take(6)) homePosterUrl(context, item),
+      ]);
+    }
+
+    history(widget.startedSeries);
+    history(widget.startedMovies);
+    posters(widget.forYou);
+    posters(widget.forYouSeries);
+    for (final top in widget.tops) {
+      final movies = top.$4;
+      final series = top.$5;
+      posters(movies.isNotEmpty ? movies : series);
+    }
+    return rows;
+  }
+
+  void _warmFollowing(List<List<String?>> rows, int index) {
+    final next = index + 1;
+    if (!mounted || next >= rows.length) return;
+    PosterMemoryWarmup.warmTv(context, rows[next]);
+  }
+
+  Widget _historySection(
+    String title,
+    List<ResumeItem> items, {
+    VoidCallback? onSettled,
+  }) => Builder(
     key: ValueKey(title),
     builder: (rowContext) => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1244,17 +1281,28 @@ class _TvDiscoverState extends State<_TvDiscover> {
           onFocus: (resume) {
             _focusHistory(resume);
             _revealHeading(rowContext);
+            onSettled?.call();
           },
         ),
       ],
     ),
   );
 
-  Widget _row(String title, List<TmdbItem> items, {String? subtitle}) {
+  Widget _row(
+    String title,
+    List<TmdbItem> items, {
+    String? subtitle,
+    VoidCallback? onSettled,
+  }) {
     return Builder(
       key: ValueKey(title),
-      builder: (rowContext) =>
-          _posterRow(title, items, rowContext, subtitle: subtitle),
+      builder: (rowContext) => _posterRow(
+        title,
+        items,
+        rowContext,
+        subtitle: subtitle,
+        onSettled: onSettled,
+      ),
     );
   }
 
@@ -1263,6 +1311,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
     List<TmdbItem> items,
     BuildContext rowContext, {
     String? subtitle,
+    VoidCallback? onSettled,
   }) {
     PosterMemoryWarmup.warm(
       rowContext,
@@ -1286,6 +1335,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
               _focus(items[i]);
               // Only the settled banner loads its logo; no adjacent predecode.
               _revealHeading(rowContext);
+              onSettled?.call();
             },
           ),
         ),
@@ -1344,43 +1394,83 @@ class _TvDiscoverState extends State<_TvDiscover> {
                     ),
                   ),
                   Expanded(
-                    child: TvHomeRows(
-                      sections: [
-                        if (widget.startedSeries.isNotEmpty)
-                          _historySection(
+                    child: Builder(
+                      builder: (context) {
+                        final rows = _tvRowPosters(context);
+                        if (!_primedNextRow) {
+                          _primedNextRow = true;
+                          final ahead = rows.length > 1
+                              ? rows[1]
+                              : const <String?>[];
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              PosterMemoryWarmup.warmTv(context, ahead);
+                            }
+                          });
+                        }
+                        final sections = <Widget>[];
+                        void add(bool visible, Widget Function(int index) build) {
+                          if (!visible) return;
+                          final index = sections.length;
+                          sections.add(build(index));
+                        }
+
+                        add(
+                          widget.startedSeries.isNotEmpty,
+                          (index) => _historySection(
                             'Serie viste di recente',
                             widget.startedSeries,
+                            onSettled: () => _warmFollowing(rows, index),
                           ),
-                        if (widget.startedMovies.isNotEmpty)
-                          _historySection(
+                        );
+                        add(
+                          widget.startedMovies.isNotEmpty,
+                          (index) => _historySection(
                             'Film visti di recente',
                             widget.startedMovies,
+                            onSettled: () => _warmFollowing(rows, index),
                           ),
-                        if (widget.forYou.isNotEmpty)
-                          _row(
+                        );
+                        add(
+                          widget.forYou.isNotEmpty,
+                          (index) => _row(
                             'Film consigliati per te',
                             widget.forYou,
                             subtitle: widget.forYouSource == null
                                 ? null
                                 : 'Perché hai guardato '
                                       '${displayTitle(widget.forYouSource ?? "")}',
+                            onSettled: () => _warmFollowing(rows, index),
                           ),
-                        if (widget.forYouSeries.isNotEmpty)
-                          _row(
+                        );
+                        add(
+                          widget.forYouSeries.isNotEmpty,
+                          (index) => _row(
                             'Serie consigliate per te',
                             widget.forYouSeries,
                             subtitle: widget.forYouSeriesSource == null
                                 ? null
                                 : 'Perché hai guardato '
                                       '${displayTitle(widget.forYouSeriesSource ?? "")}',
+                            onSettled: () => _warmFollowing(rows, index),
                           ),
-                        for (final t in widget.tops)
-                          _TvTopRow(
-                            key: ValueKey(t.$1),
-                            spec: t,
-                            onFocusItem: _focus,
-                          ),
-                      ],
+                        );
+                        for (final top in widget.tops) {
+                          if (top.$4.isEmpty && top.$5.isEmpty) continue;
+                          final index = sections.length;
+                          sections.add(
+                            _TvTopRow(
+                              key: ValueKey(top.$1),
+                              spec: top,
+                              onFocusItem: (item) {
+                                _focus(item);
+                                _warmFollowing(rows, index);
+                              },
+                            ),
+                          );
+                        }
+                        return TvHomeRows(sections: sections);
+                      },
                     ),
                   ),
                 ],

@@ -5,7 +5,8 @@ class TvRenderPolicy {
       isTv ? (memoryPressure ? 640 : 960) : 1280;
   static int homeBackdropDecodeLimit({required bool memoryPressure}) =>
       memoryPressure ? 960 : 1280;
-  static double rowCacheFraction({required bool memoryPressure}) => 1.0;
+  static double rowCacheFraction({required bool memoryPressure}) =>
+      memoryPressure ? 0 : 1;
   static bool backdropAllowed({
     required bool isTv,
     required bool memoryPressure,

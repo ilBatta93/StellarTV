@@ -18,8 +18,8 @@ void main() {
     'Touch unchanged',
   );
   check(
-    TvRenderPolicy.rowCacheFraction(memoryPressure: true) == 1.0,
-    'Pressure neighbour retained',
+    TvRenderPolicy.rowCacheFraction(memoryPressure: true) == 0,
+    'Pressure neighbour dropped',
   );
   check(
     TvRenderPolicy.rowCacheFraction(memoryPressure: false) == 1.0,

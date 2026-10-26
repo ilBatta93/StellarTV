@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'image_cache_service.dart';
 import 'device_type_service.dart';
 import 'playback_work_policy.dart';
+import 'tv_render_policy.dart';
 
 /// Downloads the posters of the first visible catalog titles in the
 /// background, a few at a time, so opening a section does not wait on the
@@ -153,6 +154,58 @@ class PosterMemoryWarmup {
                 onError: (_, _) {},
               ),
           ]);
+          await Future<void>.delayed(const Duration(milliseconds: 16));
+        }
+      } finally {
+        _running = false;
+      }
+    });
+  }
+
+  /// TV only: decode a few posters after the remote has stopped, at the
+  /// size the cards already use. Skipped while a video plays or while
+  /// memory pressure has retired decoded images.
+  static void warmTv(BuildContext context, Iterable<String?> urls) {
+    if (!DeviceTypeService.isTv ||
+        TvImageMemoryGuard.reducedRendering.value ||
+        _running ||
+        PlaybackWorkPolicy.instance.blocksGuide)
+      return;
+    final cap = TvRenderPolicy.decodeLimit(isTv: true, memoryPressure: false);
+    final noted = _width;
+    final int w = noted == null || noted <= 0
+        ? cap
+        : noted.clamp(64, cap).toInt();
+    final pending = <String>[];
+    for (final u in urls) {
+      if (u == null || u.isEmpty || !_seen.add('$w|$u')) continue;
+      pending.add(u);
+      if (pending.length >= 6) break;
+    }
+    if (pending.isEmpty) return;
+    if (_seen.length > 512) _seen.clear();
+    _running = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await RemoteNavigation.idle();
+        for (final u in pending) {
+          if (!context.mounted ||
+              RemoteNavigation.moving ||
+              TvImageMemoryGuard.reducedRendering.value ||
+              PlaybackWorkPolicy.instance.blocksGuide ||
+              ModalRoute.of(context)?.isCurrent == false)
+            return;
+          await precacheImage(
+            ResizeImage(
+              CachedNetworkImageProvider(
+                tmdbSizedUrl(u, w),
+                cacheManager: AppImageCache.manager,
+              ),
+              width: w,
+            ),
+            context,
+            onError: (_, _) {},
+          );
           await Future<void>.delayed(const Duration(milliseconds: 16));
         }
       } finally {

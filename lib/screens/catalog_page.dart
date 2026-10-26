@@ -534,9 +534,13 @@ class _CatalogPageState extends State<CatalogPage> {
         provider.requestTitleInfo(provider.catalogOf(widget.type));
         // Pre-download the posters of the first visible titles so opening a
         // category does not wait on the network.
-        ImageWarmupService.warm(
-          provider.recentEntries(widget.type).map((e) => e.primary.logo),
-        );
+        final posters = provider
+            .recentEntries(widget.type)
+            .map((e) => e.primary.logo);
+        ImageWarmupService.warm(posters);
+        if (DeviceTypeService.isTv) {
+          PosterMemoryWarmup.warmTv(this.context, posters);
+        }
       });
     }
 

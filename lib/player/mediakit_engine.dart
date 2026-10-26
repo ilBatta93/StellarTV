@@ -94,7 +94,13 @@ class MediaKitEngine extends PlaybackEngine {
       'sigmoid-upscaling': 'no',
       'deband': 'no',
       'interpolation': 'no',
-      'video-sync': 'audio',
+      // Live stays on the audio clock. Film and series on TV follow the
+      // panel instead, so a late audio tick is not a visible hitch.
+      'video-sync': videoSync(
+        tv: DeviceTypeService.isTv,
+        live: isLive,
+        preview: previewMode,
+      ),
       'cache': 'yes',
       // Fire TV stuttered with a 3 s read-ahead on live: a deeper window
       // absorbs provider jitter; previews stay short to start quickly.
@@ -409,6 +415,15 @@ class MediaKitEngine extends PlaybackEngine {
   /// the copy variant moved every decoded frame through shared TV RAM
   /// (micro-stutter, confirmed by diagnostics); mpv falls back to copy
   /// automatically when zero-copy cannot start. Live keeps copy only.
+  /// Film and series on TV follow the display. Live, previews and phones
+  /// stay locked to the audio clock.
+  @visibleForTesting
+  static String videoSync({
+    required bool tv,
+    required bool live,
+    required bool preview,
+  }) => tv && !live && !preview ? 'display-resample' : 'audio';
+
   /// TV strings stay on the television path. Phones use their own decoder:
   /// iOS film/series start on VideoToolbox and can fall back to the copy
   /// path; iOS live and every Android phone stay on the copy decoder.

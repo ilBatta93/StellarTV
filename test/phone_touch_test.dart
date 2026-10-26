@@ -54,6 +54,25 @@ void main() {
     );
   });
 
+  test('tv films follow the display and live stays on the audio clock', () {
+    expect(
+      MediaKitEngine.videoSync(tv: true, live: false, preview: false),
+      'display-resample',
+    );
+    expect(
+      MediaKitEngine.videoSync(tv: true, live: true, preview: false),
+      'audio',
+    );
+    expect(
+      MediaKitEngine.videoSync(tv: true, live: false, preview: true),
+      'audio',
+    );
+    expect(
+      MediaKitEngine.videoSync(tv: false, live: false, preview: false),
+      'audio',
+    );
+  });
+
   test('phones use their own decoder and can fall back to a copy', () {
     expect(
       MediaKitEngine.hardwareDecoder(
