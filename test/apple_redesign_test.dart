@@ -224,9 +224,13 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final scale = tester.widget<AnimatedScale>(find.byType(AnimatedScale));
-    expect(scale.scale, 1);
-    expect(scale.duration, Duration.zero);
+    final scale = tester.widget<Transform>(
+      find.descendant(
+        of: find.byType(TvFocusable),
+        matching: find.byType(Transform),
+      ),
+    );
+    expect(scale.transform.getMaxScaleOnAxis(), 1);
     await tester.pumpWidget(const SizedBox());
     settings.dispose();
   });

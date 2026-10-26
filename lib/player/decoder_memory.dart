@@ -14,6 +14,8 @@ class DecoderMemory {
 
   static final List<String> _keys = [];
   static Future<void>? _loading;
+  static var _loaded = false;
+  static var _epoch = 0;
 
   static final _xtreamLive = RegExp(
     r'^https?://([^/]+)/(?:live/)?[^/]+/[^/]+/(\d+)(?:\.(?:m3u8|ts))?$',
@@ -29,14 +31,21 @@ class DecoderMemory {
     return q < 0 ? trimmed : trimmed.substring(0, q);
   }
 
+  /// Once the list is in memory, finish in the caller zone. The original
+  /// future stays in the zone that completed it and would never resume.
   static Future<void> ensureLoaded() {
+    if (_loaded) return Future<void>.value();
+    final epoch = _epoch;
     return _loading ??= () async {
       try {
         final prefs = await SharedPreferences.getInstance();
+        if (epoch != _epoch) return;
         _keys
           ..clear()
           ..addAll(prefs.getStringList(_prefsKey) ?? const []);
       } catch (_) {}
+      if (epoch != _epoch) return;
+      _loaded = true;
     }();
   }
 
@@ -59,7 +68,10 @@ class DecoderMemory {
 
   /// Settings "reset": lets the hardware decoder try every channel again.
   static Future<void> clear() async {
+    _epoch++;
     _keys.clear();
+    _loaded = true;
+    _loading = null;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_prefsKey);

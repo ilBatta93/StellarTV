@@ -75,33 +75,58 @@ class _TvHomeRowsState extends State<TvHomeRows> {
     _lastMove = now;
     final primary = FocusManager.instance.primaryFocus;
     if (primary != null && primary.context != null) _selected[index] = primary;
-    final stops = _rows[next].traversalDescendants
+    final saved = _selected[next];
+    final fromSelectorUp =
+        key == LogicalKeyboardKey.arrowUp && primary is TvHomeSelectorNode;
+    final stops = _mountedStops(next);
+    if (stops.isEmpty) {
+      // Under memory pressure the next row is not built until it is shown.
+      _show(next);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || next >= widget.sections.length) return;
+        _focusMounted(next, fromSelectorUp: fromSelectorUp, saved: saved);
+      });
+      return KeyEventResult.handled;
+    }
+    _show(next);
+    _focusMounted(
+      next,
+      fromSelectorUp: fromSelectorUp,
+      saved: saved,
+      stops: stops,
+    );
+    return KeyEventResult.handled;
+  }
+
+  List<FocusNode> _mountedStops(int index) {
+    if (index < 0 || index >= _rows.length) return const [];
+    return _rows[index].traversalDescendants
         .where(
           (n) => n.canRequestFocus && n.context != null && n.context!.mounted,
         )
         .toList(growable: false);
-    final selectors = stops.whereType<TvHomeSelectorNode>().toList();
-    final saved = _selected[next];
-    final fromSelectorUp =
-        key == LogicalKeyboardKey.arrowUp && primary is TvHomeSelectorNode;
+  }
+
+  void _focusMounted(
+    int index, {
+    required bool fromSelectorUp,
+    required FocusNode? saved,
+    List<FocusNode>? stops,
+  }) {
+    final mountedStops = stops ?? _mountedStops(index);
+    final selectors = mountedStops.whereType<TvHomeSelectorNode>().toList();
     final FocusNode? target;
     if (fromSelectorUp) {
-      target = stops.where((n) => n is! TvHomeSelectorNode).firstOrNull;
+      target = mountedStops.where((n) => n is! TvHomeSelectorNode).firstOrNull;
     } else if (selectors.isNotEmpty) {
       target =
           selectors.where((n) => n.selected).firstOrNull ?? selectors.first;
     } else {
-      // Rows shift when Home gains a section (e.g. after watching a film):
-      // a remembered poster may now live in another row.
-      target = saved != null && stops.contains(saved)
+      target = saved != null && mountedStops.contains(saved)
           ? saved
-          : stops.firstOrNull;
+          : mountedStops.firstOrNull;
     }
-    if (target != null) {
-      _show(next);
-      target.requestFocus();
-    }
-    return KeyEventResult.handled;
+    target?.requestFocus();
   }
 
   @override

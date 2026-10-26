@@ -11,7 +11,10 @@ class UiScale extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scale =
-        context.select<UiSettings, int>((ui) => ui.uiScalePercent) / 100;
+        context.select<UiSettings?, int>(
+          (ui) => ui?.uiScalePercent ?? 100,
+        ) /
+        100;
     if (scale == 1) return Builder(builder: builder);
     return LayoutBuilder(
       builder: (context, bounds) {
