@@ -1,14 +1,16 @@
 import '../services/image_cache_service.dart';
+import '../services/image_warmup_service.dart';
+import '../services/tv_render_policy.dart';
 
 import "package:cached_network_image/cached_network_image.dart";
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// TV only: movie/series page with the backdrop filling the whole screen and
-/// staying still behind the content (no picture cut at the top while
-/// scrolling). Soft shadows on the left and at the bottom keep the text
-/// readable.
+/// TV only: movie, series and person pages fill the screen with a still
+/// backdrop (no picture cut at the top while scrolling). Decode and the
+/// requested width follow [TvRenderPolicy], the same ceilings as Home.
+/// Soft shadows on the left and at the bottom keep the text readable.
 class TvDetailBackdrop extends StatelessWidget {
   final String? image;
   final Widget child;
@@ -20,14 +22,17 @@ class TvDetailBackdrop extends StatelessWidget {
   static double topSpace(BuildContext context) =>
       (MediaQuery.sizeOf(context).height * 0.08).clamp(40.0, 100.0);
 
+  /// Rewrites only a published TMDB width. Other artwork is left as-is.
+  static String? requestUrl(String? image, int requestWidth) {
+    if (image == null || image.isEmpty || requestWidth <= 0) return null;
+    return image.replaceFirst(RegExp(r'/t/p/w\d+/'), '/t/p/w$requestWidth/');
+  }
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
-    final decodeWidth = (width * pixelRatio).round().clamp(1280, 1920);
-    final url = image
-        ?.replaceFirst('/t/p/w780/', '/t/p/w1280/')
-        .replaceFirst('/t/p/w500/', '/t/p/w1280/');
+    final physical = (width * pixelRatio).round();
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
@@ -38,16 +43,33 @@ class TvDetailBackdrop extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (url != null && url.isNotEmpty)
-                  CachedNetworkImage(
-                    cacheManager: AppImageCache.manager,
-                    imageUrl: url,
-                    fit: BoxFit.cover,
-                    memCacheWidth: decodeWidth,
-                    placeholder: (_, _) => const SizedBox.expand(),
-                    errorWidget: (_, _, _) => const SizedBox.expand(),
-                    fadeInDuration: const Duration(milliseconds: 300),
-                  ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: TvImageMemoryGuard.reducedRendering,
+                  builder: (_, pressure, _) {
+                    final cap = TvRenderPolicy.backdropDecodeLimit(
+                      memoryPressure: pressure,
+                    );
+                    final decodeWidth = physical > 0 && physical < cap
+                        ? physical
+                        : cap;
+                    final url = requestUrl(
+                      image,
+                      TvRenderPolicy.backdropRequestWidth(
+                        memoryPressure: pressure,
+                      ),
+                    );
+                    if (url == null) return const SizedBox.expand();
+                    return CachedNetworkImage(
+                      cacheManager: AppImageCache.manager,
+                      imageUrl: url,
+                      fit: BoxFit.cover,
+                      memCacheWidth: decodeWidth,
+                      placeholder: (_, _) => const SizedBox.expand(),
+                      errorWidget: (_, _, _) => const SizedBox.expand(),
+                      fadeInDuration: const Duration(milliseconds: 300),
+                    );
+                  },
+                ),
                 const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
