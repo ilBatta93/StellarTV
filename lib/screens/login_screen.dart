@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
+import '../providers/history_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/auth_scaffold.dart';
 import '../services/device_type_service.dart';
+import '../services/xtream_service.dart';
 import '../widgets/tv_text_field.dart';
 import '../providers/sync_provider.dart';
 import '../services/key_handoff.dart';
 import '../widgets/phone_handoff_panel.dart';
+import '../widgets/recovery_key_entry.dart';
 import 'profile_picker_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -25,11 +28,15 @@ class _LoginScreenState extends State<LoginScreen> {
   final _xtreamServerController = TextEditingController();
   final _xtreamUserController = TextEditingController();
   final _xtreamPassController = TextEditingController();
+  final _keyController = TextEditingController();
   final _xtreamUserFocus = FocusNode();
   final _xtreamPassFocus = FocusNode();
+  final _keyFocus = FocusNode();
+  final _keyPanel = GlobalKey<RecoveryKeyPanelState>();
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _phone = false;
+  bool _askForKey = false;
 
   @override
   void initState() {
@@ -50,8 +57,10 @@ class _LoginScreenState extends State<LoginScreen> {
     _xtreamServerController.dispose();
     _xtreamUserController.dispose();
     _xtreamPassController.dispose();
+    _keyController.dispose();
     _xtreamUserFocus.dispose();
     _xtreamPassFocus.dispose();
+    _keyFocus.dispose();
     super.dispose();
   }
 
@@ -100,7 +109,10 @@ class _LoginScreenState extends State<LoginScreen> {
         TvTextField(
           controller: _xtreamPassController,
           focusNode: _xtreamPassFocus,
-          textInputAction: TextInputAction.done,
+          nextFocus: _askForKey ? _keyFocus : null,
+          textInputAction: _askForKey
+              ? TextInputAction.next
+              : TextInputAction.done,
           obscureText: _obscurePassword,
           decoration: InputDecoration(
             hintText: 'Inserisci la password',
@@ -120,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-        if (context.watch<SyncProvider>().isSignedIn) ...[
+        if (_signedIn(context)) ...[
           const SizedBox(height: 16),
           if (_phone)
             PhoneHandoffPanel(
@@ -179,6 +191,15 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  /// Senza sessione in albero il passaggio dal telefono resta nascosto.
+  bool _signedIn(BuildContext context) {
+    try {
+      return context.watch<SyncProvider>().isSignedIn;
+    } on ProviderNotFoundException {
+      return false;
+    }
+  }
+
   Widget _buildFieldLabel(String label) {
     return Text(
       label,
@@ -201,12 +222,40 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() => _isLoading = true);
+    await _keyPanel.currentState?.ready;
+    if (!mounted) return;
+
+    final auth = await XtreamService().authenticate(
+      server: server,
+      username: username,
+      password: password,
+    );
+    if (!mounted) return;
+    if (!auth.ok) {
+      setState(() => _isLoading = false);
+      _showError(auth.message);
+      return;
+    }
+
+    final proceed = await acceptTypedRecoveryKey(
+      context: context,
+      sync: context.read<SyncProvider>(),
+      history: context.read<HistoryProvider>(),
+      typed: _keyController.text,
+      askForKey: _keyPanel.currentState?.askForKey ?? _askForKey,
+      keyFocus: _keyFocus,
+    );
+    if (!proceed || !mounted) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
     final provider = context.read<AppProvider>();
     final success = await provider.loginWithXtream(
       server: server,
       username: username,
       password: password,
+      verified: auth,
     );
 
     if (mounted) {

@@ -20,6 +20,13 @@ Future<void> device(bool tv) async {
   debugDefaultTargetPlatformOverride = null;
 }
 
+/// A few frames, without waiting for idle. A focused field keeps the caret
+/// ticking, so pumpAndSettle would never return.
+Future<void> frames(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   tearDown(() => debugDefaultTargetPlatformOverride = null);
@@ -41,18 +48,18 @@ void main() {
               home: account ? const AccountScreen() : const LoginScreen(),
             ),
           );
-          await tester.pumpAndSettle();
+          await frames(tester);
           expect(tester.testTextInput.isVisible, isFalse);
           expect(tester.testTextInput.hasAnyClients, isFalse);
           if (tv) {
             await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-            await tester.pumpAndSettle();
+            await frames(tester);
             expect(tester.testTextInput.isVisible, isFalse);
             await tester.sendKeyEvent(LogicalKeyboardKey.select);
           } else {
             await tester.tap(find.byType(TextField).first);
           }
-          await tester.pumpAndSettle(const Duration(seconds: 2));
+          await frames(tester);
           expect(tester.testTextInput.isVisible, isTrue);
           tester.testTextInput.enterText('test-value');
           await tester.pump();
@@ -68,18 +75,18 @@ void main() {
           );
           if (tv) {
             await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-            await tester.pumpAndSettle();
+            await frames(tester);
             expect(tester.testTextInput.isVisible, isFalse);
             await tester.sendKeyEvent(LogicalKeyboardKey.select);
           } else {
             tester.testTextInput.hide();
             await tester.tap(find.byType(TextField).first);
           }
-          await tester.pumpAndSettle(const Duration(seconds: 2));
+          await frames(tester);
           expect(tester.testTextInput.isVisible, isTrue);
           expect(tester.takeException(), isNull);
           await tester.pumpWidget(const SizedBox());
-          await tester.pumpAndSettle(const Duration(seconds: 2));
+          await frames(tester);
         },
       );
     }
