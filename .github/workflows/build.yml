@@ -83,8 +83,11 @@ jobs:
         run: flutter test
 
       - name: Verify native live window
-        working-directory: android
-        run: ./gradlew :video_player_android:testReleaseUnitTest --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.frameHealthDoesNotConfuseDimensionsWithRenderedVideo' --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.liveSeekClampsToCurrentWindow' --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.unseekableLiveDoesNotSeek' --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.liveDefaultPositionUsesNativeDefault'
+        run: |
+          set -e
+          flutter build apk --config-only --debug --no-pub
+          cd android
+          ./gradlew :video_player_android:testReleaseUnitTest --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.frameHealthDoesNotConfuseDimensionsWithRenderedVideo' --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.liveSeekClampsToCurrentWindow' --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.unseekableLiveDoesNotSeek' --tests 'io.flutter.plugins.videoplayer.VideoPlayerTest.liveDefaultPositionUsesNativeDefault'
 
       - name: Build APK (Release)
         env:
