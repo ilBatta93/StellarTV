@@ -48,9 +48,9 @@ class _SplashScreenState extends State<SplashScreen>
     final history = context.read<HistoryProvider>();
 
     if (!app.isInitialized) {
-      // Bounded wait: if startup never completes, fall through to the login
-      // screen instead of leaving the app stuck on the splash forever.
-      if (_initAttempts++ < 20) {
+      // The saved index publishes the sections before Home. This wait covers
+      // that read. If startup never finishes, the login screen still opens.
+      if (_initAttempts++ < 40) {
         Future.delayed(const Duration(milliseconds: 300), _tryNavigate);
         return;
       }

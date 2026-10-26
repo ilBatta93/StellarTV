@@ -11,6 +11,7 @@ import '../services/epg_timeline.dart';
 import '../player/playback_session.dart';
 import '../services/player_settings_service.dart';
 import '../services/catalog_builder.dart';
+import '../services/catalog_shelf.dart';
 import '../services/catalog_sort.dart' show sortLiveBackground;
 import '../services/recent_live_channels.dart';
 import '../services/xtream_service.dart';
@@ -36,6 +37,12 @@ import 'epg_settings_screen.dart';
 import 'multiview_screen.dart';
 
 final _liveWord = RegExp(r'[^a-z0-9à-ÿ]+');
+
+/// Slots already in memory. Building the guide from these does not open titles.
+List<int> liveEntrySlots(Iterable<CatalogEntry> entries) => [
+  for (final entry in entries)
+    if (entry.shelfSlot case final slot?) slot,
+];
 
 bool _nameHasTokens(String name, List<String> tokens) {
   final words = name.toLowerCase().split(_liveWord);
@@ -94,6 +101,11 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   CatalogSort? _sortOrder;
   List<Channel>? _sortResult;
   int _sortEpoch = 0;
+
+  int _indexOfChannel(List<Channel> channels, String id) {
+    if (channels is ShelfChannelList) return channels.indexOfId(id);
+    return channels.indexWhere((channel) => channel.id == id);
+  }
 
   List<Channel> _orderedLive(List<Channel> channels) {
     if (_sort == null || _sort == CatalogSort.provider) return channels;
@@ -561,9 +573,11 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
 
   Widget _tvGuide(List<Channel> channels, EpgProvider epg, AppProvider app) {
     final showWatched = _category == _watchedLabel;
-    final selected = channels
-        .where((c) => c.id == _selectedChannel?.id)
-        .firstOrNull;
+    final selectedId = _selectedChannel?.id;
+    final selectedIndex = selectedId == null
+        ? -1
+        : _indexOfChannel(channels, selectedId);
+    final selected = selectedIndex < 0 ? null : channels[selectedIndex];
     final program =
         _selectedProgram ?? (selected == null ? null : epg.nowFor(selected));
     return Padding(
@@ -610,9 +624,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                         itemCount: channels.length,
                         findChildIndexCallback: (key) {
                           if (key is! ValueKey<String>) return null;
-                          final index = channels.indexWhere(
-                            (channel) => channel.id == key.value,
-                          );
+                          final index = _indexOfChannel(channels, key.value);
                           return index < 0 ? null : index;
                         },
                         itemBuilder: (context, i) {
@@ -911,6 +923,15 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
           if (channel.name.toLowerCase().contains(needle)) channel,
       ];
     }
+    if (channels is ShelfChannelList && query.length >= 2 && app.catalogIndexReady) {
+      final named = app.matchingChannelIds(
+        ContentType.live,
+        query,
+        channels.ids,
+      );
+      final guideHits = epg.guideIdsMatching(query);
+      if (guideHits.isEmpty) return channels.whereIds(named);
+    }
     if (!app.catalogIndexReady) {
       final tokens = [
         for (final token in query.toLowerCase().split(_liveWord))
@@ -989,7 +1010,8 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       return Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
     final groups = app.groupedCatalog(ContentType.live);
-    if (groups.isEmpty && !app.catalogPreparing(ContentType.live)) {
+    final anyVisible = groups.any((group) => group.entries.isNotEmpty);
+    if (!anyVisible && !app.catalogPreparing(ContentType.live)) {
       return const EmptyState(
         icon: Icons.live_tv_rounded,
         title: 'Nessun canale',
@@ -1018,18 +1040,20 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     final showWatched = _category == _watchedLabel;
     final selected = groups.where((g) => g.label == _category).firstOrNull;
     final listKey =
-        '$_category|$_query|${epg.searchRevision}|${app.catalogIndexRevision}|${showWatched ? _recentLive.ids.join(',') : ''}';
+        '$_category|$_query|${app.visibilityStamp}|${showWatched ? _recentLive.ids.join(',') : ''}';
     final reusable = identical(_listGroups, groups) && _listKey == listKey;
     var channels = reusable
         ? (_listCache ?? const <Channel>[])
         : showWatched
         ? [for (final e in watched) e.primary]
-        : selected != null
-        ? [for (final e in selected.entries) e.primary]
-        : [
-            for (final g in groups)
-              for (final e in g.entries) e.primary,
-          ];
+        : app.bindChannels(
+            selected != null
+                ? liveEntrySlots(selected.entries)
+                : [
+                    for (final group in groups)
+                      ...liveEntrySlots(group.entries),
+                  ],
+          );
     if (!reusable && _query.isNotEmpty) {
       channels = _channelsForQuery(channels, app, epg);
     }
@@ -1043,7 +1067,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       channels = _orderedLive(channels);
 
     if (_selectedChannel != null &&
-        !channels.any((c) => c.id == _selectedChannel?.id)) {
+        _indexOfChannel(channels, _selectedChannel!.id) < 0) {
       _stopPreview();
       _selectedChannel = null;
       _selectedProgram = null;
@@ -1087,6 +1111,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                     _confirmClearRecent,
                   ),
                 for (final group in groups)
+                  if (group.entries.isNotEmpty)
                   TvFilterOption(
                     group.label,
                     _category == group.label,
@@ -1275,7 +1300,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
             (count, group) => count + group.entries.length,
           ),
           _watchedLabel: watched.length,
-          for (final group in groups) group.label: group.entries.length,
+          for (final group in groups)
+            if (group.entries.isNotEmpty)
+              group.label: group.entries.length,
         },
         selected: _category ?? 'Tutti',
         onSelected: (category) =>

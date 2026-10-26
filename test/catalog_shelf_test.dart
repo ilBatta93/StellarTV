@@ -73,6 +73,53 @@ void main() {
     expect(shelf.readSlot(padrino.first).url, contains('/2/'));
     expect(movies.readAsStringSync(), contains('https://local/2/stream'));
   });
+
+  test('startup publishes the three sections from the saved index', () async {
+    final dir = Directory.systemTemp.createTempSync('stv_index_');
+    final live = File('${dir.path}/live.ndjson');
+    final movies = File('${dir.path}/movie.ndjson');
+    final series = File('${dir.path}/series.ndjson');
+    writeSection(live, [row(1, name: 'Alfa Uno', type: ContentType.live)]);
+    writeSection(movies, [row(2, name: 'Il Padrino')]);
+    writeSection(series, [
+      row(3, name: 'Dark Matter', type: ContentType.series),
+    ]);
+    const hidden = <String, List<String>>{};
+    final built = CatalogShelf.empty();
+    addTearDown(() async {
+      built.close();
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    for (final file in [live, movies, series]) {
+      await built.appendSection(
+        file.path,
+        hidden: hidden,
+        custom: const [],
+        order: const {},
+      );
+    }
+    final token = built.settingsToken;
+    built.close();
+    final restored = CatalogShelf.empty();
+    addTearDown(restored.close);
+    CatalogShelf.diskReads = 0;
+    CatalogShelf.forbidDiskReads = true;
+    try {
+      expect(await restored.adoptIndex(live.path, token: token), isTrue);
+      expect(await restored.adoptIndex(movies.path, token: token), isTrue);
+      expect(await restored.adoptIndex(series.path, token: token), isTrue);
+      expect(restored.plan(ContentType.live)?.channels, isNotEmpty);
+      expect(restored.plan(ContentType.movie)?.channels, isNotEmpty);
+      expect(restored.plan(ContentType.series)?.channels, isNotEmpty);
+      expect(restored.searchSlots('padrino'), isNotEmpty);
+      expect(CatalogShelf.diskReads, 0);
+    } finally {
+      CatalogShelf.forbidDiskReads = false;
+    }
+    final slot = restored.plan(ContentType.movie)!.channels.first;
+    expect(restored.readSlot(slot).name, 'Il Padrino');
+    expect(CatalogShelf.diskReads, 1);
+  });
 }
 
 void writeSection(File file, List<Channel> rows) {

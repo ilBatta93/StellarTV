@@ -11,6 +11,8 @@ import 'package:stellar_tv/models/channel.dart';
 import 'package:stellar_tv/models/content_type.dart';
 import 'package:stellar_tv/providers/app_provider.dart';
 import 'package:stellar_tv/services/catalog_cache_service.dart';
+import 'package:stellar_tv/screens/catalog_page.dart';
+import 'package:stellar_tv/screens/live_page.dart';
 import 'package:stellar_tv/services/catalog_shelf.dart';
 import 'package:stellar_tv/services/xtream_service.dart';
 import 'package:stellar_tv/widgets/catalog_status_indicator.dart';
@@ -453,6 +455,56 @@ void main() {
     expect(app.kidsMode, isTrue);
     expect(app.channelsOf(ContentType.movie), hasLength(1));
     expect(app.channelsOf(ContentType.movie).single.name, 'Topolino');
+    CatalogShelf.diskReads = 0;
+    CatalogShelf.forbidDiskReads = true;
+    try {
+      await app.setShowAdult(true);
+      for (final type in [
+        ContentType.live,
+        ContentType.movie,
+        ContentType.series,
+      ]) {
+        final entries = [
+          for (final group in app.groupedCatalog(type)) ...group.entries,
+        ];
+        final slots = liveEntrySlots(entries);
+        final view = app.bindChannels(slots);
+        if (slots.isNotEmpty) {
+          expect(view.indexOfId(app.idAt(slots.first)), 0);
+        }
+        for (final entry in entries) {
+          catalogSlotMatchesGenre(app, entry, 16);
+          catalogEntryIdentity(app, entry);
+        }
+      }
+      expect(CatalogShelf.diskReads, 0);
+    } finally {
+      CatalogShelf.forbidDiskReads = false;
+    }
     await loading;
+  });
+
+  test('a second full download is not queued while one is running', () async {
+    final api = FakeXtream();
+    final app = AppProvider(xtreamService: api, catalogCache: FakeCache());
+    addTearDown(app.dispose);
+    final first = app.loadFromXtream(
+      server: 'test',
+      username: '',
+      password: '',
+    );
+    final second = app.loadFromXtream(
+      server: 'test',
+      username: '',
+      password: '',
+    );
+    await tick();
+    expect(api.liveCalls, 1);
+    api.live.complete(<Channel>[]);
+    api.movies.complete(<Channel>[]);
+    api.series.complete(<Channel>[]);
+    await first;
+    await second;
+    expect(api.liveCalls, 1);
   });
 }

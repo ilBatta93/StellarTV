@@ -99,6 +99,9 @@ class AppProvider extends ChangeNotifier {
   bool _shelfReady = false;
   Uint8List _visibleMask = Uint8List(0);
   int _visibleCount = 0;
+  final CatalogVisibility _visibility = CatalogVisibility();
+  int get visibilityStamp => _visibility.stamp;
+  bool _fullLoadActive = false;
   ShelfChannelList? _visibleView;
   final Map<ContentType, ShelfChannelList> _typedViews = {};
   bool _showAdult = false;
@@ -246,6 +249,14 @@ class AppProvider extends ChangeNotifier {
 
   List<Channel> channelsOf(ContentType type) =>
       _typedViews[type] ?? ShelfChannelList(_shelf, const []);
+
+  String idAt(int slot) => _shelf.idAt(slot);
+
+  List<int>? genresForSlot(int slot) =>
+      _kids.genresForKey(_shelf.facetKeyAt(slot));
+
+  ShelfChannelList bindChannels(List<int> slots) =>
+      ShelfChannelList(_shelf, slots);
 
   List<Channel> catalogOf(ContentType type) {
     if (type == ContentType.series || type == ContentType.anime) {
@@ -499,12 +510,7 @@ class AppProvider extends ChangeNotifier {
         }
       }
       for (final path in targets) {
-        await _shelf.appendSection(
-          path,
-          hidden: _hiddenCategories,
-          custom: _customCategories,
-          order: _categoryOrder,
-        );
+        await _openSavedSection(_shelf, path);
         if (_disposed || epoch != _shelfEpoch) return;
       }
       if (_disposed || epoch != _shelfEpoch) return;
@@ -513,18 +519,24 @@ class AppProvider extends ChangeNotifier {
     }
     final shelf = CatalogShelf.empty();
     for (final path in present) {
-      await shelf.appendSection(
-        path,
-        hidden: _hiddenCategories,
-        custom: _customCategories,
-        order: _categoryOrder,
-      );
+      await _openSavedSection(shelf, path);
       if (_disposed || epoch != _shelfEpoch) {
         shelf.close();
         return;
       }
     }
     _swap(shelf);
+  }
+
+  Future<void> _openSavedSection(CatalogShelf shelf, String path) async {
+    final adopted = await shelf.adoptIndex(path, token: _settingsToken());
+    if (adopted) return;
+    await shelf.appendSection(
+      path,
+      hidden: _hiddenCategories,
+      custom: _customCategories,
+      order: _categoryOrder,
+    );
   }
 
   Future<void> _installChannels(List<Channel> channels) async {
@@ -588,12 +600,8 @@ class AppProvider extends ChangeNotifier {
     }
     _visibleMask = mask;
     _visibleCount = visible;
+    _visibility.setMask(mask);
   }
-
-  List<int> _kept(List<int> slots) => [
-    for (final slot in slots)
-      if (slot < _visibleMask.length && _visibleMask[slot] == 1) slot,
-  ];
 
   CatalogEntry _slotEntry(int slot) => CatalogEntry.slot(slot, _shelf);
 
@@ -603,37 +611,49 @@ class AppProvider extends ChangeNotifier {
     for (final type in ContentType.values) {
       final plan = _shelf.plan(type);
       if (plan == null) continue;
-      _typedViews[type] = ShelfChannelList(_shelf, _kept(plan.channels));
+      _typedViews[type] = ShelfChannelList(
+        _shelf,
+        plan.channels,
+        visibility: _visibility,
+      );
       if (type == ContentType.series || type == ContentType.anime) {
         _seriesCatalogCache[type] = ShelfChannelList(
           _shelf,
-          _kept(plan.catalog),
+          plan.catalog,
+          visibility: _visibility,
         );
       }
       final groups = <CatalogGroup>[];
       for (var i = 0; i < plan.labels.length; i++) {
-        final entries = _kept(plan.groupSlots[i]);
-        if (entries.isNotEmpty) {
-          groups.add(
-            CatalogGroup(
-              label: plan.labels[i],
-              entries: SlotEntryList(_shelf, entries),
+        groups.add(
+          CatalogGroup(
+            label: plan.labels[i],
+            entries: SlotEntryList(
+              _shelf,
+              plan.groupSlots[i],
+              visibility: _visibility,
             ),
-          );
-        }
+          ),
+        );
       }
       _groupedCache[type] = groups;
-      _recentCache[type] = SlotEntryList(_shelf, _kept(plan.recent));
-      _allCache[type] = SlotEntryList(_shelf, _kept(plan.alphabetical));
+      _recentCache[type] = SlotEntryList(
+        _shelf,
+        plan.recent,
+        visibility: _visibility,
+      );
+      _allCache[type] = SlotEntryList(
+        _shelf,
+        plan.alphabetical,
+        visibility: _visibility,
+      );
       unawaited(_warmFacetNames(type, plan.alphabetical));
       unawaited(_ensureGenreCounts(type));
     }
     _visibleView = ShelfChannelList(
       _shelf,
-      [
-        for (var slot = 0; slot < _shelf.length; slot++)
-          if (_visibleMask[slot] == 1) slot,
-      ],
+      [for (var slot = 0; slot < _shelf.length; slot++) slot],
+      visibility: _visibility,
     );
     _titleCategories = _shelf.titleCategories;
     if (notify) notifyListeners();
@@ -732,7 +752,12 @@ class AppProvider extends ChangeNotifier {
 
   void _applyAdultFilter() {
     _rebuildMask();
-    _publishShelf();
+    final published = _groupedCache.isNotEmpty || _typedViews.isNotEmpty;
+    if (!published && !_shelf.isEmpty) {
+      _publishShelf();
+    } else {
+      notifyListeners();
+    }
   }
 
   /// Kids profile: only children's categories/channels are visible.
@@ -1532,7 +1557,10 @@ class AppProvider extends ChangeNotifier {
           for (final type in _playlistTypes)
             if (!saved.contains(type)) type,
         ];
-        if (missing.length == _playlistTypes.length) {
+        if (_fullLoadActive || _anyPending) {
+          // A full download is already queued. The saved index is enough
+          // to open the sections that are already on the device.
+        } else if (missing.length == _playlistTypes.length) {
           // Nothing saved on this device yet: full first download.
           await loadFromXtream(
             server: credentials['server']!,
@@ -1568,6 +1596,8 @@ class AppProvider extends ChangeNotifier {
     List<ContentType> types,
     Map<String, String> credentials,
   ) async {
+    if (_fullLoadActive || _anyPending) return;
+    _fullLoadActive = true;
     _activeLoadKey = _cacheKey(credentials);
     _isLoading = true;
     _error = null;
@@ -1584,6 +1614,7 @@ class AppProvider extends ChangeNotifier {
         await _enqueue(type, credentials);
       }
     } finally {
+      _fullLoadActive = false;
       _finishIfIdle();
     }
   }
@@ -1661,13 +1692,19 @@ class AppProvider extends ChangeNotifier {
   String get _currentKey => _cacheKey(_xtreamCredentials ?? const {});
 
   /// Retries one section only; the other sections keep their content.
-  Future<void> retrySection(ContentType type) async {
+  Future<void> retrySection(ContentType type, {bool force = false}) async {
     final section = type == ContentType.anime ? ContentType.series : type;
     final credentials = _xtreamCredentials;
     if (!ForegroundPolicy.instance.active ||
         credentials == null ||
-        catalogState(section).isPending)
+        catalogState(section).isPending) {
       return;
+    }
+    if (!force &&
+        (_fullLoadActive || _anyPending) &&
+        _hasSection(section)) {
+      return;
+    }
     _catalogStates[section] = CatalogLoadState(
       phase: CatalogLoadPhase.queued,
       hasContent: _hasSection(section),
@@ -1684,14 +1721,20 @@ class AppProvider extends ChangeNotifier {
   Future<void> refreshAllSections() async {
     if (_xtreamCredentials == null) return;
     if (_playbackActive || !ForegroundPolicy.instance.active) return;
-    await Future.wait([
-      for (final t in const [
-        ContentType.live,
-        ContentType.movie,
-        ContentType.series,
-      ])
-        retrySection(t),
-    ]);
+    if (_fullLoadActive || _anyPending) return;
+    _fullLoadActive = true;
+    try {
+      await Future.wait([
+        for (final t in const [
+          ContentType.live,
+          ContentType.movie,
+          ContentType.series,
+        ])
+          retrySection(t, force: true),
+      ]);
+    } finally {
+      _fullLoadActive = false;
+    }
     if (_loadFailures.isEmpty) {
       await _refreshService.markRun();
       _playlistRefreshRevision++;
@@ -1848,7 +1891,10 @@ class AppProvider extends ChangeNotifier {
     required String password,
   }) async {
     final requestedKey = _cacheKey({'server': server, 'username': username});
-    if (_anyPending && requestedKey == _activeLoadKey) return;
+    if (_fullLoadActive || (_anyPending && requestedKey == _activeLoadKey)) {
+      return;
+    }
+    _fullLoadActive = true;
     _activeLoadKey = requestedKey;
     final current = _xtreamCredentials;
     final credentials =
@@ -1882,6 +1928,7 @@ class AppProvider extends ChangeNotifier {
         notifyListeners();
       }
     } finally {
+      _fullLoadActive = false;
       _finishIfIdle();
     }
   }

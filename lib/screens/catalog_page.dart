@@ -37,6 +37,20 @@ import '../widgets/tv_text_field.dart';
 import '../widgets/section_row.dart';
 import 'settings_screen.dart';
 
+/// Genre check from the facet already stored on the slot.
+bool catalogSlotMatchesGenre(AppProvider app, CatalogEntry entry, int? genreId) {
+  if (genreId == null) return true;
+  final slot = entry.shelfSlot;
+  if (slot != null) return app.genresForSlot(slot)?.contains(genreId) ?? false;
+  return app.genresOf(entry.primary)?.contains(genreId) ?? false;
+}
+
+String catalogEntryIdentity(AppProvider app, CatalogEntry entry) {
+  final slot = entry.shelfSlot;
+  if (slot != null) return app.idAt(slot);
+  return catalogEntryKey(entry.primary);
+}
+
 SliverGridDelegateWithMaxCrossAxisExtent channelGridDelegate(
   ContentType type, {
   double maxExtent = 140,
@@ -513,7 +527,8 @@ class _CatalogPageState extends State<CatalogPage> {
     }
 
     final groups = app.groupedCatalog(widget.type);
-    if (groups.isEmpty && !app.catalogPreparing(widget.type)) {
+    final anyVisible = groups.any((group) => group.entries.isNotEmpty);
+    if (!anyVisible && !app.catalogPreparing(widget.type)) {
       return EmptyState(
         icon: Icons.playlist_add_rounded,
         title: 'Nessun contenuto',
@@ -531,17 +546,16 @@ class _CatalogPageState extends State<CatalogPage> {
 
     if (!_infoRequested) {
       _infoRequested = true;
-      // After the first frames: the tab opens first, the genre check
-      // (which walks the whole catalog) starts a moment later.
+      // Posters of the first visible titles only. The saved index already
+      // published the section, so opening the page does not read every title.
       Future<void>.delayed(const Duration(seconds: 2), () {
         if (!mounted) return;
         final provider = this.context.read<AppProvider>();
-        provider.requestTitleInfo(provider.catalogOf(widget.type));
-        // Pre-download the posters of the first visible titles so opening a
-        // category does not wait on the network.
-        final posters = provider
-            .recentEntries(widget.type)
-            .map((e) => e.primary.logo);
+        final recent = provider.recentEntries(widget.type);
+        final posters = [
+          for (var i = 0; i < recent.length && i < 24; i++)
+            recent[i].primary.logo,
+        ];
         ImageWarmupService.warm(posters);
         if (DeviceTypeService.isTv) {
           PosterMemoryWarmup.warmTv(this.context, posters);
@@ -574,7 +588,8 @@ class _CatalogPageState extends State<CatalogPage> {
                 _watchedLabel: watched.length,
                 _allLabel: app.catalogCountOf(widget.type),
                 for (final g in groups)
-                  if (g.label != _allLabel) g.label: g.entries.length,
+                  if (g.label != _allLabel && g.entries.isNotEmpty)
+                    g.label: g.entries.length,
               },
               selected: _selectedCategory ?? _recentLabel,
               onSelected: (category) => setState(
@@ -590,7 +605,8 @@ class _CatalogPageState extends State<CatalogPage> {
                 _watchedLabel: watched.length,
                 _allLabel: app.catalogCountOf(widget.type),
                 for (final g in groups)
-                  if (g.label != _allLabel) g.label: g.entries.length,
+                  if (g.label != _allLabel && g.entries.isNotEmpty)
+                    g.label: g.entries.length,
               },
               selected: _selectedCategory,
               onSelected: (category) {
@@ -708,6 +724,10 @@ class _CatalogPageState extends State<CatalogPage> {
 
   bool _matchesGenre(AppProvider app, CatalogEntry e) {
     final platform = _platform;
+    final id = _genreId;
+    if (platform == null && !_only4k) {
+      return catalogSlotMatchesGenre(app, e, id);
+    }
     if (platform != null &&
         !belongsToPlatform(
           platform,
@@ -717,9 +737,7 @@ class _CatalogPageState extends State<CatalogPage> {
       return false;
     }
     if (_only4k && !_is4k(e)) return false;
-    final id = _genreId;
-    if (id == null) return true;
-    return app.genresOf(e.primary)?.contains(id) ?? false;
+    return catalogSlotMatchesGenre(app, e, id);
   }
 
   /// One-genre chip bar; only genres that exist in the playlist are shown.
@@ -807,7 +825,7 @@ class _CatalogPageState extends State<CatalogPage> {
     return [
       for (final g in app.groupedCatalog(widget.type))
         for (final e in g.entries)
-          if (_matchesGenre(app, e) && seen.add(catalogEntryKey(e.primary))) e,
+          if (_matchesGenre(app, e) && seen.add(catalogEntryIdentity(app, e))) e,
     ];
   }
 
@@ -946,7 +964,9 @@ class _CatalogPageState extends State<CatalogPage> {
     if (ui.viewMode != CatalogViewMode.spotlight) return grid;
     final current = _spotlight.value;
     if (current == null ||
-        !entries.any((e) => e.primary.id == current.primary.id)) {
+        !entries.any(
+          (e) => catalogEntryIdentity(app, e) == catalogEntryIdentity(app, current),
+        )) {
       _spotlight.value = entries.first;
     }
     return Column(
@@ -1064,6 +1084,7 @@ class _CatalogPageState extends State<CatalogPage> {
   int? _filterGenre;
   String? _filterPlatform;
   int? _filterInfoVersion;
+  int? _filterVisibility;
   List<CatalogEntry>? _filterResult;
   bool _filter4k = false;
 
@@ -1086,7 +1107,8 @@ class _CatalogPageState extends State<CatalogPage> {
         _filter4k == _only4k &&
         _filterPlatform ==
             (_platform == null ? null : _platformKey(app, _platform!)) &&
-        _filterInfoVersion == app.titleInfoVersion) {
+        _filterInfoVersion == app.titleInfoVersion &&
+        _filterVisibility == app.visibilityStamp) {
       return _filterResult!;
     }
     _filterSource = source;
@@ -1095,6 +1117,7 @@ class _CatalogPageState extends State<CatalogPage> {
     _filter4k = _only4k;
     _filterPlatform = _platform == null ? null : _platformKey(app, _platform!);
     _filterInfoVersion = app.titleInfoVersion;
+    _filterVisibility = app.visibilityStamp;
     return _filterResult = compute();
   }
 
