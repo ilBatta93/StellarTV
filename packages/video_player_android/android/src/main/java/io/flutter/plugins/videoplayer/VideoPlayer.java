@@ -501,6 +501,28 @@ public abstract class VideoPlayer implements VideoPlayerInstanceApi {
     return true;
   }
 
+  /**
+   * Keeps the decoder and the texture, swapping only the media item when the
+   * container family matches. A different family must build a new player.
+   */
+  @UnstableApi
+  public boolean replaceMediaItem(@NonNull String uri, @Nullable String mimeType) {
+    if (isDisposed) return false;
+    MediaItem current = exoPlayer.getCurrentMediaItem();
+    String currentMime =
+        current != null && current.localConfiguration != null
+            ? current.localConfiguration.mimeType
+            : null;
+    if (!java.util.Objects.equals(currentMime, mimeType)) return false;
+    firstFrameRendered = false;
+    MediaItem.Builder builder = new MediaItem.Builder().setUri(android.net.Uri.parse(uri));
+    if (mimeType != null) builder.setMimeType(mimeType);
+    exoPlayer.setMediaItem(builder.build());
+    exoPlayer.prepare();
+    exoPlayer.setPlayWhenReady(true);
+    return true;
+  }
+
   public void dispose() {
     isDisposed = true;
     mainHandler.removeCallbacksAndMessages(null);

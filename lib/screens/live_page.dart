@@ -16,6 +16,7 @@ import '../services/recent_live_channels.dart';
 import '../services/xtream_service.dart';
 import '../services/xtream_catchup.dart';
 import '../services/live_preview_policy.dart';
+import '../services/stream_slot_policy.dart';
 import '../services/native_player_bridge.dart';
 import '../widgets/player/video_surface.dart';
 import '../navigation/app_routes.dart';
@@ -243,7 +244,8 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     _stopPreview();
     if (mounted) setState(() {});
     final gen = _previewGeneration;
-    _previewDelay = Timer(const Duration(milliseconds: 800), () async {
+    final overlap = StreamSlotPolicy.instance.allowsOverlap;
+    _previewDelay = Timer(const Duration(milliseconds: 200), () async {
       if (!mounted ||
           !widget.active ||
           ModalRoute.of(context)?.isCurrent != true)
@@ -261,7 +263,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
         _previewWaiting = true;
         return;
       }
-      await _releaseQueue;
+      if (!overlap) await _releaseQueue;
       if (!mounted ||
           gen != _previewGeneration ||
           !widget.active ||
@@ -290,8 +292,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   Future<void> _watch(Channel channel) async {
     _stopPreview();
     setState(() {});
-    await Future<void>.delayed(const Duration(milliseconds: 700));
-    await _releaseQueue;
+    if (!StreamSlotPolicy.instance.allowsOverlap) await _releaseQueue;
     if (mounted && widget.active) playChannel(context, channel);
   }
 

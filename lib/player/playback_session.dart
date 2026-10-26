@@ -16,7 +16,9 @@ import '../services/vod_diagnostics_tracker.dart';
 
 import 'exo_engine.dart';
 import 'mediakit_engine.dart';
+import '../services/stream_slot_policy.dart';
 import 'playback_engine.dart';
+import 'stream_health.dart';
 
 enum SessionStatus { connecting, playing, switching, failed }
 
@@ -27,17 +29,15 @@ class _Attempt {
   final String url;
 }
 
-/// Owns at most ONE native player at a time.
+/// Owns the visible native player.
 ///
-/// Field reports (Fire TV, Google TV, Chromecast): live channels showed a
-/// black picture and then the app closed with every engine. The old session
-/// created the next player while the previous one was still alive (released
-/// 300 ms later), and failures switched engine before trying the other
-/// addresses of the channel: one bad address produced a storm of native
-/// players and provider connections, ending in a native crash or in the
-/// provider refusing the stream. Now every swap fully releases the previous
-/// player first, alternative addresses are tried with the same engine, the
-/// number of attempts is bounded and errors of stale players are ignored.
+/// A source that allows one connection releases that player completely
+/// before the next stream starts. A source that allows more than one starts
+/// the next stream while the previous player is still closing, and an
+/// adjacent channel keeps the current surface when the engine can reopen.
+/// Alternative addresses stay on the same engine, attempts are bounded and
+/// errors of stale players are ignored. A dispose deadline is not a
+/// completed release: [released] waits for the native future.
 class PlaybackSession extends ChangeNotifier {
   PlaybackSession({
     required this.url,
@@ -48,7 +48,9 @@ class PlaybackSession extends ChangeNotifier {
     this.previewFallback = false,
     this.engineFactory,
     this.onPositionCommitted,
-  }) : _candidates = liveCandidates(
+    this.maxConnections,
+  }) : _playbackUrl = url,
+       _candidates = liveCandidates(
          url,
          isLive,
          format: settings.liveStreamFormat,
@@ -59,6 +61,7 @@ class PlaybackSession extends ChangeNotifier {
        audioDelay = Duration(milliseconds: settings.audioDelayMs);
 
   final String url;
+  String _playbackUrl;
   final bool isLive;
   final Future<void> Function(Duration position)? onPositionCommitted;
 
@@ -71,6 +74,10 @@ class PlaybackSession extends ChangeNotifier {
 
   /// Allows deterministic playback/lifecycle tests without a native decoder.
   final PlaybackEngine Function(PlayerEngineType)? engineFactory;
+
+  /// Source connection cap. Null reads [StreamSlotPolicy]. One keeps the
+  /// next open behind a finished release.
+  final int? maxConnections;
 
   /// Alternative addresses for the same stream. Xtream live channels were
   /// saved without the `/live/` segment (HTTP 404); the standard
@@ -148,6 +155,29 @@ class PlaybackSession extends ChangeNotifier {
   List<_Attempt> _plan = const [];
   int _attempt = 0;
   Future<void> _releasing = Future<void>.value();
+  final List<Future<void>> _nativeDrains = [];
+  final Set<PlaybackEngine> _disposing = {};
+  int _nativeOutstanding = 0;
+  PlaybackEngine? _held;
+  Future<void>? _retuneTail;
+
+  int get _connectionSlots {
+    final cap = maxConnections ?? StreamSlotPolicy.instance.maxConnections;
+    return cap < 1 ? 1 : cap;
+  }
+
+  bool get _allowsOverlap => _connectionSlots > 1;
+
+  /// Hard cap so a stuck native dispose cannot pin the next open forever.
+  /// A deadline does not complete [released].
+  @visibleForTesting
+  static Duration nativeDisposeTimeout = const Duration(seconds: 3);
+
+  @visibleForTesting
+  static Duration surfaceReleaseDelay = const Duration(milliseconds: 350);
+
+  @visibleForTesting
+  static Duration singleConnectionGap = const Duration(milliseconds: 450);
 
   double speed;
   double volume = 1.0;
@@ -163,13 +193,36 @@ class PlaybackSession extends ChangeNotifier {
 
   PlaybackEngine? get engine => _engine;
 
+  /// Surface to keep on screen. During a hot swap this is the previous
+  /// picture until the new engine has drawn a frame.
+  PlaybackEngine? get presentedEngine {
+    final current = _engine;
+    final held = _held;
+    if (current == null) return held;
+    if (held != null &&
+        current.videoFrameRendered == false &&
+        !current.audioOnly) {
+      return held;
+    }
+    return current;
+  }
+
   /// Completes when every player of this session has been fully released
-  /// (useful after [dispose] before opening another stream).
-  Future<void> get released => _releasing;
+  /// (useful after [dispose] before opening another stream). A dispose
+  /// deadline does not complete this future.
+  Future<void> get released async {
+    await _releasing;
+    for (final drain in List<Future<void>>.of(_nativeDrains)) {
+      try {
+        await drain;
+      } catch (_) {}
+    }
+  }
   SessionStatus get status => _status;
   String? get notice => _notice;
   String? get error => _error;
-  PlaybackSnapshot get value => _engine?.value ?? const PlaybackSnapshot();
+  PlaybackSnapshot get value =>
+      _engine?.value ?? _held?.value ?? const PlaybackSnapshot();
 
   /// Channels already known to give a black picture with the hardware
   /// decoder open directly in mpv with FFmpeg software decoding.
@@ -285,7 +338,8 @@ class PlaybackSession extends ChangeNotifier {
       if (_disposed) return;
       // Software decoding is a decoder choice, not an engine switch: it
       // stays available even when automatic engine fallback is off.
-      if ((!previewMode || previewFallback) && DecoderMemory.needsSoftware(url))
+      if ((!previewMode || previewFallback) &&
+          DecoderMemory.needsSoftware(_playbackUrl))
         _softwareDecode = true;
     }
     _plan = _buildPlan(_firstEngine);
@@ -299,6 +353,81 @@ class PlaybackSession extends ChangeNotifier {
     _plan = _buildPlan(_firstEngine);
     _attempt = 0;
     return _openAttempt(resumeAt: _resumePoint());
+  }
+
+  /// Opens [nextUrl] on this session. The same native player is kept when it
+  /// can reopen; otherwise a source with more than one connection starts the
+  /// new stream before the previous player is disposed.
+  Future<void> retune(String nextUrl) {
+    final previous = _retuneTail ?? Future<void>.value();
+    final task = previous.then((_) async {
+      if (_disposed || _streamStopped) return;
+      await _retuneNow(nextUrl);
+    });
+    _retuneTail = task.catchError((Object _) {});
+    return task;
+  }
+
+  Future<void> _retuneNow(String nextUrl) async {
+    if (_disposed || _streamStopped) return;
+    final gen = ++_generation;
+    _cancelHealth();
+    _playbackUrl = nextUrl;
+    _candidates
+      ..clear()
+      ..addAll(
+        liveCandidates(nextUrl, isLive, format: settings.liveStreamFormat),
+      );
+    _currentUrl = '';
+    _serverRefusalRetries = 0;
+    _reconnects = 0;
+    _probedFormats.clear();
+    _softwareDecode = false;
+    _failedGeneration = -1;
+    _userPausedLive = false;
+    _deferredLiveFailure = false;
+    if (isLive &&
+        (!previewMode || previewFallback) &&
+        DecoderMemory.needsSoftware(_playbackUrl)) {
+      _softwareDecode = true;
+    }
+    _plan = _buildPlan(_firstEngine);
+    _attempt = 0;
+    final engine = _engine ?? _held;
+    final target = _plan.isEmpty ? nextUrl : _plan.first.url;
+    if (engine != null &&
+        _plan.isNotEmpty &&
+        engine.type == _plan.first.engine &&
+        identical(engine, _engine)) {
+      _status = SessionStatus.switching;
+      _notify();
+      var reused = false;
+      try {
+        reused = await engine.reopen(target);
+      } catch (_) {
+        reused = false;
+      }
+      if (_disposed || gen != _generation) return;
+      if (reused) {
+        _currentUrl = target;
+        _error = null;
+        _notice = null;
+        _status = SessionStatus.playing;
+        _shift = Duration.zero;
+        _pausedAt = null;
+        _liveStartedAt = isLive ? DateTime.now() : null;
+        _playingSince = DateTime.now();
+        _armHealth(engine, gen);
+        _notify();
+        return;
+      }
+    }
+    if (_disposed || gen != _generation) return;
+    if (_engine == null && _held != null) await _releaseCurrent();
+    if (_disposed || gen != _generation) return;
+    _status = SessionStatus.switching;
+    _notify();
+    await _openAttempt(generation: gen);
   }
 
   Future<void> switchEngine(PlayerEngineType type) {
@@ -340,46 +469,148 @@ class PlaybackSession extends ChangeNotifier {
         ),
       };
 
-  /// Detaches the current player, unmounts its view and releases it
-  /// completely (decoder, surface and provider connection) before the
-  /// returned future completes. Releases are serialized.
+  void _noteDisposed() {
+    if (_nativeOutstanding > 0) _nativeOutstanding--;
+  }
+
+  void _cancelHealth() {
+    _healthTimer?.cancel();
+    _healthTimer = null;
+  }
+
+  /// Serial release: the surface leaves, then the native player is disposed
+  /// within [nativeDisposeTimeout]. One connection also waits out the
+  /// server gap. A timed-out dispose stays in [released] and blocks another
+  /// native player on a single-connection source.
   Future<void> _releaseCurrent() {
-    final old = _engine;
-    _firstPictureTimer?.cancel();
-    _frameWatch?.cancel();
-    _phoneCopyTimer?.cancel();
-    if (old == null) return _releasing;
+    _cancelHealth();
+    final retiring = <PlaybackEngine>[
+      if (_engine != null) _engine!,
+      if (_held != null && !identical(_held, _engine)) _held!,
+    ];
+    if (retiring.isEmpty) return _releasing;
+    for (final engine in retiring) {
+      engine.removeListener(_onEngineChanged);
+    }
     _diagnostics?.end();
     _vod?.end();
     _engine = null;
-
-    old.removeListener(_onEngineChanged);
-    _notify(); // the view unmounts on the next frame
+    _held = null;
+    _notify();
+    final gap = !_allowsOverlap;
     _releasing = _releasing.then((_) async {
-      try {
-        await old.setVolume(0).timeout(const Duration(milliseconds: 500));
-      } catch (_) {}
-      // Let the surface/texture leave the screen before freeing it.
-      await Future<void>.delayed(const Duration(milliseconds: 350));
-      try {
-        final Object? result = (old as dynamic).dispose();
-        if (result is Future) {
-          // A deadline is not proof that the decoder has been released.
-          // Never permit the replacement to overlap a pending disposal.
-          await result;
-        }
-      } catch (e) {
-        debugPrint('Player release failed: $e');
+      for (final engine in retiring) {
+        await _disposeNative(engine, connectionGap: gap);
       }
-      // Providers with a single connection need a moment to free it.
-      await Future<void>.delayed(Duration(milliseconds: isLive ? 450 : 150));
     });
     return _releasing;
   }
 
-  Future<void> _openAttempt({Duration? resumeAt}) async {
-    final gen = ++_generation;
-    await _releaseCurrent();
+  Future<void> _disposeNative(
+    PlaybackEngine engine, {
+    required bool connectionGap,
+  }) async {
+    if (!_disposing.add(engine)) return;
+    try {
+      await engine.setVolume(0).timeout(const Duration(milliseconds: 500));
+    } catch (_) {}
+    if (connectionGap) {
+      await Future<void>.delayed(surfaceReleaseDelay);
+    }
+    final Object? result = (engine as dynamic).dispose();
+    final Future<void> pending = result is Future
+        ? result.then<void>((_) {})
+        : Future<void>.value();
+    final Future<void> drain = pending
+        .then<void>((_) {
+          _noteDisposed();
+        })
+        .catchError((Object e) {
+          _noteDisposed();
+          debugPrint('Player release failed: $e');
+        });
+    _nativeDrains.add(drain);
+    unawaited(
+      drain.whenComplete(() {
+        _nativeDrains.remove(drain);
+      }),
+    );
+    var confirmed = false;
+    try {
+      await drain.timeout(nativeDisposeTimeout);
+      confirmed = true;
+    } on TimeoutException {
+      confirmed = false;
+    }
+    if (connectionGap && !confirmed) {
+      // The deadline is not a release. Keep the single connection closed
+      // until the native player is actually gone, and say so on screen.
+      _status = SessionStatus.switching;
+      _notice = 'Chiusura del lettore in corso...';
+      _notify();
+      try {
+        await drain;
+      } catch (_) {}
+    }
+    if (connectionGap) {
+      await Future<void>.delayed(
+        isLive ? singleConnectionGap : const Duration(milliseconds: 150),
+      );
+    }
+  }
+
+  void _handoff(PlaybackEngine previous) {
+    _cancelHealth();
+    _diagnostics?.end();
+    _vod?.end();
+    previous.removeListener(_onEngineChanged);
+    _held = previous;
+    _engine = null;
+    unawaited(
+      previous.setVolume(0).catchError((Object _) {}),
+    );
+    _notify();
+  }
+
+  void _dropHeldIfReady() {
+    final held = _held;
+    final current = _engine;
+    if (held == null || current == null || identical(held, current)) return;
+    if (current.videoFrameRendered == false && !current.audioOnly) return;
+    _held = null;
+    _notify();
+    _releasing = _releasing.then((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 48));
+      await _disposeNative(held, connectionGap: false);
+    });
+  }
+
+  Future<bool> _reserveSlot() async {
+    if (_nativeOutstanding < _connectionSlots) return true;
+    try {
+      await _releasing.timeout(nativeDisposeTimeout);
+    } on TimeoutException {
+      // The slot is still taken. A single connection must not open another.
+    }
+    return _nativeOutstanding < _connectionSlots;
+  }
+
+  Future<void> _openAttempt({Duration? resumeAt, int? generation}) async {
+    final gen = generation ?? ++_generation;
+    final previous = _engine;
+    if (previous != null && _allowsOverlap) {
+      _handoff(previous);
+    } else {
+      await _releaseCurrent();
+    }
+    if (gen != _generation || _disposed || _plan.isEmpty) return;
+    if (!await _reserveSlot()) {
+      if (gen != _generation || _disposed) return;
+      _status = SessionStatus.switching;
+      _notice = 'Chiusura del lettore in corso...';
+      _notify();
+      return;
+    }
     if (gen != _generation || _disposed || _plan.isEmpty) return;
     final attempt = _plan[_attempt.clamp(0, _plan.length - 1)];
     _diagnostics?.begin(
@@ -400,6 +631,7 @@ class PlaybackSession extends ChangeNotifier {
     _currentUrl = attempt.url;
     final engine = _create(attempt.engine, attempt.url);
     _engine = engine;
+    _nativeOutstanding++;
     _lastVideoSize = Size.zero;
     _error = null;
     if (_status != SessionStatus.switching) _status = SessionStatus.connecting;
@@ -438,13 +670,12 @@ class PlaybackSession extends ChangeNotifier {
     _pausedAt = null;
     _liveStartedAt = isLive ? DateTime.now() : null;
     _playingSince = DateTime.now();
-    _watchFirstPicture(engine, gen);
-    _watchFrameProgress(engine, gen);
-    _watchPhoneHardwareCopy(engine, gen);
+    _armHealth(engine, gen);
+    _dropHeldIfReady();
     if (isLive && _softwareDecode) {
       // Persist only after the fallback actually opens, not on the original
       // failure: broken provider connections must not poison decoder memory.
-      unawaited(DecoderMemory.remember(url));
+      unawaited(DecoderMemory.remember(_playbackUrl));
     }
     _notify();
     try {
@@ -554,14 +785,13 @@ class PlaybackSession extends ChangeNotifier {
       _lastVideoSize = engine.value.size;
       engine.applyFitMode(fitMode, _boxRatio);
     }
+    _dropHeldIfReady();
     _notify();
   }
 
-  /// How long a live player may stay "ready" without drawing its first
-  /// picture. ExoPlayer is ready only with media buffered, so a picture
-  /// follows within ~1-3 s on every working channel (TCL logs); mpv reports
-  /// ready earlier and gets more time. The removed 3.5 s HLS check also
-  /// fired while buffering; this one only ends players that never drew.
+  /// How long a live player may stay ready without drawing its first
+  /// picture, after the keyframe grace. ExoPlayer reports ready only with
+  /// media buffered; mpv reports ready earlier and gets more time.
   @visibleForTesting
   static Duration firstPictureDeadline(PlayerEngineType engine) =>
       engine == PlayerEngineType.exo
@@ -577,9 +807,7 @@ class PlaybackSession extends ChangeNotifier {
       ? 'Nessuna immagine dal flusso (schermo nero)'
       : 'Nessun video dal server per questo canale';
 
-  Timer? _firstPictureTimer;
-  Timer? _frameWatch;
-  Timer? _phoneCopyTimer;
+  Timer? _healthTimer;
   bool _phoneHardwareCopy = false;
 
   /// Frozen output samples before one mid-play recovery. The reconnect budget
@@ -600,120 +828,97 @@ class PlaybackSession extends ChangeNotifier {
     required bool seenMotion,
     required int? frames,
     required int? baseline,
-  }) {
-    if (viewerPaused || audioOnly || !playing || buffering || ended) {
-      return false;
-    }
-    if (!seenMotion || frames == null || baseline == null) return false;
-    return frames <= baseline;
-  }
+  }) => streamFrameStalled(
+    viewerPaused: viewerPaused,
+    audioOnly: audioOnly,
+    playing: playing,
+    buffering: buffering,
+    ended: ended,
+    seenMotion: seenMotion,
+    frames: frames,
+    baseline: baseline,
+  );
 
-  /// Full-session stall watch. Preview and MultiView keep their own tile
-  /// check. A stream that is still drawing is never reopened.
-  void _watchFrameProgress(PlaybackEngine engine, int gen) {
-    _frameWatch?.cancel();
-    if (previewMode) return;
-    var seenMotion = false;
-    int? baseline;
-    var frozen = 0;
-    _frameWatch = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_disposed || gen != _generation || _engine != engine) return;
-      final v = engine.value;
-      final frames = engine.renderedFrameCount;
-      final previous = baseline;
-      if (previous != null && frames != null && frames > previous) {
-        seenMotion = true;
-      }
-      final stalled = frameProgressStalled(
-        viewerPaused: isLive && _userPausedLive,
-        audioOnly: engine.audioOnly,
-        playing: v.isPlaying,
-        buffering: v.isBuffering,
-        ended: v.isEnded,
-        seenMotion: seenMotion,
-        frames: frames,
-        baseline: previous,
-      );
-      if (!v.isPlaying ||
-          v.isBuffering ||
-          v.isEnded ||
-          engine.audioOnly ||
-          (isLive && _userPausedLive) ||
-          frames == null) {
-        frozen = 0;
-        baseline = null;
-        return;
-      }
-      baseline = frames;
-      if (!stalled) {
-        frozen = 0;
-        return;
-      }
-      frozen++;
-      if (frozen < frameStallSamples) return;
-      frozen = 0;
-      baseline = null;
-      unawaited(
-        _handleFailure(
-          gen,
-          'Immagine ferma',
-          isLive ? null : v.position,
-          midPlay: true,
-        ),
-      );
-    });
-  }
-
-  /// Black screens of the TCL logs: the player opened in ~0.4 s, then
-  /// buffered forever without a frame. The decoder black-screen checks
-  /// ignore buffering, so nothing ever moved to the other format.
-  void _watchFirstPicture(PlaybackEngine engine, int gen) {
-    _firstPictureTimer?.cancel();
-    if (!isLive) return;
+  /// One budget for the first picture, a black frame and a later freeze.
+  /// Buffering inside the keyframe grace does not spend the picture budget.
+  /// Preview and MultiView keep their own tile stall check.
+  void _armHealth(PlaybackEngine engine, int gen) {
+    _cancelHealth();
+    final phoneCopy =
+        !_phoneHardwareCopy &&
+        engine is MediaKitEngine &&
+        engine.canRetryHardwareCopy;
+    final evaluatePicture = isLive || phoneCopy;
+    final evaluateStall = !previewMode;
+    if (!evaluatePicture && !evaluateStall) return;
+    final health = StreamHealth(
+      pictureBudget: firstPictureDeadline(engine.type),
+      stallSamples: frameStallSamples,
+    );
     final startPosition = engine.value.position;
-    _firstPictureTimer = Timer(firstPictureDeadline(engine.type), () {
+    var checking = false;
+    _healthTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+      if (checking) return;
       if (_disposed || gen != _generation || _engine != engine) return;
-      // Confirmed picture, or a platform without renderer telemetry.
-      if (engine.videoFrameRendered != false || engine.audioOnly) return;
-      final v = engine.value;
-      final advancing =
-          v.isPlaying &&
-          !v.isBuffering &&
-          v.position > startPosition + const Duration(seconds: 2);
-      unawaited(
-        _handleFailure(
-          gen,
-          noPictureReason(mediaAdvancing: advancing),
-          null,
-          midPlay: false,
-        ),
-      );
-    });
-  }
-
-  /// iPhone film/series: zero-copy VideoToolbox, then the copy decoder if
-  /// the first picture never arrives. Live and TV keep their own paths.
-  void _watchPhoneHardwareCopy(PlaybackEngine engine, int gen) {
-    _phoneCopyTimer?.cancel();
-    if (_phoneHardwareCopy || engine is! MediaKitEngine) return;
-    if (!engine.canRetryHardwareCopy) return;
-    _phoneCopyTimer = Timer(firstPictureDeadline(engine.type), () {
-      if (_disposed || gen != _generation || _engine != engine) return;
-      if (engine.videoFrameRendered != false || engine.audioOnly) return;
-      final position = engine.value.position;
-      unawaited(
-        _retryPhoneHardwareCopy(
-          gen,
-          position > Duration.zero ? position : startAt,
-        ),
-      );
+      checking = true;
+      try {
+        await engine.sampleOutput();
+        if (_disposed || gen != _generation || _engine != engine) return;
+        final v = engine.value;
+        final decision = health.tick(
+          evaluatePicture: evaluatePicture,
+          evaluateStall: evaluateStall,
+          viewerPaused: isLive && _userPausedLive,
+          audioOnly: engine.audioOnly,
+          playing: v.isPlaying,
+          buffering: v.isBuffering,
+          ended: v.isEnded,
+          frameAvailable: engine.videoFrameRendered,
+          frames: engine.renderedFrameCount,
+          mediaAdvanced:
+              v.position > startPosition + const Duration(seconds: 2),
+        );
+        _dropHeldIfReady();
+        if (decision == null || _disposed || gen != _generation) return;
+        if (decision.kind == StreamHealthKind.picture) {
+          if (phoneCopy) {
+            unawaited(
+              _retryPhoneHardwareCopy(
+                gen,
+                v.position > Duration.zero ? v.position : startAt,
+              ),
+            );
+            return;
+          }
+          if (!isLive) return;
+          unawaited(
+            _handleFailure(
+              gen,
+              noPictureReason(mediaAdvancing: decision.mediaAdvancing),
+              null,
+              midPlay: false,
+            ),
+          );
+          return;
+        }
+        unawaited(
+          _handleFailure(
+            gen,
+            'Immagine ferma',
+            isLive ? null : v.position,
+            midPlay: true,
+          ),
+        );
+      } finally {
+        checking = false;
+      }
     });
   }
 
   Future<void> _retryPhoneHardwareCopy(int gen, Duration? resumeAt) async {
     if (_disposed || gen != _generation || _phoneHardwareCopy) return;
     _phoneHardwareCopy = true;
-    _phoneCopyTimer?.cancel();
+    _cancelHealth();
     _status = SessionStatus.switching;
     _notice = null;
     _notify();
@@ -1080,9 +1285,9 @@ class PlaybackSession extends ChangeNotifier {
     if (isLive) {
       _userPausedLive = engine.value.isPlaying;
       if (_userPausedLive) {
-        _firstPictureTimer?.cancel();
+        _cancelHealth();
       } else {
-        _watchFirstPicture(engine, _generation);
+        _armHealth(engine, _generation);
       }
     }
     if (isLive && canTimeshift) {
@@ -1227,9 +1432,7 @@ class PlaybackSession extends ChangeNotifier {
   void stopStream() {
     if (_disposed || _streamStopped) return;
     _streamStopped = true;
-    _firstPictureTimer?.cancel();
-    _frameWatch?.cancel();
-    _phoneCopyTimer?.cancel();
+    _cancelHealth();
     _diagnosticTimer?.cancel();
     _delayTick?.cancel();
     _generation++;
@@ -1243,9 +1446,7 @@ class PlaybackSession extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _firstPictureTimer?.cancel();
-    _frameWatch?.cancel();
-    _phoneCopyTimer?.cancel();
+    _cancelHealth();
     _diagnosticTimer?.cancel();
     _diagnostics?.end();
     _vod?.end();

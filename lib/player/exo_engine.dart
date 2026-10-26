@@ -7,19 +7,17 @@ import 'package:video_player/video_player.dart';
 
 import '../models/player_settings.dart';
 import 'playback_engine.dart';
-import 'video_health.dart';
 
 class ExoEngine extends PlaybackEngine {
   /// [shared] is for MultiView and the Live preview: several players run at
   /// once, so this one must not take Android's audio focus (which pauses
-  /// every other ExoPlayer) and reports a black picture sooner so the tile
-  /// can move to mpv software decoding.
+  /// every other ExoPlayer).
   ExoEngine({
     required String url,
     required PlayerSettings settings,
     bool shared = false,
     this.isLive = false,
-  }) : _blackStrikes = shared ? 2 : 3,
+  }) : _mediaUrl = url,
        _controller = VideoPlayerController.networkUrl(
          Uri.parse(url),
          formatHint: _formatHint(url),
@@ -39,6 +37,7 @@ class ExoEngine extends PlaybackEngine {
        );
 
   final bool isLive;
+  String _mediaUrl;
   final VideoPlayerController _controller;
 
   /// Android-only. Other platforms must not receive this header: they would
@@ -60,11 +59,9 @@ class ExoEngine extends PlaybackEngine {
     }
     return headers;
   }
-  final int _blackStrikes;
   final Map<String, VideoTrack> _videoTracks = {};
   PlaybackSnapshot _value = const PlaybackSnapshot();
   bool _disposed = false;
-  Timer? _blackWatch;
   Timer? _livePoll;
   Map<Object?, Object?> _window = const {};
   bool _polling = false;
@@ -230,53 +227,36 @@ class ExoEngine extends PlaybackEngine {
       const Duration(seconds: 1),
       (_) => _pollWindow(),
     );
-    _watchBlackScreen();
   }
 
-  /// Some live streams decode audio but never produce a video frame on the
-  /// texture (codec not supported by the device): the sound plays while the
-  /// picture stays black. After a few seconds this reports an error so the
-  /// session tries the next format or engine instead of a black screen.
-  void _watchBlackScreen() {
-    _blackWatch?.cancel();
-    final health = VideoHealth(missingLimit: _blackStrikes);
-    int? lastRendered;
-    var sawMotion = false;
-    _blackWatch = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (_disposed) {
-        _blackWatch?.cancel();
-        return;
-      }
-      final v = _controller.value;
-      if (v.hasError || !v.isInitialized) return;
-      final rendered = (_window['renderedFrames'] as num?)?.toInt();
-      if (rendered != null && lastRendered != null && rendered > lastRendered!) {
-        sawMotion = true;
-      }
-      lastRendered = rendered;
-      // After frames have moved, a later freeze is the session stall watch.
-      // This check stays on a picture that never started.
-      if (sawMotion) return;
-      bool? hasFrame;
-      if (_window.containsKey('firstFrameRendered')) {
-        hasFrame = _window['firstFrameRendered'] == true;
-      } else if (v.size.width <= 0 || v.size.height <= 0) {
-        // Other native platforms do not expose output telemetry. Unknown
-        // metadata must not be presented as confirmed rendered video.
-        hasFrame = false;
-      }
-      if (health.check(
-        playing: v.isPlaying,
-        buffering: v.isBuffering,
-        audioOnly:
-            _window['tracksKnown'] == true && _window['hasVideoTrack'] == false,
-        frameAvailable: hasFrame,
-      )) {
-        _blackWatch?.cancel();
-        _blackError = 'Nessuna immagine dal flusso (schermo nero)';
-        _sync();
-      }
-    });
+  @override
+  Future<void> sampleOutput() => _pollWindow();
+
+  @override
+  Future<bool> reopen(String next) async {
+    if (_disposed) return false;
+    final hint = _formatHint(next);
+    if (hint != _formatHint(_mediaUrl)) return false;
+    final mime = switch (hint) {
+      VideoFormat.hls => 'application/x-mpegURL',
+      VideoFormat.dash => 'application/dash+xml',
+      VideoFormat.ss => 'application/vnd.ms-sstr+xml',
+      _ => null,
+    };
+    try {
+      final ok = await _liveChannel.invokeMethod<bool>('replaceMedia', {
+        'uri': next,
+        if (mime != null) 'mime': mime,
+      });
+      if (ok != true || _disposed) return false;
+      _mediaUrl = next;
+      _blackError = null;
+      _window = const {'firstFrameRendered': false};
+      _sync();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Platform init errors are often opaque (Future timeouts, generic Platform
@@ -396,7 +376,6 @@ class ExoEngine extends PlaybackEngine {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    _blackWatch?.cancel();
     _livePoll?.cancel();
     _controller.removeListener(_sync);
     try {

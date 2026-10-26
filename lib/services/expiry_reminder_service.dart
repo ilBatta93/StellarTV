@@ -8,6 +8,7 @@ import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'xtream_service.dart';
+import 'stream_slot_policy.dart';
 
 /// User choices for subscription-expiry reminders (synced with the cloud as a
 /// regular setting under [ExpiryReminderService.settingsKey]).
@@ -129,6 +130,7 @@ class ExpiryReminderService extends ChangeNotifier {
       '${_account.hashCode}:${_expiry?.millisecondsSinceEpoch}:$t';
 
   Future<void> load() async {
+    await StreamSlotPolicy.instance.load();
     final prefs = await SharedPreferences.getInstance();
     try {
       final raw = prefs.getString(settingsKey);
@@ -192,6 +194,7 @@ class ExpiryReminderService extends ChangeNotifier {
   Future<void> applyAccountInfo(String account, Map<String, dynamic> info) async {
     final user = info['user_info'];
     if (user is! Map) return;
+    await StreamSlotPolicy.instance.remember(user['max_connections']);
     final exp = ExpiryPlan.parseExpiry(user['exp_date']);
     if (account != _account || exp != _expiry) {
       // Renewal or account change: stale "later" choices no longer apply.

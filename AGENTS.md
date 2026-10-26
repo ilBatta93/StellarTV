@@ -9,7 +9,7 @@ Al termine di ogni modifica richiesta, crea un commit git e fai push sul branch 
 - La presentazione TV dipende dalla modalità di interfaccia Android. Il layout touch resta quello attuale.
 - La sincronizzazione usa l'id dell'account autenticato.
 - Le righe legacy del vault non si cancellano da sole. Un preferito rimosso resta un tombstone nella corsia riservata.
-- Una sola sessione di riproduzione nativa alla volta: prima il rilascio completo, poi il flusso successivo.
+- Con una sola connessione ammessa il rilascio del player nativo precede il flusso successivo. Con più connessioni il successivo può aprirsi prima della chiusura, e `released` attende comunque lo smaltimento reale.
 - La diretta non entra nella cronologia di visione né nel cloud. La pausa chiesta dallo spettatore non va riavviata dal controllo di salute.
 - Un episodio non eredita il voto della serie. Un voto IMDb non ancora arrivato non si mostra.
 - Le note di rilascio pubbliche descrivono solo le novità rispetto alla release precedente, una volta sola e in linguaggio neutro, a partire da docs/release-current.md, senza copiare il testo dei commit.

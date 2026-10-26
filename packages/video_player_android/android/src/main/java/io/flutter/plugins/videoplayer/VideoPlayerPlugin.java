@@ -201,6 +201,10 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
             result.success(player.seekWithinLiveWindow(position.longValue())); break;
           case "getLiveWindow": result.success(player.getLiveWindow()); break;
           case "seekToDefaultLivePosition": result.success(player.seekToDefaultLivePosition()); break;
+          case "replaceMedia":
+            String uri = call.argument("uri");
+            if (uri == null) { result.error("invalid_uri", "Missing uri", null); break; }
+            result.success(player.replaceMediaItem(uri, call.argument("mime"))); break;
           default: result.notImplemented();
         }
       } catch (RuntimeException error) { result.error("live_player_error", error.getMessage(), null); }

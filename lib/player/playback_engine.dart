@@ -95,6 +95,13 @@ abstract class PlaybackEngine extends ChangeNotifier {
   /// Engines backed by a platform view only progress while [buildView] is mounted.
   Future<void> open({double initialVolume = 1});
 
+  /// Keeps the native player and its surface, opening [url] in place.
+  /// False when the engine has to be created again.
+  Future<bool> reopen(String url) async => false;
+
+  /// Refreshes renderer counters used by the shared health budget.
+  Future<void> sampleOutput() async {}
+
   /// Renders the video stretched to fill its parent, whose ratio is [boxRatio].
   Widget buildView(double boxRatio);
 

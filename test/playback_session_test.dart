@@ -677,6 +677,108 @@ void main() {
     session.dispose();
     await session.released;
   });
+
+  test('con più connessioni il canale successivo parte prima del dispose', () async {
+    final gate = Completer<void>();
+    final engines = <_FakeEngine>[];
+    late PlaybackSession session;
+    session = PlaybackSession(
+      url: _xtream,
+      isLive: true,
+      maxConnections: 2,
+      settings: PlayerSettings(
+        primaryEngine: PlayerEngineType.exo,
+        autoFallback: false,
+      ),
+      engineFactory: (type) {
+        final engine = _FakeEngine(type, session.currentUrl, succeed: true);
+        engines.add(engine);
+        return engine;
+      },
+    );
+    await session.start();
+    engines.single.releaseGate = gate;
+    final pending = session.retune('http://tv.example.com/live/user/pass/43.ts');
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(engines, hasLength(2));
+    expect(gate.isCompleted, isFalse);
+    expect(_FakeEngine.alive, 2);
+    gate.complete();
+    await pending.timeout(const Duration(seconds: 3));
+    session.dispose();
+    await session.released.timeout(const Duration(seconds: 3));
+  });
+
+  test('con una sola connessione il successivo aspetta il rilascio', () async {
+    final gate = Completer<void>();
+    final engines = <_FakeEngine>[];
+    late PlaybackSession session;
+    session = PlaybackSession(
+      url: _xtream,
+      isLive: true,
+      maxConnections: 1,
+      settings: PlayerSettings(
+        primaryEngine: PlayerEngineType.exo,
+        autoFallback: false,
+      ),
+      engineFactory: (type) {
+        final engine = _FakeEngine(type, session.currentUrl, succeed: true);
+        engines.add(engine);
+        return engine;
+      },
+    );
+    await session.start();
+    engines.single.releaseGate = gate;
+    final pending = session.retune('http://tv.example.com/live/user/pass/43.ts');
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(engines, hasLength(1));
+    gate.complete();
+    await pending.timeout(const Duration(seconds: 3));
+    expect(engines, hasLength(2));
+    expect(engines.first.disposed, isTrue);
+    session.dispose();
+    await session.released.timeout(const Duration(seconds: 3));
+  });
+
+  test('il canale adiacente riusa il player nativo', () async {
+    final engines = <_StickyEngine>[];
+    late PlaybackSession session;
+    session = PlaybackSession(
+      url: _xtream,
+      isLive: true,
+      maxConnections: 1,
+      settings: PlayerSettings(
+        primaryEngine: PlayerEngineType.exo,
+        autoFallback: false,
+      ),
+      engineFactory: (type) {
+        final engine = _StickyEngine(type, session.currentUrl);
+        engines.add(engine);
+        return engine;
+      },
+    );
+    await session.start();
+    await session.retune('http://tv.example.com/live/user/pass/43.ts');
+    expect(engines, hasLength(1));
+    expect(engines.single.reopens, 1);
+    expect(engines.single.disposed, isFalse);
+    expect(session.presentedEngine, same(engines.single));
+    session.dispose();
+    await session.released;
+  });
+}
+
+class _StickyEngine extends _FakeEngine {
+  _StickyEngine(PlayerEngineType type, String url)
+    : super(type, url, succeed: true);
+
+  int reopens = 0;
+
+  @override
+  Future<bool> reopen(String url) async {
+    reopens++;
+    return true;
+  }
 }
 
 class _FrameEngine extends _FakeEngine {
@@ -695,7 +797,7 @@ class _PausedNoPictureEngine extends _FakeEngine {
   bool? get videoFrameRendered => false;
 }
 
-/// Opens fine but stays buffering without ever drawing a picture.
+/// Opens fine and plays, but never draws a picture.
 class _NoPictureEngine extends _FakeEngine {
   _NoPictureEngine(PlayerEngineType type, String url)
     : super(type, url, succeed: true);
@@ -704,6 +806,9 @@ class _NoPictureEngine extends _FakeEngine {
   bool? get videoFrameRendered => false;
 
   @override
-  PlaybackSnapshot get value =>
-      const PlaybackSnapshot(isReady: true, isPlaying: true, isBuffering: true);
+  PlaybackSnapshot get value => const PlaybackSnapshot(
+    isReady: true,
+    isPlaying: true,
+    isBuffering: false,
+  );
 }

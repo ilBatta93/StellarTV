@@ -9,7 +9,6 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../models/player_settings.dart';
 import '../services/device_type_service.dart';
 import 'playback_engine.dart';
-import 'video_health.dart';
 
 /// mpv-backed engine (media_kit): subtitles and several audio tracks,
 /// more tolerant of difficult live streams than the previous engine.
@@ -194,7 +193,7 @@ class MediaKitEngine extends PlaybackEngine {
       (Platform.isIOS || Platform.isMacOS) &&
       _settings.hardwareDecoding != HardwareDecoding.disabled;
   final PlayerSettings _settings;
-  final String url;
+  String url;
   late final Player _player;
   late final VideoController _videoController;
   PlaybackSnapshot _value = const PlaybackSnapshot();
@@ -534,12 +533,10 @@ class MediaKitEngine extends PlaybackEngine {
     }
   }
 
-  Timer? _blackWatch;
   bool _firstFrameRendered = false;
   int? _outputFrames;
   String? _outputToken;
   String? _outputProperty;
-  bool _outputAdvanced = false;
 
   /// Output properties that change when a new frame is drawn. Playback time
   /// and estimated-frame-number are not output, so they are not used.
@@ -549,15 +546,8 @@ class MediaKitEngine extends PlaybackEngine {
     'video-frame-info/smpte-timecode',
   ];
 
-  /// Samples one output token per second. A change increments [renderedFrameCount].
-  /// After the first change the startup black-screen check stops treating a
-  /// later freeze as a decoder failure: the session stall watch owns that.
-  Future<bool?> _framesFlowing() async {
-    await _sampleOutputSignal();
-    if (_outputAdvanced) return true;
-    return _firstFrameRendered;
-  }
-
+  /// Samples one output token. A change increments [renderedFrameCount].
+  /// The session health budget owns teardown; this only reports frames.
   Future<void> _sampleOutputSignal() async {
     final platform = _player.platform;
     if (_disposed || platform is! NativePlayer) return;
@@ -575,56 +565,10 @@ class MediaKitEngine extends PlaybackEngine {
           _outputToken = value;
           final next = (_outputFrames ?? 0) + 1;
           _outputFrames = next;
-          if (next > 1) _outputAdvanced = true;
         }
         return;
       } catch (_) {}
     }
-  }
-
-  /// Audio playing but no decoded video frame = black screen. Checked every
-  /// second for the whole playback (a decoder can also stall mid-stream);
-  /// after ~5 s without frames the session reopens the channel in FFmpeg
-  /// software decoding and remembers it for the next time.
-  void _watchBlackScreen() {
-    _blackWatch?.cancel();
-    var checking = false;
-    // Allow provider keyframe intervals and surface attachment to finish;
-    // a two-second threshold repeatedly interrupts otherwise valid live.
-    final limit = softwareDecode ? 15 : 10;
-    final health = VideoHealth(missingLimit: limit);
-    _blackWatch = Timer.periodic(const Duration(seconds: 1), (_) async {
-      if (_disposed) return _blackWatch?.cancel();
-      if (checking) return;
-      final st = _player.state;
-      final hasVideoTrack = st.tracks.video.any(
-        (t) => t.id != 'auto' && t.id != 'no',
-      );
-      // Radio / audio-only channels and paused or buffering players.
-      if (!hasVideoTrack || !st.playing || st.buffering) {
-        health.check(
-          playing: st.playing,
-          buffering: st.buffering,
-          audioOnly: !hasVideoTrack,
-          frameAvailable: null,
-        );
-        return;
-      }
-      checking = true;
-      final flowing = await _framesFlowing();
-      checking = false;
-      if (_disposed) return;
-      final current = _player.state;
-      if (health.check(
-        playing: current.playing,
-        buffering: current.buffering,
-        audioOnly: !hasVideoTrack,
-        frameAvailable: flowing,
-      )) {
-        _blackWatch?.cancel();
-        _onError('Nessuna immagine dal flusso (schermo nero)');
-      }
-    });
   }
 
   /// Preferences the settings screen shows for this engine. Frame dropping
@@ -673,7 +617,7 @@ class MediaKitEngine extends PlaybackEngine {
     try {
       final ua = effectiveStreamUserAgent(_settings.userAgent);
       await _player.open(
-        Media(_urlWithUserAgent(ua), httpHeaders: {'User-Agent': ua}),
+        Media(url, httpHeaders: {'User-Agent': ua}),
         play: true,
       );
     } catch (e) {
@@ -682,7 +626,6 @@ class MediaKitEngine extends PlaybackEngine {
     if (_disposed) throw const PlaybackException('Chiuso');
     await _player.setRate(isLive ? 1.0 : _settings.defaultSpeed);
     unawaited(_observeFirstFrame());
-    _watchBlackScreen();
     await _playing!.future.timeout(
       Duration(seconds: _settings.startTimeoutSeconds + 5),
       onTimeout: () =>
@@ -690,7 +633,31 @@ class MediaKitEngine extends PlaybackEngine {
     );
   }
 
-  String _urlWithUserAgent(String ua) => url; // media_kit uses httpHeaders.
+  @override
+  Future<void> sampleOutput() => _sampleOutputSignal();
+
+  @override
+  Future<bool> reopen(String next) async {
+    if (_disposed) return false;
+    url = next;
+    _firstFrameRendered = false;
+    _outputFrames = null;
+    _outputToken = null;
+    _outputProperty = null;
+    _playing = Completer<void>();
+    try {
+      final ua = effectiveStreamUserAgent(_settings.userAgent);
+      await _player.open(
+        Media(next, httpHeaders: {'User-Agent': ua}),
+        play: true,
+      );
+    } catch (_) {
+      return false;
+    }
+    if (_disposed) return false;
+    unawaited(_observeFirstFrame());
+    return true;
+  }
 
   Future<void> _observeFirstFrame() async {
     try {
@@ -820,7 +787,6 @@ class MediaKitEngine extends PlaybackEngine {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    _blackWatch?.cancel();
     _errorConfirm?.cancel();
     if (_playing != null && !_playing!.isCompleted) {
       _playing!.completeError(const PlaybackException('Chiuso'));

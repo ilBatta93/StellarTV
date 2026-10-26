@@ -36,6 +36,7 @@ import '../theme/app_theme.dart';
 import '../widgets/episode_still_overlay.dart';
 import '../widgets/player/live_channel_picker.dart';
 import '../services/recent_live_channels.dart';
+import '../services/stream_slot_policy.dart';
 import '../widgets/player/player_controls.dart';
 import '../widgets/player/player_format.dart';
 import '../widgets/player/player_gestures.dart';
@@ -155,8 +156,11 @@ class _PlayerScreenState extends State<PlayerScreen>
   int _outroCountdown = 5;
   Timer? _outroTimer;
 
+  Channel? _tunedChannel;
+  Channel get _channel => _tunedChannel ?? widget.channel;
+
   bool get _isLive =>
-      widget.channel.type == ContentType.live && !widget.archivePlayback;
+      _channel.type == ContentType.live && !widget.archivePlayback;
 
   /// Players currently on screen. When a player replaces another (next
   /// channel / next episode) the old one is disposed AFTER the new one is
@@ -933,8 +937,8 @@ class _PlayerScreenState extends State<PlayerScreen>
     final navigator = Navigator.of(context);
     final app = context.read<AppProvider>();
     final key = _isEpisode
-        ? (widget.channel.seriesKey ?? widget.channel.id)
-        : widget.channel.id;
+        ? (_channel.seriesKey ?? _channel.id)
+        : _channel.id;
     // The title page is still open below the player: just go back to it,
     // without rebuilding it (and reloading its episodes and pictures).
     final name = titleRouteName(key);
@@ -948,16 +952,16 @@ class _PlayerScreenState extends State<PlayerScreen>
         ? (app.seriesFolderFor(key) ??
               Channel(
                 id: key,
-                name: widget.channel.seriesName ?? widget.channel.name,
+                name: _channel.seriesName ?? _channel.name,
                 url: '',
                 logo: '',
-                group: widget.channel.group,
-                type: widget.channel.type,
+                group: _channel.group,
+                type: _channel.type,
                 seriesKey: key,
-                seriesName: widget.channel.seriesName,
+                seriesName: _channel.seriesName,
                 isSeriesFolder: true,
               ))
-        : widget.channel;
+        : _channel;
     if (_isEpisode) {
       openSeries(navigator.context, target, replace: true);
     } else {
@@ -966,8 +970,8 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   bool get _isEpisode =>
-      widget.channel.type == ContentType.series ||
-      widget.channel.type == ContentType.anime;
+      _channel.type == ContentType.series ||
+      _channel.type == ContentType.anime;
 
   /// Finds the next episode: from the list passed by the series page, or by
   /// loading the series (e.g. when resuming from "Continua a guardare").
@@ -975,20 +979,20 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!_isEpisode) return;
     List<Channel> queue = widget.queue ?? const [];
     if (queue.isEmpty) {
-      final key = widget.channel.seriesKey;
+      final key = _channel.seriesKey;
       if (key == null || key.isEmpty) return;
       final app = context.read<AppProvider>();
       final folder =
           app.seriesFolderFor(key) ??
           Channel(
             id: key,
-            name: widget.channel.seriesName ?? widget.channel.name,
+            name: _channel.seriesName ?? _channel.name,
             url: '',
             logo: '',
-            group: widget.channel.group,
-            type: widget.channel.type,
+            group: _channel.group,
+            type: _channel.type,
             seriesKey: key,
-            seriesName: widget.channel.seriesName,
+            seriesName: _channel.seriesName,
             isSeriesFolder: true,
           );
       try {
@@ -998,7 +1002,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         return;
       }
     }
-    final index = queue.indexWhere((c) => c.id == widget.channel.id);
+    final index = queue.indexWhere((c) => c.id == _channel.id);
     if (!mounted) return;
     setState(() {
       _queue = queue;
@@ -1016,13 +1020,13 @@ class _PlayerScreenState extends State<PlayerScreen>
     previous?.removeListener(_onSessionChanged);
     setState(() => _session = null);
     previous?.dispose();
-    // Wait until decoder, surface and provider connection are really free.
+    // MultiView opens several streams: the current one is released first.
     await (previous?.released ?? Future<void>.value());
     if (!mounted) return;
     unawaited(
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => MultiViewScreen(initialChannel: widget.channel),
+          builder: (_) => MultiViewScreen(initialChannel: _channel),
         ),
       ),
     );
@@ -1036,7 +1040,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       context: context,
       barrierColor: AppColors.background.withValues(alpha: 0.2),
       builder: (_) => _EpisodePicker(
-        current: widget.channel,
+        current: _channel,
         entryFor: _history.entryFor,
         load: () async {
           if (_queue == null) await _resolveQueue();
@@ -1050,7 +1054,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!mounted) return;
     _remoteFocus.requestFocus();
     _scheduleHide();
-    if (selected == null || selected.id == widget.channel.id || _advancing)
+    if (selected == null || selected.id == _channel.id || _advancing)
       return;
     _advancing = true;
     await _saveResume();
@@ -1059,8 +1063,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     previous?.removeListener(_onSessionChanged);
     setState(() => _session = null);
     previous?.dispose();
-    // Wait until decoder, surface and provider connection are really free.
-    await (previous?.released ?? Future<void>.value());
+    if (!StreamSlotPolicy.instance.allowsOverlap) {
+      await (previous?.released ?? Future<void>.value());
+    }
     if (!mounted) return;
     playChannel(
       context,
@@ -1081,7 +1086,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       _onSessionChanged();
       return;
     }
-    await SegmentLibrary.instance.deliver(widget.channel, (segments) {
+    await SegmentLibrary.instance.deliver(_channel, (segments) {
       if (!mounted) return;
       setState(() => _segments = segments);
       _onSessionChanged();
@@ -1096,7 +1101,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (_isLive || _onlineSubsLoading) return;
     setState(() => _onlineSubsLoading = true);
     try {
-      final c = widget.channel;
+      final c = _channel;
       // Livello 1: una traccia italiana incorporata è già perfettamente
       // sincronizzata, quindi ha la precedenza sui file scaricati.
       if (_onlineCues == null && await _selectEmbeddedItalian()) return;
@@ -1186,7 +1191,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   Future<void> _readLocalChapters(PlaybackSession session) async {
     final engine = session.engine;
-    final movie = widget.channel.type == ContentType.movie;
+    final movie = _channel.type == ContentType.movie;
     if ((!_isEpisode && !movie) || engine == null || _chapterReadInFlight)
       return;
     if (!identical(engine, _chaptersEngine)) {
@@ -1293,8 +1298,8 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (completeCurrent) {
       final runtime = _session?.value.duration;
       await _progressWriter.complete(() async {
-        await _history.markWatched(widget.channel, duration: runtime);
-        await _settingsService.saveResumePosition(widget.channel.url, null);
+        await _history.markWatched(_channel, duration: runtime);
+        await _settingsService.saveResumePosition(_channel.url, null);
       });
     } else {
       await _saveResume();
@@ -1304,8 +1309,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     previous?.removeListener(_onSessionChanged);
     setState(() => _session = null);
     previous?.dispose();
-    // Wait until decoder, surface and provider connection are really free.
-    await (previous?.released ?? Future<void>.value());
+    if (!StreamSlotPolicy.instance.allowsOverlap) {
+      await (previous?.released ?? Future<void>.value());
+    }
     if (!mounted) return;
     final entry = _history.entryFor(next.id);
     playChannel(
@@ -1321,7 +1327,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!_isLive) return const [];
     final all = context.read<AppProvider>().channelsOf(ContentType.live);
     final sameGroup = all
-        .where((channel) => channel.group == widget.channel.group)
+        .where((channel) => channel.group == _channel.group)
         .toList(growable: false);
     return sameGroup.length > 1 ? sameGroup : all;
   }
@@ -1329,7 +1335,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   Channel? _adjacentLiveChannel(int offset) {
     final channels = _liveChannels;
     final index = channels.indexWhere(
-      (channel) => channel.id == widget.channel.id,
+      (channel) => channel.id == _channel.id,
     );
     final target = index + offset;
     if (index < 0 || target < 0 || target >= channels.length) return null;
@@ -1370,7 +1376,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       barrierColor: AppColors.clear,
       transitionDuration: const Duration(milliseconds: 180),
       pageBuilder: (_, _, _) => LiveChannelPicker(
-        current: widget.channel,
+        current: _channel,
         groups: groups,
         nowOnAir: (c) => epg.nowFor(c)?.title,
       ),
@@ -1384,23 +1390,23 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
     if (!mounted) return;
     _remoteFocus.requestFocus();
-    if (selected == null || selected.id == widget.channel.id) return;
+    if (selected == null || selected.id == _channel.id) return;
     await _playLiveChannel(selected);
   }
 
   Future<void> _playLiveChannel(Channel? channel) async {
-    if (channel == null || _advancing) return;
+    if (channel == null || channel.id == _channel.id) return;
+    final app = context.read<AppProvider>();
+    if (app.kidsMode && !app.isKidsContent(channel)) return;
+    RecentLiveChannels.instance.record(channel.id);
+    final session = _session;
+    if (session != null) {
+      setState(() => _tunedChannel = channel);
+      await session.retune(channel.url);
+      return;
+    }
+    if (_advancing) return;
     _advancing = true;
-    // Close the current provider connection before opening the next channel.
-    // Many Xtream plans allow only one active stream and otherwise return 458.
-    final previous = _session;
-    previous?.removeListener(_onSessionChanged);
-    // Unmount the picture before its player is released.
-    setState(() => _session = null);
-    previous?.dispose();
-    // Wait until decoder, surface and provider connection are really free.
-    await (previous?.released ?? Future<void>.value());
-    if (!mounted) return;
     playChannel(context, channel, replace: true);
   }
 
@@ -1419,8 +1425,8 @@ class _PlayerScreenState extends State<PlayerScreen>
         !widget.archivePlayback &&
         settings.resumePlayback) {
       startAt =
-          _history.entryFor(widget.channel.id)?.resumePosition ??
-          await _settingsService.getResumePosition(widget.channel.url);
+          _history.entryFor(_channel.id)?.resumePosition ??
+          await _settingsService.getResumePosition(_channel.url);
     }
     if (!mounted) return;
     if (startAt != null && startAt > Duration.zero) _pendingResume = startAt;
@@ -1431,7 +1437,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (pipSupported) _bridge.setAutoPip(settings.autoPip);
 
     final session = PlaybackSession(
-      url: widget.channel.url,
+      url: _channel.url,
       isLive: _isLive,
       settings: settings,
       startAt: startAt,
@@ -1711,7 +1717,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     await _progressWriter.save(() async {
       final playingSample = periodic && v.isPlaying;
       final wroteHistory = await _history.updatePosition(
-        widget.channel.id,
+        _channel.id,
         actualPosition,
         v.duration,
         periodic: playingSample,
@@ -1725,7 +1731,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       final stored = keep ? actualPosition.inMilliseconds : null;
       if (_resumePrefsSynced && stored == _resumePrefsMs) return;
       await _settingsService.saveResumePosition(
-        widget.channel.url,
+        _channel.url,
         keep ? actualPosition : null,
       );
       _resumePrefsSynced = true;
@@ -1862,11 +1868,11 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   String _episodeInfoTitle() {
-    final metadata = EpisodeMetadataService.instance.forChannel(widget.channel);
-    if (metadata == null) return widget.channel.name;
+    final metadata = EpisodeMetadataService.instance.forChannel(_channel);
+    if (metadata == null) return _channel.name;
     final code =
         'S${metadata.season.toString().padLeft(2, '0')} E${metadata.episode.toString().padLeft(2, '0')}';
-    return '${widget.channel.displaySeriesName} · $code${metadata.title.isEmpty ? '' : ' · ${metadata.title}'}';
+    return '${_channel.displaySeriesName} · $code${metadata.title.isEmpty ? '' : ' · ${metadata.title}'}';
   }
 
   List<Widget> _buildOverlays(
@@ -1878,7 +1884,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       return [
         _FailureView(
           session: session,
-          playbackUrl: widget.channel.url,
+          playbackUrl: _channel.url,
           onBack: () => Navigator.pop(context),
           retryFocus: DeviceTypeService.isTv ? _failureFocus : null,
         ),
@@ -1900,14 +1906,14 @@ class _PlayerScreenState extends State<PlayerScreen>
         TvPlaybackInfo(
           title: _episodeInfoTitle(),
           episodeMetadata: EpisodeMetadataService.instance.forChannel(
-            widget.channel,
+            _channel,
           ),
           plot: episodeSynopsis(
             EpisodeMetadataService.instance
-                .forChannel(widget.channel)
+                .forChannel(_channel)
                 ?.overview,
-            widget.channel.plot,
-            _app.seriesFolderFor(widget.channel.seriesKey ?? '')?.plot,
+            _channel.plot,
+            _app.seriesFolderFor(_channel.seriesKey ?? '')?.plot,
           ),
           duration: session.value.duration,
           position: session.value.position,
@@ -1926,14 +1932,14 @@ class _PlayerScreenState extends State<PlayerScreen>
                   rows: _tvRows(session),
                   selectedRow: _tvRow,
                   selectedColumn: _tvCol,
-                  title: widget.channel.name,
+                  title: _channel.name,
                   subtitle: _isLive
                       ? (context
                                 .watch<EpgProvider>()
-                                .nowFor(widget.channel)
+                                .nowFor(_channel)
                                 ?.title ??
-                            widget.channel.group)
-                      : widget.channel.group,
+                            _channel.group)
+                      : _channel.group,
                   isLive: _isLive,
                   locked: _locked,
                   position: session.value.position,
@@ -1959,14 +1965,14 @@ class _PlayerScreenState extends State<PlayerScreen>
               child: PlayerControls(
                 session: session,
                 playFocusNode: null,
-                title: widget.channel.name,
+                title: _channel.name,
                 subtitle: _isLive
                     ? (context
                               .watch<EpgProvider>()
-                              .nowFor(widget.channel)
+                              .nowFor(_channel)
                               ?.title ??
-                          widget.channel.group)
-                    : widget.channel.group,
+                          _channel.group)
+                    : _channel.group,
                 locked: _locked,
                 pipSupported: _pipSupported,
                 seekStepSeconds: settings.seekStepSeconds,

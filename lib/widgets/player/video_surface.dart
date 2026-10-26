@@ -29,41 +29,51 @@ class VideoSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final engine = session.engine;
-    return ColoredBox(
-      color: Colors.black,
-      child: LayoutBuilder(builder: (context, box) {
-        if (engine == null || box.maxHeight == 0) return const SizedBox.expand();
-        session.updateBoxRatio(box.maxWidth / box.maxHeight);
-        final size = _targetSize(box.maxWidth, box.maxHeight);
-        // The structure stays identical across fit modes and resizes
-        // (rotation, notch). The key is the engine, so the native surface
-        // is never remounted.
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            ClipRect(
-              child: OverflowBox(
-                minWidth: size.width,
-                maxWidth: size.width,
-                minHeight: size.height,
-                maxHeight: size.height,
-                child: KeyedSubtree(
-                  key: ObjectKey(engine),
-                  child: engine.buildView(size.width / size.height),
+    return ListenableBuilder(
+      listenable: session,
+      builder: (context, _) {
+        final engine = session.presentedEngine;
+        return ColoredBox(
+          color: Colors.black,
+          child: LayoutBuilder(builder: (context, box) {
+            if (engine == null || box.maxHeight == 0) {
+              return const SizedBox.expand();
+            }
+            session.updateBoxRatio(box.maxWidth / box.maxHeight);
+            final size = _targetSize(box.maxWidth, box.maxHeight);
+            // The key is the engine, so a recycled native surface is not
+            // remounted. A hot swap keeps the previous picture until the
+            // new one has drawn a frame.
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                ClipRect(
+                  child: OverflowBox(
+                    minWidth: size.width,
+                    maxWidth: size.width,
+                    minHeight: size.height,
+                    maxHeight: size.height,
+                    child: KeyedSubtree(
+                      key: ObjectKey(engine),
+                      child: engine.buildView(size.width / size.height),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            if (session.value.caption.isNotEmpty)
-              Positioned(
-                left: 48,
-                right: 48,
-                bottom: 32,
-                child: SubtitleCaption(text: session.value.caption, settings: settings),
-              ),
-          ],
+                if (session.value.caption.isNotEmpty)
+                  Positioned(
+                    left: 48,
+                    right: 48,
+                    bottom: 32,
+                    child: SubtitleCaption(
+                      text: session.value.caption,
+                      settings: settings,
+                    ),
+                  ),
+              ],
+            );
+          }),
         );
-      }),
+      },
     );
   }
 }
