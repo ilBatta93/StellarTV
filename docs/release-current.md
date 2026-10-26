@@ -2,6 +2,7 @@
 - Il catalogo si ordina fuori dall'interfaccia, che resta scorrevole mentre l'elenco si prepara.
 - Con più collegamenti ammessi il flusso successivo parte senza attendere la chiusura del precedente.
 - La guida programmi si apre dai titoli già pronti e resta utilizzabile anche quando è molto estesa.
+- I canali già caricati restano in guida anche se l'indice non è ancora pronto.
 - La ricerca in diretta trova un programma mentre si scrive, senza scorrere tutta la programmazione.
 - La descrizione di un programma compare quando lo si apre.
 - Il telecomando resta sul canale aperto, la Home non sborda e una seconda apertura non resta in attesa.
