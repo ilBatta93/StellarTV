@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:stellar_tv/models/channel.dart';
 import 'package:stellar_tv/models/content_type.dart';
 import 'package:stellar_tv/services/catalog_cache_service.dart';
+import 'package:stellar_tv/services/playback_work_policy.dart';
 
 Channel item(int i, ContentType type) => Channel(
   id: '${type.name}_$i',
@@ -70,6 +71,38 @@ void main() {
       expect(mixed.map((c) => c.id), ['movie_3']);
     },
   );
+
+  test('a refused replace leaves the previous copy and no temp file', () async {
+    final path = '${dir.path}/movie.ndjson';
+    expect(await writeCatalogFile(path, [item(1, ContentType.movie)]), true);
+    final refused = await writeCatalogFile(
+      path,
+      [item(2, ContentType.movie)],
+      stillAllowed: () {
+        final temporary = File('$path.tmp');
+        return !temporary.existsSync() || temporary.lengthSync() == 0;
+      },
+    );
+    expect(refused, false);
+    final back = await readCatalogFileV3(path);
+    expect(back!.single.id, 'movie_1');
+    expect(File('$path.tmp').existsSync(), false);
+  });
+
+  test('open session does not encode a catalog section', () async {
+    final session = Object();
+    PlaybackWorkPolicy.instance.update(session, cloudBlocked: false);
+    try {
+      final saved = await CatalogCacheService().writeSection(
+        'account',
+        ContentType.movie,
+        [item(1, ContentType.movie)],
+      );
+      expect(saved, false);
+    } finally {
+      PlaybackWorkPolicy.instance.remove(session);
+    }
+  });
 
   test('empty section is saved and read as empty, not missing', () async {
     final path = '${dir.path}/e.ndjson';

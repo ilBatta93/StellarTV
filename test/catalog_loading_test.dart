@@ -54,6 +54,22 @@ class FakeXtream extends XtreamService {
   }) => series.future;
 }
 
+class RecordingCache extends CatalogCacheService {
+  final writes = <ContentType>[];
+  @override
+  Future<List<Channel>> read(String accountKey) async => const [];
+  @override
+  Future<bool> writeSection(
+    String accountKey,
+    ContentType type,
+    List<Channel> channels, {
+    bool Function()? stillAllowed,
+  }) async {
+    writes.add(type);
+    return true;
+  }
+}
+
 class FakeCache extends CatalogCacheService {
   final List<Channel> rows;
   FakeCache([this.rows = const []]);
@@ -62,11 +78,12 @@ class FakeCache extends CatalogCacheService {
   @override
   Future<void> write(String accountKey, List<Channel> channels) async {}
   @override
-  Future<void> writeSection(
+  Future<bool> writeSection(
     String accountKey,
     ContentType type,
-    List<Channel> channels,
-  ) async {}
+    List<Channel> channels, {
+    bool Function()? stillAllowed,
+  }) async => true;
 }
 
 Future<void> tick() => Future<void>.delayed(Duration.zero);
@@ -166,6 +183,35 @@ void main() {
       expect(app.catalogState(ContentType.anime).phase, CatalogLoadPhase.ready);
     },
   );
+
+  test('a section downloaded during playback is saved only after the player closes', () async {
+    final api = FakeXtream();
+    final cache = RecordingCache();
+    final app = AppProvider(xtreamService: api, catalogCache: cache);
+    final loading = app.loadFromXtream(
+      server: 'test',
+      username: 'viewer',
+      password: '',
+    );
+    await tick();
+    expect(app.catalogState(ContentType.live).phase, CatalogLoadPhase.loading);
+    app.setPlaybackActive(true);
+    api.live.complete([channel(ContentType.live)]);
+    api.movies.complete([channel(ContentType.movie)]);
+    api.series.complete([channel(ContentType.series)]);
+    await sectionReady(app, ContentType.live);
+    expect(cache.writes, isEmpty);
+    expect(app.channelsOf(ContentType.live), isEmpty);
+    app.setPlaybackActive(false);
+    final deadline = DateTime.now().add(const Duration(seconds: 4));
+    while (cache.writes.isEmpty && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    expect(cache.writes, [ContentType.live]);
+    expect(app.channelsOf(ContentType.live), hasLength(1));
+    await loading;
+    app.dispose();
+  });
 
   test(
     'Failure uses cache without marking unrelated sections failed',

@@ -65,7 +65,7 @@ class AppProvider extends ChangeNotifier {
     if (active != _playbackActive) _setEffectivePlaybackActive(active);
     if (!active &&
         ForegroundPolicy.instance.active &&
-        _pendingSections.isNotEmpty &&
+        _hasDeferredCatalogWork &&
         !(_pendingTimer?.isActive ?? false)) {
       _pendingTimer = Timer(
         const Duration(milliseconds: 900),
@@ -426,7 +426,15 @@ class AppProvider extends ChangeNotifier {
   bool _playbackActive = false;
   bool _mainPlayerActive = false;
   bool get playbackActive => _playbackActive;
+
+  /// True while a session is open or the app is not visible. Catalog files
+  /// stay in memory until this is false; nothing is encoded on the UI isolate.
+  bool get _catalogDiskBlocked =>
+      _playbackActive || PlaybackWorkPolicy.instance.blocksCatalogWrite;
   final Map<ContentType, List<Channel>> _pendingSections = {};
+  final Map<ContentType, List<Channel>> _pendingCatalogWrites = {};
+  bool get _hasDeferredCatalogWork =>
+      _pendingSections.isNotEmpty || _pendingCatalogWrites.isNotEmpty;
   Timer? _pendingTimer;
   bool _refreshDeferred = false;
   Timer? _deferredRefreshTimer;
@@ -459,7 +467,7 @@ class AppProvider extends ChangeNotifier {
       // Index skipped while the video played: build it once it closes.
       Timer(const Duration(seconds: 2), _startCatalogIndex);
     }
-    if (!value && _pendingSections.isNotEmpty) {
+    if (!value && _hasDeferredCatalogWork) {
       // Let the exit animation finish first.
       _pendingTimer = Timer(
         const Duration(milliseconds: 900),
@@ -522,6 +530,59 @@ class AppProvider extends ChangeNotifier {
       _pendingSections.remove(entry.key);
       _setChannels(merged, visible: visible);
       notifyListeners();
+    }
+    await _flushDeferredCatalogCopies();
+  }
+
+  /// Encodes deferred sections only while the player is closed and the app
+  /// is visible. Runs on the same queue as downloads so the two never overlap.
+  /// Must not be called from inside that queue: waiting for it would deadlock.
+  Future<void> _flushDeferredCatalogCopies() async {
+    final key = _currentKey;
+    if (_disposed ||
+        _catalogDiskBlocked ||
+        _pendingCatalogWrites.isEmpty ||
+        key != _currentKey) {
+      return;
+    }
+    final run = _sectionQueue.then((_) async {
+      final pending = List<MapEntry<ContentType, List<Channel>>>.of(
+        _pendingCatalogWrites.entries,
+      );
+      for (final entry in pending) {
+        if (_disposed || key != _currentKey || _catalogDiskBlocked) return;
+        if (!identical(_pendingCatalogWrites[entry.key], entry.value)) continue;
+        await _persistSectionCopy(key, entry.key, entry.value);
+      }
+    });
+    _sectionQueue = run.catchError((_) {});
+    await run;
+  }
+
+  /// Keeps [channels] in memory until a complete file replaces the previous
+  /// copy. A refused or interrupted write does not emit the saved marker.
+  Future<void> _persistSectionCopy(
+    String key,
+    ContentType type,
+    List<Channel> channels,
+  ) async {
+    _pendingCatalogWrites[type] = channels;
+    if (_disposed || key != _currentKey || _catalogDiskBlocked) return;
+    final saved = await _catalogCache.writeSection(
+      key,
+      type,
+      channels,
+      stillAllowed: () =>
+          !_disposed && key == _currentKey && !_catalogDiskBlocked,
+    );
+    if (_disposed || key != _currentKey) return;
+    if (saved && identical(_pendingCatalogWrites[type], channels)) {
+      _pendingCatalogWrites.remove(type);
+      if (!_catalogDiskBlocked) {
+        FrameTelemetryService.instance.mark(
+          'catalogo: copia salvata ${type.name}',
+        );
+      }
     }
   }
 
@@ -2066,11 +2127,10 @@ class AppProvider extends ChangeNotifier {
         phase: CatalogLoadPhase.ready,
         hasContent: channels.isNotEmpty,
       );
-      // Serialize cache workers with downloads instead of competing on TV CPU.
-      await _catalogCache.writeSection(key, type, channels);
-      FrameTelemetryService.instance.mark(
-        'catalogo: copia salvata ${type.name}',
-      );
+      // Same queue as this download: the copy is encoded off the UI isolate
+      // and only while the player is closed. Otherwise the section stays in
+      // memory until the session ends.
+      await _persistSectionCopy(key, type, channels);
     } catch (e) {
       if (_disposed || key != _currentKey) return;
       final message = e.toString().replaceFirst('Exception: ', '');
@@ -2163,6 +2223,7 @@ class AppProvider extends ChangeNotifier {
     // A new account must download its playlist completely the first time.
     unawaited(_refreshService.clearLastRun());
     _pendingSections.clear();
+    _pendingCatalogWrites.clear();
     _setChannels([]);
     _catalogStates.clear();
     for (final p in _progress.values) {

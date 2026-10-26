@@ -14,6 +14,11 @@ class PlaybackWorkPolicy {
   bool get hasPlayback => _sessions.isNotEmpty;
   bool get blocksGuide =>
       !ForegroundPolicy.instance.active || _sessions.isNotEmpty;
+
+  /// Catalog files wait until every session is gone and the app is visible.
+  /// A paused preview still counts as open: the copy stays in memory.
+  bool get blocksCatalogWrite =>
+      !ForegroundPolicy.instance.active || _sessions.isNotEmpty;
   bool get blocksCloud =>
       !ForegroundPolicy.instance.active ||
       _sessions.values.any((blocked) => blocked);

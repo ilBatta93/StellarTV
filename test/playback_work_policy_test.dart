@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/services/foreground_policy.dart';
 import '../lib/services/playback_work_policy.dart';
 
 void main() {
@@ -49,6 +50,23 @@ void main() {
     p.removeListener(listener);
     p.remove(session);
     expect(calls, 1);
+  });
+  test('catalog copies wait for a closed session and a visible app', () {
+    final p = PlaybackWorkPolicy();
+    final session = Object();
+    expect(p.blocksCatalogWrite, false);
+    p.update(session, cloudBlocked: false);
+    expect(p.hasPlayback, true);
+    expect(p.blocksCatalogWrite, true);
+    p.remove(session);
+    expect(p.blocksCatalogWrite, false);
+    ForegroundPolicy.instance.setResumed(false);
+    try {
+      expect(p.blocksCatalogWrite, true);
+    } finally {
+      ForegroundPolicy.instance.setResumed(true);
+    }
+    expect(p.blocksCatalogWrite, false);
   });
   test('conflict retry jitter stays within 250–400 milliseconds', () {
     expect(
