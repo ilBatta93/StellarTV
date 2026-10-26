@@ -26,9 +26,12 @@ class MediaKitEngine extends PlaybackEngine {
          configuration: PlayerConfiguration(
            // The old value (network caching ms * 1 KB, ~1.5 MB) held about a
            // second of HD video: any network hiccup stuttered. 32 MB minimum.
-           bufferSize: previewMode
-               ? 8 * 1024 * 1024
-               : _bufferBytes(settings, isLive),
+           bufferSize: cacheBytes(
+             settings,
+             isLive: isLive,
+             tv: DeviceTypeService.isTv,
+             preview: previewMode,
+           ),
            logLevel: MPVLogLevel.warn,
          ),
        ) {
@@ -71,11 +74,33 @@ class MediaKitEngine extends PlaybackEngine {
     _sync();
   }
 
-  static int _bufferBytes(PlayerSettings settings, bool isLive) {
-    final minimum = (isLive && DeviceTypeService.isTv ? 16 : 32) * 1024 * 1024;
-    final configured =
-        (isLive ? settings.liveCachingMs : settings.networkCachingMs) * 1024;
-    return configured < minimum ? minimum : configured;
+  /// Preview stays at 8 MB. Otherwise the stored slider is the forward
+  /// cache: legacy milliseconds keep today's buffer, and a value above the
+  /// floor (16 MB on TV live, 32 MB elsewhere) is the byte count mpv uses.
+  @visibleForTesting
+  static int cacheBytes(
+    PlayerSettings settings, {
+    required bool isLive,
+    required bool tv,
+    bool preview = false,
+  }) {
+    if (preview) return 8 * 1024 * 1024;
+    final stored = isLive ? settings.liveCachingMs : settings.networkCachingMs;
+    return PlayerSettings.migrateCacheBytes(stored, live: isLive, tv: tv);
+  }
+
+  @visibleForTesting
+  static String streamLavfOptions({
+    required bool reconnect,
+    required bool live,
+  }) {
+    if (!reconnect) return 'reconnect=0';
+    if (live) {
+      return 'reconnect=1,reconnect_at_eof=1,reconnect_on_network_error=1,'
+          'reconnect_delay_max=2';
+    }
+    return 'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,'
+        'reconnect_delay_max=5';
   }
 
   /// TV boxes have weak GPUs: mpv's high-quality scalers and dithering
@@ -119,13 +144,6 @@ class MediaKitEngine extends PlaybackEngine {
       // A deeper audio buffer absorbs Android audio-driver hiccups, so
       // mpv no longer repeats/skips frames to chase the audio clock.
       'audio-buffer': '0.5',
-      // Never drop frames on live: a jittery IPTV clock made mpv discard
-      // every picture at start (audio with a black screen). On film/series
-      // "vo" dropping turned tiny presentation delays into visible jumps;
-      // only CPU software decoding keeps dropping (it really falls behind).
-      'framedrop': (!isLive && softwareDecode && _settings.dropLateFrames)
-          ? 'vo'
-          : 'no',
       // Broadcast H.264 1080i, MPEG-2 and VC-1 channels gave audio with a
       // black picture through MediaCodec on Fire TV / Google TV /
       // Chromecast (no hardware deinterlacing towards the texture). Live:
@@ -147,9 +165,6 @@ class MediaKitEngine extends PlaybackEngine {
       // Auto threads oversubscribed entry-level quad-core TV CPUs and
       // starved the render thread; phones keep automatic detection.
       'vd-lavc-threads': DeviceTypeService.isTv ? '4' : '0',
-      // Film/series had mpv's 150 MiB default: on 1-2 GB TVs that forced
-      // Android memory reclaim pauses. 48 MiB is still minutes of video.
-      if (!isLive && DeviceTypeService.isTv) 'demuxer-max-bytes': '48MiB',
     };
     for (final entry in options.entries) {
       try {
@@ -373,12 +388,12 @@ class MediaKitEngine extends PlaybackEngine {
       'network-timeout': '20',
       'tls-verify': 'no',
       // Live: no reconnect_streamed. It resumed with a Range request that
-      // IPTV servers reject on live channels ("Segnale interrotto" loops).
-      'stream-lavf-o': isLive
-          ? 'reconnect=1,reconnect_at_eof=1,reconnect_on_network_error=1,'
-                'reconnect_delay_max=2'
-          : 'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,'
-                'reconnect_delay_max=5',
+      // live servers reject ("Segnale interrotto" loops). The switch turns
+      // the whole reconnect set off.
+      'stream-lavf-o': streamLavfOptions(
+        reconnect: _settings.httpReconnect,
+        live: isLive,
+      ),
       'demuxer-lavf-o': isLive
           // Keep the broadcast PCR/PTS: genpts rewrote them (A/V drift) and
           // nobuffer starved the decoder of keyframes.
@@ -400,9 +415,8 @@ class MediaKitEngine extends PlaybackEngine {
           : '5',
       'demuxer-lavf-probe-info': 'auto',
       'hls-bitrate': 'max',
-      if (isLive)
-        'demuxer-max-bytes':
-            '${previewMode ? 8 : (DeviceTypeService.isTv ? 16 : 64)}MiB',
+      'demuxer-max-bytes':
+          '${cacheBytes(_settings, isLive: isLive, tv: DeviceTypeService.isTv, preview: previewMode)}',
     };
     for (final entry in options.entries) {
       try {
@@ -612,6 +626,34 @@ class MediaKitEngine extends PlaybackEngine {
     });
   }
 
+  /// Preferences the settings screen shows for this engine. Frame dropping
+  /// stays off on live: a jittery clock made mpv discard every picture at
+  /// start. On film, "vo" dropping is limited to software decoding, where
+  /// the CPU really falls behind; hardware film on a phone keeps mpv's own
+  /// default so this does not change a path that was already smooth.
+  Future<void> _applyDeclaredPreferences() async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return;
+    final dropLate = !isLive && softwareDecode && _settings.dropLateFrames;
+    final options = <String, String>{
+      if (_settings.skipFrames) 'vd-lavc-skipframe': 'nonref',
+      'audio-pitch-correction': _settings.audioTimeStretch ? 'yes' : 'no',
+      'audio-spdif': _settings.audioPassthrough
+          ? 'ac3,eac3,dts,dts-hd,truehd'
+          : 'no',
+      // OpenSL cannot carry a bitstream. AudioTrack is opt-in with the
+      // switch; the default path stays on the output media_kit already set.
+      if (_settings.audioPassthrough && Platform.isAndroid) 'ao': 'audiotrack',
+      if (dropLate || DeviceTypeService.isTv || isLive)
+        'framedrop': dropLate ? 'vo' : 'no',
+    };
+    for (final entry in options.entries) {
+      try {
+        await platform.setProperty(entry.key, entry.value);
+      } catch (_) {}
+    }
+  }
+
   @override
   Future<void> open({double initialVolume = 1}) async {
     // VideoController applies native output/hwdec options after a frame.
@@ -619,10 +661,11 @@ class MediaKitEngine extends PlaybackEngine {
     await _videoController.platform.future;
     if (_disposed) throw const PlaybackException('Chiuso');
     await _tuneNetwork(effectiveStreamUserAgent(_settings.userAgent));
-    // Live tuning (no frame drops, codec allowlist, deinterlacing) matters
-    // on phones too: iPhone showed the same audio-with-black-picture bug.
+    // Live tuning (codec allowlist, deinterlacing) matters on phones too:
+    // iPhone showed the same audio-with-black-picture bug.
     if (DeviceTypeService.isTv || isLive) await _tuneForTv();
     if (isLive && !previewMode) await _enableTimeshift();
+    await _applyDeclaredPreferences();
     if (_disposed) throw const PlaybackException('Chiuso');
     await _player.setVolume(initialVolume.clamp(0.0, 1.0) * 100);
     _playing = Completer<void>();

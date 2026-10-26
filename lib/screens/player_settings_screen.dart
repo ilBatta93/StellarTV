@@ -34,10 +34,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
   PlayerSettingsScope get _scope => DeviceTypeService.isTv
       ? widget.scope ?? PlayerSettingsScope.shared
       : PlayerSettingsScope.shared;
-  bool _mpv(PlayerSettings s) =>
-      !_tvProfile || s.primaryEngine == PlayerEngineType.mediakit;
-  bool _exo(PlayerSettings s) =>
-      !_tvProfile || s.primaryEngine == PlayerEngineType.exo;
+  bool _mpv(PlayerSettings s) => s.primaryEngine == PlayerEngineType.mediakit;
   bool _mpvOrMdk(PlayerSettings s) => _mpv(s);
 
   bool get _live => _scope == PlayerSettingsScope.liveTv;
@@ -80,9 +77,42 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     if (picked != null) _update((s) => apply(s, picked));
   }
 
-  String _ms(double v) => v >= 1000
-      ? '${(v / 1000).toStringAsFixed(v % 1000 == 0 ? 0 : 1)} s'
-      : '${v.round()} ms';
+  String _mb(double bytes) => '${(bytes / (1024 * 1024)).round()} MB';
+
+  Widget _cacheSlider(PlayerSettings s, {required bool live}) {
+    final tv = DeviceTypeService.isTv;
+    final min = PlayerSettings.cacheFloor(live: live, tv: tv).toDouble();
+    final max = PlayerSettings.cacheCap(live: live, tv: tv).toDouble();
+    final stored = live ? s.liveCachingMs : s.networkCachingMs;
+    final value = PlayerSettings.migrateCacheBytes(
+      stored,
+      live: live,
+      tv: tv,
+    ).toDouble();
+    return SettingsSliderTile(
+      icon: live ? Icons.live_tv_rounded : Icons.cloud_download_outlined,
+      title: live ? 'Buffer dirette' : 'Buffer video',
+      subtitle: 'Minimo ${_mb(min)}. Sopra questo valore cambia la cache reale',
+      badge: 'mpv',
+      value: value,
+      min: min,
+      max: max,
+      divisions: ((max - min) / PlayerSettings.cacheStepBytes).round(),
+      format: _mb,
+      onChanged: (v) => _update((s) {
+        final bytes = PlayerSettings.alignCacheBytes(
+          v.round(),
+          live: live,
+          tv: tv,
+        );
+        if (live) {
+          s.liveCachingMs = bytes;
+        } else {
+          s.networkCachingMs = bytes;
+        }
+      }),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -299,7 +329,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             (s, v) => s.preferredAudioLanguage = v,
           ),
         ),
-        if (_mpv(s))
+        if (s.primaryEngine.supportsAudioPassthrough)
           SettingsSwitchTile(
             icon: Icons.surround_sound_outlined,
             title: 'Passthrough Dolby / DTS',
@@ -308,7 +338,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             value: s.audioPassthrough,
             onChanged: (v) => _update((s) => s.audioPassthrough = v),
           ),
-        if (_mpv(s))
+        if (s.primaryEngine.supportsAudioTimeStretch)
           SettingsSwitchTile(
             icon: Icons.graphic_eq_rounded,
             title: 'Mantieni il tono a velocità diverse',
@@ -317,7 +347,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             value: s.audioTimeStretch,
             onChanged: (v) => _update((s) => s.audioTimeStretch = v),
           ),
-        if (_mpv(s))
+        if (s.primaryEngine.supportsDelays)
           SettingsSliderTile(
             icon: Icons.sync_rounded,
             title: 'Ritardo audio predefinito',
@@ -396,7 +426,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           value: s.subtitleBold,
           onChanged: (v) => _update((s) => s.subtitleBold = v),
         ),
-        if (_mpv(s))
+        if (s.primaryEngine.supportsDelays)
           SettingsSliderTile(
             icon: Icons.av_timer_rounded,
             title: 'Ritardo sottotitoli predefinito',
@@ -439,17 +469,16 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               },
             ),
           ),
-        if (_mpv(s))
+        if (s.primaryEngine.supportsDropLateFrames && !_live)
           SettingsSwitchTile(
             icon: Icons.slow_motion_video_rounded,
             title: 'Scarta fotogrammi in ritardo',
-            subtitle:
-                'Mantiene audio e video sincronizzati su dispositivi lenti',
+            subtitle: 'Solo con decodifica software di un film: tiene audio e video in sincrono',
             badge: 'mpv',
             value: s.dropLateFrames,
             onChanged: (v) => _update((s) => s.dropLateFrames = v),
           ),
-        if (_mpv(s))
+        if (s.primaryEngine.supportsSkipFrames)
           SettingsSwitchTile(
             icon: Icons.skip_next_outlined,
             title: 'Salta fotogrammi',
@@ -467,35 +496,11 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
       title: 'Rete e buffer',
       description: 'Valori più alti riducono le interruzioni su connessioni instabili ma aumentano il tempo di avvio.',
       children: [
-        if (!_tvProfile || !_live)
-          if (_mpvOrMdk(s))
-            SettingsSliderTile(
-              icon: Icons.cloud_download_outlined,
-              title: 'Buffer video',
-              badge: 'mpv',
-              value: s.networkCachingMs.toDouble(),
-              min: 300,
-              max: 10000,
-              divisions: 97,
-              format: _ms,
-              onChanged: (v) =>
-                  _update((s) => s.networkCachingMs = (v / 100).round() * 100),
-            ),
-        if (!_tvProfile || _live)
-          if (_mpvOrMdk(s))
-            SettingsSliderTile(
-              icon: Icons.live_tv_rounded,
-              title: 'Buffer dirette',
-              badge: 'mpv',
-              value: s.liveCachingMs.toDouble(),
-              min: 300,
-              max: 10000,
-              divisions: 97,
-              format: _ms,
-              onChanged: (v) =>
-                  _update((s) => s.liveCachingMs = (v / 100).round() * 100),
-            ),
-        if (_exo(s))
+        if (s.primaryEngine.supportsCacheBuffer && (!_tvProfile || !_live))
+          _cacheSlider(s, live: false),
+        if (s.primaryEngine.supportsCacheBuffer && (!_tvProfile || _live))
+          _cacheSlider(s, live: true),
+        if (s.primaryEngine.supportsBackBuffer)
           SettingsSliderTile(
             icon: Icons.replay_circle_filled_outlined,
             title: 'Buffer all\'indietro',
@@ -508,7 +513,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             format: (v) => '${v.round()} s',
             onChanged: (v) => _update((s) => s.backBufferSeconds = v.round()),
           ),
-        if (_mpvOrMdk(s))
+        if (s.primaryEngine.supportsReconnect)
           SettingsSwitchTile(
             icon: Icons.wifi_protected_setup_rounded,
             title: 'Riconnessione automatica',
@@ -677,7 +682,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     );
     if (ok != true) return;
     await _service.reset(scope: _scope);
-    if (mounted) setState(() => _s = PlayerSettings());
+    await _load();
   }
 }
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stellar_tv/models/player_settings.dart';
+import 'package:stellar_tv/player/mediakit_engine.dart';
 import 'package:stellar_tv/services/player_settings_service.dart';
 
 void main() {
@@ -65,4 +66,67 @@ void main() {
       );
     },
   );
+  test('legacy cache sliders become the buffer mpv already used', () {
+    const mib = 1024 * 1024;
+    expect(
+      PlayerSettings.migrateCacheBytes(1500, live: true, tv: true),
+      16 * mib,
+    );
+    expect(
+      PlayerSettings.migrateCacheBytes(5000, live: false, tv: true),
+      48 * mib,
+    );
+    expect(
+      PlayerSettings.migrateCacheBytes(1500, live: true, tv: false),
+      64 * mib,
+    );
+    expect(
+      PlayerSettings.migrateCacheBytes(40 * mib, live: true, tv: true),
+      40 * mib,
+    );
+    expect(
+      PlayerSettings.migrateCacheBytes(8 * mib, live: false, tv: false),
+      32 * mib,
+    );
+    final legacy = PlayerSettings()
+      ..liveCachingMs = 1500
+      ..networkCachingMs = 5000;
+    expect(
+      MediaKitEngine.cacheBytes(legacy, isLive: true, tv: true),
+      16 * mib,
+    );
+    expect(
+      MediaKitEngine.cacheBytes(legacy, isLive: false, tv: true, preview: true),
+      8 * mib,
+    );
+    expect(
+      MediaKitEngine.streamLavfOptions(reconnect: false, live: true),
+      'reconnect=0',
+    );
+    expect(
+      MediaKitEngine.streamLavfOptions(reconnect: true, live: true),
+      contains('reconnect_at_eof=1'),
+    );
+    expect(
+      MediaKitEngine.streamLavfOptions(reconnect: true, live: false),
+      contains('reconnect_streamed=1'),
+    );
+    final old = PlayerSettings.fromJson({
+      'engineV': 2,
+      'skipFrames': true,
+      'httpReconnect': false,
+      'audioPassthrough': true,
+    });
+    expect(old.skipFrames, isFalse);
+    expect(old.httpReconnect, isFalse);
+    expect(old.audioPassthrough, isTrue);
+    expect(PlayerEngineType.mediakit.supportsReconnect, isTrue);
+    expect(PlayerEngineType.exo.supportsReconnect, isFalse);
+    expect(PlayerEngineType.mediakit.supportsSkipFrames, isTrue);
+    expect(PlayerEngineType.exo.supportsSkipFrames, isFalse);
+    expect(PlayerEngineType.mediakit.supportsAudioPassthrough, isTrue);
+    expect(PlayerEngineType.exo.supportsAudioPassthrough, isFalse);
+    expect(PlayerEngineType.exo.supportsCacheBuffer, isFalse);
+    expect(PlayerEngineType.mediakit.supportsBackBuffer, isFalse);
+  });
 }

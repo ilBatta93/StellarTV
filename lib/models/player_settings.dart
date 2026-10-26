@@ -26,6 +26,16 @@ enum PlayerEngineType {
   bool get supportsDelays => this == PlayerEngineType.mediakit;
   bool get supportsTimeshift => this == PlayerEngineType.mediakit;
   bool get supportsQuality => this == PlayerEngineType.exo;
+
+  /// Declared here so a new engine opts in once and the settings screen
+  /// hides the control everywhere else.
+  bool get supportsReconnect => this == PlayerEngineType.mediakit;
+  bool get supportsSkipFrames => this == PlayerEngineType.mediakit;
+  bool get supportsAudioPassthrough => this == PlayerEngineType.mediakit;
+  bool get supportsAudioTimeStretch => this == PlayerEngineType.mediakit;
+  bool get supportsDropLateFrames => this == PlayerEngineType.mediakit;
+  bool get supportsCacheBuffer => this == PlayerEngineType.mediakit;
+  bool get supportsBackBuffer => this == PlayerEngineType.exo;
 }
 
 enum LiveStreamFormat {
@@ -121,6 +131,9 @@ class PlayerSettings {
   LiveStreamFormat liveStreamFormat;
 
   HardwareDecoding hardwareDecoding;
+
+  /// Forward cache in bytes. A value below 16 MB is a legacy millisecond
+  /// slider and is migrated before it reaches the engine.
   int networkCachingMs;
   int liveCachingMs;
   int backBufferSeconds;
@@ -166,7 +179,7 @@ class PlayerSettings {
     this.backBufferSeconds = 30,
     this.httpReconnect = true,
     this.dropLateFrames = true,
-    this.skipFrames = true,
+    this.skipFrames = false,
     this.audioPassthrough = false,
     this.audioTimeStretch = true,
     this.userAgent = '',
@@ -193,6 +206,59 @@ class PlayerSettings {
     this.backgroundAudio = false,
     this.showStats = false,
   });
+
+  static const int cacheMib = 1024 * 1024;
+
+  /// TV live floor. Every other scope floors at 32 MB.
+  static const int cacheFloorLiveTvBytes = 16 * cacheMib;
+  static const int cacheFloorBytes = 32 * cacheMib;
+  static const int cacheStepBytes = 8 * cacheMib;
+
+  static int cacheFloor({required bool live, required bool tv}) =>
+      live && tv ? cacheFloorLiveTvBytes : cacheFloorBytes;
+
+  static int cacheCap({required bool live, required bool tv}) {
+    if (live) return (tv ? 64 : 96) * cacheMib;
+    return (tv ? 96 : 128) * cacheMib;
+  }
+
+  /// Millisecond sliders topped out near 10 MB, under both floors.
+  static bool isLegacyCacheValue(int value) => value < cacheFloorLiveTvBytes;
+
+  /// Legacy values keep the buffer the engine already used. Anything at or
+  /// above the floor is clamped and then used as the real byte count.
+  static int migrateCacheBytes(
+    int stored, {
+    required bool live,
+    required bool tv,
+  }) {
+    if (isLegacyCacheValue(stored)) {
+      if (live && tv) return cacheFloorLiveTvBytes;
+      if (live) return 64 * cacheMib;
+      if (tv) return 48 * cacheMib;
+      return cacheFloorBytes;
+    }
+    final floor = cacheFloor(live: live, tv: tv);
+    final cap = cacheCap(live: live, tv: tv);
+    if (stored < floor) return floor;
+    if (stored > cap) return cap;
+    return stored;
+  }
+
+  static int alignCacheBytes(
+    int value, {
+    required bool live,
+    required bool tv,
+  }) {
+    final floor = cacheFloor(live: live, tv: tv);
+    final cap = cacheCap(live: live, tv: tv);
+    final clamped = value < floor ? floor : (value > cap ? cap : value);
+    final steps = ((clamped - floor) / cacheStepBytes).round();
+    final aligned = floor + steps * cacheStepBytes;
+    if (aligned > cap) return cap;
+    if (aligned < floor) return floor;
+    return aligned;
+  }
 
   static T _enum<T extends Enum>(List<T> values, Object? name, T fallback) =>
       values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -224,7 +290,9 @@ class PlayerSettings {
       backBufferSeconds: i('backBufferSeconds', d.backBufferSeconds),
       httpReconnect: b('httpReconnect', d.httpReconnect),
       dropLateFrames: b('dropLateFrames', d.dropLateFrames),
-      skipFrames: b('skipFrames', d.skipFrames),
+      // The old default was on, but the engine ignored it. Keep that
+      // playback until the viewer turns the control on.
+      skipFrames: j['tuningV'] == 1 ? b('skipFrames', d.skipFrames) : false,
       audioPassthrough: b('audioPassthrough', d.audioPassthrough),
       audioTimeStretch: b('audioTimeStretch', d.audioTimeStretch),
       userAgent: s('userAgent', d.userAgent),
@@ -285,6 +353,7 @@ class PlayerSettings {
     'httpReconnect': httpReconnect,
     'dropLateFrames': dropLateFrames,
     'skipFrames': skipFrames,
+    'tuningV': 1,
     'audioPassthrough': audioPassthrough,
     'audioTimeStretch': audioTimeStretch,
     'userAgent': userAgent,

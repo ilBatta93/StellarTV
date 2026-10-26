@@ -31,7 +31,13 @@ class PlayerSettingsService {
       await save(previous, scope: scope);
       return previous;
     }
-    if (raw == null) return _common(PlayerSettings(), prefs, scope);
+    if (raw == null) {
+      return _finish(
+        await _common(PlayerSettings(), prefs, scope),
+        scope,
+        existed: false,
+      );
+    }
     try {
       final decoded = jsonDecode(raw);
       if (decoded is Map<String, dynamic>) {
@@ -43,12 +49,48 @@ class PlayerSettingsService {
           _liveDefaults(settings);
           await save(settings, scope: scope);
         }
-        return _common(settings, prefs, scope);
+        return await _finish(
+          await _common(settings, prefs, scope),
+          scope,
+          existed: true,
+        );
       }
     } on FormatException {
       // Corrupt payload: fall through to defaults.
     }
-    return _common(PlayerSettings(), prefs, scope);
+    return _finish(
+      await _common(PlayerSettings(), prefs, scope),
+      scope,
+      existed: false,
+    );
+  }
+
+  /// Rewrites a millisecond slider into the byte count mpv already used,
+  /// once, so the screen and the engine share the same number.
+  Future<PlayerSettings> _finish(
+    PlayerSettings settings,
+    PlayerSettingsScope scope, {
+    required bool existed,
+  }) async {
+    final tv = DeviceTypeService.isTv;
+    final live = PlayerSettings.migrateCacheBytes(
+      settings.liveCachingMs,
+      live: true,
+      tv: tv,
+    );
+    final network = PlayerSettings.migrateCacheBytes(
+      settings.networkCachingMs,
+      live: false,
+      tv: tv,
+    );
+    if (live == settings.liveCachingMs &&
+        network == settings.networkCachingMs) {
+      return settings;
+    }
+    settings.liveCachingMs = live;
+    settings.networkCachingMs = network;
+    if (existed) await save(settings, scope: scope);
+    return settings;
   }
 
   Future<PlayerSettings> _common(
@@ -107,6 +149,17 @@ class PlayerSettingsService {
   }) async {
     final defaults = PlayerSettings();
     if (scope == PlayerSettingsScope.liveTv) _liveDefaults(defaults);
+    final tv = DeviceTypeService.isTv;
+    defaults.liveCachingMs = PlayerSettings.migrateCacheBytes(
+      defaults.liveCachingMs,
+      live: true,
+      tv: tv,
+    );
+    defaults.networkCachingMs = PlayerSettings.migrateCacheBytes(
+      defaults.networkCachingMs,
+      live: false,
+      tv: tv,
+    );
     await save(defaults, scope: scope);
     if (scope != PlayerSettingsScope.liveTv)
       await setAutoNextEpisode(defaults.autoNextEpisode);
