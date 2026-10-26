@@ -17,8 +17,9 @@ import '../services/playback_work_policy.dart';
 import '../services/foreground_policy.dart';
 import '../models/episode_watch_event.dart';
 
-/// Local-first watch history: entries are always saved on the device
-/// immediately, and mirrored to the cloud sync profile when a pairing code
+/// Local-first watch history. A playing sample stays in memory; preferences
+/// are rewritten on pause, seek, exit and at most once a minute. Other edits
+/// are saved on the device immediately and mirrored when a pairing code
 /// exists. No account required.
 class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   HistoryProvider(this._sync, [this._favorites, this._syncProvider]) {
@@ -55,6 +56,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     await _manualWrites;
     await _loadFuture;
     if (!force && profileId == _profileId) return;
+    if (_progressDirty) await _persistLocal();
     _profileEpoch++;
     _pushDebounce?.cancel();
     _profileId = profileId;
@@ -432,9 +434,18 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _persistLocal() async {
+    final generation = _progressGeneration;
     await _sync.saveLocalHistory(_localMap(), profileId: _profileId);
+    if (generation == _progressGeneration) {
+      _progressDirty = false;
+      _lastProgressPush = DateTime.now();
+    }
     _scheduleCloudPush();
   }
+
+  /// Playback samples newer than the last preference write.
+  bool _progressDirty = false;
+  int _progressGeneration = 0;
 
   void _scheduleCloudPush() {
     _pushDebounce?.cancel();
@@ -631,52 +642,55 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       seriesPoster: _seriesPosterFor(channel) ?? previous?.seriesPoster ?? '',
     );
     _entries = [entry, ..._entries.where((e) => e.contentId != channel.id)];
+    _progressGeneration++;
+    _progressDirty = true;
     _notify();
     await _persistLocal();
   }
 
-  Future<void> updatePosition(
+  /// Updates the in-memory position. Returns true when that position was
+  /// written to preferences. [periodic] is the playing sample: it stays in
+  /// memory until [progressCloudInterval] has elapsed. Pause, seek and exit
+  /// pass periodic false and write immediately. Cloud push stays on the
+  /// preference write, still deferred while playback blocks it.
+  Future<bool> updatePosition(
     String contentId,
     Duration position,
     Duration duration, {
     bool periodic = false,
   }) async {
-    if (duration <= Duration.zero) return;
+    if (duration <= Duration.zero) return false;
     await _loadFuture;
     final index = _entries.indexWhere((e) => e.contentId == contentId);
-    if (index < 0) return;
+    if (index < 0) return false;
     final current = _entries[index];
     position = position < Duration.zero
         ? Duration.zero
         : position > duration
         ? duration
         : position;
-    final nowAt = DateTime.now();
-    final at = nowAt.isAfter(current.lastWatchedAt)
-        ? nowAt
-        : current.lastWatchedAt.add(const Duration(microseconds: 1));
-    if (current.position.inSeconds == position.inSeconds &&
-        current.duration.inSeconds == duration.inSeconds) {
-      return;
+    if (current.position.inSeconds != position.inSeconds ||
+        current.duration.inSeconds != duration.inSeconds) {
+      final nowAt = DateTime.now();
+      final at = nowAt.isAfter(current.lastWatchedAt)
+          ? nowAt
+          : current.lastWatchedAt.add(const Duration(microseconds: 1));
+      _entries = [..._entries]
+        ..[index] = current.copyWith(
+          position: position,
+          duration: duration,
+          lastWatchedAt: at,
+        );
+      _progressGeneration++;
+      _progressDirty = true;
+      _notify();
     }
-    _entries = [..._entries]
-      ..[index] = current.copyWith(
-        position: position,
-        duration: duration,
-        lastWatchedAt: at,
-      );
-    _notify();
-    // Local copy is always immediate. While a video keeps playing the
-    // periodic progress tick reaches the cloud at most once per
-    // [progressCloudInterval]; pause, exit, app background and every
-    // explicit action sync when foreground is permitted; background stays local.
-    final now = DateTime.now();
-    if (periodic && now.difference(_lastProgressPush) < progressCloudInterval) {
-      await _sync.saveLocalHistory(_localMap(), profileId: _profileId);
-      return;
-    }
-    _lastProgressPush = now;
+    final due =
+        !periodic ||
+        DateTime.now().difference(_lastProgressPush) >= progressCloudInterval;
+    if (!due || !_progressDirty) return false;
     await _persistLocal();
+    return true;
   }
 
   static const progressCloudInterval = Duration(seconds: 60);

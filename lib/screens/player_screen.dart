@@ -27,7 +27,6 @@ import '../services/playback_assistance.dart';
 import '../services/segment_library.dart';
 import '../services/foreground_policy.dart';
 import '../widgets/player/provider_check_button.dart';
-import '../services/playback_work_policy.dart';
 import '../services/native_player_bridge.dart';
 import '../services/player_settings_service.dart';
 import '../services/movie_hash.dart';
@@ -111,6 +110,8 @@ class _PlayerScreenState extends State<PlayerScreen>
   StreamSubscription<bool>? _pipSub;
   Timer? _hideTimer;
   Timer? _resumeTimer;
+  bool _resumePrefsSynced = false;
+  int? _resumePrefsMs;
   Timer? _noticeTimer;
   bool _controlsVisible = false;
   bool _tvInfoVisible = false;
@@ -1106,11 +1107,9 @@ class _PlayerScreenState extends State<PlayerScreen>
           ? (c.seriesName?.isNotEmpty == true ? c.seriesName! : c.name)
           : c.name;
       final saved = CatalogRatingService.instance.imdbIdOf(c);
-      final imdbId = saved ??
-          await ImdbResolver.getImdbId(
-            title: title,
-            isMovie: !_isEpisode,
-          );
+      final imdbId =
+          saved ??
+          await ImdbResolver.getImdbId(title: title, isMovie: !_isEpisode);
       if (saved == null && imdbId != null) {
         CatalogRatingService.instance.noteImdbId(c, imdbId);
       }
@@ -1452,7 +1451,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     });
     session.start();
     _scheduleHide();
-    if (!_isLive) {
+    if (!_isLive && !widget.archivePlayback) {
+      // The sample stays in memory. Preferences flush on pause, seek, exit
+      // and at most once a minute while playback continues.
       _resumeTimer = Timer.periodic(
         const Duration(seconds: 10),
         (_) => _saveResume(periodic: true),
@@ -1517,9 +1518,9 @@ class _PlayerScreenState extends State<PlayerScreen>
       _initialProgressSaved = true;
       unawaited(_saveResume(periodic: true));
     }
-    if (_wasPlaying &&
-        (!v.isPlaying || v.isEnded) &&
-        !PlaybackWorkPolicy.instance.blocksCloud) {
+    // Disk flush is independent of the cloud gate: a pause must keep the
+    // position even while the upload is still deferred.
+    if (_wasPlaying && (!v.isPlaying || v.isEnded)) {
       _saveResume();
     }
     _wasPlaying = v.isPlaying;
@@ -1708,22 +1709,27 @@ class _PlayerScreenState extends State<PlayerScreen>
       _pendingResume = null;
     }
     await _progressWriter.save(() async {
-      await _history.updatePosition(
+      final playingSample = periodic && v.isPlaying;
+      final wroteHistory = await _history.updatePosition(
         widget.channel.id,
         actualPosition,
         v.duration,
-        // A paused video syncs at once so another device resumes exactly.
-        periodic: periodic && v.isPlaying,
+        periodic: playingSample,
       );
       if (_settings?.resumePlayback != true) return;
+      if (playingSample && !wroteHistory) return;
       final remaining = v.duration - actualPosition;
       final keep =
           actualPosition > Duration.zero &&
           remaining > const Duration(minutes: 1);
+      final stored = keep ? actualPosition.inMilliseconds : null;
+      if (_resumePrefsSynced && stored == _resumePrefsMs) return;
       await _settingsService.saveResumePosition(
         widget.channel.url,
         keep ? actualPosition : null,
       );
+      _resumePrefsSynced = true;
+      _resumePrefsMs = stored;
     });
   }
 
@@ -1771,9 +1777,9 @@ class _PlayerScreenState extends State<PlayerScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _resumeTimer?.cancel();
     _saveResume();
     _hideTimer?.cancel();
-    _resumeTimer?.cancel();
     _tvInfoTimer?.cancel();
     _noticeTimer?.cancel();
     _pipSub?.cancel();

@@ -254,30 +254,62 @@ class SyncService {
   }
 
   Future<void> _historyWrites = Future<void>.value();
+  final Map<String, _QueuedHistory> _queuedHistory = {};
+
+  /// Serializes preference writes. A burst for the same key keeps only the
+  /// newest snapshot, so pause and exit do not rewrite the blob twice.
   Future<void> saveLocalHistory(
     Map<String, dynamic> history, {
     String? profileId,
   }) {
-    final account = currentUserId;
-    final snapshot = Map<String, dynamic>.from(history);
-    final next = _historyWrites.then((_) async {
-      if (account != currentUserId) throw StateError('Account cambiato');
+    final key = historyKeyFor(profileId);
+    final queued = _queuedHistory[key];
+    if (queued != null && !queued.started) {
+      queued.account = currentUserId;
+      queued.snapshot = PersonalVault.mergeHistory(queued.snapshot, history);
+      return queued.done.future;
+    }
+    final pending = _QueuedHistory(
+      currentUserId,
+      Map<String, dynamic>.from(history),
+    );
+    _queuedHistory[key] = pending;
+    final next = _historyWrites.then((_) => _writeQueuedHistory(key, pending));
+    _historyWrites = next.catchError((Object _) {});
+    return pending.done.future;
+  }
+
+  Future<void> _writeQueuedHistory(String key, _QueuedHistory pending) async {
+    pending.started = true;
+    if (identical(_queuedHistory[key], pending)) _queuedHistory.remove(key);
+    try {
+      if (pending.account != currentUserId) {
+        throw StateError('Account cambiato');
+      }
       final prefs = await SharedPreferences.getInstance();
-      final key = historyKeyFor(profileId);
-      final raw = jsonDecode(prefs.getString(key) ?? '{}');
+      if (pending.account != currentUserId) {
+        throw StateError('Account cambiato');
+      }
+      final existing = prefs.getString(key);
+      final raw = jsonDecode(existing ?? '{}');
       final controls = <String, dynamic>{
         for (final e in PersonalVault.object(raw).entries)
           if (PersonalVault.object(e.value)['type'] == '__stellar_seen_v1')
             e.key: e.value,
       };
       // Late playback snapshots must never erase a newer manual choice.
-      final merged = PersonalVault.mergeHistory(controls, snapshot);
-      if (account != currentUserId) throw StateError('Account cambiato');
-      if (!await prefs.setString(key, jsonEncode(merged)))
+      final merged = PersonalVault.mergeHistory(controls, pending.snapshot);
+      final encoded = jsonEncode(merged);
+      if (existing != encoded && !await prefs.setString(key, encoded)) {
         throw StateError('Salvataggio non riuscito');
-    });
-    _historyWrites = next.catchError((Object _) {});
-    return next;
+      }
+      if (!pending.done.isCompleted) pending.done.complete();
+    } catch (error, stack) {
+      if (!pending.done.isCompleted) {
+        pending.done.completeError(error, stack);
+      }
+      Error.throwWithStackTrace(error, stack);
+    }
   }
 
   /// Every per-profile history stored on this device.
@@ -647,4 +679,12 @@ class SyncService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastPullKey, DateTime.now().toIso8601String());
   }
+}
+
+class _QueuedHistory {
+  _QueuedHistory(this.account, this.snapshot);
+  String? account;
+  Map<String, dynamic> snapshot;
+  bool started = false;
+  final Completer<void> done = Completer<void>();
 }
