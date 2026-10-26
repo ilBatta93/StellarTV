@@ -10,6 +10,7 @@ import 'catalog_builder.dart';
 import 'catalog_index_builder.dart' show catalogEntryKey, catalogTitleKey;
 import 'catalog_preparation.dart';
 import 'kids_content_service.dart';
+import 'kids_policy.dart';
 
 /// Adult titles are flagged while the shelf is built, so the provider can
 /// hide them without keeping the raw catalog.
@@ -17,6 +18,7 @@ const shelfFlagAdult = 1;
 const shelfFlagFolder = 2;
 const shelfFlagBanned = 4;
 const shelfFlagSynthetic = 8;
+const shelfFlagKids = 16;
 
 final _adultPattern = RegExp(
   r'\bx{3,}\b|for\s*adults?|\badults?\b|\badulti\b|\b18\s*\+|\+\s*18\b|'
@@ -236,6 +238,10 @@ _LineIndex _indexChannels(
       '${channel.name} ${channel.group} ${channel.seriesName ?? ''} ${channel.plot ?? ''}',
     )) {
       flag |= shelfFlagBanned;
+    }
+    if ((flag & (shelfFlagAdult | shelfFlagBanned)) == 0 &&
+        KidsPolicy.allows(category: channel.group)) {
+      flag |= shelfFlagKids;
     }
     flags.add(flag);
     final group = channel.group;
@@ -608,11 +614,312 @@ _ShelfImage _buildShelfFromFiles(
   return _buildShelfFromChannels(directory, channels, hidden, custom, order);
 }
 
+/// One saved section. Offsets point at that file; only synthetic folders are
+/// written beside it. Other sections are not opened.
+_ShelfImage? _sectionImage(
+  String path,
+  String directory,
+  Map<String, List<String>> hidden,
+  List<CustomCategory> custom,
+  Map<String, List<String>> order,
+) {
+  final file = File(path);
+  if (!file.existsSync()) return null;
+  final bytes = file.readAsBytesSync();
+  final channels = <Channel>[];
+  final offsets = <int>[];
+  final lengths = <int>[];
+  var start = 0;
+  var header = false;
+  int? end;
+  for (var i = 0; i <= bytes.length; i++) {
+    if (i != bytes.length && bytes[i] != 0x0A) continue;
+    if (i == start) {
+      start = i + 1;
+      continue;
+    }
+    final lineStart = start;
+    final lineEnd = i;
+    start = i + 1;
+    if (lineEnd == lineStart) continue;
+    final text = utf8.decode(bytes.sublist(lineStart, lineEnd));
+    if (text.isEmpty) continue;
+    final value = jsonDecode(text);
+    if (!header) {
+      if (value is! Map || value['stellar_catalog'] != 3) return null;
+      header = true;
+      continue;
+    }
+    if (value is Map && value.length == 1 && value['end'] is int) {
+      end = value['end'] as int;
+      continue;
+    }
+    if (value is Map) {
+      channels.add(Channel.fromMap(value.cast<String, dynamic>()));
+      offsets.add(lineStart);
+      lengths.add(lineEnd - lineStart);
+    }
+  }
+  if (!header || end == null || end != channels.length) return null;
+  final slotOf = <Channel, int>{
+    for (var i = 0; i < channels.length; i++) channels[i]: i,
+  };
+  final sourceCount = channels.length;
+  final present = <ContentType>{for (final channel in channels) channel.type};
+  final plans = <String, ShelfPlan>{};
+  for (final type in ContentType.values) {
+    if (!present.contains(type)) continue;
+    final prepared = prepareCatalogSync(
+      snapshot: channels,
+      type: type,
+      hidden: hidden[type.name] ?? const [],
+      custom: [
+        for (final category in custom)
+          if (category.type == type) category,
+      ],
+      order: order[type.name] ?? const [],
+    );
+    for (final channel in [
+      ...prepared.channels,
+      ...prepared.catalog,
+      for (final group in prepared.groups)
+        for (final entry in group.entries) entry.primary,
+    ]) {
+      if (!slotOf.containsKey(channel)) {
+        slotOf[channel] = slotOf.length;
+        channels.add(channel);
+      }
+    }
+    plans[type.name] = ShelfPlan.fromPrepared(prepared, slotOf);
+  }
+  final synthetic = <bool>[
+    for (var i = 0; i < channels.length; i++) i >= sourceCount,
+  ];
+  final fileOf = <int>[];
+  final allOffsets = <int>[];
+  final allLengths = <int>[];
+  final paths = <String>[path];
+  for (var i = 0; i < sourceCount; i++) {
+    fileOf.add(0);
+    allOffsets.add(offsets[i]);
+    allLengths.add(lengths[i]);
+  }
+  if (channels.length > sourceCount) {
+    final syntheticPath = '$directory/synthetic_${path.hashCode}.ndjson';
+    final out = File(syntheticPath).openSync(mode: FileMode.write);
+    var cursor = 0;
+    try {
+      for (var i = sourceCount; i < channels.length; i++) {
+        final written = _appendChannel(
+          out,
+          cursor,
+          channels[i],
+          synthetic: true,
+        );
+        fileOf.add(1);
+        allOffsets.add(written.offset);
+        allLengths.add(written.length);
+        cursor = written.offset + written.length + 1;
+      }
+    } finally {
+      out.closeSync();
+    }
+    paths.add(syntheticPath);
+  }
+  return _finishImage(
+    paths: paths,
+    channels: channels,
+    fileOf: fileOf,
+    offsets: allOffsets,
+    lengths: allLengths,
+    plans: plans,
+    settingsToken: shelfSettingsToken(
+      hidden: hidden,
+      custom: custom,
+      order: order,
+    ),
+    synthetic: synthetic,
+  );
+}
+
+ShelfPlan _shiftPlan(ShelfPlan plan, int base) {
+  if (base == 0) return plan;
+  List<int> move(List<int> slots) => [for (final slot in slots) slot + base];
+  return ShelfPlan(
+    channels: move(plan.channels),
+    catalog: move(plan.catalog),
+    labels: plan.labels,
+    groupSlots: [for (final group in plan.groupSlots) move(group)],
+    recent: move(plan.recent),
+    alphabetical: move(plan.alphabetical),
+  );
+}
+
+void _absorbPostings(
+  Map<String, List<int>> buckets,
+  List<String> keys,
+  List<int> starts,
+  List<int> postings,
+  int base,
+) {
+  for (var i = 0; i < keys.length; i++) {
+    final list = buckets[keys[i]] ??= <int>[];
+    for (var posting = starts[i]; posting < starts[i + 1]; posting++) {
+      list.add(postings[posting] + base);
+    }
+  }
+}
+
+_ShelfImage _mergePieces(List<_ShelfImage> pieces, String token) {
+  if (pieces.isEmpty) {
+    return _ShelfImage(
+      paths: const [],
+      ids: const [],
+      types: const [],
+      fileOf: const [],
+      offsets: const [],
+      lengths: const [],
+      flags: const [],
+      groupOf: const [],
+      groupLabels: const [''],
+      facetKeys: const [],
+      words: const [],
+      wordStarts: const [0],
+      wordPostings: const [],
+      exactKeys: const [],
+      exactStarts: const [0],
+      exactPostings: const [],
+      episodes: const {},
+      folders: const {},
+      titleCategories: const {},
+      categoryLabels: const {},
+      plans: const {},
+      settingsToken: token,
+    );
+  }
+  if (pieces.length == 1) return pieces.first;
+  final paths = <String>[];
+  final pathIndex = <String, int>{};
+  int adopt(String path) => pathIndex.putIfAbsent(path, () {
+    paths.add(path);
+    return paths.length - 1;
+  });
+  final ids = <String>[];
+  final types = <int>[];
+  final fileOf = <int>[];
+  final offsets = <int>[];
+  final lengths = <int>[];
+  final flags = <int>[];
+  final groupOf = <int>[];
+  final groupLabels = <String>[''];
+  final groupSlot = <String, int>{'': 0};
+  final facetKeys = <String>[];
+  final words = <String, List<int>>{};
+  final exact = <String, List<int>>{};
+  final episodes = <String, List<int>>{};
+  final folders = <String, int>{};
+  final titleCategories = <String, List<String>>{};
+  final categoryLabels = <String, List<String>>{};
+  final plans = <String, ShelfPlan>{};
+  var base = 0;
+  for (final piece in pieces) {
+    for (final entry in piece.plans.entries) {
+      plans[entry.key] = _shiftPlan(entry.value, base);
+    }
+    final localGroups = <int>[];
+    for (final label in piece.groupLabels) {
+      localGroups.add(
+        groupSlot.putIfAbsent(label, () {
+          groupLabels.add(label);
+          return groupLabels.length - 1;
+        }),
+      );
+    }
+    ids.addAll(piece.ids);
+    types.addAll(piece.types);
+    offsets.addAll(piece.offsets);
+    lengths.addAll(piece.lengths);
+    flags.addAll(piece.flags);
+    facetKeys.addAll(piece.facetKeys);
+    for (var slot = 0; slot < piece.ids.length; slot++) {
+      final localFile = piece.fileOf[slot];
+      final path = localFile >= 0 && localFile < piece.paths.length
+          ? piece.paths[localFile]
+          : piece.paths.first;
+      fileOf.add(adopt(path));
+      final localGroup = piece.groupOf[slot];
+      groupOf.add(
+        localGroup >= 0 && localGroup < localGroups.length
+            ? localGroups[localGroup]
+            : 0,
+      );
+    }
+    _absorbPostings(words, piece.words, piece.wordStarts, piece.wordPostings, base);
+    _absorbPostings(
+      exact,
+      piece.exactKeys,
+      piece.exactStarts,
+      piece.exactPostings,
+      base,
+    );
+    for (final entry in piece.episodes.entries) {
+      final list = episodes[entry.key] ??= <int>[];
+      for (final slot in entry.value) {
+        list.add(slot + base);
+      }
+    }
+    for (final entry in piece.folders.entries) {
+      folders.putIfAbsent(entry.key, () => entry.value + base);
+    }
+    for (final entry in piece.titleCategories.entries) {
+      final list = titleCategories[entry.key] ??= <String>[];
+      for (final label in entry.value) {
+        if (!list.contains(label)) list.add(label);
+      }
+    }
+    for (final entry in piece.categoryLabels.entries) {
+      final list = categoryLabels[entry.key] ??= <String>[];
+      for (final label in entry.value) {
+        if (!list.contains(label)) list.add(label);
+      }
+    }
+    base += piece.ids.length;
+  }
+  final flatWords = _flatten(words);
+  final flatExact = _flatten(exact);
+  return _ShelfImage(
+    paths: paths,
+    ids: ids,
+    types: types,
+    fileOf: fileOf,
+    offsets: offsets,
+    lengths: lengths,
+    flags: flags,
+    groupOf: groupOf,
+    groupLabels: groupLabels,
+    facetKeys: facetKeys,
+    words: flatWords.keys,
+    wordStarts: flatWords.starts,
+    wordPostings: flatWords.postings,
+    exactKeys: flatExact.keys,
+    exactStarts: flatExact.starts,
+    exactPostings: flatExact.postings,
+    episodes: episodes,
+    folders: folders,
+    titleCategories: titleCategories,
+    categoryLabels: categoryLabels,
+    plans: plans,
+    settingsToken: token,
+  );
+}
+
 /// Indexed local catalog. The provider keeps this object, the slot lists and
-/// the filters. Titles and playback addresses stay in the NDJSON body and are
-/// read a few dozen at a time.
+/// the filters. Titles and playback addresses stay in the section file and are
+/// read a few dozen at a time. A new section is appended; the others stay.
 class CatalogShelf implements CatalogChannelSource {
   CatalogShelf._(this._image, this.generation);
+
+  static bool forbidDiskReads = false;
 
   factory CatalogShelf.empty() => CatalogShelf._(
     _ShelfImage(
@@ -676,8 +983,10 @@ class CatalogShelf implements CatalogChannelSource {
     return CatalogShelf._(image, generation);
   }
 
-  final _ShelfImage _image;
+  _ShelfImage _image;
   final int generation;
+  final List<_ShelfImage> _pieces = [];
+  String? _workDir;
   final List<RandomAccessFile?> _files = [];
   final LinkedHashMap<int, Channel> _window = LinkedHashMap();
   static const _windowLimit = 640;
@@ -686,6 +995,13 @@ class CatalogShelf implements CatalogChannelSource {
   bool get isEmpty => _image.ids.isEmpty;
   String get settingsToken => _image.settingsToken;
   String? get storagePath => _image.paths.isEmpty ? null : _image.paths.first;
+
+  /// Section files already indexed, in publication order.
+  List<String> get sectionPaths => [
+    for (final piece in _pieces)
+      if (piece.paths.isNotEmpty) piece.paths.first,
+  ];
+
   Map<String, List<String>> get titleCategories => _image.titleCategories;
 
   List<String> categoryLabels(ContentType type) =>
@@ -695,6 +1011,21 @@ class CatalogShelf implements CatalogChannelSource {
 
   bool isAdultSlot(int slot) => (_image.flags[slot] & shelfFlagAdult) != 0;
 
+  bool isBannedSlot(int slot) => (_image.flags[slot] & shelfFlagBanned) != 0;
+
+  bool isKidsSlot(int slot) => (_image.flags[slot] & shelfFlagKids) != 0;
+
+  void setKidsFlag(int slot, bool allowed) {
+    if (allowed) {
+      _image.flags[slot] |= shelfFlagKids;
+    } else {
+      _image.flags[slot] &= ~shelfFlagKids;
+    }
+  }
+
+  /// File that holds this slot. Section slots stay on the saved section file.
+  String pathOfSlot(int slot) => _image.paths[_image.fileOf[slot]];
+
   String groupAt(int slot) => _image.groupLabels[_image.groupOf[slot]];
 
   String facetKeyAt(int slot) => _image.facetKeys[slot];
@@ -703,6 +1034,9 @@ class CatalogShelf implements CatalogChannelSource {
 
   @override
   Channel readSlot(int slot) {
+    if (forbidDiskReads) {
+      throw StateError('lettura del titolo durante la pubblicazione');
+    }
     final cached = _window.remove(slot);
     if (cached != null) {
       _window[slot] = cached;
@@ -769,6 +1103,46 @@ class CatalogShelf implements CatalogChannelSource {
       if ((_image.flags[i] & shelfFlagSynthetic) == 0) readSlot(i),
   ];
 
+  /// Indexes [path] alone and appends that fragment. The same path replaces
+  /// its previous fragment. A different settings token is left to [retune].
+  Future<void> appendSection(
+    String path, {
+    required Map<String, List<String>> hidden,
+    required List<CustomCategory> custom,
+    required Map<String, List<String>> order,
+  }) async {
+    if (!File(path).existsSync()) return;
+    final token = shelfSettingsToken(
+      hidden: hidden,
+      custom: custom,
+      order: order,
+    );
+    final directory = _workDir ??= Directory.systemTemp
+        .createTempSync('stv_shelf_')
+        .path;
+    final image = await Isolate.run(
+      () => _sectionImage(path, directory, hidden, custom, order),
+    );
+    if (image == null) return;
+    _pieces.removeWhere(
+      (piece) => piece.paths.isNotEmpty && piece.paths.first == path,
+    );
+    _pieces.add(image);
+    _releaseHandles();
+    _image = _mergePieces(_pieces, token);
+  }
+
+  void _releaseHandles() {
+    for (final file in _files) {
+      try {
+        file?.closeSync();
+      } catch (_) {}
+    }
+    _files.clear();
+    _window.clear();
+    _idIndexCache = null;
+  }
+
   Future<CatalogShelf> retune({
     required Map<String, List<String>> hidden,
     required List<CustomCategory> custom,
@@ -780,7 +1154,22 @@ class CatalogShelf implements CatalogChannelSource {
       custom: custom,
       order: order,
     );
-    if (token == settingsToken || _image.paths.isEmpty) return this;
+    if (token == settingsToken || (_image.paths.isEmpty && _pieces.isEmpty)) {
+      return this;
+    }
+    if (_pieces.isNotEmpty) {
+      final paths = [
+        for (final piece in _pieces)
+          if (piece.paths.isNotEmpty) piece.paths.first,
+      ];
+      return CatalogShelf.fromSectionFiles(
+        paths,
+        hidden: hidden,
+        custom: custom,
+        order: order,
+        generation: generation,
+      );
+    }
     final source = _image.paths.first;
     final directory = Directory.systemTemp.createTempSync('stv_shelf_').path;
     final image = await Isolate.run(
@@ -791,16 +1180,33 @@ class CatalogShelf implements CatalogChannelSource {
 
   Future<void> warmNames(ContentType type, void Function(List<String> ids, List<String> names) apply) async {
     final plan = this.plan(type);
-    final path = _image.paths.isEmpty ? null : _image.paths.first;
-    if (plan == null || path == null || plan.alphabetical.isEmpty) return;
+    if (plan == null || _image.paths.isEmpty || plan.alphabetical.isEmpty) {
+      return;
+    }
     final slots = plan.alphabetical;
-    final offsets = _image.offsets;
-    final lengths = _image.lengths;
-    final ids = [for (final slot in slots) _image.ids[slot]];
-    final names = await Isolate.run(
-      () => readShelfDisplayNames(path, offsets, lengths, slots),
+    final namesBySlot = <int, String>{};
+    final byFile = <int, List<int>>{};
+    for (final slot in slots) {
+      if (slot < 0 || slot >= _image.fileOf.length) continue;
+      (byFile[_image.fileOf[slot]] ??= <int>[]).add(slot);
+    }
+    for (final entry in byFile.entries) {
+      if (entry.key < 0 || entry.key >= _image.paths.length) continue;
+      final path = _image.paths[entry.key];
+      final offsets = _image.offsets;
+      final lengths = _image.lengths;
+      final mine = entry.value;
+      final part = await Isolate.run(
+        () => readShelfDisplayNames(path, offsets, lengths, mine),
+      );
+      for (var i = 0; i < mine.length && i < part.length; i++) {
+        namesBySlot[mine[i]] = part[i];
+      }
+    }
+    apply(
+      [for (final slot in slots) _image.ids[slot]],
+      [for (final slot in slots) namesBySlot[slot] ?? ''],
     );
-    apply(ids, names);
   }
 
   List<int> searchSlots(String query) {
@@ -879,14 +1285,38 @@ class CatalogShelf implements CatalogChannelSource {
   }
 
   void close() {
-    for (final file in _files) {
+    _releaseHandles();
+    final directory = _workDir;
+    if (directory != null) {
       try {
-        file?.closeSync();
+        Directory(directory).deleteSync(recursive: true);
       } catch (_) {}
+      _workDir = null;
     }
-    _files.clear();
-    _window.clear();
   }
+}
+
+/// Catalog rows addressed by slot. A tile reads its title the first time it
+/// is built; publishing the shelf does not build one entry per title.
+class SlotEntryList extends ListBase<CatalogEntry> {
+  SlotEntryList(this.source, this.slots);
+
+  final CatalogChannelSource source;
+  final List<int> slots;
+
+  @override
+  int get length => slots.length;
+
+  @override
+  set length(int newLength) =>
+      throw UnsupportedError('catalogo in sola lettura');
+
+  @override
+  CatalogEntry operator [](int index) => CatalogEntry.slot(slots[index], source);
+
+  @override
+  void operator []=(int index, CatalogEntry value) =>
+      throw UnsupportedError('catalogo in sola lettura');
 }
 
 List<Map<String, String>> _readLiveIdentities(

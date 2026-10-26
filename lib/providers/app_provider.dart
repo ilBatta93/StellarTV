@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -451,7 +452,7 @@ class AppProvider extends ChangeNotifier {
     String key,
   ) async {
     if (await _catalogCache.hasSectionFile(key)) {
-      await _installFromFiles(key);
+      await _installFromFiles(key, changed: type);
       return;
     }
     final epoch = _shelfEpoch;
@@ -467,19 +468,61 @@ class AppProvider extends ChangeNotifier {
     await _installChannels(merged);
   }
 
-  Future<void> _installFromFiles(String key) async {
+  Future<void> _installFromFiles(String key, {ContentType? changed}) async {
     final epoch = ++_shelfEpoch;
     final paths = await _catalogCache.sectionPaths(key);
-    final shelf = await CatalogShelf.fromSectionFiles(
-      paths,
-      hidden: _hiddenCategories,
-      custom: _customCategories,
-      order: _categoryOrder,
-      generation: epoch,
-    );
-    if (_disposed || epoch != _shelfEpoch) {
-      shelf.close();
+    final present = [
+      for (final path in paths)
+        if (File(path).existsSync()) path,
+    ];
+    if (_disposed || epoch != _shelfEpoch) return;
+    if (present.isEmpty) {
+      _swap(CatalogShelf.empty());
       return;
+    }
+    final token = _settingsToken();
+    final reusable = !_shelf.isEmpty && _shelf.settingsToken == token;
+    if (reusable) {
+      final known = _shelf.sectionPaths.toSet();
+      final targets = <String>[];
+      if (changed != null) {
+        final index = CatalogCacheService.sections.indexOf(changed);
+        if (index >= 0 &&
+            index < paths.length &&
+            File(paths[index]).existsSync()) {
+          targets.add(paths[index]);
+        }
+      }
+      if (targets.isEmpty) {
+        for (final path in present) {
+          if (!known.contains(path)) targets.add(path);
+        }
+      }
+      for (final path in targets) {
+        await _shelf.appendSection(
+          path,
+          hidden: _hiddenCategories,
+          custom: _customCategories,
+          order: _categoryOrder,
+        );
+        if (_disposed || epoch != _shelfEpoch) return;
+      }
+      if (_disposed || epoch != _shelfEpoch) return;
+      _swap(_shelf);
+      return;
+    }
+    final shelf = CatalogShelf.empty();
+    for (final path in present) {
+      await shelf.appendSection(
+        path,
+        hidden: _hiddenCategories,
+        custom: _customCategories,
+        order: _categoryOrder,
+      );
+      if (_disposed || epoch != _shelfEpoch) {
+        shelf.close();
+        return;
+      }
     }
     _swap(shelf);
   }
@@ -523,7 +566,14 @@ class AppProvider extends ChangeNotifier {
     var visible = 0;
     if (_kidsMode) {
       for (var slot = 0; slot < count; slot++) {
-        if (isKidsContent(_shelf.readSlot(slot))) {
+        final show = _kids.allowsIndexed(
+          adult: _shelf.isAdultSlot(slot),
+          banned: _shelf.isBannedSlot(slot),
+          category: _shelf.groupAt(slot),
+          key: _shelf.facetKeyAt(slot),
+        );
+        _shelf.setKidsFlag(slot, show);
+        if (show) {
           mask[slot] = 1;
           visible++;
         }
@@ -562,20 +612,19 @@ class AppProvider extends ChangeNotifier {
       }
       final groups = <CatalogGroup>[];
       for (var i = 0; i < plan.labels.length; i++) {
-        final entries = [
-          for (final slot in _kept(plan.groupSlots[i])) _slotEntry(slot),
-        ];
+        final entries = _kept(plan.groupSlots[i]);
         if (entries.isNotEmpty) {
-          groups.add(CatalogGroup(label: plan.labels[i], entries: entries));
+          groups.add(
+            CatalogGroup(
+              label: plan.labels[i],
+              entries: SlotEntryList(_shelf, entries),
+            ),
+          );
         }
       }
       _groupedCache[type] = groups;
-      _recentCache[type] = [
-        for (final slot in _kept(plan.recent)) _slotEntry(slot),
-      ];
-      _allCache[type] = [
-        for (final slot in _kept(plan.alphabetical)) _slotEntry(slot),
-      ];
+      _recentCache[type] = SlotEntryList(_shelf, _kept(plan.recent));
+      _allCache[type] = SlotEntryList(_shelf, _kept(plan.alphabetical));
       unawaited(_warmFacetNames(type, plan.alphabetical));
       unawaited(_ensureGenreCounts(type));
     }
@@ -1740,7 +1789,7 @@ class AppProvider extends ChangeNotifier {
         // rebuilds every page under the player. Keep the section aside.
         _pendingSections[type] = channels;
       } else if (saved && await _catalogCache.hasSectionFile(key)) {
-        await _installFromFiles(key);
+        await _installFromFiles(key, changed: type);
         FrameTelemetryService.instance.mark(
           'catalogo: pubblicato ${type.name}',
         );
@@ -1760,7 +1809,7 @@ class AppProvider extends ChangeNotifier {
       _loadFailures.add(message);
       if (!_hasSection(type)) {
         if (await _catalogCache.hasSectionFile(key)) {
-          await _installFromFiles(key);
+          await _installFromFiles(key, changed: type);
         } else {
           final cached = await _catalogCache.read(key);
           if (_disposed || key != _currentKey) return;
@@ -1887,6 +1936,7 @@ class AppProvider extends ChangeNotifier {
     _kidsRefresh?.cancel();
     _kids.dispose();
     _refreshService.dispose();
+    _shelf.close();
     super.dispose();
   }
 }

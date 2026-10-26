@@ -149,6 +149,26 @@ class KidsContentService {
   List<int>? genresForKey(String key) =>
       TitleFacetIndex.instance.genresOf(key) ?? _genres[key];
 
+  /// Kids visibility from the shelf flags and the indexed key. Does not read
+  /// the title body.
+  bool allowsIndexed({
+    required bool adult,
+    required bool banned,
+    required String category,
+    required String key,
+  }) {
+    if (adult || banned) return false;
+    if (!KidsPolicy.allows(
+      category: category,
+      genres: genresForKey(key) ?? const <int>[],
+      certification: _certifications[key] ?? '',
+    )) {
+      return false;
+    }
+    if (_verdicts[key] == false) return false;
+    return true;
+  }
+
   /// TMDB genre ids of a movie/series, or null while not yet checked.
   List<int>? genresOf(Channel item) => genresForKey(keyOf(item));
 

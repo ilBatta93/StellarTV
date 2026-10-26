@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -37,4 +38,49 @@ void main() {
     final body = File(shelf.storagePath!).readAsStringSync();
     expect(body, contains('https://local/2/stream'));
   });
+
+  test('a second section is appended without the first file', () async {
+    final dir = Directory.systemTemp.createTempSync('stv_append_');
+    final live = File('${dir.path}/live.ndjson');
+    final movies = File('${dir.path}/movie.ndjson');
+    writeSection(live, [
+      row(1, name: 'Alfa Uno', type: ContentType.live),
+    ]);
+    writeSection(movies, [row(2, name: 'Il Padrino')]);
+    final shelf = CatalogShelf.empty();
+    addTearDown(() async {
+      shelf.close();
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    const hidden = <String, List<String>>{};
+    await shelf.appendSection(
+      live.path,
+      hidden: hidden,
+      custom: const [],
+      order: const {},
+    );
+    live.deleteSync();
+    await shelf.appendSection(
+      movies.path,
+      hidden: hidden,
+      custom: const [],
+      order: const {},
+    );
+    expect(shelf.searchSlots('alfa'), isNotEmpty);
+    final padrino = shelf.searchSlots('padrino');
+    expect(padrino, isNotEmpty);
+    expect(shelf.pathOfSlot(padrino.first), movies.path);
+    expect(shelf.readSlot(padrino.first).url, contains('/2/'));
+    expect(movies.readAsStringSync(), contains('https://local/2/stream'));
+  });
+}
+
+void writeSection(File file, List<Channel> rows) {
+  final buffer = StringBuffer()
+    ..writeln(jsonEncode({'stellar_catalog': 3}));
+  for (final row in rows) {
+    buffer.writeln(jsonEncode(row.toMap()));
+  }
+  buffer.writeln(jsonEncode({'end': rows.length}));
+  file.writeAsStringSync(buffer.toString());
 }

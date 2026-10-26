@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +11,7 @@ import 'package:stellar_tv/models/channel.dart';
 import 'package:stellar_tv/models/content_type.dart';
 import 'package:stellar_tv/providers/app_provider.dart';
 import 'package:stellar_tv/services/catalog_cache_service.dart';
+import 'package:stellar_tv/services/catalog_shelf.dart';
 import 'package:stellar_tv/services/xtream_service.dart';
 import 'package:stellar_tv/widgets/catalog_status_indicator.dart';
 
@@ -72,6 +75,25 @@ class RecordingCache extends CatalogCacheService {
     writes.add(type);
     return true;
   }
+}
+
+class PathCache extends CatalogCacheService {
+  PathCache(this.paths);
+  final List<String> paths;
+  @override
+  Future<List<Channel>> read(String accountKey) async => const [];
+  @override
+  Future<List<String>> sectionPaths(String accountKey) async => paths;
+  @override
+  Future<bool> hasSectionFile(String accountKey) async =>
+      paths.any((path) => File(path).existsSync());
+  @override
+  Future<bool> writeSection(
+    String accountKey,
+    ContentType type,
+    List<Channel> channels, {
+    bool Function()? stillAllowed,
+  }) async => true;
 }
 
 class FakeCache extends CatalogCacheService {
@@ -353,5 +375,84 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     // Allow the pre-existing kids-cache notification debounce to finish.
     await tester.pump(const Duration(milliseconds: 300));
+  });
+
+  test('kids mask publishes without opening title files', () async {
+    final dir = Directory.systemTemp.createTempSync('stv_mask_');
+    addTearDown(() async {
+      for (var attempt = 0; attempt < 10; attempt++) {
+        try {
+          if (dir.existsSync()) dir.deleteSync(recursive: true);
+          return;
+        } on FileSystemException {
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+        }
+      }
+    });
+    final movie = File('${dir.path}/movie.ndjson');
+    final buffer = StringBuffer()
+      ..writeln(jsonEncode({'stellar_catalog': 3}));
+    final rows = [
+      Channel(
+        id: 'kids',
+        name: 'Topolino',
+        url: 'https://local/kids',
+        logo: '',
+        group: 'Cartoni',
+        type: ContentType.movie,
+      ),
+      Channel(
+        id: 'drama',
+        name: 'Dramma',
+        url: 'https://local/drama',
+        logo: '',
+        group: 'Drama',
+        type: ContentType.movie,
+      ),
+      Channel(
+        id: 'adult',
+        name: 'XXX',
+        url: 'https://local/adult',
+        logo: '',
+        group: 'Varie',
+        type: ContentType.movie,
+      ),
+    ];
+    for (final row in rows) {
+      buffer.writeln(jsonEncode(row.toMap()));
+    }
+    buffer.writeln(jsonEncode({'end': rows.length}));
+    movie.writeAsStringSync(buffer.toString());
+    final api = FakeXtream();
+    final app = AppProvider(
+      xtreamService: api,
+      catalogCache: PathCache([
+        '${dir.path}/live.ndjson',
+        movie.path,
+        '${dir.path}/series.ndjson',
+      ]),
+    );
+    addTearDown(app.dispose);
+    final loading = app.loadFromXtream(
+      server: 'test',
+      username: '',
+      password: '',
+    );
+    await tick();
+    api.live.complete(<Channel>[]);
+    api.movies.complete(rows);
+    api.series.complete(<Channel>[]);
+    await sectionReady(app, ContentType.movie);
+    expect(app.channelsOf(ContentType.movie), hasLength(2));
+    CatalogShelf.forbidDiskReads = true;
+    try {
+      app.setKidsMode(true);
+    } finally {
+      CatalogShelf.forbidDiskReads = false;
+    }
+    expect(app.kidsMode, isTrue);
+    expect(app.channelsOf(ContentType.movie), hasLength(1));
+    expect(app.channelsOf(ContentType.movie).single.name, 'Topolino');
+    await loading;
   });
 }
