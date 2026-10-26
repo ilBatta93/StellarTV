@@ -1,3 +1,3 @@
-- La guida programmi si apre dai titoli già pronti e resta utilizzabile anche quando è molto estesa.
-- La ricerca in diretta trova un programma mentre si scrive, senza scorrere tutta la programmazione.
-- La descrizione di un programma compare quando lo si apre.
+- Il catalogo personale compare una sezione alla volta e l'interfaccia resta utilizzabile mentre il resto arriva.
+- Il telecomando resta attivo sulla diretta già aperta durante l'arrivo delle sezioni successive.
+- Il profilo bambino filtra il catalogo senza attendere la lettura di ogni titolo.
