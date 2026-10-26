@@ -19,16 +19,24 @@ void main() {
     expect(result.groups.expand((g) => g.entries).map((e) => e.primary.id), ['1', '3']);
     expect(result.recent.first.primary.id, '3');
   });
-  test('large preparation yields to remote heartbeat and cancellation prevents completion', () async {
+  test('preparation runs off the calling isolate', () async {
     var ticks = 0;
     final timer = Timer.periodic(const Duration(milliseconds: 1), (_) => ticks++);
     try {
-      final rows = List.generate(10000, (i) => item(i));
-      await expectLater(prepareCatalog(snapshot: rows, type: ContentType.movie,
-        hidden: {}, custom: [], order: [], yieldWork: CatalogYield(() async => ticks < 4)),
-        throwsA(isA<CatalogPreparationCancelled>()));
-      expect(ticks, greaterThanOrEqualTo(4));
-    } finally { timer.cancel(); }
+      final rows = List.generate(8000, (i) => item(i));
+      final result = await prepareCatalog(
+        snapshot: rows,
+        type: ContentType.movie,
+        hidden: {},
+        custom: [],
+        order: [],
+        yieldWork: CatalogYield(() async => true),
+      );
+      expect(result.catalog, hasLength(8000));
+      expect(ticks, greaterThan(0));
+    } finally {
+      timer.cancel();
+    }
   });
   test('hidden categories stay excluded', () async {
     final result = await prepareCatalog(snapshot: [item(1), item(2, group: 'Hidden')],

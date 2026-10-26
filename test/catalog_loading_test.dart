@@ -59,6 +59,10 @@ class RecordingCache extends CatalogCacheService {
   @override
   Future<List<Channel>> read(String accountKey) async => const [];
   @override
+  Future<List<String>> sectionPaths(String accountKey) async => const [];
+  @override
+  Future<bool> hasSectionFile(String accountKey) async => false;
+  @override
   Future<bool> writeSection(
     String accountKey,
     ContentType type,
@@ -75,6 +79,10 @@ class FakeCache extends CatalogCacheService {
   FakeCache([this.rows = const []]);
   @override
   Future<List<Channel>> read(String accountKey) async => rows;
+  @override
+  Future<List<String>> sectionPaths(String accountKey) async => const [];
+  @override
+  Future<bool> hasSectionFile(String accountKey) async => false;
   @override
   Future<void> write(String accountKey, List<Channel> channels) async {}
   @override
@@ -128,8 +136,10 @@ void main() {
       expect(app.catalogState(ContentType.movie).isPending, true);
       api.movies.complete([channel(ContentType.movie)]);
       api.series.complete([channel(ContentType.series)]);
-      for (var i = 0; i < 10; i++) {
-        await tick();
+      final seriesDeadline = DateTime.now().add(const Duration(seconds: 5));
+      while (app.channelsOf(ContentType.series).isEmpty &&
+          DateTime.now().isBefore(seriesDeadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
       }
       expect(app.channelsOf(ContentType.series), hasLength(1));
       final refresh = app.refreshAllSections();
@@ -227,9 +237,19 @@ void main() {
         password: '',
       );
       api.live.complete([]);
-      await tick();
+      final movieLoading = DateTime.now().add(const Duration(seconds: 5));
+      while (app.catalogState(ContentType.movie).phase !=
+              CatalogLoadPhase.loading &&
+          DateTime.now().isBefore(movieLoading)) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
       api.movies.completeError(Exception('offline'));
-      await tick();
+      final cached = DateTime.now().add(const Duration(seconds: 5));
+      while (app.catalogState(ContentType.movie).phase ==
+              CatalogLoadPhase.loading &&
+          DateTime.now().isBefore(cached)) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
       expect(
         app.catalogState(ContentType.movie).phase,
         CatalogLoadPhase.cached,
@@ -256,7 +276,12 @@ void main() {
       password: '',
     );
     api.live.complete([channel(ContentType.live)]);
-    await tick();
+    final movieLoading = DateTime.now().add(const Duration(seconds: 5));
+    while (app.catalogState(ContentType.movie).phase !=
+            CatalogLoadPhase.loading &&
+        DateTime.now().isBefore(movieLoading)) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
     api.movies.completeError(Exception('offline'));
     await tick();
     api.series.complete([channel(ContentType.series)]);
@@ -314,11 +339,12 @@ void main() {
     expect(find.byType(ExcludeFocus), findsNWidgets(3));
     expect(find.byTooltip('Diretta: Caricamento'), findsOneWidget);
     expect(find.byTooltip('Film: In attesa'), findsOneWidget);
-    api.live.complete([]);
-    api.movies.complete([]);
-    api.series.complete([]);
-    await tester.pump();
-    await loading;
+    await tester.runAsync(() async {
+      api.live.complete([]);
+      api.movies.complete([]);
+      api.series.complete([]);
+      await loading;
+    });
     await tester.pump();
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.byTooltip('Diretta: Pronta'), findsOneWidget);

@@ -1,3 +1,5 @@
+import 'dart:isolate';
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/custom_category.dart';
@@ -24,36 +26,12 @@ class CatalogPreparationCancelled implements Exception {
   const CatalogPreparationCancelled();
 }
 
-Future<List<T>> catalogMergeSort<T>(
-  List<T> input,
-  int Function(T, T) compare,
-  CatalogYield yieldWork,
-) async {
-  var source = <T>[];
-  for (final item in input) {
-    source.add(item);
-    await yieldWork.step();
-  }
-  for (var width = 1; width < source.length; width *= 2) {
-    final next = <T>[];
-    for (var start = 0; start < source.length; start += width * 2) {
-      var left = start;
-      final middle = (start + width).clamp(0, source.length);
-      var right = middle;
-      final end = (start + width * 2).clamp(0, source.length);
-      while (left < middle || right < end) {
-        if (right >= end ||
-            (left < middle && compare(source[left], source[right]) <= 0)) {
-          next.add(source[left++]);
-        } else {
-          next.add(source[right++]);
-        }
-        await yieldWork.step();
-      }
-    }
-    source = next;
-  }
-  return source;
+/// Sorts a catalog off the calling isolate. The UI thread must not walk the
+/// comparison tree: [prepareCatalog] runs this inside `Isolate.run`.
+List<T> catalogSortSync<T>(List<T> input, int Function(T, T) compare) {
+  final copy = List<T>.of(input, growable: false);
+  copy.sort(compare);
+  return copy;
 }
 
 class PreparedCatalog {
@@ -80,6 +58,37 @@ Future<PreparedCatalog> prepareCatalog({
   required CatalogYield yieldWork,
   void Function(List<CatalogGroup>, List<CatalogEntry>)? onProgress,
 }) async {
+  if (!await yieldWork.allowed()) throw const CatalogPreparationCancelled();
+  final rows = snapshot;
+  final kind = type;
+  final hide = hidden.toList(growable: false);
+  final extras = custom;
+  final saved = order;
+  final prepared = await Isolate.run(
+    () => prepareCatalogSync(
+      snapshot: rows,
+      type: kind,
+      hidden: hide,
+      custom: extras,
+      order: saved,
+    ),
+  );
+  if (!await yieldWork.allowed()) throw const CatalogPreparationCancelled();
+  onProgress?.call(prepared.groups, prepared.recent);
+  return prepared;
+}
+
+/// Full preparation, including every sort. Safe only inside an isolate: the
+/// returned objects are the ones the caller keeps, and the sort never shares
+/// the UI event loop.
+PreparedCatalog prepareCatalogSync({
+  required List<Channel> snapshot,
+  required ContentType type,
+  required List<String> hidden,
+  required List<CustomCategory> custom,
+  required List<String> order,
+}) {
+  final hiddenSet = hidden.toSet();
   final channels = <Channel>[];
   final categoryOrder = <String>{};
   for (final c in snapshot) {
@@ -90,7 +99,6 @@ Future<PreparedCatalog> prepareCatalog({
         categoryOrder.add(c.group);
       }
     }
-    await yieldWork.step();
   }
   List<Channel> catalog = channels;
   if (type == ContentType.series || type == ContentType.anime) {
@@ -102,19 +110,18 @@ Future<PreparedCatalog> prepareCatalog({
       } else {
         (episodes[c.seriesKey ?? c.id] ??= []).add(c);
       }
-      await yieldWork.step();
     }
     if (folders.isEmpty) {
       for (final items in episodes.values) {
         // Only one show's episodes at a time; preserves the existing folder contract.
-        final sorted = await catalogMergeSort(items, (a, b) {
+        final sorted = catalogSortSync(items, (a, b) {
           final season = (a.season ?? 0).compareTo(b.season ?? 0);
           if (season != 0) return season;
           final episode = (a.episode ?? 0).compareTo(b.episode ?? 0);
           return episode != 0
               ? episode
               : a.name.toLowerCase().compareTo(b.name.toLowerCase());
-        }, yieldWork);
+        });
         final first = sorted.first;
         var logo = first.logo;
         for (final item in sorted) {
@@ -122,7 +129,6 @@ Future<PreparedCatalog> prepareCatalog({
             logo = item.logo;
             break;
           }
-          await yieldWork.step();
         }
         folders.add(
           first.copyWith(
@@ -136,20 +142,18 @@ Future<PreparedCatalog> prepareCatalog({
             episodeCount: items.length,
           ),
         );
-        await yieldWork.step();
       }
     }
-    catalog = await catalogMergeSort(
+    catalog = catalogSortSync(
       folders,
       (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-      yieldWork,
     );
   }
   final byCategory = <String, List<Channel>>{};
   final other = <Channel>[];
   final visible = <Channel>[];
   for (final c in catalog) {
-    if (!hidden.contains(c.group)) {
+    if (!hiddenSet.contains(c.group)) {
       visible.add(c);
       if (categoryOrder.contains(c.group)) {
         (byCategory[c.group] ??= []).add(c);
@@ -157,13 +161,12 @@ Future<PreparedCatalog> prepareCatalog({
         other.add(c);
       }
     }
-    await yieldWork.step();
   }
   final base = <CatalogGroup>[];
   final seen = <String>{};
   final byId = <String, CatalogEntry>{};
   for (final label in [
-    ...categoryOrder.where((g) => !hidden.contains(g)),
+    ...categoryOrder.where((g) => !hiddenSet.contains(g)),
     if (other.isNotEmpty) 'Altri',
   ]) {
     final entries = <CatalogEntry>[];
@@ -178,7 +181,6 @@ Future<PreparedCatalog> prepareCatalog({
         entries.add(entry);
         byId[c.id] = entry;
       }
-      await yieldWork.step();
     }
     if (entries.isNotEmpty)
       base.add(CatalogGroup(label: label, entries: entries));
@@ -189,13 +191,11 @@ Future<PreparedCatalog> prepareCatalog({
     for (final id in c.itemIds) {
       final entry = byId[id];
       if (entry != null) entries.add(entry);
-      await yieldWork.step();
     }
     labels[c.name] = CatalogGroup(label: c.name, entries: entries);
   }
   for (final group in base) {
     labels.putIfAbsent(group.label, () => group);
-    await yieldWork.step();
   }
   final groups = <CatalogGroup>[];
   for (final label in applyCategoryOrder(labels.keys.toList(), order)) {
@@ -205,12 +205,11 @@ Future<PreparedCatalog> prepareCatalog({
   final indexed = <(int, Channel)>[];
   for (var i = 0; i < visible.length; i++) {
     indexed.add((i, visible[i]));
-    await yieldWork.step();
   }
-  final newest = await catalogMergeSort(indexed, (a, b) {
+  final newest = catalogSortSync(indexed, (a, b) {
     final date = b.$2.addedAt.compareTo(a.$2.addedAt);
     return date != 0 ? date : b.$1.compareTo(a.$1);
-  }, yieldWork);
+  });
   String key(Channel c) {
     final name = catalogTitleKey(c.seriesName ?? c.name);
     return name.isEmpty ? c.id : '${c.type.name}:$name';
@@ -222,22 +221,18 @@ Future<PreparedCatalog> prepareCatalog({
     if (recentSeen.add(key(c)))
       recent.add(CatalogEntry(primary: c, variants: [c]));
     if (recent.length == 100) break;
-    await yieldWork.step();
   }
-  onProgress?.call(groups, recent);
   final all = <CatalogEntry>[];
   final allSeen = <String>{};
   for (final group in groups) {
     for (final entry in group.entries) {
       if (allSeen.add(key(entry.primary))) all.add(entry);
-      await yieldWork.step();
     }
   }
-  final alphabetical = await catalogMergeSort(
+  final alphabetical = catalogSortSync(
     all,
     (a, b) =>
         a.primary.name.toLowerCase().compareTo(b.primary.name.toLowerCase()),
-    yieldWork,
   );
   return PreparedCatalog(channels, catalog, groups, recent, alphabetical);
 }

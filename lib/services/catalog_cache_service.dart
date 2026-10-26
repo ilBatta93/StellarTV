@@ -43,6 +43,22 @@ class CatalogCacheService {
   String _v3Path(String dir, String accountKey, ContentType type) =>
       '$dir/stellartv_catalog_v3_${_hash(accountKey)}_${type.name}.ndjson';
 
+  /// On-disk section files, in publication order. Missing files are included
+  /// so the shelf can ignore them without reading a title into the UI isolate.
+  Future<List<String>> sectionPaths(String accountKey) async {
+    final dir = await _dir();
+    return [for (final type in sections) _v3Path(dir, accountKey, type)];
+  }
+
+  Future<bool> hasSectionFile(String accountKey) async {
+    try {
+      for (final path in await sectionPaths(accountKey)) {
+        if (File(path).existsSync()) return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   String _sectionPath(String dir, String accountKey, ContentType type) =>
       '$dir/stellartv_catalog_v2_${_hash(accountKey)}_${type.name}.json';
 

@@ -146,10 +146,11 @@ class KidsContentService {
   bool isKnown(Channel item) => _verdicts.containsKey(keyOf(item));
 
   /// TMDB genre ids of a movie/series, or null while not yet checked.
-  List<int>? genresOf(Channel item) {
-    final key = keyOf(item);
-    return TitleFacetIndex.instance.genresOf(key) ?? _genres[key];
-  }
+  List<int>? genresForKey(String key) =>
+      TitleFacetIndex.instance.genresOf(key) ?? _genres[key];
+
+  /// TMDB genre ids of a movie/series, or null while not yet checked.
+  List<int>? genresOf(Channel item) => genresForKey(keyOf(item));
 
   /// Starts filling the shared/local cache as soon as a playlist is loaded,
   /// without requiring the kids profile or the player to be open.

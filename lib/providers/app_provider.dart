@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:isolate';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,9 +13,7 @@ import '../models/series_details.dart';
 import '../models/tmdb_item.dart';
 import '../services/catalog_builder.dart';
 import '../services/catalog_preparation.dart';
-import '../services/prepared_catalog_store.dart';
 import '../services/catalog_index_builder.dart';
-import '../services/title_category_index.dart';
 import '../services/playlist_refresh_service.dart';
 import '../services/playback_work_policy.dart';
 import '../services/foreground_policy.dart';
@@ -23,18 +21,16 @@ import '../services/source_login_result.dart';
 import '../services/xtream_service.dart';
 import '../services/cloud_favorites_service.dart';
 import '../services/favorites_service.dart';
-import '../services/sync_hooks.dart';
 import '../services/settings_service.dart';
 import '../services/sync_service.dart';
 import '../services/series_grouping.dart';
 import '../services/kids_content_service.dart';
 import '../services/catalog_cache_service.dart';
+import '../services/catalog_shelf.dart';
 import '../services/catalog_publication.dart';
-import '../services/catalog_rating_service.dart';
 import '../services/title_facet_index.dart';
 import '../services/frame_telemetry_service.dart';
 import '../services/device_type_service.dart';
-import '../services/image_warmup_service.dart' show RemoteNavigation;
 import '../models/custom_category.dart';
 
 enum AuthMethod { none, xtream }
@@ -97,12 +93,15 @@ class AppProvider extends ChangeNotifier {
     refreshPlaylist,
   );
 
-  List<Channel> _rawChannels = [];
-  List<Channel> _allChannels = [];
+  CatalogShelf _shelf = CatalogShelf.empty();
+  int _shelfEpoch = 0;
+  bool _shelfReady = false;
+  Uint8List _visibleMask = Uint8List(0);
+  int _visibleCount = 0;
+  ShelfChannelList? _visibleView;
+  final Map<ContentType, ShelfChannelList> _typedViews = {};
   bool _showAdult = false;
   static const _showAdultKey = 'show_adult_content';
-  Map<String, Channel>? _channelIndex;
-  Map<String, Channel>? _seriesFolderIndex;
   Set<String> _favoriteIds = {};
   List<TmdbItem> _tmdbFavorites = [];
   Map<String, List<String>> _hiddenCategories = {};
@@ -124,7 +123,8 @@ class AppProvider extends ChangeNotifier {
   Map<String, String>? _xtreamCredentials;
   bool _isAuthenticated = false;
 
-  List<Channel> get allChannels => _allChannels;
+  List<Channel> get allChannels =>
+      _visibleView ?? ShelfChannelList(_shelf, const []);
   Set<String> get favoriteIds => _favoriteIds;
   List<TmdbItem> get tmdbFavorites =>
       _kidsMode ? _tmdbFavorites.where(isTmdbAllowed).toList() : _tmdbFavorites;
@@ -141,8 +141,13 @@ class AppProvider extends ChangeNotifier {
   bool _belongsToSection(Channel channel, ContentType type) =>
       channel.type == type ||
       (type == ContentType.series && channel.type == ContentType.anime);
-  bool _hasSection(ContentType type) =>
-      _rawChannels.any((channel) => _belongsToSection(channel, type));
+  bool _hasSection(ContentType type) {
+    if (type == ContentType.series) {
+      return (_shelf.plan(ContentType.series)?.channels.isNotEmpty ?? false) ||
+          (_shelf.plan(ContentType.anime)?.channels.isNotEmpty ?? false);
+    }
+    return _shelf.plan(type)?.channels.isNotEmpty ?? false;
+  }
   bool get isInitialized => _initialized;
   String? get error => _error;
   AuthMethod get authMethod => _authMethod;
@@ -151,190 +156,75 @@ class AppProvider extends ChangeNotifier {
 
   // Derived lists are cached: rebuilding them on every notify (e.g. when a
   // favorite changes) froze the UI with large playlists.
-  final Map<ContentType, List<Channel>> _byType = {};
   final Map<ContentType, List<Channel>> _seriesCatalogCache = {};
   final Map<ContentType, List<CatalogGroup>> _groupedCache = {};
   final Map<ContentType, List<CatalogEntry>> _recentCache = {};
-  final Map<ContentType, List<Channel>> _categoryLabelSources = {};
-  final Map<ContentType, List<String>> _categoryLabels = {};
   final Map<ContentType, Map<int, int>> _genreCountsCache = {};
   final Map<ContentType, int> _genreCountsVersions = {};
   final Map<ContentType, Future<void>> _genreCountJobs = {};
-  final Map<ContentType, String> _preparedSignatures = {};
   List<Channel>? _favoritesCache;
 
   Map<String, List<String>> _titleCategories = const {};
   Timer? _titleCategoriesTimer;
-  bool _titleCategoriesBuilding = false;
 
   List<String> titleCategoriesOf(Channel channel) =>
       _titleCategories[catalogEntryKey(channel)] ??
       (channel.group.isEmpty ? const [] : [channel.group]);
 
   void _scheduleTitleCategories() {
-    _titleCategoriesTimer?.cancel();
-    if (_disposed || _allChannels.isEmpty) return;
-    _titleCategoriesTimer = Timer(const Duration(milliseconds: 300), () async {
-      if (_disposed) return;
-      if (_titleCategoriesBuilding ||
-          _playbackActive ||
-          !ForegroundPolicy.instance.active) {
-        _scheduleTitleCategories();
-        return;
-      }
-      final snapshot = _allChannels;
-      final epoch = _preparationEpoch;
-      _titleCategoriesBuilding = true;
-      try {
-        final index = await Isolate.run(
-          () => buildTitleCategoryIndex(snapshot),
-        );
-        if (!_disposed &&
-            epoch == _preparationEpoch &&
-            identical(snapshot, _allChannels) &&
-            !_playbackActive) {
-          _titleCategories = index;
-          notifyListeners();
-        } else if (!_disposed) {
-          _scheduleTitleCategories();
-        }
-      } catch (_) {
-        // The current category remains available if indexing fails.
-      } finally {
-        _titleCategoriesBuilding = false;
-      }
-    });
+    _titleCategories = _shelf.titleCategories;
   }
 
   int _preparationEpoch = 0;
   int _playlistRefreshRevision = 0;
   int get playlistRefreshRevision => _playlistRefreshRevision;
   final Map<ContentType, Future<void>> _preparing = {};
-  Future<void> _preparationTail = Future<void>.value();
 
-  bool get _largeCatalog => _allChannels.length > 512;
+  bool get _largeCatalog => _shelf.length > 512;
   bool catalogPreparing(ContentType type) =>
       _largeCatalog && !_allCache.containsKey(type);
+
+  String _settingsToken() => shelfSettingsToken(
+    hidden: _hiddenCategories,
+    custom: _customCategories,
+    order: _categoryOrder,
+  );
 
   Future<void> ensureCatalogPrepared(ContentType type) {
     final existing = _preparing[type];
     if (existing != null) return existing;
-    if (_allCache.containsKey(type) || _disposed) return Future<void>.value();
-    final epoch = _preparationEpoch;
-    final snapshot = _allChannels;
-    final hidden = hiddenCategoriesOf(type).toSet();
-    final custom = customCategoriesOf(type);
-    final order = List<String>.of(_categoryOrder[type.name] ?? const []);
-    bool current() =>
-        !_disposed &&
-        epoch == _preparationEpoch &&
-        identical(snapshot, _allChannels);
-    Future<bool> allowed() async {
-      while (current() &&
-          (_playbackActive || !ForegroundPolicy.instance.active)) {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      }
-      return current();
+    if (_allCache.containsKey(type) || _disposed || _shelf.isEmpty) {
+      return Future<void>.value();
     }
-
+    final epoch = _shelfEpoch;
     late final Future<void> job;
     job = Future<void>.value()
         .then((_) async {
-          if (!await allowed()) return;
-          FrameTelemetryService.instance.mark('catalog preparation start');
-          try {
-            final accountKey = _currentKey;
-            final store = PreparedCatalogStore.instance;
-            final yieldWork = CatalogYield(allowed);
-            final signature = await PreparedCatalogStore.signature(
-              snapshot: snapshot,
-              type: type,
-              hidden: hidden,
-              custom: custom,
-              order: order,
-              yieldWork: yieldWork,
+          if (_shelf.settingsToken != _settingsToken()) {
+            final nextEpoch = ++_shelfEpoch;
+            final next = await _shelf.retune(
+              hidden: _hiddenCategories,
+              custom: _customCategories,
+              order: _categoryOrder,
+              generation: nextEpoch,
             );
-            final saved = await store.read(accountKey, type);
-            final restored = saved == null
-                ? null
-                : await PreparedCatalogStore.restore(
-                    saved,
-                    signature,
-                    snapshot,
-                    type,
-                    yieldWork,
-                  );
-            if (restored != null) {
-              FrameTelemetryService.instance.mark('catalog restored');
+            if (_disposed || nextEpoch != _shelfEpoch) {
+              if (!identical(next, _shelf)) next.close();
+              return;
             }
-            final result =
-                restored ??
-                await prepareCatalog(
-                  snapshot: snapshot,
-                  type: type,
-                  hidden: hidden,
-                  custom: custom,
-                  order: order,
-                  yieldWork: CatalogYield(allowed),
-                  onProgress: (groups, recent) {
-                    if (!current() ||
-                        _playbackActive ||
-                        !ForegroundPolicy.instance.active)
-                      return;
-                    _groupedCache[type] = groups;
-                    _recentCache[type] = recent;
-                    notifyListeners();
-                  },
-                );
-            if (!await allowed()) return;
-            _preparedSignatures[type] = signature;
-            if (restored != null && saved != null) {
-              final counts = PreparedCatalogStore.genreCounts(saved);
-              if (counts != null) _genreCountsCache[type] = counts;
-            }
-            _byType[type] = result.channels;
-            if (type == ContentType.series || type == ContentType.anime)
-              _seriesCatalogCache[type] = result.catalog;
-            if (type == ContentType.series || type == ContentType.anime)
-              _seriesFolderIndex = null;
-            _groupedCache[type] = result.groups;
-            _recentCache[type] = result.recent;
-            _allCache[type] = result.all;
-            _joinTitleFacets(type, result.all);
-            FrameTelemetryService.instance.mark('catalog preparation ready');
-            notifyListeners();
-            unawaited(_ensureGenreCounts(type));
-          } on CatalogPreparationCancelled {
-            // Scope changed: never publish stale account/profile/category data.
-          } catch (_) {
-            FrameTelemetryService.instance.mark('catalog preparation deferred');
+            _swap(next, bumpWarmup: false);
           }
+          if (_disposed || epoch != _shelfEpoch && _allCache.containsKey(type)) {
+            return;
+          }
+          if (!_allCache.containsKey(type)) _publishShelf(notify: false);
+          notifyListeners();
         })
         .whenComplete(() {
           if (identical(_preparing[type], job)) _preparing.remove(type);
         });
     _preparing[type] = job;
-    _preparationTail = job;
     return job;
-  }
-
-  /// Scores and the ordered id list are ready before the sort button is pressed.
-  void _joinTitleFacets(ContentType type, List<CatalogEntry> entries) {
-    if (type != ContentType.movie &&
-        type != ContentType.series &&
-        type != ContentType.anime) {
-      return;
-    }
-    final ids = [for (final entry in entries) entry.primary.id];
-    final names = [
-      for (final entry in entries) entry.primary.displaySeriesName,
-    ];
-    final channels = [for (final entry in entries) entry.primary];
-    unawaited(() async {
-      await CatalogRatingService.instance.ensureLoaded();
-      await TitleFacetIndex.instance.rank(type, ids, names);
-      CatalogRatingService.instance.warm(channels);
-    }());
   }
 
   void _invalidateCaches() {
@@ -342,9 +232,6 @@ class AppProvider extends ChangeNotifier {
     _titleCategories = const {};
     _scheduleTitleCategories();
     _preparing.clear();
-    _byType.clear();
-    _categoryLabelSources.clear();
-    _categoryLabels.clear();
     _seriesCatalogCache.clear();
     _groupedCache.clear();
     _allCache.clear();
@@ -352,42 +239,19 @@ class AppProvider extends ChangeNotifier {
     _genreCountsCache.clear();
     _genreCountsVersions.clear();
     _genreCountJobs.clear();
-    _preparedSignatures.clear();
     _favoritesCache = null;
-    _titleIndex = null;
-    _indexEpoch++;
     _matchCache.clear();
-    _seriesFolderIndex = null;
-    _searchReady = false;
-    _searchSnapshot = null;
-    _searchEpoch++;
   }
 
-  List<Channel> channelsOf(ContentType type) => _byType[type] ??= _allChannels
-      .where((c) => c.type == type)
-      .toList(growable: false);
-
-  /// Channels of a type whose category is not hidden by the user.
-  List<Channel> _visibleChannels(ContentType type) {
-    final hidden = hiddenCategoriesOf(type).toSet();
-    // Series tabs list whole series only: episodes indexed after opening a
-    // series must never show up as separate titles.
-    final base = (type == ContentType.series || type == ContentType.anime)
-        ? catalogOf(type)
-        : channelsOf(type);
-    if (hidden.isEmpty) return base;
-    return base.where((c) => !hidden.contains(c.group)).toList();
-  }
+  List<Channel> channelsOf(ContentType type) =>
+      _typedViews[type] ?? ShelfChannelList(_shelf, const []);
 
   List<Channel> catalogOf(ContentType type) {
     if (type == ContentType.series || type == ContentType.anime) {
-      if (_largeCatalog && !_seriesCatalogCache.containsKey(type)) {
-        unawaited(ensureCatalogPrepared(type));
-        return const [];
-      }
-      return _seriesCatalogCache[type] ??= SeriesGrouping.catalog(
-        channelsOf(type),
-      );
+      final ready = _seriesCatalogCache[type];
+      if (ready != null) return ready;
+      unawaited(ensureCatalogPrepared(type));
+      return const [];
     }
     return channelsOf(type);
   }
@@ -409,11 +273,11 @@ class AppProvider extends ChangeNotifier {
         ..sort();
 
   Channel? channelById(String id) {
-    final index = _channelIndex ??= {for (final c in _allChannels) c.id: c};
-    final channel = index[id] ?? _episodeIndex[id];
-    return channel != null && (!_kidsMode || isKidsContent(channel))
-        ? channel
-        : null;
+    final channel = _episodeIndex[id] ?? _shelf.readId(id);
+    if (channel == null) return null;
+    if (_kidsMode && !isKidsContent(channel)) return null;
+    if (!_kidsMode && !_showAdult && catalogChannelIsAdult(channel)) return null;
+    return channel;
   }
 
   /// Episodes loaded when a series page opens. Kept apart from the catalog:
@@ -466,9 +330,7 @@ class AppProvider extends ChangeNotifier {
         refreshPlaylist();
       });
     }
-    if (!value &&
-        _allChannels.isNotEmpty &&
-        (_titleIndex == null || !_searchReady)) {
+    if (!value && _visibleCount > 0 && !_shelfReady) {
       // Index skipped while the video played: build it once it closes.
       Timer(const Duration(seconds: 2), _startCatalogIndex);
     }
@@ -505,35 +367,26 @@ class AppProvider extends ChangeNotifier {
         !_playbackActive &&
         ForegroundPolicy.instance.active) {
       final entry = _pendingSections.entries.first;
-      final snapshot = _rawChannels;
-      final kids = _kidsMode, adult = _showAdult;
+      final epoch = _shelfEpoch;
+      final kids = _kidsMode;
+      final adult = _showAdult;
       final evidence = _titleInfoVersion;
       bool valid() =>
           !_disposed &&
           key == _currentKey &&
           !_playbackActive &&
           ForegroundPolicy.instance.active &&
-          identical(snapshot, _rawChannels) &&
+          epoch == _shelfEpoch &&
           kids == _kidsMode &&
           adult == _showAdult &&
           evidence == _titleInfoVersion &&
           identical(_pendingSections[entry.key], entry.value);
-      final merged = await replaceCatalogSection(
-        current: snapshot,
-        replacement: entry.value,
-        type: entry.key,
-        stillCurrent: valid,
-      );
-      if (merged == null) continue;
-      final visible = await filterCatalogForPublication(
-        channels: merged,
-        allowed: (c) => kids ? isKidsContent(c) : (adult || !isAdult(c)),
-        requestEvidence: kids ? _kids.request : null,
-        stillCurrent: valid,
-      );
-      if (visible == null || !valid()) continue;
+      if (!valid()) {
+        _pendingSections.remove(entry.key);
+        continue;
+      }
       _pendingSections.remove(entry.key);
-      _setChannels(merged, visible: visible);
+      await _publishResolved(entry.key, entry.value, key);
       notifyListeners();
     }
     await _flushDeferredCatalogCopies();
@@ -566,13 +419,13 @@ class AppProvider extends ChangeNotifier {
 
   /// Keeps [channels] in memory until a complete file replaces the previous
   /// copy. A refused or interrupted write does not emit the saved marker.
-  Future<void> _persistSectionCopy(
+  Future<bool> _persistSectionCopy(
     String key,
     ContentType type,
     List<Channel> channels,
   ) async {
     _pendingCatalogWrites[type] = channels;
-    if (_disposed || key != _currentKey || _catalogDiskBlocked) return;
+    if (_disposed || key != _currentKey || _catalogDiskBlocked) return false;
     final saved = await _catalogCache.writeSection(
       key,
       type,
@@ -580,7 +433,7 @@ class AppProvider extends ChangeNotifier {
       stillAllowed: () =>
           !_disposed && key == _currentKey && !_catalogDiskBlocked,
     );
-    if (_disposed || key != _currentKey) return;
+    if (_disposed || key != _currentKey) return false;
     if (saved && identical(_pendingCatalogWrites[type], channels)) {
       _pendingCatalogWrites.remove(type);
       if (!_catalogDiskBlocked) {
@@ -589,30 +442,195 @@ class AppProvider extends ChangeNotifier {
         );
       }
     }
+    return saved;
   }
 
-  void _setChannels(List<Channel> channels, {List<Channel>? visible}) {
-    _rawChannels = channels;
-    // The background age check is heavy on big playlists: start it once the
-    // sections settle and the first navigation is done, not at every publish.
-    _warmUpTimer?.cancel();
-    if (channels.isNotEmpty) {
-      void warm() {
-        if (_playbackActive ||
-            _anyPending ||
-            !ForegroundPolicy.instance.active) {
-          _warmUpTimer = Timer(const Duration(seconds: 5), warm);
-          return;
-        }
-        unawaited(_kids.warmUp(_rawChannels));
-      }
-
-      // Genres are read from the shared cache in bulk right away: the
-      // lookup is network-bound and never waits for an idle remote.
-      _warmUpTimer = Timer(const Duration(seconds: 3), warm);
+  Future<void> _publishResolved(
+    ContentType type,
+    List<Channel> incoming,
+    String key,
+  ) async {
+    if (await _catalogCache.hasSectionFile(key)) {
+      await _installFromFiles(key);
+      return;
     }
-    _applyAdultFilter(visible: visible);
-    _schedulePrewarm();
+    final epoch = _shelfEpoch;
+    bool valid() =>
+        !_disposed && key == _currentKey && epoch == _shelfEpoch && !_playbackActive;
+    final merged = await replaceCatalogSection(
+      current: _shelf.materialize(),
+      replacement: incoming,
+      type: type,
+      stillCurrent: valid,
+    );
+    if (merged == null || !valid()) return;
+    await _installChannels(merged);
+  }
+
+  Future<void> _installFromFiles(String key) async {
+    final epoch = ++_shelfEpoch;
+    final paths = await _catalogCache.sectionPaths(key);
+    final shelf = await CatalogShelf.fromSectionFiles(
+      paths,
+      hidden: _hiddenCategories,
+      custom: _customCategories,
+      order: _categoryOrder,
+      generation: epoch,
+    );
+    if (_disposed || epoch != _shelfEpoch) {
+      shelf.close();
+      return;
+    }
+    _swap(shelf);
+  }
+
+  Future<void> _installChannels(List<Channel> channels) async {
+    final epoch = ++_shelfEpoch;
+    final shelf = channels.isEmpty
+        ? CatalogShelf.empty()
+        : await CatalogShelf.fromChannels(
+            channels,
+            hidden: _hiddenCategories,
+            custom: _customCategories,
+            order: _categoryOrder,
+            generation: epoch,
+          );
+    if (_disposed || epoch != _shelfEpoch) {
+      shelf.close();
+      return;
+    }
+    _swap(shelf);
+  }
+
+  void _swap(CatalogShelf shelf, {bool bumpWarmup = true}) {
+    final previous = _shelf;
+    _shelf = shelf;
+    _shelfReady = true;
+    _invalidateCaches();
+    _rebuildMask();
+    _publishShelf(notify: false);
+    if (!identical(previous, shelf)) previous.close();
+    if (bumpWarmup) {
+      _schedulePrewarm();
+      unawaited(_warmShelf());
+    }
+    notifyListeners();
+  }
+
+  void _rebuildMask() {
+    final count = _shelf.length;
+    final mask = Uint8List(count);
+    var visible = 0;
+    if (_kidsMode) {
+      for (var slot = 0; slot < count; slot++) {
+        if (isKidsContent(_shelf.readSlot(slot))) {
+          mask[slot] = 1;
+          visible++;
+        }
+      }
+    } else {
+      for (var slot = 0; slot < count; slot++) {
+        if (_showAdult || !_shelf.isAdultSlot(slot)) {
+          mask[slot] = 1;
+          visible++;
+        }
+      }
+    }
+    _visibleMask = mask;
+    _visibleCount = visible;
+  }
+
+  List<int> _kept(List<int> slots) => [
+    for (final slot in slots)
+      if (slot < _visibleMask.length && _visibleMask[slot] == 1) slot,
+  ];
+
+  CatalogEntry _slotEntry(int slot) => CatalogEntry.slot(slot, _shelf);
+
+  void _publishShelf({bool notify = true}) {
+    _typedViews.clear();
+    _seriesCatalogCache.clear();
+    for (final type in ContentType.values) {
+      final plan = _shelf.plan(type);
+      if (plan == null) continue;
+      _typedViews[type] = ShelfChannelList(_shelf, _kept(plan.channels));
+      if (type == ContentType.series || type == ContentType.anime) {
+        _seriesCatalogCache[type] = ShelfChannelList(
+          _shelf,
+          _kept(plan.catalog),
+        );
+      }
+      final groups = <CatalogGroup>[];
+      for (var i = 0; i < plan.labels.length; i++) {
+        final entries = [
+          for (final slot in _kept(plan.groupSlots[i])) _slotEntry(slot),
+        ];
+        if (entries.isNotEmpty) {
+          groups.add(CatalogGroup(label: plan.labels[i], entries: entries));
+        }
+      }
+      _groupedCache[type] = groups;
+      _recentCache[type] = [
+        for (final slot in _kept(plan.recent)) _slotEntry(slot),
+      ];
+      _allCache[type] = [
+        for (final slot in _kept(plan.alphabetical)) _slotEntry(slot),
+      ];
+      unawaited(_warmFacetNames(type, plan.alphabetical));
+      unawaited(_ensureGenreCounts(type));
+    }
+    _visibleView = ShelfChannelList(
+      _shelf,
+      [
+        for (var slot = 0; slot < _shelf.length; slot++)
+          if (_visibleMask[slot] == 1) slot,
+      ],
+    );
+    _titleCategories = _shelf.titleCategories;
+    if (notify) notifyListeners();
+  }
+
+  Future<void> _warmFacetNames(ContentType type, List<int> slots) async {
+    if (type != ContentType.movie &&
+        type != ContentType.series &&
+        type != ContentType.anime) {
+      return;
+    }
+    final epoch = _shelfEpoch;
+    try {
+      await _shelf.warmNames(type, (ids, names) {
+        if (_disposed || epoch != _shelfEpoch) return;
+        unawaited(TitleFacetIndex.instance.rank(type, ids, names));
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _warmShelf() async {
+    if (_shelf.isEmpty || _playbackActive) return;
+    final slots = [
+      ..._shelf.slotsOfType(ContentType.movie),
+      ..._shelf.slotsOfType(ContentType.series),
+      ..._shelf.slotsOfType(ContentType.anime),
+    ];
+    for (var start = 0; start < slots.length; start += 80) {
+      if (_disposed || _playbackActive || !ForegroundPolicy.instance.active) {
+        return;
+      }
+      final end = start + 80 < slots.length ? start + 80 : slots.length;
+      _kids.request([
+        for (var i = start; i < end; i++) _shelf.readSlot(slots[i]),
+      ]);
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+    }
+  }
+
+  void _setChannels(List<Channel> channels) {
+    if (channels.isEmpty) {
+      _shelfEpoch++;
+      _swap(CatalogShelf.empty());
+      return;
+    }
+    unawaited(_installChannels(channels));
   }
 
   Timer? _prewarmTimer;
@@ -622,7 +640,7 @@ class AppProvider extends ChangeNotifier {
   /// waits for the whole playlist to be grouped.
   void _schedulePrewarm() {
     _prewarmTimer?.cancel();
-    if (_rawChannels.isEmpty) return;
+    if (_shelf.isEmpty) return;
     // TV boxes: the first half minute belongs to the Home and the remote;
     // grouping tens of thousands of titles there froze input after launch.
     _prewarmTimer = Timer(
@@ -633,28 +651,16 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
-  /// TV: heavy grouping waits until the remote has been still for 2 s.
-  Future<bool> _waitRemoteStill(List<Channel> snapshot) async {
-    if (!DeviceTypeService.isTv) return true;
-    const still = Duration(seconds: 2);
-    while (!RemoteNavigation.stillFor(still)) {
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-      if (!identical(snapshot, _allChannels)) return false;
-    }
-    return true;
-  }
-
   Future<void> _prewarm() async {
     if (_playbackActive || !ForegroundPolicy.instance.active) {
-      // Never compete with video or section publication for the UI thread.
       _prewarmTimer = Timer(
         const Duration(seconds: 10),
         () => unawaited(_prewarm()),
       );
       return;
     }
-    final snapshot = _allChannels;
-    if (snapshot.isEmpty) return;
+    final epoch = _shelfEpoch;
+    if (_shelf.isEmpty) return;
     for (final type in [
       ContentType.live,
       ContentType.movie,
@@ -662,11 +668,12 @@ class AppProvider extends ChangeNotifier {
       ContentType.anime,
     ]) {
       await Future<void>.delayed(const Duration(milliseconds: 100));
-      if (!identical(snapshot, _allChannels) || _disposed) return;
+      if (epoch != _shelfEpoch || _disposed) return;
       await ensureCatalogPrepared(type);
     }
-    if (!_playbackActive && ForegroundPolicy.instance.active)
+    if (!_playbackActive && ForegroundPolicy.instance.active) {
       _startCatalogIndex();
+    }
   }
 
   /// Bumped when new TMDB genres arrive, so pages can cache what they derive
@@ -674,18 +681,9 @@ class AppProvider extends ChangeNotifier {
   int _titleInfoVersion = 0;
   int get titleInfoVersion => _titleInfoVersion;
 
-  void _applyAdultFilter({List<Channel>? visible}) {
-    if (_kidsMode && visible == null) _kids.request(_rawChannels);
-    _allChannels =
-        visible ??
-        _rawChannels
-            .where(
-              (c) => _kidsMode ? isKidsContent(c) : (_showAdult || !isAdult(c)),
-            )
-            .toList(growable: false);
-    _channelIndex = null;
-    _seriesFolderIndex = null;
-    _invalidateCaches();
+  void _applyAdultFilter() {
+    _rebuildMask();
+    _publishShelf();
   }
 
   /// Kids profile: only children's categories/channels are visible.
@@ -750,51 +748,17 @@ class AppProvider extends ChangeNotifier {
     await prefs.setBool(_showAdultKey, value);
   }
 
-  static final _adultPattern = RegExp(
-    r'\bx{3,}\b|for\s*adults?|\badults?\b|\badulti\b|\b18\s*\+|\+\s*18\b|'
-    r'\bporn|\bp0rn|\bhentai\b|\beroti[ck]|\bsexy?\b|\bhot\s*club\b|'
-    r'playboy|brazzers|dorcel|hustler|penthouse|redlight|red\s*light|'
-    r'private\s*(tv|spice)|\bspice\b|vivid|xxl\s*tv|blue\s*hustler|\bnsfw\b|milf',
-    caseSensitive: false,
-  );
-  static final _adultExceptions = RegExp(
-    r'adult\s*swim|young\s*adults?',
-    caseSensitive: false,
-  );
-
   /// True for pornographic items: "XXX" or "for adults" in the title or
   /// category, plus well known adult channel brands and keywords.
-  static bool isAdult(Channel c) {
-    bool test(String? s) {
-      if (s == null || s.isEmpty) return false;
-      final clean = s.replaceAll(_adultExceptions, ' ');
-      return _adultPattern.hasMatch(clean);
-    }
+  static bool isAdult(Channel c) => catalogChannelIsAdult(c);
 
-    return test(c.group) || test(c.name) || test(c.seriesName);
+  List<String> groupsOf(ContentType type) {
+    final labels = [..._shelf.categoryLabels(type)]..sort();
+    return labels;
   }
-
-  List<String> groupsOf(ContentType type) =>
-      catalogOf(type).map((c) => c.group).toSet().toList()..sort();
 
   /// Category labels in the playlist's own order (not alphabetical).
-  List<String> categoryOrderOf(ContentType type) {
-    final channels = channelsOf(type);
-    if (identical(_categoryLabelSources[type], channels)) {
-      return _categoryLabels[type] ?? const [];
-    }
-    final labels = channels
-        .where(
-          (c) =>
-              (type != ContentType.series && type != ContentType.anime) ||
-              c.isSeriesFolder,
-        )
-        .map((c) => c.group)
-        .toSet()
-        .toList(growable: false);
-    _categoryLabelSources[type] = channels;
-    return _categoryLabels[type] = List.unmodifiable(labels);
-  }
+  List<String> categoryOrderOf(ContentType type) => _shelf.categoryLabels(type);
 
   /// Categories the user hid per type (key: content type name).
   Map<String, List<String>> get hiddenCategories => _hiddenCategories;
@@ -824,58 +788,8 @@ class AppProvider extends ChangeNotifier {
   List<CatalogGroup> groupedCatalog(ContentType type) {
     final ready = _groupedCache[type];
     if (ready != null) return ready;
-    if (_largeCatalog) {
-      if (_playbackActive && type == ContentType.live) {
-        final entries = <CatalogEntry>[];
-        for (final c in _allChannels) {
-          if (c.type == type && !hiddenCategoriesOf(type).contains(c.group)) {
-            entries.add(CatalogEntry(primary: c, variants: [c]));
-            if (entries.length == 100) break;
-          }
-        }
-        return entries.isEmpty
-            ? const []
-            : [CatalogGroup(label: 'Tutti', entries: entries)];
-      }
-      unawaited(ensureCatalogPrepared(type));
-      return const [];
-    }
-    return _groupedCache[type] ??= () {
-      final base = CatalogBuilder.groupsOf(
-        _visibleChannels(type),
-        categoryOrderOf(type)
-            .where((g) => !hiddenCategoriesOf(type).contains(g))
-            .toList(),
-      );
-      final customs = customCategoriesOf(type);
-      final byLabel = <String, CatalogGroup>{};
-      if (customs.isNotEmpty) {
-        final byId = <String, CatalogEntry>{
-          for (final g in base)
-            for (final e in g.entries) e.primary.id: e,
-        };
-        for (final c in customs) {
-          byLabel[c.name] = CatalogGroup(
-            label: c.name,
-            entries: [
-              for (final id in c.itemIds)
-                if (byId[id] case final entry?) entry,
-            ],
-          );
-        }
-      }
-      for (final g in base) {
-        byLabel.putIfAbsent(g.label, () => g);
-      }
-      return [
-        for (final label in applyCategoryOrder(
-          byLabel.keys.toList(),
-          _categoryOrder[type.name] ?? const [],
-        ))
-          if (byLabel[label] case final group?)
-            if (group.entries.isNotEmpty) group,
-      ];
-    }();
+    unawaited(ensureCatalogPrepared(type));
+    return const [];
   }
 
   // ---- Personal categories and category order (device-local) ----
@@ -1024,28 +938,14 @@ class AppProvider extends ChangeNotifier {
   /// "Ultimi Aggiunti": the 100 newest items by the provider's added date
   /// (playlist order as tie-breaker, newest entries come last there).
   List<CatalogEntry> recentEntries(ContentType type, {int limit = 100}) {
-    if (_largeCatalog && !_recentCache.containsKey(type)) {
+    final ready = _recentCache[type];
+    if (ready == null) {
       unawaited(ensureCatalogPrepared(type));
       return const [];
     }
-    final result = (_recentCache[type] ??= () {
-      final items = _visibleChannels(type);
-      final indexed = [for (var i = 0; i < items.length; i++) (i, items[i])]
-        ..sort((a, b) {
-          final byDate = b.$2.addedAt.compareTo(a.$2.addedAt);
-          return byDate != 0 ? byDate : b.$1.compareTo(a.$1);
-        });
-      // The same title is often listed in several categories: show it
-      // once (normalized title, quality tags ignored).
-      final seen = <String>{};
-      return [
-        for (final (_, c) in indexed)
-          if (seen.add(_dedupeKey(c))) CatalogEntry(primary: c, variants: [c]),
-      ].toList(growable: false);
-    }());
-    return result.length <= limit
-        ? result
-        : result.take(limit).toList(growable: false);
+    return ready.length <= limit
+        ? ready
+        : ready.take(limit).toList(growable: false);
   }
 
   /// "Visti di recente": up to [limit] titles of [type] watched or started,
@@ -1100,7 +1000,6 @@ class AppProvider extends ChangeNotifier {
     }
     final epoch = _preparationEpoch;
     final version = _titleInfoVersion;
-    final accountKey = _currentKey;
     bool current() =>
         !_disposed &&
         epoch == _preparationEpoch &&
@@ -1124,7 +1023,11 @@ class AppProvider extends ChangeNotifier {
               return;
             for (final group in groups) {
               for (final entry in group.entries) {
-                for (final id in genresOf(entry.primary) ?? const <int>[]) {
+                final slot = entry.shelfSlot;
+                final key = slot == null
+                    ? KidsContentService.keyOf(entry.primary)
+                    : _shelf.facetKeyAt(slot);
+                for (final id in _kids.genresForKey(key) ?? const <int>[]) {
                   counts[id] = (counts[id] ?? 0) + 1;
                 }
                 await work.step();
@@ -1137,28 +1040,6 @@ class AppProvider extends ChangeNotifier {
             _genreCountsCache[type] = Map.unmodifiable(counts);
             _genreCountsVersions[type] = version;
             notifyListeners();
-            final signature = _preparedSignatures[type];
-            final channels = _byType[type];
-            final all = _allCache[type];
-            final recent = _recentCache[type];
-            if (signature != null &&
-                channels != null &&
-                all != null &&
-                recent != null) {
-              await PreparedCatalogStore.instance.write(
-                accountKey,
-                type,
-                signature,
-                PreparedCatalog(
-                  channels,
-                  _seriesCatalogCache[type] ?? channels,
-                  groups,
-                  recent,
-                  all,
-                ),
-                genreCounts: counts,
-              );
-            }
           } on CatalogPreparationCancelled {
             // Retry on the next eligible filter access; never publish stale counts.
           }
@@ -1176,556 +1057,81 @@ class AppProvider extends ChangeNotifier {
       unawaited(_kids.warmUp(items));
 
   /// Drawer counts never sort or initiate title preparation.
-  int catalogCountOf(ContentType type) {
-    final ready = _allCache[type];
-    if (ready != null) return ready.length;
-    final seen = <String>{};
-    for (final group in _groupedCache[type] ?? const <CatalogGroup>[]) {
-      for (final entry in group.entries) seen.add(_dedupeKey(entry.primary));
-    }
-    return seen.length;
-  }
+  int catalogCountOf(ContentType type) => _allCache[type]?.length ?? 0;
 
-  /// "Tutti i Film" / "Tutte le Serie": every visible title once, A-Z.
   List<CatalogEntry> allEntries(ContentType type) {
-    if (_largeCatalog && !_allCache.containsKey(type)) {
-      unawaited(ensureCatalogPrepared(type));
-      return const [];
-    }
-    return _allCache[type] ??= () {
-      final seen = <String>{};
-      final list =
-          [
-            for (final g in groupedCatalog(type))
-              for (final e in g.entries)
-                if (seen.add(_dedupeKey(e.primary))) e,
-          ]..sort(
-            (a, b) => a.primary.name.toLowerCase().compareTo(
-              b.primary.name.toLowerCase(),
-            ),
-          );
-      return list;
-    }();
+    final ready = _allCache[type];
+    if (ready != null) return ready;
+    unawaited(ensureCatalogPrepared(type));
+    return const [];
   }
 
   final Map<ContentType, List<CatalogEntry>> _allCache = {};
 
-  Isolate? _searchIsolate;
-  ReceivePort? _searchInbox;
-  Future<SendPort>? _searchPortFuture;
-  int _searchEpoch = 0;
-  int _searchQueryId = 0;
-  bool _searchReady = false;
-  bool _searchFeeding = false;
-  List<Channel>? _searchSnapshot;
-  final Map<int, Completer<CatalogSearchAnswer>> _searchQueries = {};
-  final Map<int, Completer<void>> _searchCommits = {};
+  bool get catalogIndexReady => _shelfReady;
 
-  /// Changes when the snapshot, the search index, or the series folders change.
-  int get searchStamp => Object.hash(
-    identityHashCode(_allChannels),
-    _searchEpoch,
-    _searchReady,
-    identityHashCode(_seriesCatalogCache[ContentType.series]),
-    identityHashCode(_seriesCatalogCache[ContentType.anime]),
-  );
+  int get catalogIndexRevision => _shelfEpoch * 2 + (_shelfReady ? 1 : 0);
 
-  /// One query against the snapshot index. The scan runs off the UI isolate.
+  final Map<String, Channel?> _matchCache = {};
+
+  int get searchStamp => Object.hash(_shelfEpoch, _visibleCount, _shelfReady);
+
+  /// Prefix lookup. The posting lists are built with the shelf, so a query
+  /// does not walk every title.
+  List<CatalogEntry> queryEntries(
+    ContentType type,
+    String query, {
+    String? group,
+  }) {
+    final wanted = type.index;
+    final out = <CatalogEntry>[];
+    final seen = <int>{};
+    for (final slot in _shelf.searchSlots(query)) {
+      if (slot >= _visibleMask.length || _visibleMask[slot] == 0) continue;
+      if (_shelf.typeIndexAt(slot) != wanted) continue;
+      if ((type == ContentType.series || type == ContentType.anime) &&
+          !_shelf.isFolderSlot(slot)) {
+        continue;
+      }
+      if (group != null && _shelf.groupAt(slot) != group) continue;
+      if (seen.add(slot)) out.add(_slotEntry(slot));
+    }
+    return out;
+  }
+
   Future<Map<ContentType, List<Channel>>> searchCatalog(String query) async {
     final q = query.trim();
-    if (q.isEmpty || _disposed || _allChannels.isEmpty) return const {};
-    final snapshot = _allChannels;
-    final deadline = DateTime.now().add(const Duration(seconds: 30));
-    while (!_searchReady || !identical(_searchSnapshot, snapshot)) {
-      if (_disposed || !identical(_allChannels, snapshot)) return const {};
-      if (DateTime.now().isAfter(deadline)) return const {};
-      if (_playbackActive || !ForegroundPolicy.instance.active) {
-        _scheduleSearchIndex();
-        return const {};
+    if (q.isEmpty || _disposed || _shelf.isEmpty) return const {};
+    final buckets = {for (final type in ContentType.values) type: <Channel>[]};
+    for (final slot in _shelf.searchSlots(q)) {
+      if (slot >= _visibleMask.length || _visibleMask[slot] == 0) continue;
+      final type = ContentType.values[_shelf.typeIndexAt(slot)];
+      if ((type == ContentType.series || type == ContentType.anime) &&
+          !_shelf.isFolderSlot(slot)) {
+        continue;
       }
-      _scheduleSearchIndex();
-      await Future<void>.delayed(const Duration(milliseconds: 40));
+      final list = buckets[type]!;
+      if (list.length >= 40) continue;
+      list.add(_shelf.readSlot(slot));
     }
-    final epoch = _searchEpoch;
-    final SendPort port;
-    try {
-      port = await _searchPort();
-    } catch (_) {
-      return const {};
-    }
-    if (_disposed || epoch != _searchEpoch || !identical(_allChannels, snapshot)) {
-      return const {};
-    }
-    final id = ++_searchQueryId;
-    final done = Completer<CatalogSearchAnswer>();
-    _searchQueries[id] = done;
-    port.send(CatalogSearchQuery(id, epoch, q));
-    final CatalogSearchAnswer answer;
-    try {
-      answer = await done.future.timeout(const Duration(seconds: 10));
-    } catch (_) {
-      _searchQueries.remove(id);
-      return const {};
-    }
-    _searchQueries.remove(id);
-    if (answer.stale ||
-        answer.epoch != epoch ||
-        !identical(_allChannels, snapshot)) {
-      return const {};
-    }
-    return {
-      ContentType.live: _channelsAt(snapshot, answer.live),
-      ContentType.movie: _channelsAt(snapshot, answer.movie),
-      ContentType.series: _foldersNamed(
-        ContentType.series,
-        answer.seriesIds,
-      ),
-      ContentType.anime: _foldersNamed(ContentType.anime, answer.animeIds),
-    };
+    return buckets;
   }
 
-  List<Channel> _channelsAt(List<Channel> snapshot, List<int> indexes) {
-    final out = <Channel>[];
-    for (final index in indexes) {
-      if (index >= 0 && index < snapshot.length) out.add(snapshot[index]);
-    }
-    return out;
-  }
+  void _startCatalogIndex() {}
 
-  List<Channel> _foldersNamed(ContentType type, List<String> ids) {
-    if (ids.isEmpty) return const [];
-    final wanted = ids.toSet();
-    final out = <Channel>[];
-    for (final channel in catalogOf(type)) {
-      if (wanted.contains(channel.id)) out.add(channel);
-    }
-    return out;
-  }
-
-  void _scheduleSearchIndex() {
-    if (_disposed || _searchFeeding) return;
-    if (_playbackActive || !ForegroundPolicy.instance.active) return;
-    final snapshot = _allChannels;
-    if (snapshot.isEmpty) return;
-    if (_searchReady && identical(_searchSnapshot, snapshot)) return;
-    _searchFeeding = true;
-    _searchReady = false;
-    _searchSnapshot = snapshot;
-    final epoch = ++_searchEpoch;
-    unawaited(_feedSearchIndex(snapshot, epoch));
-  }
-
-  Future<void> _feedSearchIndex(List<Channel> snapshot, int epoch) async {
-    var failed = false;
-    try {
-      final port = await _searchPort();
-      if (epoch != _searchEpoch ||
-          _disposed ||
-          !identical(snapshot, _allChannels)) {
-        return;
-      }
-      port.send(CatalogSearchReset(epoch));
-      const size = 600;
-      for (var start = 0; start < snapshot.length; start += size) {
-        while (epoch == _searchEpoch &&
-            !_disposed &&
-            (_playbackActive || !ForegroundPolicy.instance.active)) {
-          await Future<void>.delayed(const Duration(milliseconds: 100));
-        }
-        if (epoch != _searchEpoch ||
-            _disposed ||
-            !identical(snapshot, _allChannels)) {
-          return;
-        }
-        final end = start + size < snapshot.length
-            ? start + size
-            : snapshot.length;
-        port.send(_searchChunk(snapshot, start, end, epoch));
-        await Future<void>.delayed(Duration.zero);
-      }
-      if (epoch != _searchEpoch ||
-          _disposed ||
-          !identical(snapshot, _allChannels)) {
-        return;
-      }
-      final done = Completer<void>();
-      _searchCommits[epoch] = done;
-      port.send(CatalogSearchCommit(epoch));
-      await done.future.timeout(const Duration(seconds: 20));
-      if (epoch != _searchEpoch ||
-          _disposed ||
-          !identical(snapshot, _allChannels)) {
-        return;
-      }
-      _searchReady = true;
-      _searchSnapshot = snapshot;
-      notifyListeners();
-    } catch (_) {
-      failed = true;
-      _searchReady = false;
-    } finally {
-      _searchCommits.remove(epoch);
-      _searchFeeding = false;
-      if (!failed &&
-          !_disposed &&
-          (!_searchReady || !identical(_searchSnapshot, _allChannels))) {
-        _scheduleSearchIndex();
-      }
-    }
-  }
-
-  CatalogSearchChunk _searchChunk(
-    List<Channel> snapshot,
-    int start,
-    int end,
-    int epoch,
-  ) {
-    final count = end - start;
-    return CatalogSearchChunk(
-      epoch: epoch,
-      names: List<String>.generate(
-        count,
-        (i) => snapshot[start + i].name,
-        growable: false,
-      ),
-      groups: List<String>.generate(
-        count,
-        (i) => snapshot[start + i].group,
-        growable: false,
-      ),
-      seriesNames: List<String>.generate(
-        count,
-        (i) => snapshot[start + i].seriesName ?? '',
-        growable: false,
-      ),
-      seriesKeys: List<String>.generate(
-        count,
-        (i) => snapshot[start + i].seriesKey ?? '',
-        growable: false,
-      ),
-      ids: List<String>.generate(
-        count,
-        (i) => snapshot[start + i].id,
-        growable: false,
-      ),
-      types: List<int>.generate(
-        count,
-        (i) => snapshot[start + i].type.index,
-        growable: false,
-      ),
-      seasons: List<int>.generate(
-        count,
-        (i) => snapshot[start + i].season ?? 0,
-        growable: false,
-      ),
-      episodes: List<int>.generate(
-        count,
-        (i) => snapshot[start + i].episode ?? 0,
-        growable: false,
-      ),
-      folders: List<bool>.generate(
-        count,
-        (i) => snapshot[start + i].isSeriesFolder,
-        growable: false,
-      ),
-    );
-  }
-
-  Future<SendPort> _searchPort() {
-    final pending = _searchPortFuture;
-    if (pending != null) return pending;
-    final completer = Completer<SendPort>();
-    _searchPortFuture = completer.future;
-    final inbox = ReceivePort();
-    _searchInbox = inbox;
-    inbox.listen((message) {
-      if (message is SendPort) {
-        if (!completer.isCompleted) completer.complete(message);
-        return;
-      }
-      if (message is CatalogSearchReady) {
-        final pendingCommit = _searchCommits[message.epoch];
-        if (pendingCommit != null && !pendingCommit.isCompleted) {
-          pendingCommit.complete();
-        }
-        return;
-      }
-      if (message is CatalogSearchAnswer) {
-        final pendingQuery = _searchQueries.remove(message.id);
-        if (pendingQuery != null && !pendingQuery.isCompleted) {
-          pendingQuery.complete(message);
-        }
-      }
-    });
-    unawaited(
-      Isolate.spawn(
-        catalogSearchWorker,
-        inbox.sendPort,
-        debugName: 'catalog-search',
-      ).then(
-        (isolate) => _searchIsolate = isolate,
-        onError: (Object error, StackTrace stack) {
-          if (!completer.isCompleted) completer.completeError(error, stack);
-          _searchPortFuture = null;
-        },
-      ),
-    );
-    return completer.future;
-  }
-
-  void _closeSearchIndex() {
-    _searchEpoch++;
-    for (final pending in _searchQueries.values) {
-      if (!pending.isCompleted) {
-        pending.complete(
-          CatalogSearchAnswer.empty(0, _searchEpoch, stale: true),
-        );
-      }
-    }
-    _searchQueries.clear();
-    for (final pending in _searchCommits.values) {
-      if (!pending.isCompleted) pending.complete();
-    }
-    _searchCommits.clear();
-    _searchIsolate?.kill(priority: Isolate.immediate);
-    _searchIsolate = null;
-    _searchInbox?.close();
-    _searchInbox = null;
-    _searchPortFuture = null;
-  }
-
-  /// Normalized title -> playlist movies / series folders, built once per
-  /// playlist in a background isolate so the Home never freezes at launch.
-  Map<String, List<Channel>>? _titleIndex;
-  final Map<String, Channel?> _matchCache = {};
-  int _indexEpoch = 0;
-  bool _indexBuilding = false;
-  bool get catalogIndexReady => _titleIndex != null;
-  int get catalogIndexRevision =>
-      _indexEpoch * 2 + (_titleIndex == null ? 0 : 1);
-
-  /// Starts (once) the off-thread grouping + title normalization. Never
-  /// during playback: the result is applied after the player closes.
-  void _startCatalogIndex() {
-    _scheduleSearchIndex();
-    if (_indexBuilding || _titleIndex != null || _disposed) return;
-    if (_playbackActive || !ForegroundPolicy.instance.active) return;
-    if (_largeCatalog) {
-      unawaited(_prepareLargeTitleIndex());
-      return;
-    }
-    final snapshot = _allChannels;
-    if (snapshot.isEmpty) return;
-    _indexBuilding = true;
-    final epoch = ++_indexEpoch;
-    final movies = channelsOf(ContentType.movie);
-    final movieNames = [for (final c in movies) c.name];
-    final seriesItems = _seriesCatalogCache.containsKey(ContentType.series)
-        ? const <Channel>[]
-        : channelsOf(ContentType.series);
-    final animeItems = _seriesCatalogCache.containsKey(ContentType.anime)
-        ? const <Channel>[]
-        : channelsOf(ContentType.anime);
-    final seriesReady = _seriesCatalogCache[ContentType.series];
-    final animeReady = _seriesCatalogCache[ContentType.anime];
-    // Series already grouped on this thread: only their names travel.
-    final seriesNames = seriesReady == null
-        ? null
-        : [for (final c in seriesReady) c];
-    final animeNames = animeReady == null
-        ? null
-        : [for (final c in animeReady) c];
-    unawaited(() async {
-      CatalogIndexData? data;
-      try {
-        data = await Isolate.run(
-          () => buildCatalogIndex(
-            movieNames,
-            seriesNames ?? seriesItems,
-            animeNames ?? animeItems,
-            alreadyGrouped: (seriesNames != null, animeNames != null),
-          ),
-        );
-      } catch (_) {
-        data = null;
-      }
-      if (_disposed) {
-        _indexBuilding = false;
-        return;
-      }
-      if (_titleIndex != null) {
-        _indexBuilding = false;
-        return;
-      }
-      if (epoch != _indexEpoch || !identical(snapshot, _allChannels)) {
-        // Playlist changed meanwhile: index the current one instead.
-        _indexBuilding = false;
-        if (_titleIndex == null) _startCatalogIndex();
-        return;
-      }
-      await _applyCatalogIndex(data, movies, epoch, snapshot);
-      _indexBuilding = false;
-    }());
-  }
-
-  Future<void> _prepareLargeTitleIndex() async {
-    if (_indexBuilding || _disposed) return;
-    _indexBuilding = true;
-    final epoch = _indexEpoch;
-    final snapshot = _allChannels;
-    bool current() =>
-        !_disposed && epoch == _indexEpoch && identical(snapshot, _allChannels);
-    Future<bool> allowed() async {
-      while (current() &&
-          (_playbackActive || !ForegroundPolicy.instance.active)) {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      }
-      return current();
-    }
-
-    try {
-      for (final type in [
-        ContentType.movie,
-        ContentType.series,
-        ContentType.anime,
-      ]) {
-        await ensureCatalogPrepared(type);
-        if (!current()) return;
-      }
-      final budget = CatalogYield(allowed);
-      final index = <String, List<Channel>>{};
-      final folders = <String, Channel>{};
-      for (final type in [
-        ContentType.movie,
-        ContentType.series,
-        ContentType.anime,
-      ]) {
-        for (final c in catalogOf(type)) {
-          final key = _titleKey(c.name);
-          if (key.isNotEmpty) (index[key] ??= []).add(c);
-          final seriesName = c.seriesName;
-          if (type != ContentType.movie) {
-            if (seriesName != null)
-              (index[_titleKey(seriesName)] ??= []).add(c);
-            final seriesKey = c.seriesKey;
-            if (seriesKey != null && seriesKey.isNotEmpty)
-              folders.putIfAbsent(seriesKey, () => c);
-            folders.putIfAbsent(c.id, () => c);
-          }
-          await budget.step();
-        }
-      }
-      if (!await allowed()) return;
-      _titleIndex = index;
-      _seriesFolderIndex = folders;
-      _matchCache.clear();
-      notifyListeners();
-    } on CatalogPreparationCancelled {
-    } finally {
-      _indexBuilding = false;
-    }
-  }
-
-  Future<void> _applyCatalogIndex(
-    CatalogIndexData? data,
-    List<Channel> movies,
-    int epoch,
-    List<Channel> snapshot,
-  ) async {
-    if (data == null)
-      return; // Failure must not trigger a synchronous full rebuild.
-    bool current() =>
-        !_disposed && epoch == _indexEpoch && identical(snapshot, _allChannels);
-    final budget = CatalogYield(() async {
-      while (current() &&
-          (_playbackActive || !ForegroundPolicy.instance.active)) {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      }
-      return current();
-    });
-    try {
-      final lists = [movies, data.seriesCatalog, data.animeCatalog];
-      final index = <String, List<Channel>>{};
-      for (final entry in data.titles.entries) {
-        final out = <Channel>[];
-        for (final code in entry.value) {
-          final kind = CatalogIndexData.kindOf(code);
-          final i = CatalogIndexData.indexOf(code);
-          if (kind < lists.length && i < lists[kind].length)
-            out.add(lists[kind][i]);
-          await budget.step();
-        }
-        if (out.isNotEmpty) index[entry.key] = out;
-        await budget.step();
-      }
-      if (!current() || _playbackActive || !ForegroundPolicy.instance.active)
-        return;
-      _seriesCatalogCache[ContentType.series] ??= data.seriesCatalog;
-      _seriesCatalogCache[ContentType.anime] ??= data.animeCatalog;
-      _titleIndex = index;
-      _matchCache.clear();
-      _seriesFolderIndex = null;
-      notifyListeners();
-    } on CatalogPreparationCancelled {}
-  }
-
-  Map<String, List<Channel>> _buildTitleIndexSync() {
-    final index = <String, List<Channel>>{};
-    void add(String key, Channel c) {
-      if (key.isEmpty) return;
-      (index[key] ??= []).add(c);
-    }
-
-    for (final c in catalogOf(ContentType.movie)) {
-      add(_titleKey(c.name), c);
-    }
-    for (final type in [ContentType.series, ContentType.anime]) {
-      for (final c in catalogOf(type)) {
-        add(_titleKey(c.name), c);
-        if (c.seriesName != null) add(_titleKey(c.seriesName!), c);
-      }
-    }
-    return index;
-  }
-
-  /// Series folder for an episode's series key.
-  /// O(1) lookup: Home cards call this on every build. While the series
-  /// catalog is still grouped in background it answers null (no freeze).
   Channel? seriesFolderFor(String seriesKey, {bool wait = true}) {
-    if (_largeCatalog && _seriesFolderIndex == null) {
-      _startCatalogIndex();
+    if (!_shelfReady) return null;
+    final slot = _shelf.folderSlot(seriesKey);
+    if (slot == null ||
+        slot >= _visibleMask.length ||
+        _visibleMask[slot] == 0) {
       return null;
     }
-    final grouped =
-        _seriesCatalogCache.containsKey(ContentType.series) &&
-        _seriesCatalogCache.containsKey(ContentType.anime);
-    if (!wait && !grouped && _titleIndex == null) {
-      _startCatalogIndex();
-      if (_indexBuilding) return null;
-    }
-    final index = _seriesFolderIndex ??= () {
-      final m = <String, Channel>{};
-      for (final type in [ContentType.series, ContentType.anime]) {
-        for (final c in catalogOf(type)) {
-          final k = c.seriesKey;
-          if (k != null && k.isNotEmpty) m.putIfAbsent(k, () => c);
-        }
-      }
-      for (final type in [ContentType.series, ContentType.anime]) {
-        for (final c in catalogOf(type)) {
-          m.putIfAbsent(c.id, () => c);
-        }
-      }
-      return m;
-    }();
-    return index[seriesKey];
+    return _shelf.readSlot(slot);
   }
 
-  /// True when the TMDB title can actually be watched with the playlist.
-  /// Non-blocking: false until the background index is ready.
   bool isAvailable(TmdbItem item) => findChannelFor(item, wait: false) != null;
 
-  /// External search/credits cannot bypass the verified playlist catalog.
   bool isTmdbAllowed(TmdbItem item) {
     if (!_kidsMode) return true;
     final channel = findChannelFor(item);
@@ -1736,59 +1142,39 @@ class AppProvider extends ChangeNotifier {
         );
   }
 
-  /// Finds the playlist title for a TMDB item. Movies need an exact title
-  /// match and, when both sides have a year, the same year: this avoids
-  /// opening a different film with the same name (remakes, sequels).
-  /// While the background index is still being built this answers null
-  /// without caching, and the Home refreshes as soon as it is ready.
-  /// [wait] false is for the Home: it never blocks the UI thread. User
-  /// actions (opening a title, search) keep the exact synchronous answer.
   Channel? findChannelFor(TmdbItem item, {bool wait = true}) {
     if (_matchCache.containsKey(item.key)) return _matchCache[item.key];
-    if (_titleIndex == null) {
-      if (!wait) {
-        _startCatalogIndex();
-        return null;
-      }
-      if (_largeCatalog) {
-        _startCatalogIndex();
-        return null;
-      }
-      _titleIndex = _buildTitleIndexSync();
-      _indexEpoch++; // the pending background result is now redundant
-    }
+    if (!_shelfReady) return null;
     final result = _findChannelFor(item);
     _matchCache[item.key] = result;
     return result;
   }
 
   Channel? _findChannelFor(TmdbItem item) {
-    final index = _titleIndex!;
     final target = _titleKey(item.title);
     if (target.isEmpty) return null;
     final isMovie = item.contentType == ContentType.movie;
-    final candidates = (index[target] ?? const <Channel>[])
-        .where(
-          (c) => isMovie
-              ? c.type == ContentType.movie
-              : c.type != ContentType.movie,
-        )
-        .toList();
+    final candidates = <Channel>[];
+    for (final slot in _shelf.exactSlots(target)) {
+      if (slot >= _visibleMask.length || _visibleMask[slot] == 0) continue;
+      final channel = _shelf.readSlot(slot);
+      final movie = channel.type == ContentType.movie;
+      if (isMovie == movie) candidates.add(channel);
+    }
     if (candidates.isEmpty) return null;
     final year = item.year;
     if (year.isNotEmpty) {
       Channel? sameYear;
       final noYear = <Channel>[];
-      for (final c in candidates) {
-        final y = _yearOf(c.name);
-        if (y == year) {
-          sameYear ??= c;
-        } else if (y == null) {
-          noYear.add(c);
+      for (final channel in candidates) {
+        final found = _yearOf(channel.name);
+        if (found == year) {
+          sameYear ??= channel;
+        } else if (found == null) {
+          noYear.add(channel);
         }
       }
       if (sameYear != null) return sameYear;
-      // A different explicit year means a different title: skip it.
       return noYear.firstOrNull;
     }
     return candidates.first;
@@ -1799,8 +1185,6 @@ class AppProvider extends ChangeNotifier {
       _yearPattern.firstMatch(name)?.group(0);
 
   /// Title key without language prefix, brackets, quality tags and year.
-  static String _dedupeKey(Channel c) => catalogEntryKey(c);
-
   static String _titleKey(String raw) => catalogTitleKey(raw);
 
   void indexEpisodes(List<Channel> episodes) {
@@ -1831,13 +1215,16 @@ class AppProvider extends ChangeNotifier {
         indexEpisodes(details.allEpisodes.map((e) => e.channel).toList());
         return _safeSeriesDetails(details);
       } catch (_) {
-        final local = SeriesGrouping.detailsFromEpisodes(series, _rawChannels);
+        final local = SeriesGrouping.detailsFromEpisodes(
+          series,
+          _shelf.episodesOf(series),
+        );
         if (local.seasons.isNotEmpty) return _safeSeriesDetails(local);
         rethrow;
       }
     }
     return _safeSeriesDetails(
-      SeriesGrouping.detailsFromEpisodes(series, _rawChannels),
+      SeriesGrouping.detailsFromEpisodes(series, _shelf.episodesOf(series)),
     );
   }
 
@@ -2050,8 +1437,13 @@ class AppProvider extends ChangeNotifier {
         _authMethod == AuthMethod.xtream && _xtreamCredentials != null;
     final saved = <ContentType>{};
     if (_xtreamCredentials case final credentials?) {
-      final cached = await _catalogCache.read(_cacheKey(credentials));
-      if (cached.isNotEmpty && _rawChannels.isEmpty) _setChannels(cached);
+      final key = _cacheKey(credentials);
+      if (await _catalogCache.hasSectionFile(key)) {
+        await _installFromFiles(key);
+      } else {
+        final cached = await _catalogCache.read(key);
+        if (cached.isNotEmpty && _shelf.isEmpty) await _installChannels(cached);
+      }
       for (final type in _playlistTypes) {
         if (_hasSection(type)) {
           saved.add(type);
@@ -2201,7 +1593,6 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> _sectionQueue = Future.value();
   String? _activeLoadKey;
-  List<Channel>? _cacheSnapshot;
   final List<String> _loadFailures = [];
 
   bool get _anyPending => _catalogStates.values.any((s) => s.isPending);
@@ -2252,7 +1643,7 @@ class AppProvider extends ChangeNotifier {
   bool get isRefreshingAny =>
       _anyPending &&
       !_playbackActive &&
-      (!_startupLoading || _rawChannels.isEmpty);
+      (!_startupLoading || _shelf.isEmpty);
 
   Future<void> _enqueue(ContentType type, Map<String, String> credentials) {
     final run = _sectionQueue.then((_) => _loadSection(type, credentials));
@@ -2330,74 +1721,43 @@ class AppProvider extends ChangeNotifier {
       FrameTelemetryService.instance.mark(
         'catalogo: risposta pronta ${type.name}',
       );
-      if (_playbackActive) {
+      final saved = await _persistSectionCopy(key, type, channels);
+      if (_disposed || key != _currentKey) return;
+      if (_playbackActive || !ForegroundPolicy.instance.active) {
         // A video is playing: swapping the catalog now re-filters and
-        // rebuilds every page under the player, freezing the picture and
-        // the remote. Keep the fresh section aside and apply it once the
-        // player closes.
+        // rebuilds every page under the player. Keep the section aside.
         _pendingSections[type] = channels;
+      } else if (saved && await _catalogCache.hasSectionFile(key)) {
+        await _installFromFiles(key);
+        FrameTelemetryService.instance.mark(
+          'catalogo: pubblicato ${type.name}',
+        );
       } else {
-        // Publish each section atomically, yielding during merge/filter work.
-        // Recheck settings/profile/account after every yield; never relax Kids.
-        while (!_disposed &&
-            key == _currentKey &&
-            !_playbackActive &&
-            ForegroundPolicy.instance.active) {
-          final snapshot = _rawChannels;
-          final kids = _kidsMode;
-          final adult = _showAdult;
-          final evidence = _titleInfoVersion;
-          bool valid() =>
-              !_disposed &&
-              key == _currentKey &&
-              identical(snapshot, _rawChannels) &&
-              kids == _kidsMode &&
-              adult == _showAdult &&
-              evidence == _titleInfoVersion &&
-              !_playbackActive &&
-              ForegroundPolicy.instance.active;
-          final merged = await replaceCatalogSection(
-            current: snapshot,
-            replacement: channels,
-            type: type,
-            stillCurrent: valid,
-          );
-          if (merged == null) continue;
-          final visible = await filterCatalogForPublication(
-            channels: merged,
-            allowed: (c) => kids ? isKidsContent(c) : (adult || !isAdult(c)),
-            requestEvidence: kids ? _kids.request : null,
-            stillCurrent: valid,
-          );
-          if (visible == null || !valid()) continue;
-          _pendingSections.remove(type);
-          _setChannels(merged, visible: visible);
-          FrameTelemetryService.instance.mark(
-            'catalogo: pubblicato ${type.name}',
-          );
-          break;
-        }
-        if (_disposed || key != _currentKey) return;
-        if (_playbackActive || !ForegroundPolicy.instance.active)
-          _pendingSections[type] = channels;
+        await _publishResolved(type, channels, key);
+        FrameTelemetryService.instance.mark(
+          'catalogo: pubblicato ${type.name}',
+        );
       }
       _catalogStates[type] = CatalogLoadState(
         phase: CatalogLoadPhase.ready,
         hasContent: channels.isNotEmpty,
       );
-      // Same queue as this download: the copy is encoded off the UI isolate
-      // and only while the player is closed. Otherwise the section stays in
-      // memory until the session ends.
-      await _persistSectionCopy(key, type, channels);
     } catch (e) {
       if (_disposed || key != _currentKey) return;
       final message = e.toString().replaceFirst('Exception: ', '');
       _loadFailures.add(message);
       if (!_hasSection(type)) {
-        final cached = _cacheSnapshot ??= await _catalogCache.read(key);
-        if (_disposed || key != _currentKey) return;
-        final fallback = cached.where((c) => _belongsToSection(c, type));
-        if (fallback.isNotEmpty) _setChannels([..._rawChannels, ...fallback]);
+        if (await _catalogCache.hasSectionFile(key)) {
+          await _installFromFiles(key);
+        } else {
+          final cached = await _catalogCache.read(key);
+          if (_disposed || key != _currentKey) return;
+          final fallback = [
+            for (final channel in cached)
+              if (_belongsToSection(channel, type)) channel,
+          ];
+          if (fallback.isNotEmpty) await _publishResolved(type, fallback, key);
+        }
       }
       final available = _hasSection(type);
       _catalogStates[type] = CatalogLoadState(
@@ -2414,11 +1774,10 @@ class AppProvider extends ChangeNotifier {
   void _finishIfIdle() {
     if (_anyPending) return;
     _isLoading = false;
-    _error = _rawChannels.isEmpty && _loadFailures.isNotEmpty
+    _error = _shelf.isEmpty && _loadFailures.isNotEmpty
         ? _loadFailures.first
         : null;
     _loadFailures.clear();
-    _cacheSnapshot = null;
     notifyListeners();
   }
 
@@ -2505,7 +1864,6 @@ class AppProvider extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _closeSearchIndex();
     _titleCategoriesTimer?.cancel();
     _cancelVisibilityWaits();
     _startupEpoch++;

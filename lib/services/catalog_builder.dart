@@ -1,16 +1,45 @@
 import 'catalog_index_builder.dart' show catalogEntryKey;
 import '../models/channel.dart';
-import '../models/content_type.dart';
 
 /// One deduplicated catalog entry: a title plus all the alternative copies
 /// (different qualities, e.g. 1080p and 4K) found across categories.
 class CatalogEntry {
-  final Channel primary;
-  final List<Channel> variants;
+  final Channel? _bound;
+  final int? _slot;
+  final CatalogChannelSource? _source;
+  final List<Channel>? _boundVariants;
+  final List<int>? _variantSlots;
 
-  const CatalogEntry({required this.primary, required this.variants});
+  const CatalogEntry({required Channel primary, required List<Channel> variants})
+    : _bound = primary,
+      _slot = null,
+      _source = null,
+      _boundVariants = variants,
+      _variantSlots = null;
 
-  bool get hasVariants => variants.length > 1;
+  /// Resolves the title from the indexed shelf the first time a tile reads it.
+  CatalogEntry.slot(int slot, CatalogChannelSource source, {List<int>? variants})
+    : _bound = null,
+      _slot = slot,
+      _source = source,
+      _boundVariants = null,
+      _variantSlots = variants;
+
+  Channel get primary => _bound ?? _source!.readSlot(_slot!);
+
+  List<Channel> get variants =>
+      _boundVariants ??
+      [
+        for (final slot in _variantSlots ?? <int>[_slot!])
+          _source!.readSlot(slot),
+      ];
+
+  int? get shelfSlot => _slot;
+}
+
+/// Windowed read used by [CatalogEntry.slot]. Implemented by the shelf.
+abstract class CatalogChannelSource {
+  Channel readSlot(int slot);
 }
 
 /// Groups and deduplicates channels for the catalog pages.

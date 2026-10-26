@@ -809,11 +809,8 @@ class _MultiViewChannelPickerState extends State<_MultiViewChannelPicker> {
     if (q.isNotEmpty) {
       // Searching looks through every category.
       channels = [
-        for (final c in app.allChannels)
-          if (c.type == ContentType.live &&
-              _allowed(app, c) &&
-              c.name.toLowerCase().contains(q))
-            c,
+        for (final entry in app.queryEntries(ContentType.live, q))
+          if (_allowed(app, entry.primary)) entry.primary,
       ];
     } else {
       final group = groups.where((g) => g.label == _category).firstOrNull;

@@ -343,10 +343,6 @@ class _CatalogPageState extends State<CatalogPage> {
     ContentType.anime => 'anime',
   };
 
-  Map<int, int>? _genreCounts;
-  List<CatalogGroup>? _genreCountsGroups;
-  int _genreCountsVersion = -1;
-
   @override
   void initState() {
     super.initState();
@@ -1014,20 +1010,14 @@ class _CatalogPageState extends State<CatalogPage> {
 
   // Search results are cached per query/filters: focus moves and rating
   // batches rebuild the page but never rescan the whole catalog.
-  final Map<String, String> _lowerNames = {};
   String? _searchKey;
   List<CatalogEntry>? _searchResult;
 
-  String _lowerName(CatalogEntry e) =>
-      _lowerNames[e.primary.name] ??= e.primary.name.toLowerCase();
-
   Widget _buildSearchResults(AppProvider app) {
     final q = _query.toLowerCase();
-    final groups = app.groupedCatalog(widget.type);
     final key =
-        '${identityHashCode(groups)}|$q|$_selectedCategory|$_genreId|'
+        '${app.searchStamp}|$q|$_selectedCategory|$_genreId|'
         '$_platform|$_only4k|${app.titleInfoVersion}|${app.catalogIndexRevision}|${PlatformCatalogService.instance.version}';
-    if (_lowerNames.length > 200000) _lowerNames.clear();
     if (_searchKey == key && _searchResult != null) {
       final cached = _ordered(_searchResult!);
       return cached.isEmpty
@@ -1038,23 +1028,21 @@ class _CatalogPageState extends State<CatalogPage> {
             )
           : _buildEntries(app, cached);
     }
-    var matches = <CatalogEntry>[];
-    final seen = <String>{};
-    for (final g in groups) {
-      if (DeviceTypeService.isTv &&
-          _selectedCategory != null &&
-          _selectedCategory != _allLabel &&
-          _selectedCategory != _watchedLabel &&
-          g.label != _selectedCategory) {
-        continue;
-      }
-      for (final e in g.entries) {
-        if (!_lowerName(e).contains(q)) continue;
-        if (!_matchesGenre(app, e)) continue;
-        if (!seen.add(e.primary.id)) continue;
-        matches.add(e);
-      }
-    }
+    var matches = app.queryEntries(
+      widget.type,
+      q,
+      group:
+          DeviceTypeService.isTv &&
+              _selectedCategory != null &&
+              _selectedCategory != _allLabel &&
+              _selectedCategory != _watchedLabel
+          ? _selectedCategory
+          : null,
+    );
+    matches = [
+      for (final entry in matches)
+        if (_matchesGenre(app, entry)) entry,
+    ];
     _searchKey = key;
     _searchResult = matches;
     matches = _ordered(matches);
