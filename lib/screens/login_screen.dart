@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/app_provider.dart';
 import '../providers/history_provider.dart';
 import '../theme/app_theme.dart';
@@ -132,6 +133,17 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+        const SizedBox(height: 16),
+        RecoveryKeyPanel(
+          key: _keyPanel,
+          controller: _keyController,
+          focusNode: _keyFocus,
+          onSubmitted: (_) => _handleXtreamLogin(),
+          onVisibility: (visible) {
+            if (_askForKey == visible || !mounted) return;
+            setState(() => _askForKey = visible);
+          },
+        ),
         if (_signedIn(context)) ...[
           const SizedBox(height: 16),
           if (_phone)
@@ -141,8 +153,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 final x = XtreamHandoff.parse(raw);
                 setState(() => _phone = false);
                 if (x == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Dati ricevuti non validi. Riprova.')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Dati ricevuti non validi. Riprova.'),
+                    ),
+                  );
                   return;
                 }
                 _xtreamServerController.text = x.server;
@@ -152,8 +167,9 @@ class _LoginScreenState extends State<LoginScreen> {
               },
               onClose: (m) {
                 setState(() => _phone = false);
-                if (m != null) ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text(m)));
+                if (m != null)
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text(m)));
               },
             )
           else
@@ -237,14 +253,17 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final proceed = await acceptTypedRecoveryKey(
-      context: context,
-      sync: context.read<SyncProvider>(),
-      history: context.read<HistoryProvider>(),
-      typed: _keyController.text,
-      askForKey: _keyPanel.currentState?.askForKey ?? _askForKey,
-      keyFocus: _keyFocus,
-    );
+    final askForKey = _keyPanel.currentState?.askForKey ?? _askForKey;
+    final proceed = !askForKey
+        ? true
+        : await acceptTypedRecoveryKey(
+            context: context,
+            sync: context.read<SyncProvider>(),
+            history: context.read<HistoryProvider>(),
+            typed: _keyController.text,
+            askForKey: true,
+            keyFocus: _keyFocus,
+          );
     if (!proceed || !mounted) {
       if (mounted) setState(() => _isLoading = false);
       return;

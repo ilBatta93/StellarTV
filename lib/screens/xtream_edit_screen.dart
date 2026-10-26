@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/app_provider.dart';
 import '../models/content_type.dart';
 import '../models/catalog_load_state.dart';
+import '../providers/history_provider.dart';
 import '../providers/sync_provider.dart';
 import '../services/device_type_service.dart';
 import '../services/settings_service.dart';
@@ -13,6 +15,7 @@ import '../widgets/auth_scaffold.dart';
 import '../widgets/tv_text_field.dart';
 import '../services/key_handoff.dart';
 import '../widgets/phone_handoff_panel.dart';
+import '../widgets/recovery_key_entry.dart';
 
 class XtreamEditScreen extends StatefulWidget {
   const XtreamEditScreen({super.key});
@@ -24,11 +27,15 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
   final _server = TextEditingController();
   final _user = TextEditingController();
   final _password = TextEditingController();
+  final _key = TextEditingController();
   final _userFocus = FocusNode();
   final _passwordFocus = FocusNode();
+  final _keyFocus = FocusNode();
+  final _keyPanel = GlobalKey<RecoveryKeyPanelState>();
   bool _busy = false;
   bool _obscure = true;
   bool _phone = false;
+  bool _askForKey = false;
   @override
   void initState() {
     super.initState();
@@ -43,8 +50,10 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
     _server.dispose();
     _user.dispose();
     _password.dispose();
+    _key.dispose();
     _userFocus.dispose();
     _passwordFocus.dispose();
+    _keyFocus.dispose();
     super.dispose();
   }
 
@@ -58,13 +67,8 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
     final server = _server.text.trim();
     final username = _user.text.trim();
     final password = _password.text;
-    final uri = Uri.tryParse(server);
-    if (uri == null ||
-        !['http', 'https'].contains(uri.scheme) ||
-        uri.host.isEmpty ||
-        username.isEmpty ||
-        password.isEmpty) {
-      _notice('Inserisci un URL http/https valido, nome utente e password.');
+    if (username.isEmpty || password.isEmpty) {
+      _notice('Inserisci nome utente e password.');
       return;
     }
     final app = context.read<AppProvider>();
@@ -76,18 +80,40 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
     setState(() => _busy = true);
     FocusManager.instance.primaryFocus?.unfocus();
     try {
+      await _keyPanel.currentState?.ready;
+      if (!mounted) return;
+      final auth = await XtreamService().authenticate(
+        server: server,
+        username: username,
+        password: password,
+      );
+      if (!mounted) return;
+      if (!auth.ok) {
+        _notice(auth.message);
+        return;
+      }
+      if (app.isRefreshingAny) {
+        _notice('Attendi il completamento dell’aggiornamento della lista.');
+        return;
+      }
+      final askForKey = _keyPanel.currentState?.askForKey ?? _askForKey;
+      final proceed = !askForKey
+          ? true
+          : await acceptTypedRecoveryKey(
+              context: context,
+              sync: sync,
+              history: context.read<HistoryProvider>(),
+              typed: _key.text,
+              askForKey: true,
+              keyFocus: _keyFocus,
+            );
+      if (!proceed || !mounted) return;
+      if (app.isRefreshingAny) {
+        _notice('Attendi il completamento dell’aggiornamento della lista.');
+        return;
+      }
       final result = await saveXtreamEdit(
-        authenticate: () async {
-          final valid = await XtreamService().authenticate(
-            server: server,
-            username: username,
-            password: password,
-          );
-          // Recheck after network validation before writing any credentials.
-          if (app.isRefreshingAny)
-            throw StateError('Catalog refresh in progress');
-          return valid;
-        },
+        authenticate: () async => true,
         persist: () => SettingsService().setXtreamCredentials(
           server: server,
           username: username,
@@ -102,9 +128,7 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
       );
       if (!mounted) return;
       if (!result.saved) {
-        _notice(
-          'Credenziali non valide. La lista precedente non è stata modificata.',
-        );
+        _notice('La lista precedente non è stata modificata.');
       } else {
         if (sync.isSignedIn && !result.synced) sync.schedulePush();
         final incomplete = [
@@ -172,8 +196,11 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
                 TvTextField(
                   controller: _password,
                   focusNode: _passwordFocus,
+                  nextFocus: _askForKey ? _keyFocus : null,
                   obscureText: _obscure,
-                  textInputAction: TextInputAction.done,
+                  textInputAction: _askForKey
+                      ? TextInputAction.next
+                      : TextInputAction.done,
                   decoration: InputDecoration(
                     labelText: 'Password',
                     prefixIcon: const Icon(Icons.lock_outline_rounded),
@@ -193,40 +220,57 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
                     ),
                   ),
                 ),
-        if (context.watch<SyncProvider>().isSignedIn) ...[
-          const SizedBox(height: 16),
-          if (_phone)
-            PhoneHandoffPanel(
-              mode: 'x',
-              onReceived: (raw) {
-                final x = XtreamHandoff.parse(raw);
-                setState(() => _phone = false);
-                if (x == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Dati ricevuti non validi. Riprova.')));
-                  return;
-                }
-                _server.text = x.server;
-                _user.text = x.username;
-                _password.text = x.password;
-                _save();
-              },
-              onClose: (m) {
-                setState(() => _phone = false);
-                if (m != null) ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text(m)));
-              },
-            )
-          else
-            AuthAction(
-              onPressed: () => setState(() => _phone = true),
-              child: OutlinedButton.icon(
-                onPressed: () => setState(() => _phone = true),
-                icon: const Icon(Icons.smartphone),
-                label: const Text('Inserisci dal telefono'),
-              ),
-            ),
-        ],
+                const SizedBox(height: 16),
+                RecoveryKeyPanel(
+                  key: _keyPanel,
+                  controller: _key,
+                  focusNode: _keyFocus,
+                  onSubmitted: (_) => _save(),
+                  onVisibility: (visible) {
+                    if (_askForKey == visible || !mounted) return;
+                    setState(() => _askForKey = visible);
+                  },
+                ),
+                if (context.watch<SyncProvider>().isSignedIn) ...[
+                  const SizedBox(height: 16),
+                  if (_phone)
+                    PhoneHandoffPanel(
+                      mode: 'x',
+                      onReceived: (raw) {
+                        final x = XtreamHandoff.parse(raw);
+                        setState(() => _phone = false);
+                        if (x == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Dati ricevuti non validi. Riprova.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+                        _server.text = x.server;
+                        _user.text = x.username;
+                        _password.text = x.password;
+                        _save();
+                      },
+                      onClose: (m) {
+                        setState(() => _phone = false);
+                        if (m != null)
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(m)));
+                      },
+                    )
+                  else
+                    AuthAction(
+                      onPressed: () => setState(() => _phone = true),
+                      child: OutlinedButton.icon(
+                        onPressed: () => setState(() => _phone = true),
+                        icon: const Icon(Icons.smartphone),
+                        label: const Text('Inserisci dal telefono'),
+                      ),
+                    ),
+                ],
                 const SizedBox(height: 24),
                 AuthAction(
                   onPressed: save,

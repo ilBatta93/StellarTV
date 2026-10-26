@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
+
 import 'package:http/http.dart' as http;
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/series_details.dart';
+import 'source_login_result.dart';
 import 'xtream_downloader.dart';
 import 'image_url.dart';
 export 'image_url.dart' show cleanImageUrl;
@@ -179,19 +182,30 @@ class XtreamService {
     return data;
   }
 
-  Future<bool> authenticate({
+  Future<SourceLoginResult> authenticate({
     required String server,
     required String username,
     required String password,
   }) async {
-    final apiUrl = _buildApiUrl(server, username, password);
-    final response = await http.get(Uri.parse(apiUrl), headers: _headers);
-    if (response.statusCode != 200) return false;
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final userInfo = data['user_info'] as Map<String, dynamic>?;
-    if (userInfo == null) return false;
-    final status = userInfo['auth'] ?? 0;
-    return status == 1;
+    final invalid = invalidSourceAddress(server);
+    if (invalid != null) return invalid;
+    try {
+      final apiUrl = _buildApiUrl(server, username, password);
+      final response = await http
+          .get(Uri.parse(apiUrl), headers: _headers)
+          .timeout(const Duration(seconds: 20));
+      Object? body;
+      if (response.statusCode == 200) {
+        try {
+          body = jsonDecode(response.body);
+        } on FormatException catch (error) {
+          return classifySourceLogin(error: error);
+        }
+      }
+      return classifySourceLogin(statusCode: response.statusCode, body: body);
+    } catch (error) {
+      return classifySourceLogin(error: error);
+    }
   }
 
   Future<List<Channel>> _section(
@@ -462,4 +476,3 @@ _LenientJson _decodeLenient(Uint8List bytes) {
     diagnostic: 'ricevuti ${bytes.length ~/ 1024} KB non leggibili',
   );
 }
-

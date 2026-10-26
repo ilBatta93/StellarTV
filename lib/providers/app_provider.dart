@@ -19,6 +19,7 @@ import '../services/title_category_index.dart';
 import '../services/playlist_refresh_service.dart';
 import '../services/playback_work_policy.dart';
 import '../services/foreground_policy.dart';
+import '../services/source_login_result.dart';
 import '../services/xtream_service.dart';
 import '../services/cloud_favorites_service.dart';
 import '../services/favorites_service.dart';
@@ -325,7 +326,9 @@ class AppProvider extends ChangeNotifier {
       return;
     }
     final ids = [for (final entry in entries) entry.primary.id];
-    final names = [for (final entry in entries) entry.primary.displaySeriesName];
+    final names = [
+      for (final entry in entries) entry.primary.displaySeriesName,
+    ];
     final channels = [for (final entry in entries) entry.primary];
     unawaited(() async {
       await CatalogRatingService.instance.ensureLoaded();
@@ -1817,19 +1820,22 @@ class AppProvider extends ChangeNotifier {
     required String server,
     required String username,
     required String password,
+    SourceLoginResult? verified,
   }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final ok = await _xtreamService.authenticate(
-        server: server,
-        username: username,
-        password: password,
-      );
-      if (!ok) {
-        _error = 'Autenticazione non riuscita. Controlla le credenziali.';
+      final result = verified != null && verified.ok
+          ? verified
+          : await _xtreamService.authenticate(
+              server: server,
+              username: username,
+              password: password,
+            );
+      if (!result.ok) {
+        _error = result.message;
         _isLoading = false;
         notifyListeners();
         return false;
