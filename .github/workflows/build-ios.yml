@@ -42,6 +42,8 @@ jobs:
           echo "Versione: $V (build $BUILD)"
 
       - name: Note di rilascio neutrali
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python3 -m unittest discover -s scripts -p '*_test.py'
           python3 scripts/release_notes.py "$VERSION"
@@ -138,6 +140,7 @@ jobs:
         with:
           tag_name: "v${{ env.VERSION }}"
           name: "StellarTV v${{ env.VERSION }}"
+          target_commitish: ${{ github.sha }}
           body_path: RELEASE_NOTES.md
           files: dist/*.ipa
           draft: false
@@ -153,6 +156,7 @@ jobs:
           token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: "v${{ env.VERSION }}"
           name: "StellarTV v${{ env.VERSION }}"
+          target_commitish: ${{ github.sha }}
           body_path: RELEASE_NOTES.md
           files: dist/*.ipa
           draft: false

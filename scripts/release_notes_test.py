@@ -1,5 +1,5 @@
 import unittest
-from release_notes import fresh_lines, render, series_version
+from release_notes import fresh_lines, previous_build_sha, render, select_notes, series_version
 
 class NotesTest(unittest.TestCase):
     def test_series_38_starts_at_build_108(self):
@@ -18,5 +18,25 @@ class NotesTest(unittest.TestCase):
     def test_notes_keep_only_lines_absent_from_the_previous_release(self):
         fresh = fresh_lines('- Nuova voce\n- Voce già pubblicata\n', '- Voce già pubblicata\n')
         self.assertEqual(fresh, ['Nuova voce'])
+    def test_notes_after_the_last_built_commit_drop_older_lines(self):
+        current = '- Voce nuova\n- Voce del commit già compilato\n- Altra voce vecchia\n'
+        built = '- Voce del commit già compilato\n- Altra voce vecchia\n'
+        self.assertEqual(select_notes(current, built, ['lib/main.dart']), ['Voce nuova'])
+    def test_library_change_without_a_new_line_fails(self):
+        with self.assertRaises(ValueError):
+            select_notes('- Voce già pubblicata\n', '- Voce già pubblicata\n', ['lib/main.dart'])
+    def test_unchanged_notes_are_empty_when_the_library_did_not_change(self):
+        self.assertEqual(
+            select_notes('- Voce già pubblicata\n', '- Voce già pubblicata\n', ['scripts/release_notes.py']),
+            [],
+        )
+    def test_previous_build_is_the_newest_successful_commit(self):
+        runs = [
+            {'databaseId': 9, 'headSha': 'current'},
+            {'databaseId': 8, 'headSha': 'last-built'},
+            {'databaseId': 7, 'headSha': 'older'},
+        ]
+        self.assertEqual(previous_build_sha(runs, 9), 'last-built')
+        self.assertEqual(previous_build_sha([{'databaseId': 1, 'headSha': ''}], None), None)
 
 if __name__ == '__main__': unittest.main()
