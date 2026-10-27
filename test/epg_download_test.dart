@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/providers/epg_provider.dart';
 import '../lib/services/epg_archive.dart';
 import '../lib/services/epg_downloader.dart';
 
@@ -193,5 +194,41 @@ void main() {
       await server.close(force: true);
       await directory.delete(recursive: true);
     }
+  });
+
+  test('an empty guide does not replace programmes or count as fresh', () {
+    expect(
+      epgKeepsPreviousGuide(previousCount: 40, incomingCount: 0),
+      isTrue,
+    );
+    expect(
+      epgKeepsPreviousGuide(previousCount: 0, incomingCount: 0),
+      isFalse,
+    );
+    expect(epgGuideIsFresh(0), isFalse);
+    expect(epgGuideIsFresh(3), isTrue);
+    final now = DateTime.utc(2026, 10, 26, 22);
+    expect(
+      epgGuideNeedsRefresh(
+        empty: false,
+        programmeCount: 0,
+        hasChannels: true,
+        lastRun: now,
+        intervalMinutes: 1440,
+        now: now.add(const Duration(minutes: 10)),
+      ),
+      isTrue,
+    );
+    expect(
+      epgGuideNeedsRefresh(
+        empty: false,
+        programmeCount: 12,
+        hasChannels: true,
+        lastRun: now,
+        intervalMinutes: 1440,
+        now: now.add(const Duration(minutes: 10)),
+      ),
+      isFalse,
+    );
   });
 }

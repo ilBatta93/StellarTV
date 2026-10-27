@@ -25,6 +25,7 @@ import '../widgets/tv_filter_panel.dart';
 import '../widgets/tv_catalog_navigation.dart';
 import '../widgets/tv_focusable.dart';
 import '../services/title_facet_index.dart';
+import '../services/image_cache_service.dart';
 import '../services/image_warmup_service.dart';
 import '../services/platform_catalog_service.dart';
 import '../models/streaming_platform.dart';
@@ -552,9 +553,10 @@ class _CatalogPageState extends State<CatalogPage> {
         if (!mounted) return;
         final provider = this.context.read<AppProvider>();
         final recent = provider.recentEntries(widget.type);
+        final decodeWidth = PosterMemoryWarmup.width;
         final posters = [
           for (var i = 0; i < recent.length && i < 24; i++)
-            recent[i].primary.logo,
+            tmdbSizedUrl(recent[i].primary.logo, decodeWidth),
         ];
         ImageWarmupService.warm(posters);
         if (DeviceTypeService.isTv) {

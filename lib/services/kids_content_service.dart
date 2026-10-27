@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'foreground_http_client.dart';
 import 'playback_work_policy.dart';
 
@@ -181,26 +183,39 @@ class KidsContentService {
 
   /// Queues unknown titles and checks them in the background.
   void request(Iterable<Channel> items) {
-    for (final c in items) {
-      if (c.type != ContentType.movie &&
-          c.type != ContentType.series &&
-          c.type != ContentType.anime) {
-        continue;
-      }
-      final key = keyOf(c);
+    requestIndexed([
+      for (final c in items)
+        if (c.type == ContentType.movie ||
+            c.type == ContentType.series ||
+            c.type == ContentType.anime)
+          (key: keyOf(c), title: _titleOf(c)),
+    ]);
+  }
+
+  /// Same queue as [request], using facet keys and display names that are
+  /// already in memory. The catalog warmup must not open title files for this.
+  void requestIndexed(Iterable<({String key, String title})> items) {
+    final now = DateTime.now();
+    for (final item in items) {
+      final key = item.key;
+      if (key.isEmpty) continue;
       if (_verdicts.containsKey(key) &&
           _certifications.containsKey(key) &&
           TitleFacetIndex.instance.genresFresh(key)) {
         continue;
       }
+      final title = item.title.trim();
       _work.add(
         key,
-        '${key.split(':').first}\u0000${_titleOf(c)}',
-        DateTime.now(),
+        '${key.split(':').first}\u0000${title.isEmpty ? key : title}',
+        now,
       );
     }
     if (!_running) unawaited(_run());
   }
+
+  @visibleForTesting
+  Iterable<String> get queuedKeys => _work.pending.keys;
 
   /// Bulk-reads titles already classified in the cloud (shared by every
   /// device and profile), so only truly new titles hit the slow check.

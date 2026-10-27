@@ -103,12 +103,11 @@ class _HomeTitleArtState extends State<HomeTitleArt> {
           if (!context.select<UiSettings, bool>((ui) => ui.showPosters)) {
             return fallback;
           }
-          // A pending lookup is not evidence that the title has no logo.
-          // Never flash text (or the previous title's logo) during a swap.
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const SizedBox.expand();
+          // The title stays readable while the logo is resolved, then the
+          // artwork replaces it. A new item already dropped the previous logo.
+          if (snapshot.connectionState != ConnectionState.done || url == null) {
+            return fallback;
           }
-          if (url == null) return fallback;
           return Semantics(
             label: title,
             image: true,
@@ -119,7 +118,7 @@ class _HomeTitleArtState extends State<HomeTitleArt> {
               alignment: Alignment.centerLeft,
               memCacheWidth: 640,
               fadeInDuration: Duration.zero,
-              placeholder: (_, _) => const SizedBox.expand(),
+              placeholder: (_, _) => fallback,
               errorWidget: (_, _, _) => fallback,
             ),
           );

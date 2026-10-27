@@ -1,7 +1,7 @@
-- Banner e locandine tornano visibili. Senza codice il profilo bambino resta chiuso. Il riavvolgimento compare solo se è possibile.
-- Il catalogo si ordina fuori dall'interfaccia, che resta scorrevole mentre l'elenco si prepara.
+- Locandine e titoli restano visibili mentre si scorrono le schede. Senza codice il profilo bambino resta chiuso. Il riavvolgimento compare solo se è possibile.
+- Il catalogo si prepara fuori dall'interfaccia, che resta scorrevole mentre l'elenco è già pronto.
 - Con più collegamenti ammessi il flusso successivo parte senza attendere la chiusura del precedente.
-- La guida programmi si apre dai titoli già pronti e resta utilizzabile anche quando è molto estesa.
+- La guida programmi non sostituisce i programmi già pronti con un aggiornamento vuoto.
 - I canali già caricati restano in guida anche se l'indice non è ancora pronto.
 - La ricerca in diretta trova un programma mentre si scrive, senza scorrere tutta la programmazione.
 - La descrizione di un programma compare quando lo si apre.
@@ -10,4 +10,4 @@
 - Il telecomando resta attivo sulla diretta già aperta durante l'arrivo delle sezioni successive.
 - Il profilo bambino filtra il catalogo senza attendere la lettura di ogni titolo.
 - All'avvio la diretta e il catalogo compaiono dai dati già salvati, senza ripetere lo scaricamento.
-- La diretta si apre con il riproduttore più adatto al flusso televisivo. Se un canale non parte, l'app prova l'altro riproduttore.
+- Se l'anteprima ha già l'immagine, la diretta continua con lo stesso riproduttore. Se un canale non parte, l'app prova l'altro.

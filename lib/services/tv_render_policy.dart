@@ -6,6 +6,13 @@ class TvRenderPolicy {
   static int decodeLimit({required bool isTv, required bool memoryPressure}) =>
       isTv ? (memoryPressure ? 640 : 960) : 1280;
 
+  /// TV panels are watched from across the room. Decoding at the logical
+  /// width keeps the 40 MB image cache on the posters that are on screen.
+  static double imagePixelRatio({
+    required bool isTv,
+    required double devicePixelRatio,
+  }) => isTv || devicePixelRatio <= 0 ? 1 : devicePixelRatio;
+
   /// Full-screen backdrop decode cap: 1280 px normally, 960 px under pressure.
   static int backdropDecodeLimit({required bool memoryPressure}) =>
       memoryPressure ? 960 : 1280;

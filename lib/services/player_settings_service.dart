@@ -126,9 +126,10 @@ class PlayerSettingsService {
     SyncHooks.settingsChanged();
   }
 
-  /// TV live playback starts with mpv. ExoPlayer stays the automatic
-  /// fallback when mpv cannot open the stream. Preview and MultiView keep
-  /// their own ExoPlayer start and are not affected here.
+  /// TV live playback starts with mpv, unless the Diretta preview of that
+  /// channel already drew a frame: fullscreen then opens ExoPlayer and keeps
+  /// mpv as the fallback. The saved choice is not rewritten. Preview and
+  /// MultiView keep their own ExoPlayer start.
   static void _liveDefaults(PlayerSettings s) {
     if (!DeviceTypeService.isTv) return;
     s.primaryEngine = PlayerEngineType.mediakit;

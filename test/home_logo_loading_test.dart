@@ -16,7 +16,7 @@ class LogoTmdb extends TmdbService {
 
 void main() {
   testWidgets(
-    'Title fallback waits until logo lookup definitively has no result',
+    'Title text stays visible until a logo replaces it',
     (tester) async {
       final tmdb = LogoTmdb();
       final item = TmdbItem(
@@ -41,7 +41,7 @@ void main() {
           ),
         ),
       );
-      expect(find.byType(Text), findsNothing);
+      expect(find.text('Titolo'), findsOneWidget);
       tmdb.result.complete(null);
       await tester.pump();
       expect(find.byType(Text), findsOneWidget);

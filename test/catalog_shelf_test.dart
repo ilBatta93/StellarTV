@@ -120,6 +120,28 @@ void main() {
     expect(restored.readSlot(slot).name, 'Il Padrino');
     expect(CatalogShelf.diskReads, 1);
   });
+
+  test('kids warmup pairs facet keys without reading titles', () async {
+    final shelf = await CatalogShelf.fromChannels(
+      [row(1, name: 'Il Padrino'), row(2, name: 'Inception')],
+      hidden: const {},
+      custom: const [],
+      order: const {},
+    );
+    addTearDown(shelf.close);
+    final slot = shelf.plan(ContentType.movie)!.alphabetical.first;
+    CatalogShelf.diskReads = 0;
+    CatalogShelf.forbidDiskReads = true;
+    try {
+      final pairs = shelf.kidsIndexPairs([shelf.idAt(slot)], ['Il Padrino']);
+      expect(pairs, hasLength(1));
+      expect(pairs.single.key, shelf.facetKeyAt(slot));
+      expect(pairs.single.title, 'Il Padrino');
+      expect(CatalogShelf.diskReads, 0);
+    } finally {
+      CatalogShelf.forbidDiskReads = false;
+    }
+  });
 }
 
 void writeSection(File file, List<Channel> rows) {

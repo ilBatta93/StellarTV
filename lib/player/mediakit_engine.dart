@@ -95,12 +95,29 @@ class MediaKitEngine extends PlaybackEngine {
   }) {
     if (!reconnect) return 'reconnect=0';
     if (live) {
+      // A continuous MPEG-TS often ends the socket between bursts. Waiting
+      // out reconnect_delay_max froze the picture for that whole delay.
       return 'reconnect=1,reconnect_at_eof=1,reconnect_on_network_error=1,'
-          'reconnect_delay_max=2';
+          'reconnect_delay_max=0';
     }
     return 'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,'
         'reconnect_delay_max=5';
   }
+
+  /// Live TV decodes broadcast H.264 in FFmpeg while the hardware allowlist
+  /// is only the progressive codecs. That path needs the cheap decoder
+  /// before a black-picture retry sets [softwareDecode].
+  @visibleForTesting
+  static bool useCheapLiveDecode({
+    required bool tv,
+    required bool live,
+    required bool softwareDecode,
+  }) => softwareDecode || (tv && live);
+
+  /// Four threads on a four-core stick leave nothing for the picture.
+  @visibleForTesting
+  static String decoderThreads({required bool tv, required bool live}) =>
+      !tv ? '0' : live ? '2' : '4';
 
   /// TV boxes have weak GPUs: mpv's high-quality scalers and dithering
   /// dropped frames at 1080p/4K. Fast scaling looks the same at TV distance.
@@ -133,13 +150,26 @@ class MediaKitEngine extends PlaybackEngine {
           : isLive
           ? (DeviceTypeService.isFireTv ? '6' : '3')
           : '20',
-      'vd-lavc-fast': (DeviceTypeService.isFireTv || softwareDecode)
+      'vd-lavc-fast':
+          (DeviceTypeService.isFireTv ||
+              useCheapLiveDecode(
+                tv: DeviceTypeService.isTv,
+                live: isLive,
+                softwareDecode: softwareDecode,
+              ))
           ? 'yes'
           : 'no',
       // Software decoding of broadcast 1080i: cheap deinterlacing, skip the
-      // loop filter so weak TV CPUs keep up.
+      // loop filter so weak TV CPUs keep up. Live TV already decodes
+      // H.264, MPEG-2 and VC-1 in FFmpeg even before a black-picture retry,
+      // so that cheaper path starts immediately.
       if (softwareDecode) 'deinterlace': 'yes',
-      if (softwareDecode) 'vd-lavc-skiploopfilter': 'nonref',
+      if (useCheapLiveDecode(
+        tv: DeviceTypeService.isTv,
+        live: isLive,
+        softwareDecode: softwareDecode,
+      ))
+        'vd-lavc-skiploopfilter': 'nonref',
       // A deeper audio buffer absorbs Android audio-driver hiccups, so
       // mpv no longer repeats/skips frames to chase the audio clock.
       'audio-buffer': '0.5',
@@ -163,7 +193,10 @@ class MediaKitEngine extends PlaybackEngine {
       if (!isLive && !previewMode) 'cache-secs': '30',
       // Auto threads oversubscribed entry-level quad-core TV CPUs and
       // starved the render thread; phones keep automatic detection.
-      'vd-lavc-threads': DeviceTypeService.isTv ? '4' : '0',
+      'vd-lavc-threads': decoderThreads(
+        tv: DeviceTypeService.isTv,
+        live: isLive,
+      ),
     };
     for (final entry in options.entries) {
       try {

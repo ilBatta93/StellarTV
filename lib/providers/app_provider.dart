@@ -167,6 +167,7 @@ class AppProvider extends ChangeNotifier {
   final Map<ContentType, int> _genreCountsVersions = {};
   final Map<ContentType, Future<void>> _genreCountJobs = {};
   List<Channel>? _favoritesCache;
+  final Map<ContentType, _RecentWatchMemo> _watchedMemos = {};
 
   Map<String, List<String>> _titleCategories = const {};
   Timer? _titleCategoriesTimer;
@@ -245,6 +246,7 @@ class AppProvider extends ChangeNotifier {
     _genreCountJobs.clear();
     _favoritesCache = null;
     _matchCache.clear();
+    _watchedMemos.clear();
   }
 
   List<Channel> channelsOf(ContentType type) =>
@@ -565,10 +567,7 @@ class AppProvider extends ChangeNotifier {
     _rebuildMask();
     _publishShelf(notify: false);
     if (!identical(previous, shelf)) previous.close();
-    if (bumpWarmup) {
-      _schedulePrewarm();
-      unawaited(_warmShelf());
-    }
+    if (bumpWarmup) _schedulePrewarm();
     notifyListeners();
   }
 
@@ -670,27 +669,9 @@ class AppProvider extends ChangeNotifier {
       await _shelf.warmNames(type, (ids, names) {
         if (_disposed || epoch != _shelfEpoch) return;
         unawaited(TitleFacetIndex.instance.rank(type, ids, names));
+        _kids.requestIndexed(_shelf.kidsIndexPairs(ids, names));
       });
     } catch (_) {}
-  }
-
-  Future<void> _warmShelf() async {
-    if (_shelf.isEmpty || _playbackActive) return;
-    final slots = [
-      ..._shelf.slotsOfType(ContentType.movie),
-      ..._shelf.slotsOfType(ContentType.series),
-      ..._shelf.slotsOfType(ContentType.anime),
-    ];
-    for (var start = 0; start < slots.length; start += 80) {
-      if (_disposed || _playbackActive || !ForegroundPolicy.instance.active) {
-        return;
-      }
-      final end = start + 80 < slots.length ? start + 80 : slots.length;
-      _kids.request([
-        for (var i = start; i < end; i++) _shelf.readSlot(slots[i]),
-      ]);
-      await Future<void>.delayed(const Duration(milliseconds: 30));
-    }
   }
 
   void _setChannels(List<Channel> channels) {
@@ -1029,6 +1010,16 @@ class AppProvider extends ChangeNotifier {
     List<HistoryEntry> history, {
     int limit = 100,
   }) {
+    final token = _historyToken(history);
+    final cached = _watchedMemos[type];
+    if (cached != null &&
+        cached.token == token &&
+        cached.kids == _kidsMode &&
+        cached.version == _titleInfoVersion &&
+        cached.epoch == _shelfEpoch &&
+        cached.limit == limit) {
+      return cached.entries;
+    }
     final sorted = [...history]
       ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
     final seen = <String>{};
@@ -1045,7 +1036,29 @@ class AppProvider extends ChangeNotifier {
       if (!seen.add(c.id)) continue;
       out.add(CatalogEntry(primary: c, variants: [c]));
     }
+    _watchedMemos[type] = _RecentWatchMemo(
+      token: token,
+      kids: _kidsMode,
+      version: _titleInfoVersion,
+      epoch: _shelfEpoch,
+      limit: limit,
+      entries: out,
+    );
     return out;
+  }
+
+  static int _historyToken(List<HistoryEntry> history) {
+    var token = history.length;
+    for (final entry in history) {
+      token = Object.hash(
+        token,
+        entry.contentId,
+        entry.type.index,
+        entry.seriesKey,
+        entry.lastWatchedAt.microsecondsSinceEpoch,
+      );
+    }
+    return token;
   }
 
   /// Basic handling: every playlist item is played as it is, no merging of
@@ -1986,4 +1999,22 @@ class AppProvider extends ChangeNotifier {
     _shelf.close();
     super.dispose();
   }
+}
+
+class _RecentWatchMemo {
+  const _RecentWatchMemo({
+    required this.token,
+    required this.kids,
+    required this.version,
+    required this.epoch,
+    required this.limit,
+    required this.entries,
+  });
+
+  final int token;
+  final bool kids;
+  final int version;
+  final int epoch;
+  final int limit;
+  final List<CatalogEntry> entries;
 }

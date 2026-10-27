@@ -266,6 +266,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
 
   void _select(Channel channel, [EpgProgram? program]) {
     final same = _selectedChannel?.id == channel.id;
+    if (!same) context.read<EpgProvider>().reopenShort(channel);
     setState(() {
       _selectedChannel = channel;
       _selectedProgram = program;
@@ -326,10 +327,16 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   }
 
   Future<void> _watch(Channel channel) async {
+    final previewDrew =
+        DeviceTypeService.isTv &&
+        _selectedChannel?.id == channel.id &&
+        _preview?.engine?.videoFrameRendered == true;
     _stopPreview();
     setState(() {});
     if (!StreamSlotPolicy.instance.allowsOverlap) await _releaseQueue;
-    if (mounted && widget.active) playChannel(context, channel);
+    if (mounted && widget.active) {
+      playChannel(context, channel, openedWithPreviewFrame: previewDrew);
+    }
   }
 
   // Proportional guide: one shared time window for every channel row, with

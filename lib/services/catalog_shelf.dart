@@ -1318,6 +1318,24 @@ class CatalogShelf implements CatalogChannelSource {
 
   String facetKeyAt(int slot) => _image.facetKeys[slot];
 
+  /// Pairs facet keys already stored on the shelf with display names read
+  /// off the UI isolate. Does not open a title.
+  List<({String key, String title})> kidsIndexPairs(
+    List<String> ids,
+    List<String> names,
+  ) {
+    final out = <({String key, String title})>[];
+    final count = ids.length < names.length ? ids.length : names.length;
+    for (var i = 0; i < count; i++) {
+      final slot = _slotOf(ids[i]);
+      if (slot == null) continue;
+      final key = _image.facetKeys[slot];
+      if (key.isEmpty) continue;
+      out.add((key: key, title: names[i]));
+    }
+    return out;
+  }
+
   bool isFolderSlot(int slot) => (_image.flags[slot] & shelfFlagFolder) != 0;
 
   String idAt(int slot) => _image.ids[slot];

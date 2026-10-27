@@ -10,8 +10,8 @@ Aggiorna la frase del vincolo. Non aggiungere un paragrafo di cronologia.
 
 - Le sezioni della playlist si scaricano in un isolate, con parser JSON in streaming e timeout limitati. Una lista di almeno 500 titoli troncata o fallita non viene pubblicata come pronta e resta ritentabile. Una alla volta, in coda condivisa. Pubblicazione e cache sono per sezione e si possono ritentare da sole. La pagina usa una cornice condivisa con progresso reale, nuovo tentativo e copia salvata, su touch e TV.
 - All'avvio la playlist si apre dalla copia sul dispositivo. Si scaricano subito solo le sezioni mai salvate. Un refresh completo parte solo se è passato l'intervallo scelto dall'ultimo download completo.
-- Le cache derivate grandi (verdetti bambino, sezioni playlist) vanno su file tramite isolate, a lotti. Mai nelle preferenze né sul thread UI.
-- Ogni immagine di rete passa da un solo gestore di cache su disco ed è decodificata alla dimensione di visualizzazione.
+- Le cache derivate grandi (verdetti bambino, sezioni playlist) vanno su file tramite isolate, a lotti. I verdetti si accodano dalle chiavi già in indice e dai nomi letti in un isolate, senza aprire i titoli sul thread dell'interfaccia. Mai nelle preferenze né sul thread UI.
+- Ogni immagine di rete passa da un solo gestore di cache su disco ed è decodificata alla dimensione di visualizzazione; sulla TV il rapporto è 1, così la cache tiene le locandine visibili.
 - Le griglie memoizzano le liste filtrate per istanza della sorgente, genere e versione dei metadati. L'ordinamento continua a colpire la cache.
 - Ordine delle sezioni e sezione di avvio appartengono a UiSettings e usano id AppSection stabili. Navigazione e sync non dipendono dall'indice di posizione.
 - I download offline stanno in DownloadService, uno alla volta, con ripresa HTTP Range e file solo sul dispositivo. playChannel sostituisce il file locale. Gli id di cronologia e ripresa non cambiano.

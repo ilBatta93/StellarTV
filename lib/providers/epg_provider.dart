@@ -66,6 +66,7 @@ class EpgProvider extends ChangeNotifier {
   int _boundCatalog = -1;
   int? _bindingRevision;
   final Map<String, List<EpgProgram>> _short = {};
+  final Set<String> _shortEmpty = {};
   final Map<String, List<EpgTimelineSlot>> _shortSlots = {};
   final Map<String, _TrimmedTimeline> _shortTrimmed = {};
   final Set<String> _shortTried = {};
@@ -96,7 +97,7 @@ class EpgProvider extends ChangeNotifier {
   String? get error => _error;
   bool get hasData => !_data.isEmpty;
   bool get hasListings =>
-      hasData || _short.values.any((list) => list.isNotEmpty);
+      programmeCount > 0 || _short.values.any((list) => list.isNotEmpty);
   bool get degraded => _data.degraded;
   int get searchRevision => _searchRevision;
   bool get usePlaylistGuide => _usePlaylist;
@@ -199,6 +200,7 @@ class EpgProvider extends ChangeNotifier {
     _boundCatalog = -1;
     _prefixToken++;
     _short.clear();
+    _shortEmpty.clear();
     _shortSlots.clear();
     _shortTrimmed.clear();
     _shortTried.clear();
@@ -293,12 +295,14 @@ class EpgProvider extends ChangeNotifier {
     _timer?.cancel();
     _scheduledFor = _activeSources.join('|');
     if (_activeSources.isEmpty) return;
-    final due =
-        _data.isEmpty ||
-        _lastRun == null ||
-        (_intervalMinutes > 0 &&
-            DateTime.now().difference(_lastRun!) >=
-                Duration(minutes: _intervalMinutes));
+    final due = epgGuideNeedsRefresh(
+      empty: _data.isEmpty,
+      programmeCount: _data.programmeCount,
+      hasChannels: _data.channelIndex.isNotEmpty,
+      lastRun: _lastRun,
+      intervalMinutes: _intervalMinutes,
+      now: DateTime.now(),
+    );
     if (_playbackBlocked) {
       // Retain due work even when the first scheduling attempt happens while
       // a preview is active. Closing that session must resume the download.
@@ -343,6 +347,7 @@ class EpgProvider extends ChangeNotifier {
     notifyListeners();
     try {
       FrameTelemetryService.instance.mark('guida: download avviato');
+      final previousCount = _data.programmeCount;
       final data = await _service.fetch(sources);
       if (_disposed) {
         await _service.discard(data);
@@ -351,6 +356,23 @@ class EpgProvider extends ChangeNotifier {
       if (_playbackBlocked || sources.join('|') != _activeSources.join('|')) {
         await _service.discard(data);
         throw EpgRefreshDeferred();
+      }
+      if (!epgGuideIsFresh(data.programmeCount)) {
+        if (epgKeepsPreviousGuide(
+          previousCount: previousCount,
+          incomingCount: data.programmeCount,
+        )) {
+          await _service.discard(data);
+        } else {
+          final previous = _archive;
+          _archive = null;
+          previous?.close();
+          await _service.publish(data, sources);
+          _adopt(data);
+        }
+        FrameTelemetryService.instance.mark('guida: senza programmi');
+        _deferred = true;
+        return;
       }
       final previous = _archive;
       _archive = null;
@@ -536,6 +558,13 @@ class EpgProvider extends ChangeNotifier {
     ]);
   }
 
+  /// An empty short listing is not final. Focusing the row again may retry it.
+  void reopenShort(Channel channel) {
+    if (!_shortEmpty.remove(channel.id)) return;
+    _shortTried.remove(channel.id);
+    _short.remove(channel.id);
+  }
+
   void _requestShort(Channel channel) {
     if (_disposed || channel.type != ContentType.live) return;
     if (_short.containsKey(channel.id) || _shortTried.contains(channel.id)) return;
@@ -578,8 +607,12 @@ class EpgProvider extends ChangeNotifier {
       streamId: streamId,
     );
     if (_disposed) return;
+    if (list.isEmpty) {
+      _shortEmpty.add(channel.id);
+      return;
+    }
+    _shortEmpty.remove(channel.id);
     _short[channel.id] = list;
-    if (list.isEmpty) return;
     final match = _channelMatch[channel.id];
     if (match != null) {
       _timelines.remove(match);
@@ -654,4 +687,30 @@ class _TrimmedTimeline {
   final DateTime origin;
   final List<EpgTimelineSlot> slots;
   const _TrimmedTimeline(this.origin, this.slots);
+}
+
+/// A download with no programmes must not replace a guide that has some,
+/// and must not be treated as the daily success.
+@visibleForTesting
+bool epgKeepsPreviousGuide({
+  required int previousCount,
+  required int incomingCount,
+}) => incomingCount == 0 && previousCount > 0;
+
+@visibleForTesting
+bool epgGuideIsFresh(int incomingCount) => incomingCount > 0;
+
+@visibleForTesting
+bool epgGuideNeedsRefresh({
+  required bool empty,
+  required int programmeCount,
+  required bool hasChannels,
+  required DateTime? lastRun,
+  required int intervalMinutes,
+  required DateTime now,
+}) {
+  if (empty || lastRun == null) return true;
+  if (hasChannels && programmeCount == 0) return true;
+  if (intervalMinutes <= 0) return false;
+  return now.difference(lastRun) >= Duration(minutes: intervalMinutes);
 }

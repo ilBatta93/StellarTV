@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stellar_tv/services/kids_policy.dart';
 import 'package:stellar_tv/services/kids_content_service.dart';
+import 'package:stellar_tv/services/playback_work_policy.dart';
 import 'package:stellar_tv/models/channel.dart';
 import 'package:stellar_tv/models/content_type.dart';
 
@@ -115,5 +116,15 @@ void main() {
       expect(service.isKidsContent(item('Kids', 'Killer')), isFalse);
       expect(service.isKidsContent(item('Family')), isFalse);
     }
+  });
+
+  test('indexed kids warmup queues a facet key without a title file', () {
+    final owner = Object();
+    PlaybackWorkPolicy.instance.update(owner, cloudBlocked: true);
+    addTearDown(() => PlaybackWorkPolicy.instance.remove(owner));
+    final service = KidsContentService();
+    addTearDown(service.dispose);
+    service.requestIndexed([(key: 'movie:il padrino', title: 'Il Padrino')]);
+    expect(service.queuedKeys, ['movie:il padrino']);
   });
 }
