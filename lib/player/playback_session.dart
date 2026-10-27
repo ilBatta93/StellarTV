@@ -231,14 +231,15 @@ class PlaybackSession extends ChangeNotifier {
       _engine?.value ?? _held?.value ?? const PlaybackSnapshot();
 
   /// Channels already known to give a black picture with the hardware
-  /// decoder open directly in mpv with FFmpeg software decoding.
-  /// A preview that already drew wins: that picture came from ExoPlayer.
-  PlayerEngineType get _firstEngine => previewMode
+  /// decoder open directly in mpv with FFmpeg software decoding, including
+  /// the next preview. A preview that already drew, and is not one of those
+  /// channels, opens fullscreen on ExoPlayer.
+  PlayerEngineType get _firstEngine => _softwareDecode
+      ? PlayerEngineType.mediakit
+      : previewMode
       ? previewEngine(settings)
       : openedWithPreviewFrame
       ? PlayerEngineType.exo
-      : _softwareDecode
-      ? PlayerEngineType.mediakit
       : settings.primaryEngine;
 
   @visibleForTesting
