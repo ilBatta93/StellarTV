@@ -427,11 +427,13 @@ class ExoLoadProfile {
     if (live) {
       // Stay near the live edge. A multi-second floor paused the picture
       // for the whole rebuffer wait whenever the buffer dipped.
+      // maxBuffer 12 s absorbs provider jitter; rebuffer threshold 2 s is
+      // enough to catch a keyframe without raising first-frame latency.
       return ExoLoadProfile(
         minBufferMs: 800,
-        maxBufferMs: 8000,
+        maxBufferMs: 12000,
         bufferForPlaybackMs: 400,
-        bufferForPlaybackAfterRebufferMs: 600,
+        bufferForPlaybackAfterRebufferMs: 2000,
         backBufferMs: back,
         backBufferRequiresSeekable: true,
         targetBufferBytes: 0,

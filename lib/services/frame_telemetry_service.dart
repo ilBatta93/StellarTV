@@ -41,6 +41,9 @@ class FrameTelemetryService extends ChangeNotifier with WidgetsBindingObserver {
   DateTime _lastNotify = DateTime.fromMillisecondsSinceEpoch(0);
   String _route = 'avvio';
   String _lastMark = 'avvio';
+  /// Human-readable section visible to the user (home, diretta, film, serie, player).
+  /// Updated at tab changes; used as context in slow-frame records.
+  String _section = 'avvio';
   int? _firstFrameMs;
   final List<Map<String, Object?>> _marks = [];
   final List<Map<String, Object?>> _timeline = [];
@@ -182,6 +185,13 @@ class FrameTelemetryService extends ChangeNotifier with WidgetsBindingObserver {
     _event('schermata: $name');
   }
 
+  /// Called at tab changes to name the visible section (home, diretta, film,
+  /// serie, player). Shown as context in slow-frame entries instead of the
+  /// route type + last mark, which stuck the guide mark across screens.
+  void setSection(String section) {
+    _section = section;
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) =>
       _event('stato app: ${state.name}');
@@ -219,7 +229,9 @@ class FrameTelemetryService extends ChangeNotifier with WidgetsBindingObserver {
         totalUs: total,
         vsyncUs: t.vsyncOverhead.inMicroseconds,
         atMs: sinceLaunch.elapsedMilliseconds,
-        context: '$_route · $_lastMark',
+        // Use the visible section, not the route type + last mark which was
+        // sticking 'guida: pronta' to every subsequent screen.
+        context: _section,
       );
     }
     final now = DateTime.now();
@@ -257,6 +269,7 @@ class FrameTelemetryService extends ChangeNotifier with WidgetsBindingObserver {
         'peakImageCacheMb': _peakImageMb,
         'imageCacheLimitMb': cache.maximumSizeBytes >> 20,
         'images': cache.currentSize,
+        'imageCacheLimit': cache.maximumSize,
         'liveImages': cache.liveImageCount,
         'pendingImages': cache.pendingImageCount,
       },

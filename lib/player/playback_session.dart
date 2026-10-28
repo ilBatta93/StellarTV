@@ -574,7 +574,7 @@ class PlaybackSession extends ChangeNotifier {
 
   void _handoff(PlaybackEngine previous) {
     _cancelHealth();
-    _diagnostics?.end();
+    _diagnostics?.end(reason: 'replaced');
     _vod?.end();
     previous.removeListener(_onEngineChanged);
     _held = previous;
@@ -1461,7 +1461,7 @@ class PlaybackSession extends ChangeNotifier {
     _disposed = true;
     _cancelHealth();
     _diagnosticTimer?.cancel();
-    _diagnostics?.end();
+    _diagnostics?.end(reason: 'left');
     _vod?.end();
     if (_diagnosticListening)
       _diagnosticService.removeListener(_diagnosticPreference);

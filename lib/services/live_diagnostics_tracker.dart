@@ -14,6 +14,11 @@ class LiveDiagnosticsTracker {
   int attempt = 0;
   bool observed = false;
   bool running = false;
+
+  // clock_pinned state: emitted at most once per attempt when the position
+  // stays at or below ~500 ms for the whole session (TS live clock pinned).
+  bool _clockPinnedEmitted = false;
+
   void begin(
     String url,
     String engine,
@@ -33,6 +38,7 @@ class LiveDiagnosticsTracker {
     probe = LiveStallProbe();
     bufferingAt = null;
     firstFrame = false;
+    _clockPinnedEmitted = false;
     service.record(
       observed ? 'observation_started_midstream' : 'attempt_start',
       session: session,
@@ -89,23 +95,47 @@ class LiveDiagnosticsTracker {
           data: {'durationMs': (clock.elapsed - since).inMilliseconds},
         );
     }
+
+    // clock_pinned: after the first frame the position never exceeds ~500 ms.
+    // This is the TS-live clock-pinned condition, not a stall. Emitted once.
+    if (firstFrame && !_clockPinnedEmitted) {
+      final posMs = v.position.inMilliseconds;
+      if (posMs <= 500 && clock.elapsedMilliseconds >= 3000) {
+        _clockPinnedEmitted = true;
+        event('clock_pinned', data: {'positionMs': posMs});
+        // Not a stall — do not also emit suspected_stall for a pinned clock.
+        return;
+      }
+    }
+
+    // suspected_stall: clock had moved but is now stuck. Adds frameDelta so
+    // the reader knows whether the picture is still flowing.
     if (probe.check(
       elapsed: clock.elapsed,
       position: v.position,
       playing: active && v.isPlaying,
       buffering: v.isBuffering,
     )) {
+      final rendered = engine.renderedFrameCount;
+      final lastRendered = probe.lastRenderedFrameCount;
+      final frameDelta = (rendered != null && lastRendered != null)
+          ? rendered - lastRendered
+          : null;
       event(
         'suspected_stall',
         data: {
           'positionMs': v.position.inMilliseconds,
           'videoFrameConfirmed': firstFrame,
+          if (frameDelta != null) 'frameDelta': frameDelta,
         },
       );
+      // Snapshot the current frame count so the next delta is relative.
+      probe.snapshotFrameCount(rendered);
     }
   }
 
-  void end() {
+  /// [reason] must be one of: left, replaced, health, startup, error.
+  void end({String reason = 'left'}) {
     if (!running) return;
     running = false;
     final since = bufferingAt;
@@ -115,7 +145,7 @@ class LiveDiagnosticsTracker {
         data: {'durationMs': (clock.elapsed - since).inMilliseconds},
       );
     bufferingAt = null;
-    event('attempt_end');
+    event('attempt_end', data: {'reason': reason});
     clock.stop();
   }
 }

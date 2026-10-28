@@ -84,8 +84,11 @@ class HorizontalRow extends StatelessWidget {
         skipTraversal: true,
         onKeyEvent: _keepInRow,
         child: ListView.separated(
-          // Neighbours are pre-built so Right always finds the next card.
-          cacheExtent: DeviceTypeService.isTv ? 400 : null,
+          // On TV: build only ~one card beyond the visible edge so remote
+          // navigation never decodes a large batch of off-screen posters.
+          // 200 logical pixels covers one typical TV card width.
+          // On phone: keep the default (null = Flutter decides).
+          cacheExtent: DeviceTypeService.isTv ? 200 : null,
           scrollDirection: Axis.horizontal,
           padding: EdgeInsets.symmetric(
             horizontal: DeviceTypeService.isTv ? 32 : 16,

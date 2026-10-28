@@ -25,13 +25,12 @@ void main() {
     expect(preview.targetBufferBytes, ExoLoadProfile.previewTargetBytes);
     expect(live.maxBufferMs, lessThan(film.maxBufferMs));
     expect(live.minBufferMs, 800);
+    // Avvio rapido: basta 400 ms di buffer per la prima immagine.
     expect(live.bufferForPlaybackMs, 400);
-    expect(live.bufferForPlaybackAfterRebufferMs, 600);
-    expect(live.bufferForPlaybackAfterRebufferMs, lessThan(1000));
-    expect(
-      live.bufferForPlaybackAfterRebufferMs,
-      lessThanOrEqualTo(live.minBufferMs),
-    );
+    // Ripresa dopo un buco: 2 s per catturare un keyframe.
+    expect(live.bufferForPlaybackAfterRebufferMs, 2000);
+    // Finestra in avanti: 12 s per assorbire la jitter del provider.
+    expect(live.maxBufferMs, 12000);
     expect(live.backBufferMs, 30000);
     expect(live.backBufferRequiresSeekable, isTrue);
     expect(film.backBufferRequiresSeekable, isFalse);

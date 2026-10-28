@@ -205,6 +205,52 @@ class MediaKitEngine extends PlaybackEngine {
     }
   }
 
+  /// Fire TV live: open with preview-sized probe settings so the first frame
+  /// arrives quickly, then widen to the full live window after the frame is
+  /// rendered. `cache-pause` stays off throughout.
+  Future<void> _tuneForTvLiveShortProbe() async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return;
+    // Apply all normal TV tuning first, then override only the probe depth.
+    await _tuneForTv();
+    final shortOptions = {
+      // Preview-sized probe: 3 MB / 2 s — fast first frame.
+      'demuxer-lavf-probesize': '3000000',
+      'demuxer-lavf-analyzeduration': '2',
+      // Short read-ahead until the first frame is rendered.
+      'demuxer-readahead-secs': '1',
+    };
+    for (final entry in shortOptions.entries) {
+      try {
+        await platform.setProperty(entry.key, entry.value);
+      } catch (_) {}
+    }
+    // Widen the window asynchronously once the first frame is confirmed.
+    unawaited(_widenAfterFirstFrame(platform));
+  }
+
+  /// After the first frame has been rendered, apply the full live probe depth.
+  Future<void> _widenAfterFirstFrame(NativePlayer platform) async {
+    const maxWait = Duration(seconds: 10);
+    final deadline = DateTime.now().add(maxWait);
+    while (!_disposed && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      if (_disposed) return;
+      if (_firstFrameRendered) break;
+    }
+    if (_disposed) return;
+    final wideOptions = {
+      'demuxer-lavf-probesize': '5000000',
+      'demuxer-lavf-analyzeduration': '4',
+      'demuxer-readahead-secs': '6',
+    };
+    for (final entry in wideOptions.entries) {
+      try {
+        await platform.setProperty(entry.key, entry.value);
+      } catch (_) {}
+    }
+  }
+
   int _lastPositionSyncMs = 0;
   final bool isLive;
   final bool previewMode;
@@ -641,7 +687,15 @@ class MediaKitEngine extends PlaybackEngine {
     await _tuneNetwork(effectiveStreamUserAgent(_settings.userAgent));
     // Live tuning (codec allowlist, deinterlacing) matters on phones too:
     // iPhone showed the same audio-with-black-picture bug.
-    if (DeviceTypeService.isTv || isLive) await _tuneForTv();
+    // On Fire TV live: start with preview-sized probe (3 MB / 2 s, read-ahead
+    // 1 s) so the first frame arrives quickly, then widen to the full window.
+    if (DeviceTypeService.isTv || isLive) {
+      if (isLive && !previewMode && DeviceTypeService.isFireTv) {
+        await _tuneForTvLiveShortProbe();
+      } else {
+        await _tuneForTv();
+      }
+    }
     if (isLive && !previewMode) await _enableTimeshift();
     await _applyDeclaredPreferences();
     if (_disposed) throw const PlaybackException('Chiuso');

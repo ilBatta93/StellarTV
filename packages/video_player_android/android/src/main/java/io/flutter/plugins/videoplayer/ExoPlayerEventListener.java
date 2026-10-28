@@ -75,13 +75,33 @@ public abstract class ExoPlayerEventListener implements Player.Listener {
     return exoPlayer.getDuration() != C.TIME_UNSET;
   }
 
+  private boolean isLiveStream() {
+    return exoPlayer.isCurrentMediaItemLive() || exoPlayer.isCurrentMediaItemDynamic();
+  }
+
   private boolean shouldWaitForValidDuration() {
-    return !exoPlayer.isCurrentMediaItemLive() && !exoPlayer.isCurrentMediaItemDynamic();
+    return !isLiveStream();
   }
 
   private void maybeSendInitialized() {
     if (isInitialized) {
       return;
+    }
+
+    // For live streams: if duration is unknown or suspiciously short (< 5 s),
+    // publish immediately with duration 0 so video_player does not pin the
+    // clock at position 1 ms for the whole session. A real VOD that receives
+    // its duration later will get it via onTimelineChanged as usual.
+    if (isLiveStream()) {
+      long dur = exoPlayer.getDuration();
+      boolean liveHasNoDuration = dur == C.TIME_UNSET || dur < 5_000L;
+      if (liveHasNoDuration) {
+        isWaitingForValidDuration = false;
+        isInitialized = true;
+        mainHandler.removeCallbacks(initializationFallback);
+        sendInitialized();
+        return;
+      }
     }
 
     if (!hasValidDuration() && shouldWaitForValidDuration()) {
