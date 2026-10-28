@@ -109,9 +109,19 @@ String displayTitle(String raw) {
   var parsed = parseTitle(dotted.replaceAll(_notable, ' '));
   var t = parsed.title;
   final year = parsed.year;
+
+  // Check if original raw had year in parentheses like (YYYY) or after a dot like .YYYY
+  final hasYearInParens = RegExp(r'\(\d{4}\)\s*$').hasMatch(raw.trim());
+  final hasDotYear = RegExp(r'\.\d{4}\s*$').hasMatch(raw.trim());
+
   if (year != null) {
-    // Keep the year when it belongs to the displayed title (e.g. Blade Runner 2049).
-    if (!t.endsWith(' $year')) t = '$t $year';
+    // If year was in parentheses or after a dot, do NOT add it back (e.g. Cave.Diving.(2024) -> Cave Diving)
+    if (hasYearInParens || hasDotYear) {
+      // suppress: year already stripped by parseTitle, don't re-add
+    } else if (!t.endsWith(' $year')) {
+      // Year trailing without parentheses, keep it (e.g. Blade Runner 2049)
+      t = '$t $year';
+    }
   }
   t = t
       .replaceAll(RegExp(r'[\[\]()]\s*[\[\]()]'), ' ')
