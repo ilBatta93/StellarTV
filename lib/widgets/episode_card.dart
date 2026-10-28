@@ -81,9 +81,18 @@ class _EpisodeCardState extends State<EpisodeCard> {
             _watched.requestFocus();
           } else if (_watched.hasFocus) {
             _info.requestFocus();
-          }
-          if (_watched.hasFocus && available) {
+          } else if (_info.hasFocus && available) {
+            // When on info and download is available, wrap to download
             _download.requestFocus();
+          }
+        } else if (key == LogicalKeyboardKey.arrowLeft) {
+          if (_info.hasFocus) {
+            _watched.requestFocus();
+          } else if (_watched.hasFocus) {
+            _download.requestFocus();
+          } else if (_download.hasFocus && !available) {
+            // When download is not available, left from watched goes to info
+            _info.requestFocus();
           }
         }
         return KeyEventResult.handled;
