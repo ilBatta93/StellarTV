@@ -10,7 +10,7 @@ import '../providers/discover_provider.dart';
 import '../providers/ui_settings.dart';
 import '../services/device_type_service.dart';
 import '../services/image_cache_service.dart';
-import '../services/title_display.dart';
+import '../services/title_matching.dart';
 import '../theme/app_theme.dart';
 import 'poster_card.dart';
 import 'tv_home_layout.dart';

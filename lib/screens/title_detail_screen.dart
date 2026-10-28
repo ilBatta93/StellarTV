@@ -28,7 +28,7 @@ import '../widgets/download_button.dart';
 import '../widgets/reaction_buttons.dart';
 import '../widgets/trailer_button.dart';
 import '../services/download_service.dart';
-import '../services/title_display.dart';
+import '../services/title_matching.dart';
 import '../widgets/tv_wrap_navigation.dart';
 import '../widgets/category_assign_button.dart';
 import '../widgets/title_facets.dart';

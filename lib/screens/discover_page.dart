@@ -5,7 +5,7 @@ import '../widgets/home_art.dart';
 import '../widgets/tv_home_layout.dart';
 import '../services/history_episode_label.dart';
 import '../widgets/tv_home_rows.dart';
-import '../services/title_display.dart';
+import '../services/title_matching.dart';
 import '../services/series_resume_policy.dart';
 
 import 'dart:async';

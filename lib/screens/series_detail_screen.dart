@@ -22,7 +22,7 @@ import '../widgets/reaction_buttons.dart';
 import '../widgets/episode_card.dart';
 import '../widgets/home_art.dart';
 import '../widgets/trailer_button.dart';
-import '../services/title_display.dart';
+import '../services/title_matching.dart';
 import '../services/series_resume_policy.dart';
 import '../widgets/category_assign_button.dart';
 import '../widgets/title_facets.dart';
