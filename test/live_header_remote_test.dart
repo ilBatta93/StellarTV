@@ -296,10 +296,12 @@ void main() {
               final data = await image.toByteData(
                 format: image_ui.ImageByteFormat.png,
               );
-              if (data != null)
+              if (data != null) {
+                await Directory('/tmp/stv').create(recursive: true);
                 await File(
                   '/tmp/stv/oct15-live-${size.width.toInt()}-$empty.png',
                 ).writeAsBytes(data.buffer.asUint8List());
+              }
               image.dispose();
             });
           }
