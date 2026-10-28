@@ -11,3 +11,6 @@
 - Il profilo bambino filtra il catalogo senza attendere la lettura di ogni titolo.
 - All'avvio la diretta e il catalogo compaiono dai dati già salvati, senza ripetere lo scaricamento.
 - Se l'anteprima ha già l'immagine, la diretta continua con lo stesso riproduttore. Se un canale non parte, l'app prova l'altro.
+- La guida scorre senza blocchi: i titoli della griglia si leggono dalla memoria, non dal disco. L'apertura di un canale già visto in anteprima non resta ferma sull'immagine iniziale.
+- Le locandine della riga orizzontale si caricano man mano, senza costruire in anticipo tutte quelle fuori schermo.
+- La diagnostica registra quando l'orologio del flusso non parte, con il conteggio dei fotogrammi successivi per distinguere immagine ferma da orologio solo lento.
