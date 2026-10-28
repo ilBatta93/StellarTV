@@ -4,8 +4,8 @@ globs: lib/screens/**/*.dart,lib/widgets/**/*.dart,lib/player/**/*.dart
 alwaysApply: false
 ---
 
-# Telefono
+# Telefono — fuso in tv-ui.mdc (nome riferimento solo, regole unificate per touch e TV)
 
 Aggiorna la frase del vincolo. Non aggiungere un paragrafo di cronologia.
 
-- Layout, gesture e taratura del player sul telefono stanno nei rami in cui la modalità TV è disattiva. Il blocco schermo è un bersaglio da 48 dp e resta l’interruttore che spegne i gesti, senza un pulsante di luminosità. Il decoder del telefono distingue iOS e Android. Menu, focus, buffer e stringhe hardware di Fire TV, Google TV e Chromecast restano quelli attuali.
+- Layout e player del telefono restano separati dalla TV ma condividono il focus e la griglia con tv-ui.mdc (unificazione). Il blocco schermo è un bersaglio da 48 dp e resta l’interruttore che spegne i gesti, senza un pulsante di luminosità. Il decoder del telefono distingue iOS e Android. Menu, focus, buffer e stringhe hardware di Fire TV, Google TV e Chromecast restano quelli attuali.

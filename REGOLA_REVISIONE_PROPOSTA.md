@@ -70,13 +70,13 @@
 - .cursor/rules/workflow.mdc: commit/push — CONFERMARE
 - AGENTS.md web: manuale Lovable — AGGIORNARE se cambiano endpoint API o schema Supabase
 
-## Azioni proposte (ordine)
-1. Confermare tutte le regole app (nessuna rimozione immediata)
-2. Aggiornare .cursorrules sez. 7 e nota terminologia
-3. Aggiornare AGENTS.md con elenco aree completo
-4. Valutare fusione mobile-touch.mdc in tv-ui.mdc (opzionale)
-5. Aggiornare docs/release-current.md dopo modifiche
-6. Creare commit + push (regola AGENTS.md / workflow.mdc)
+## Azioni applicate (28/10/2026)
+1. `.cursorrules`: sez. 1 (termini vietati anche in .dart) + sez. 7 (riferimento workflow) ✓
+2. `AGENTS.md`: elenco aree completo (`mobile-touch`, `android-build`) + nota `.mdc` ✓
+3. `mobile-touch.mdc`: valutazione fusione — aggiornata, unificazione con `tv-ui.mdc` confermata (regole touch/TV condivise, file mantenuto come riferimento) ✓
+4. Altre regole (`catalog-data`, `player`, `live-guide`, `metadata-kids`, `diagnostics`, `history`, `sync-account`, `tv-ui`, `android-build`): NESSUN RIMOZIONE, tutte confermate vigenti
+5. Commit `8ead5e5` + push `audit/full-review` ✓
+6. Proposta rimanente: valutare se rimuovere `mobile-touch.mdc` dopo conferma unificazione (opzionale, non urgente)
 
 ---
 Nota: tutto in italiano, terminologia neutra. Nessun riferimento a IPTV, m3u, provider, abbonamenti o copyright.
