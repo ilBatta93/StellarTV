@@ -19,9 +19,8 @@ class CategoryAssignButton extends StatelessWidget {
 
   Future<void> _open(BuildContext context) async {
     final app = context.read<AppProvider>();
-    final mounted = context.mounted;
-    if (!mounted) return;
-    final customs = app.customCategoriesOf(_type);
+    while (context.mounted) {
+      final customs = app.customCategoriesOf(_type);
       const create = '__new__';
       final chosen = await pickCategoryAction<String>(
         context,
