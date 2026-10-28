@@ -30,7 +30,7 @@ class VodDiagnosticsLog {
     events.add({
       'at': DateTime.now().toUtc().toIso8601String(),
       'type': type,
-      if (session != null) 'session': session,
+      'session': ?session,
       ...data,
     });
     if (events.length > limit) events.removeRange(0, events.length - limit);

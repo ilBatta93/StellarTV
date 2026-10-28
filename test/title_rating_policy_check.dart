@@ -1,7 +1,7 @@
-import '../lib/services/title_matching.dart';
-import '../lib/models/rating_policy.dart';
-import '../lib/models/episode_metadata.dart';
-import '../lib/models/tmdb_item.dart';
+import 'package:stellar_tv/services/title_matching.dart';
+import 'package:stellar_tv/models/rating_policy.dart';
+import 'package:stellar_tv/models/episode_metadata.dart';
+import 'package:stellar_tv/models/tmdb_item.dart';
 
 void check(Object? actual, Object? expected) {
   if (actual != expected) throw StateError('$actual != $expected');

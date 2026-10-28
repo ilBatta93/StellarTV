@@ -128,14 +128,16 @@ class _DiscoverPageState extends State<DiscoverPage> {
       try {
         final next = await _findNextEpisode(context, entry, folder);
         if (!mounted) break;
-        if (generation != _nextGeneration || !_activeReplayKeys.contains(key))
+        if (generation != _nextGeneration || !_activeReplayKeys.contains(key)) {
           continue;
+        }
         _hasNext[key] = next != null;
         if (next == null) setState(() {});
       } catch (_) {
         if (!mounted) break;
-        if (generation != _nextGeneration || !_activeReplayKeys.contains(key))
+        if (generation != _nextGeneration || !_activeReplayKeys.contains(key)) {
           continue;
+        }
         // Unknown: keep the series visible.
         _hasNext[key] = true;
       }
@@ -227,16 +229,18 @@ class _DiscoverPageState extends State<DiscoverPage> {
       final isEp = e.type == ContentType.series || e.type == ContentType.anime;
       if (!isEp ||
           !replayEpisodeComplete(e) ||
-          _hasNext.containsKey(seriesReplayKey(history.profileId, e)))
+          _hasNext.containsKey(seriesReplayKey(history.profileId, e))) {
         continue;
+      }
       final folder = e.seriesKey.isNotEmpty
           ? app.seriesFolderFor(e.seriesKey, wait: false)
           : (c.isSeriesFolder ? c : null);
       if (folder != null) {
         final generation = _nextGeneration;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && generation == _nextGeneration)
+          if (mounted && generation == _nextGeneration) {
             _queueNextCheck(e, folder);
+          }
         });
       }
     }
@@ -251,7 +255,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
           it,
     ].take(ui.homeRecentLimit).toList();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted)
+      if (mounted) {
         context.read<DiscoverProvider>().loadForYou(
           watched,
           liked: reactions.liked
@@ -264,6 +268,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
           disliked: reactions.disliked,
           reactionSignature: reactions.signature,
         );
+      }
     });
 
     if (discover.error != null && !discover.hasData) {
@@ -1160,8 +1165,9 @@ class _TvDiscoverState extends State<_TvDiscover> {
 
   void _seedInitialHistory() {
     final resume = widget.initialHistory;
-    if (_userFocused || resume == null || _seededHistory == resume.$1.contentId)
+    if (_userFocused || resume == null || _seededHistory == resume.$1.contentId) {
       return;
+    }
     _seededHistory = resume.$1.contentId;
     _focusHistory(resume, initial: true);
   }
@@ -1222,8 +1228,9 @@ class _TvDiscoverState extends State<_TvDiscover> {
       if (code != null && code.isNotEmpty) parts.add(code);
     }
     final p = entry.progress;
-    if (p != null && p > 0)
+    if (p != null && p > 0) {
       parts.add('${(p.clamp(0.0, 1.0) * 100).round()}% visto');
+    }
     return parts.isEmpty ? null : parts.join('  ·  ');
   }
 
@@ -1526,11 +1533,13 @@ class _TvTopRowState extends State<_TvTopRow> {
       canRequestFocus: false,
       skipTraversal: true,
       onKeyEvent: (_, event) {
-        if (event is! KeyDownEvent && event is! KeyRepeatEvent)
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
           return KeyEventResult.ignored;
+        }
         final focus = FocusManager.instance.primaryFocus;
-        if (focus != _movieFocus && focus != _seriesFocus)
+        if (focus != _movieFocus && focus != _seriesFocus) {
           return KeyEventResult.ignored;
+        }
         final key = event.logicalKey;
         if (key == LogicalKeyboardKey.arrowLeft ||
             key == LogicalKeyboardKey.arrowRight) {
@@ -1629,9 +1638,10 @@ class _TvTopRowState extends State<_TvTopRow> {
                   onKeyEvent: (_, event) {
                     if ((hasMovies || hasSeries) &&
                         event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                      if (event is KeyDownEvent || event is KeyRepeatEvent)
+                      if (event is KeyDownEvent || event is KeyRepeatEvent) {
                         (showSeries ? _seriesFocus : _movieFocus)
                             .requestFocus();
+                      }
                       return KeyEventResult.handled;
                     }
                     return KeyEventResult.ignored;
@@ -1645,8 +1655,9 @@ class _TvTopRowState extends State<_TvTopRow> {
                       // Only the settled banner loads its logo; no adjacent predecode.
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         final heading = _headingKey.currentContext;
-                        if (mounted && heading != null)
+                        if (mounted && heading != null) {
                           _revealTvHeading(heading);
+                        }
                       });
                     },
                   ),

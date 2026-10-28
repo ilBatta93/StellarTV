@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -53,8 +52,9 @@ class AppProvider extends ChangeNotifier {
       _deferredRefreshTimer = Timer(const Duration(seconds: 20), () {
         if (!ForegroundPolicy.instance.active ||
             _playbackActive ||
-            !_refreshDeferred)
+            !_refreshDeferred) {
           return;
+        }
         _refreshDeferred = false;
         unawaited(refreshPlaylist());
       });
@@ -338,8 +338,9 @@ class AppProvider extends ChangeNotifier {
       _deferredRefreshTimer = Timer(const Duration(seconds: 20), () {
         if (!ForegroundPolicy.instance.active ||
             _playbackActive ||
-            !_refreshDeferred)
+            !_refreshDeferred) {
           return;
+        }
         _refreshDeferred = false;
         refreshPlaylist();
       });
@@ -984,7 +985,7 @@ class AppProvider extends ChangeNotifier {
     };
     return [
       for (final id in category.itemIds)
-        if (byId[id] case final entry?) entry,
+        ?byId[id],
     ];
   }
 
@@ -1106,8 +1107,9 @@ class AppProvider extends ChangeNotifier {
           try {
             if (!current() ||
                 _playbackActive ||
-                !ForegroundPolicy.instance.active)
+                !ForegroundPolicy.instance.active) {
               return;
+            }
             for (final group in groups) {
               for (final entry in group.entries) {
                 final slot = entry.shelfSlot;
@@ -1122,8 +1124,9 @@ class AppProvider extends ChangeNotifier {
             }
             if (!current() ||
                 _playbackActive ||
-                !ForegroundPolicy.instance.active)
+                !ForegroundPolicy.instance.active) {
               return;
+            }
             _genreCountsCache[type] = Map.unmodifiable(counts);
             _genreCountsVersions[type] = version;
             notifyListeners();
@@ -1131,8 +1134,9 @@ class AppProvider extends ChangeNotifier {
             // Retry on the next eligible filter access; never publish stale counts.
           }
         }().whenComplete(() {
-          if (identical(_genreCountJobs[type], job))
+          if (identical(_genreCountJobs[type], job)) {
             _genreCountJobs.remove(type);
+          }
         });
     _genreCountJobs[type] = job;
     return job;
@@ -1788,8 +1792,9 @@ class AppProvider extends ChangeNotifier {
       final done = Completer<void>();
       _visibilityWaits.add(done);
       void resumed() {
-        if (ForegroundPolicy.instance.active && !done.isCompleted)
+        if (ForegroundPolicy.instance.active && !done.isCompleted) {
           done.complete();
+        }
       }
 
       ForegroundPolicy.instance.addListener(resumed);

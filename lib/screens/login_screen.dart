@@ -167,9 +167,10 @@ class _LoginScreenState extends State<LoginScreen> {
               },
               onClose: (m) {
                 setState(() => _phone = false);
-                if (m != null)
+                if (m != null) {
                   ScaffoldMessenger.of(context)
                       .showSnackBar(SnackBar(content: Text(m)));
+                }
               },
             )
           else

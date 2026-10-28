@@ -14,7 +14,9 @@ class ForegroundPolicy {
     _resumed = resumed;
     _displayAvailable = display;
     if (before != active) {
-      for (final listener in List<void Function()>.of(_listeners)) listener();
+      for (final listener in List<void Function()>.of(_listeners)) {
+        listener();
+      }
     }
   }
 }

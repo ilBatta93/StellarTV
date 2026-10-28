@@ -339,8 +339,9 @@ class DiscoverProvider extends ChangeNotifier {
         ...liked.reversed,
         ...matches.whereType<TmdbItem>(),
       ]) {
-        if (!disliked.contains(item.key))
+        if (!disliked.contains(item.key)) {
           unique.putIfAbsent(item.key, () => item);
+        }
       }
       final found = unique.values.take(5).toList();
       if (found.isEmpty) return (const <TmdbItem>[], null);

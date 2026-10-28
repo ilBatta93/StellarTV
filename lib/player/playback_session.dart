@@ -352,8 +352,9 @@ class PlaybackSession extends ChangeNotifier {
       // Software decoding is a decoder choice, not an engine switch: it
       // stays available even when automatic engine fallback is off.
       if ((!previewMode || previewFallback) &&
-          DecoderMemory.needsSoftware(_playbackUrl))
+          DecoderMemory.needsSoftware(_playbackUrl)) {
         _softwareDecode = true;
+      }
     }
     _plan = _buildPlan(_firstEngine);
     _attempt = 0;
@@ -498,7 +499,7 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> _releaseCurrent() {
     _cancelHealth();
     final retiring = <PlaybackEngine>[
-      if (_engine != null) _engine!,
+      ?_engine,
       if (_held != null && !identical(_held, _engine)) _held!,
     ];
     if (retiring.isEmpty) return _releasing;
@@ -985,7 +986,7 @@ class PlaybackSession extends ChangeNotifier {
       data: {
         'category': LiveDiagnosticsLog.errorKind(reason),
         'midPlay': midPlay,
-        if (status != null) 'httpStatus': status,
+        'httpStatus': ?status,
       },
     );
     _vod?.event(
@@ -993,7 +994,7 @@ class PlaybackSession extends ChangeNotifier {
       data: {
         'category': VodDiagnosticsLog.errorKind(reason),
         'midPlay': midPlay,
-        if (status != null) 'httpStatus': status,
+        'httpStatus': ?status,
       },
     );
 
@@ -1178,8 +1179,9 @@ class PlaybackSession extends ChangeNotifier {
 
   /// How far behind the live point the picture is.
   Duration get liveDelay {
-    if (_engine?.value.nativeLiveSeekable == true)
+    if (_engine?.value.nativeLiveSeekable == true) {
       return _engine?.value.nativeLiveOffset ?? Duration.zero;
+    }
     var d = _shift;
     if (_pausedAt != null) d += DateTime.now().difference(_pausedAt!);
     final cap = _maxRewind;
@@ -1463,8 +1465,9 @@ class PlaybackSession extends ChangeNotifier {
     _diagnosticTimer?.cancel();
     _diagnostics?.end(reason: 'left');
     _vod?.end();
-    if (_diagnosticListening)
+    if (_diagnosticListening) {
       _diagnosticService.removeListener(_diagnosticPreference);
+    }
 
     _delayTick?.cancel();
     _generation++;

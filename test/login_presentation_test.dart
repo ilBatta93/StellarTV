@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stellar_tv/services/device_type_service.dart';
 import 'package:stellar_tv/widgets/brand_intro.dart';
-import 'package:stellar_tv/widgets/tv_text_field.dart';
 import 'package:stellar_tv/screens/account_screen.dart';
 import 'package:stellar_tv/screens/login_screen.dart';
 import 'package:stellar_tv/theme/app_theme.dart';

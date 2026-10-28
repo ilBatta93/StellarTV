@@ -221,8 +221,9 @@ class _MultiViewScreenState extends State<MultiViewScreen>
     if (_adding ||
         _slots.length >= maxChannels ||
         !_allowed(channel) ||
-        _slots.any((s) => s.channel.id == channel.id))
+        _slots.any((s) => s.channel.id == channel.id)) {
       return;
+    }
     setState(() => _adding = true);
     final scope = DeviceTypeService.isTv
         ? PlayerSettingsScope.liveTv
@@ -507,7 +508,7 @@ class _MultiViewScreenState extends State<MultiViewScreen>
   );
 
   Widget _grid(MultiViewLayout layout) {
-    if (_slots.isEmpty)
+    if (_slots.isEmpty) {
       return Center(
         child: _action(
           'Aggiungi canale',
@@ -516,6 +517,7 @@ class _MultiViewScreenState extends State<MultiViewScreen>
           focus: _addFocus,
         ),
       );
+    }
     if (_expanded != null) return _tile(_expanded ?? _slots.first);
     if (layout == MultiViewLayout.mainAndSide && _slots.length > 1) {
       return Row(

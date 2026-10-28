@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/providers/sync_provider.dart';
+import 'package:stellar_tv/providers/sync_provider.dart';
 
 void main() {
   test('failed cloud saves back off instead of retrying in a loop', () {

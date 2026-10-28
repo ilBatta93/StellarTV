@@ -88,8 +88,9 @@ class ReactionsProvider extends ChangeNotifier {
         final before = existing is Map
             ? DateTime.tryParse(existing['at']?.toString() ?? '')
             : null;
-        if (at != null && (before == null || at.isAfter(before)))
+        if (at != null && (before == null || at.isAfter(before))) {
           entries[e.key as String] = incoming;
+        }
       }
       out[profile.key] = entries;
     }

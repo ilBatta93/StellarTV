@@ -41,7 +41,7 @@ final _liveWord = RegExp(r'[^a-z0-9à-ÿ]+');
 /// Slots already in memory. Building the guide from these does not open titles.
 List<int> liveEntrySlots(Iterable<CatalogEntry> entries) => [
   for (final entry in entries)
-    if (entry.shelfSlot case final slot?) slot,
+    ?entry.shelfSlot,
 ];
 
 bool _nameHasTokens(String name, List<String> tokens) {
@@ -109,8 +109,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
 
   List<Channel> _orderedLive(List<Channel> channels) {
     if (_sort == null || _sort == CatalogSort.provider) return channels;
-    if (identical(channels, _sortSource) && _sortOrder == _sort)
+    if (identical(channels, _sortSource) && _sortOrder == _sort) {
       return _sortResult ?? channels;
+    }
     _sortSource = channels;
     _sortOrder = _sort;
     _sortResult = null;
@@ -174,9 +175,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(covariant LivePage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.active)
+    if (!widget.active) {
       _stopPreview();
-    else if (!oldWidget.active) {
+    } else if (!oldWidget.active) {
       final channel = _selectedChannel;
       if (channel != null) _select(channel, _selectedProgram);
     }
@@ -285,16 +286,18 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     _previewDelay = Timer(const Duration(milliseconds: 200), () async {
       if (!mounted ||
           !widget.active ||
-          ModalRoute.of(context)?.isCurrent != true)
+          ModalRoute.of(context)?.isCurrent != true) {
         return;
+      }
       final settings = await PlayerSettingsService().load(
         scope: PlayerSettingsScope.liveTv,
       );
       if (!mounted ||
           gen != _previewGeneration ||
           !widget.active ||
-          ModalRoute.of(context)?.isCurrent != true)
+          ModalRoute.of(context)?.isCurrent != true) {
         return;
+      }
       if (_app.kidsMode && !_app.isKidsContent(channel)) return;
       if (_previewMustWait) {
         _previewWaiting = true;
@@ -304,8 +307,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       if (!mounted ||
           gen != _previewGeneration ||
           !widget.active ||
-          ModalRoute.of(context)?.isCurrent != true)
+          ModalRoute.of(context)?.isCurrent != true) {
         return;
+      }
       if (_previewMustWait) {
         _previewWaiting = true;
         return;
@@ -685,8 +689,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                           focusNode: _channelNode(c.id),
                                           onFocusChange: (focus) {
                                             if (!focus) return;
-                                            if (_epgFocus != null)
+                                            if (_epgFocus != null) {
                                               _epgFocus = null;
+                                            }
                                             _select(c);
                                           },
                                           onPressed: () => _watch(c),
@@ -800,8 +805,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                       listenable: _preview ?? app,
                                       builder: (_, _) {
                                         final session = _preview;
-                                        if (session == null)
+                                        if (session == null) {
                                           return const SizedBox.expand();
+                                        }
                                         if (session.status ==
                                             SessionStatus.failed) {
                                           return const ColoredBox(
@@ -1071,8 +1077,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       _listKey = listKey;
       _listCache = channels;
     }
-    if (DeviceTypeService.isTv && !showWatched)
+    if (DeviceTypeService.isTv && !showWatched) {
       channels = _orderedLive(channels);
+    }
 
     if (_selectedChannel != null &&
         _indexOfChannel(channels, _selectedChannel!.id) < 0) {
@@ -1086,8 +1093,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
         channels.isNotEmpty) {
       final first = channels.first;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && widget.active && _selectedChannel == null)
+        if (mounted && widget.active && _selectedChannel == null) {
           _select(first);
+        }
       });
     }
     final content = catalogColumn(
@@ -1639,8 +1647,9 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                                 channel,
                                 p,
                                 DateTime.now(),
-                              ))
+                              )) {
                                 return;
+                              }
                               final credentials = context
                                   .read<AppProvider>()
                                   .xtreamCredentials;
@@ -1649,8 +1658,9 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                               final password = credentials?['password'];
                               if (server == null ||
                                   user == null ||
-                                  password == null)
+                                  password == null) {
                                 return;
+                              }
                               try {
                                 final info = await XtreamService().accountInfo(
                                   server: server,
@@ -1672,8 +1682,9 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                                         timezone: zone,
                                       );
                                 if (!ctx.mounted || !context.mounted) return;
-                                if (archive == null)
+                                if (archive == null) {
                                   throw StateError('Archive unavailable');
+                                }
                                 Navigator.pop(ctx);
                                 playChannel(
                                   context,
@@ -1683,7 +1694,7 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                                   archivePlayback: true,
                                 );
                               } catch (_) {
-                                if (ctx.mounted)
+                                if (ctx.mounted) {
                                   ScaffoldMessenger.of(ctx).showSnackBar(
                                     const SnackBar(
                                       content: Text(
@@ -1691,6 +1702,7 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                                       ),
                                     ),
                                   );
+                                }
                               }
                             },
                             child: Container(

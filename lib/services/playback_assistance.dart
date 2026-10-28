@@ -8,12 +8,14 @@ String? chapterSkipType(String raw) {
   if (RegExp(r'^(ed|nced)$').hasMatch(name)) return 'outro';
   if (RegExp(
     r'post[\s-]?credits?|after credits|scena dopo i titoli',
-  ).hasMatch(name))
+  ).hasMatch(name)) {
     return 'post_credits';
+  }
   if (RegExp(
     r'\b(recap|previously|riepilogo|negli episodi precedenti)\b',
-  ).hasMatch(name))
+  ).hasMatch(name)) {
     return 'recap';
+  }
   final intro = RegExp(
     r'\b(intro|introduction|opening|sigla|titoli di testa|theme song)\b',
   ).hasMatch(name);
@@ -23,8 +25,9 @@ String? chapterSkipType(String raw) {
   if (intro && !closing) return 'intro';
   if (RegExp(
     r'\b(end credits|ending|outro|closing|titoli di coda|titoli di chiusura|credits)\b',
-  ).hasMatch(name))
+  ).hasMatch(name)) {
     return 'outro';
+  }
   return null;
 }
 
@@ -111,7 +114,7 @@ EpisodeSegments mergeSkipSegments(
       remote.all.where((s) => s.type == type).firstOrNull;
   final all = <SkipSegment>[
     for (final type in ['recap', 'intro', 'outro', 'post_credits', 'credits'])
-      if (take(type) case final segment?) segment,
+      ?take(type),
   ];
   return EpisodeSegments(
     intro: take('intro'),
@@ -181,8 +184,9 @@ EpisodeSegments chapterSegments(
   List<Map<String, Object?>> chapters,
   Duration duration,
 ) {
-  if (duration <= Duration.zero || chapters.length > 40)
+  if (duration <= Duration.zero || chapters.length > 40) {
     return EpisodeSegments.empty;
+  }
   final all = <SkipSegment>[];
   for (var i = 0; i < chapters.length; i++) {
     final c = chapters[i];
@@ -197,14 +201,16 @@ EpisodeSegments chapterSegments(
         !start.isFinite ||
         !end.isFinite ||
         start < 0 ||
-        end <= start)
+        end <= start) {
       continue;
+    }
     // Avoid generic opening/ending labels swallowing the whole programme.
     if ((type == 'intro' || type == 'recap') &&
             end - start > (type == 'recap' ? 480 : 240) ||
         (type == 'outro' || type == 'post_credits') &&
-            start < duration.inSeconds / 2)
+            start < duration.inSeconds / 2) {
       continue;
+    }
     all.add(
       SkipSegment(
         type,

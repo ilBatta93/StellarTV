@@ -4,11 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../lib/screens/live_diagnostics_screen.dart';
-import '../lib/services/live_diagnostics_service.dart';
-import '../lib/services/device_type_service.dart';
-import '../lib/providers/ui_settings.dart';
-import '../lib/widgets/tv_focusable.dart';
+import 'package:stellar_tv/screens/live_diagnostics_screen.dart';
+import 'package:stellar_tv/services/live_diagnostics_service.dart';
+import 'package:stellar_tv/services/device_type_service.dart';
+import 'package:stellar_tv/providers/ui_settings.dart';
+import 'package:stellar_tv/widgets/tv_focusable.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

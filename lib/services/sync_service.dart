@@ -96,8 +96,9 @@ class SyncService {
         .select('envelope')
         .eq('user_id', account)
         .maybeSingle();
-    if (row != null)
+    if (row != null) {
       await PersonalVault.decrypt(row['envelope'], recovery, account);
+    }
     if (account != currentUserId) throw StateError('Account cambiato');
     await _keys.save(account, recovery);
   }
@@ -115,8 +116,9 @@ class SyncService {
   /// Returns the account id; throws when nobody is signed in.
   Future<String> ensureCode() async {
     final id = currentUserId;
-    if (id == null)
+    if (id == null) {
       throw StateError('Accedi al tuo account per usare il cloud.');
+    }
     await _storeCode(id);
     return id;
   }
@@ -220,10 +222,12 @@ class SyncService {
         (m.contains('weak') || m.contains('pwned') || m.contains('leaked'))) {
       return 'Password troppo debole o già trapelata online: scegline un\'altra.';
     }
-    if (m.contains('at least'))
+    if (m.contains('at least')) {
       return 'La password deve avere almeno 6 caratteri.';
-    if (m.contains('email') && m.contains('invalid'))
+    }
+    if (m.contains('email') && m.contains('invalid')) {
       return 'Email non valida.';
+    }
     return e.message;
   }
 
@@ -436,8 +440,9 @@ class SyncService {
   ) async {
     final out = <Map<String, dynamic>>[];
     for (var offset = 0; ; offset += 500) {
-      if (!ForegroundPolicy.instance.active)
+      if (!ForegroundPolicy.instance.active) {
         throw StateError('App non visibile');
+      }
       final page = await _client
           .from(table)
           .select(fields)
@@ -512,7 +517,7 @@ class SyncService {
     final next = _cloudWrites.then((_) => _push(payload, code));
     _cloudWrites = next.then<void>(
       (_) {},
-      onError: (Object _, StackTrace __) {},
+      onError: (Object _, StackTrace _) {},
     );
     return next;
   }
@@ -574,8 +579,9 @@ class SyncService {
         }
         if (PlaybackWorkPolicy.instance.blocksCloud) return null;
         final envelope = await PersonalVault.encrypt(merged, recovery, code);
-        if (code != currentUserId || PlaybackWorkPolicy.instance.blocksCloud)
+        if (code != currentUserId || PlaybackWorkPolicy.instance.blocksCloud) {
           return null;
+        }
         dynamic revision;
         try {
           revision = await _client.rpc(
@@ -607,18 +613,20 @@ class SyncService {
         );
         if (code != currentUserId) return null;
         if (check['revision'].toString() != revision.toString()) {
-          if (attempt < 3)
+          if (attempt < 3) {
             await Future<void>.delayed(
               PlaybackWorkPolicy.conflictDelay(Random()),
             );
+          }
           continue;
         }
         // AES-GCM already authenticates the stored copy; a byte-level
         // comparison wrongly rejected saves whose numbers or ordering
         // changed in transit. Only require that the essentials survived.
         if ((decoded['history'] as Map).length <
-            (PersonalVault.clean(merged)['history'] as Map).length)
+            (PersonalVault.clean(merged)['history'] as Map).length) {
           throw StateError('Verifica cifrata non riuscita');
+        }
         final now = DateTime.now();
         lastError = null;
         if (legacyOk) await prefs.setBool(marker, true);
@@ -636,12 +644,14 @@ class SyncService {
   }
 
   Future<(SyncPayload?, DateTime?)> pull(String code) async {
-    if (PlaybackWorkPolicy.instance.blocksGuide || code != currentUserId)
+    if (PlaybackWorkPolicy.instance.blocksGuide || code != currentUserId) {
       return (null, null);
+    }
     try {
       final recovery = await recoveryKey();
-      if (recovery == null || PlaybackWorkPolicy.instance.blocksGuide)
+      if (recovery == null || PlaybackWorkPolicy.instance.blocksGuide) {
         return (null, null);
+      }
       final row = await _client
           .from('personal_vaults')
           .select('envelope,updated_at')
@@ -653,8 +663,9 @@ class SyncService {
         recovery,
         code,
       );
-      if (PlaybackWorkPolicy.instance.blocksGuide || code != currentUserId)
+      if (PlaybackWorkPolicy.instance.blocksGuide || code != currentUserId) {
         return (null, null);
+      }
       return (
         SyncPayload.fromJson(PersonalVault.merge({}, decoded)),
         DateTime.tryParse(row['updated_at'].toString()),

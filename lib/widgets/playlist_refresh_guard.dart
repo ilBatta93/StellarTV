@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
@@ -89,7 +88,7 @@ class _PlaylistRefreshGuardState extends State<PlaylistRefreshGuard>
           Positioned.fill(
             child: Focus(
               focusNode: _blocker,
-              onKeyEvent: (_, __) => KeyEventResult.handled,
+              onKeyEvent: (_, _) => KeyEventResult.handled,
               child: const AbsorbPointer(child: _WaitScreen()),
             ),
           ),

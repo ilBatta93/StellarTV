@@ -109,9 +109,10 @@ void main() {
         await tester.runAsync(() async {
           final image = await boundary.toImage(pixelRatio: 1);
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          if (bytes != null)
+          if (bytes != null) {
             await File('/tmp/stv/apple-player-${size.width.toInt()}.png')
                 .writeAsBytes(bytes.buffer.asUint8List());
+          }
           image.dispose();
         });
       }
@@ -179,9 +180,9 @@ void main() {
           )
           .first;
       final node = tester.widget<Focus>(focus).focusNode;
-      if (node != null)
+      if (node != null) {
         node.requestFocus();
-      else
+      } else {
         Focus.of(
           tester.element(
             find.descendant(
@@ -190,6 +191,7 @@ void main() {
             ),
           ),
         ).requestFocus();
+      }
       await tester.pumpAndSettle();
       await tester.sendKeyEvent(LogicalKeyboardKey.select, platform: 'android');
       await tester.pumpAndSettle();

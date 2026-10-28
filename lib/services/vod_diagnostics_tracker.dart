@@ -101,11 +101,12 @@ class VodDiagnosticsTracker {
     } else if ((!v.isBuffering || !active) && bufferingAt != null) {
       final since = bufferingAt;
       bufferingAt = null;
-      if (since != null)
+      if (since != null) {
         event(
           'buffer_end',
           data: {'durationMs': (clock.elapsed - since).inMilliseconds},
         );
+      }
     }
     final dropped = _int(metrics['frameDropCount']);
     final cacheMs = _cacheMs(metrics);
@@ -116,8 +117,8 @@ class VodDiagnosticsTracker {
       event('playback_info', data: {
         'hwdec': metrics['hwdecCurrent'],
         'codec': _codec(metrics['videoCodec']),
-        if (fps != null) 'fps': fps,
-        if (cacheMs != null) 'cacheMs': cacheMs,
+        'fps': ?fps,
+        'cacheMs': ?cacheMs,
       });
     }
     for (final signal in probe.check(
@@ -164,11 +165,12 @@ class VodDiagnosticsTracker {
     if (!running) return;
     running = false;
     final since = bufferingAt;
-    if (since != null)
+    if (since != null) {
       event(
         'buffer_interrupted',
         data: {'durationMs': (clock.elapsed - since).inMilliseconds},
       );
+    }
     bufferingAt = null;
     event('attempt_end');
     clock.stop();

@@ -80,9 +80,7 @@ class PlatformCatalogService extends ChangeNotifier {
             _items[key] = [
               for (final e in (m['items'] as List? ?? const []))
                 if (e is Map)
-                  if (TmdbItem.tryParse(e.cast<String, dynamic>())
-                      case final item?)
-                    item,
+                  ?TmdbItem.tryParse(e.cast<String, dynamic>()),
             ];
             _titleIds[key] = _items[key]?.map((i) => i.id).toSet() ?? <int>{};
             // Saved catalogs stay in use; only after 30 days they are

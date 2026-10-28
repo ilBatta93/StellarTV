@@ -89,12 +89,14 @@ void main() {
       ], child: MaterialApp(theme: AppTheme.darkTheme(isTv: tv), home: RepaintBoundary(key: boundary, child: page)));
       Future<void> capture(String name) async {
         final render = boundary.currentContext?.findRenderObject();
-        if (render is RenderRepaintBoundary) await tester.runAsync(() async {
+        if (render is RenderRepaintBoundary) {
+          await tester.runAsync(() async {
           final image = await render.toImage();
           final data = await image.toByteData(format: ui.ImageByteFormat.png);
           if (data != null) { await Directory('/tmp/stv').create(recursive: true); await File('/tmp/stv/$name-$tv.png').writeAsBytes(data.buffer.asUint8List()); }
           image.dispose();
         });
+        }
       }
       final movie = channel('Film avviato', ContentType.movie);
       await history.recordStart(movie);

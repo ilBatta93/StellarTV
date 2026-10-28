@@ -1,5 +1,5 @@
-import '../lib/services/foreground_policy.dart';
-import '../lib/services/playback_work_policy.dart';
+import 'package:stellar_tv/services/foreground_policy.dart';
+import 'package:stellar_tv/services/playback_work_policy.dart';
 
 void check(bool result, String rule) {
   if (!result) throw StateError(rule);

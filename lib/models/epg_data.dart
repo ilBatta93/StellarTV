@@ -48,8 +48,9 @@ class EpgData {
     }
     final names = <String, String>{};
     final rawNames = json['n'];
-    if (rawNames is Map)
+    if (rawNames is Map) {
       rawNames.forEach((k, v) => names[k.toString()] = v.toString());
+    }
     return EpgData(
       programmes: progs,
       displayNames: names,

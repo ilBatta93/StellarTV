@@ -24,7 +24,7 @@ class LiveDiagnosticsLog {
     events.add({
       'at': DateTime.now().toUtc().toIso8601String(),
       'type': type,
-      if (session != null) 'session': session,
+      'session': ?session,
       ...data,
     });
     if (events.length > limit) events.removeRange(0, events.length - limit);
@@ -34,13 +34,15 @@ class LiveDiagnosticsLog {
     final text = reason.toLowerCase();
     if (text.contains('schermo nero')) return 'no_video_frames';
     if (text.contains('nessun video dal server')) return 'no_video_startup';
-    if (text.contains('503') || text.contains('service unavailable'))
+    if (text.contains('503') || text.contains('service unavailable')) {
       return 'http_503';
+    }
     if (text.contains('403') || text.contains('forbidden')) return 'http_403';
     if (text.contains('404')) return 'http_404';
     if (text.contains('429')) return 'http_429';
-    if (text.contains('458') || text.contains('max connections'))
+    if (text.contains('458') || text.contains('max connections')) {
       return 'connection_limit';
+    }
     if (text.contains('timeout') || text.contains('secondi')) return 'timeout';
     if (text.contains('codec') || text.contains('decoder')) return 'decoder';
     if (text.contains('network') || text.contains('socket')) return 'network';

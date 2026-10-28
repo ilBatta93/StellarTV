@@ -77,9 +77,15 @@ class _EpisodeCardState extends State<EpisodeCard> {
       if (key == LogicalKeyboardKey.arrowLeft ||
           key == LogicalKeyboardKey.arrowRight) {
         if (key == LogicalKeyboardKey.arrowRight) {
-          if (_download.hasFocus) _watched.requestFocus();
-        if (_watched.hasFocus) _info.requestFocus();
-        if (_watched.hasFocus && available) _download.requestFocus();
+          if (_download.hasFocus) {
+            _watched.requestFocus();
+          } else if (_watched.hasFocus) {
+            _info.requestFocus();
+          }
+          if (_watched.hasFocus && available) {
+            _download.requestFocus();
+          }
+        }
         return KeyEventResult.handled;
       }
     }

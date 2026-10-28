@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter/material.dart' show ModalRoute;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'image_cache_service.dart';
@@ -63,8 +62,9 @@ class ImageWarmupService {
     try {
       for (var i = 0; i < pending.length; i++) {
         await RemoteNavigation.idle();
-        if (RemoteNavigation.moving || PlaybackWorkPolicy.instance.blocksGuide)
+        if (RemoteNavigation.moving || PlaybackWorkPolicy.instance.blocksGuide) {
           return;
+        }
         final u = pending[i];
         try {
           await AppImageCache.manager.getSingleFile(u);
@@ -120,8 +120,9 @@ class PosterMemoryWarmup {
     if (DeviceTypeService.isTv ||
         w == null ||
         _running ||
-        PlaybackWorkPolicy.instance.blocksGuide)
+        PlaybackWorkPolicy.instance.blocksGuide) {
       return;
+    }
     final pending = <String>[];
     for (final u in urls) {
       if (u == null || u.isEmpty || !_seen.add('$w|$u')) continue;
@@ -138,8 +139,9 @@ class PosterMemoryWarmup {
           if (!context.mounted ||
               RemoteNavigation.moving ||
               PlaybackWorkPolicy.instance.blocksGuide ||
-              ModalRoute.of(context)?.isCurrent == false)
+              ModalRoute.of(context)?.isCurrent == false) {
             return;
+          }
           await Future.wait([
             for (final u in pending.skip(i).take(3))
               precacheImage(
@@ -169,8 +171,9 @@ class PosterMemoryWarmup {
     if (!DeviceTypeService.isTv ||
         TvImageMemoryGuard.reducedRendering.value ||
         _running ||
-        PlaybackWorkPolicy.instance.blocksGuide)
+        PlaybackWorkPolicy.instance.blocksGuide) {
       return;
+    }
     final cap = TvRenderPolicy.decodeLimit(isTv: true, memoryPressure: false);
     final noted = _width;
     final int w = noted == null || noted <= 0
@@ -193,8 +196,9 @@ class PosterMemoryWarmup {
               RemoteNavigation.moving ||
               TvImageMemoryGuard.reducedRendering.value ||
               PlaybackWorkPolicy.instance.blocksGuide ||
-              ModalRoute.of(context)?.isCurrent == false)
+              ModalRoute.of(context)?.isCurrent == false) {
             return;
+          }
           await precacheImage(
             ResizeImage(
               CachedNetworkImageProvider(

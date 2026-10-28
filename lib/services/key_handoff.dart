@@ -118,8 +118,9 @@ class KeyHandoff {
   /// Returns the key once the phone has sent it, null while waiting.
   Future<String?> poll() async {
     final id = _id, pair = _pair;
-    if (!ForegroundPolicy.instance.active || id == null || pair == null)
+    if (!ForegroundPolicy.instance.active || id == null || pair == null) {
       return null;
+    }
     final row = await _client
         .from('key_handoffs')
         .select('sender_key, nonce, ciphertext')
@@ -165,8 +166,9 @@ class XtreamHandoff {
           !['http', 'https'].contains(uri.scheme) ||
           uri.host.isEmpty ||
           u.isEmpty ||
-          p.isEmpty)
+          p.isEmpty) {
         return null;
+      }
       return XtreamHandoff(h, u, p);
     } catch (_) {
       return null;

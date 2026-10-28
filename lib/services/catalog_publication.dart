@@ -13,8 +13,9 @@ Future<List<Channel>?> replaceCatalogSection({
   for (var i = 0; i < current.length; i++) {
     final c = current[i];
     if (c.type != type &&
-        !(type == ContentType.series && c.type == ContentType.anime))
+        !(type == ContentType.series && c.type == ContentType.anime)) {
       output.add(c);
+    }
     if ((i + 1) % 128 == 0) {
       await Future<void>.delayed(Duration.zero);
       if (!stillCurrent()) return null;
@@ -53,7 +54,8 @@ Future<List<Channel>?> filterCatalogForPublication({
       started = DateTime.now();
     }
   }
-  if (requestEvidence != null && evidenceStart < channels.length)
+  if (requestEvidence != null && evidenceStart < channels.length) {
     requestEvidence(channels.sublist(evidenceStart));
+  }
   return stillCurrent() ? output : null;
 }

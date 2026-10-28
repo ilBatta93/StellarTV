@@ -2,8 +2,8 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/services/foreground_policy.dart';
-import '../lib/services/playback_work_policy.dart';
+import 'package:stellar_tv/services/foreground_policy.dart';
+import 'package:stellar_tv/services/playback_work_policy.dart';
 
 void main() {
   test('guide waits for close even when video is paused', () {

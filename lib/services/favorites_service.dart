@@ -14,7 +14,7 @@ class FavoritesService {
     final next = _eventQueue.then((_) => action());
     _eventQueue = next.then<void>(
       (_) {},
-      onError: (Object _, StackTrace __) {},
+      onError: (Object _, StackTrace _) {},
     );
     return next;
   }
@@ -42,8 +42,9 @@ class FavoritesService {
       PersonalVault.object(events[key])['watched']?.toString() ?? '',
     );
     var now = DateTime.now().toUtc();
-    if (old != null && !now.isAfter(old))
+    if (old != null && !now.isAfter(old)) {
       now = old.add(const Duration(microseconds: 1));
+    }
     events[key] = {
       ...?payload,
       'deleted': deleted,

@@ -1,8 +1,8 @@
-import '../lib/models/channel.dart';
-import '../lib/models/content_type.dart';
-import '../lib/services/catalog_builder.dart';
-import '../lib/services/catalog_sort.dart';
-import '../lib/services/title_matching.dart';
+import 'package:stellar_tv/models/channel.dart';
+import 'package:stellar_tv/models/content_type.dart';
+import 'package:stellar_tv/services/catalog_builder.dart';
+import 'package:stellar_tv/services/catalog_sort.dart';
+import 'package:stellar_tv/services/title_matching.dart';
 
 void require(bool ok, String message) {
   if (!ok) throw StateError(message);

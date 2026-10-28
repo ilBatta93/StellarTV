@@ -31,8 +31,9 @@ class MultiViewAudio<T> {
       }
       _known.removeWhere((item) => !_items.contains(item));
       final owner = _selected;
-      if (_disposed || _suspended || owner == null || !_items.contains(owner))
+      if (_disposed || _suspended || owner == null || !_items.contains(owner)) {
         return;
+      }
       try {
         await setVolume(owner, 1);
       } catch (_) {}

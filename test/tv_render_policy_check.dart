@@ -1,4 +1,4 @@
-import '../lib/services/tv_render_policy.dart';
+import 'package:stellar_tv/services/tv_render_policy.dart';
 
 void check(bool condition, String rule) {
   if (!condition) throw StateError(rule);

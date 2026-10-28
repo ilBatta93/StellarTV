@@ -22,8 +22,9 @@ class AppForegroundService with WidgetsBindingObserver {
       ForegroundPolicy.instance.setDisplayAvailable(available);
     });
     final available = await NativePlayerBridge.instance.isDisplayAvailable();
-    if (!receivedEvent)
+    if (!receivedEvent) {
       ForegroundPolicy.instance.setDisplayAvailable(available);
+    }
   }
 
   @override

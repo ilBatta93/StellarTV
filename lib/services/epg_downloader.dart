@@ -88,8 +88,9 @@ class EpgDownloadJob {
         spawn.then(
           (isolate) {
             _isolate = isolate;
-            if (_canceled || _done.isCompleted)
+            if (_canceled || _done.isCompleted) {
               isolate.kill(priority: Isolate.immediate);
+            }
           },
           onError: (Object _) => fail(
             const EpgDownloadException(
@@ -164,16 +165,19 @@ Future<void> _downloadEntry((SendPort, List<String>, String) job) async {
 
 EpgDownloadException friendlyEpgError(Object error) {
   if (error is EpgDownloadException) return error;
-  if (error is TimeoutException)
+  if (error is TimeoutException) {
     return const EpgDownloadException('Tempo di attesa della guida superato.');
-  if (error is HandshakeException)
+  }
+  if (error is HandshakeException) {
     return const EpgDownloadException(
       'Connessione sicura alla guida non riuscita.',
     );
-  if (error is SocketException)
+  }
+  if (error is SocketException) {
     return const EpgDownloadException(
       'Connessione alla guida non riuscita. Controlla la rete.',
     );
+  }
   return const EpgDownloadException(
     'La risposta non contiene una guida TV valida.',
   );
@@ -185,8 +189,9 @@ Future<Map<String, dynamic>> _readSource(String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null ||
         !['http', 'https'].contains(uri.scheme) ||
-        uri.host.isEmpty)
+        uri.host.isEmpty) {
       throw const EpgDownloadException('Indirizzo della guida non valido.');
+    }
     final client = HttpClient()
       ..autoUncompress = false
       ..connectionTimeout = const Duration(seconds: 20)
@@ -214,8 +219,9 @@ Future<Map<String, dynamic>> _readSource(String url) async {
         await response.listen((_) {}).cancel();
         continue;
       }
-      if (status != 200)
+      if (status != 200) {
         throw EpgDownloadException('Guida non disponibile (HTTP $status).');
+      }
       final stream = _decodeBody(response.timeout(const Duration(seconds: 45)));
       return await parseXmltvStream(stream, DateTime.now());
     } finally {
@@ -229,10 +235,11 @@ Stream<List<int>> _bounded(Stream<List<int>> source, int limit) async* {
   var total = 0;
   await for (final chunk in source) {
     total += chunk.length;
-    if (total > limit)
+    if (total > limit) {
       throw const EpgDownloadException(
         'Guida troppo grande per una lettura sicura.',
       );
+    }
     yield chunk;
   }
 }
@@ -241,11 +248,14 @@ Stream<List<int>> _decodeBody(Stream<List<int>> source) async* {
   final iterator = StreamIterator(_bounded(source, 128 * 1024 * 1024));
   try {
     final prefix = <int>[];
-    while (prefix.length < 2 && await iterator.moveNext())
+    while (prefix.length < 2 && await iterator.moveNext()) {
       prefix.addAll(iterator.current);
+    }
     Stream<List<int>> joined() async* {
       yield prefix;
-      while (await iterator.moveNext()) yield iterator.current;
+      while (await iterator.moveNext()) {
+        yield iterator.current;
+      }
     }
 
     final gzipBody =
@@ -296,8 +306,9 @@ Future<Map<String, dynamic>> parseXmltvStream(
         id.isEmpty ||
         title.isEmpty ||
         stop <= from ||
-        start >= to)
+        start >= to) {
       return;
+    }
     if (count >= cap) {
       degraded = true;
       capped = true;
@@ -347,10 +358,11 @@ Future<Map<String, dynamic>> parseXmltvStream(
             ? event.value
             : (event as XmlCDATAEvent).value;
         final buffer = fields[field];
-        if (buffer != null && buffer.length < 16384)
+        if (buffer != null && buffer.length < 16384) {
           buffer.write(
             value.substring(0, value.length.clamp(0, 16384 - buffer.length)),
           );
+        }
       } else if (event is XmlEndElementEvent) {
         final name = event.localName;
         final channelId = channel;
@@ -359,21 +371,24 @@ Future<Map<String, dynamic>> parseXmltvStream(
           final value = fields[name]?.toString().trim() ?? '';
           final prior = names[channelId] as String?;
           if (value.isNotEmpty &&
-              !(prior?.split(epgNameSeparator).contains(value) ?? false))
+              !(prior?.split(epgNameSeparator).contains(value) ?? false)) {
             names[channelId] = prior == null || prior.isEmpty
                 ? value
                 : '$prior$epgNameSeparator$value';
+          }
         }
         end(name);
       }
     }
   }
-  if (!rootSeen || (names.isEmpty && programmes.isEmpty))
+  if (!rootSeen || (names.isEmpty && programmes.isEmpty)) {
     throw const EpgDownloadException(
       'La risposta non contiene una guida TV valida.',
     );
-  for (final list in programmes.values)
+  }
+  for (final list in programmes.values) {
     (list as List).sort((a, b) => (a[0] as int).compareTo(b[0] as int));
+  }
   return {'p': programmes, 'n': names, 'd': degraded};
 }
 
@@ -399,8 +414,9 @@ int? parseXmltvTime(String? raw) {
       utc.day != parts[2] ||
       parts[3] > 23 ||
       parts[4] > 59 ||
-      parts[5] > 59)
+      parts[5] > 59) {
     return null;
+  }
   final offset = m.group(7);
   if (offset == null || offset == 'Z') return utc.millisecondsSinceEpoch;
   final clean = offset.replaceAll(':', '');

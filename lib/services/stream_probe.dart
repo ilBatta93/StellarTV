@@ -133,7 +133,9 @@ class StreamProbe {
       if (b[start] == 0x47 &&
           b[start + 188] == 0x47 &&
           b[start + 376] == 0x47 &&
-          b[start + 564] == 0x47) return true;
+          b[start + 564] == 0x47) {
+        return true;
+      }
     }
     return false;
   }

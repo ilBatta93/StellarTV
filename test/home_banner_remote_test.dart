@@ -24,7 +24,6 @@ import 'package:stellar_tv/services/profile_service.dart';
 import 'package:stellar_tv/services/sync_service.dart';
 import 'package:stellar_tv/services/tmdb_service.dart';
 import 'package:stellar_tv/theme/app_theme.dart';
-import 'package:stellar_tv/widgets/home_art.dart';
 import 'october_live_multiview_test.dart' as fixtures;
 
 TmdbItem item(int id, String title) => TmdbItem(
@@ -42,6 +41,7 @@ TmdbItem item(int id, String title) => TmdbItem(
 class HomeApp extends fixtures.TestApp {
   @override
   bool isAvailable(TmdbItem item) => true;
+  @override
   bool isTmdbAllowed(TmdbItem item) => true;
   @override
   Channel? findForTmdb(TmdbItem item) => null;

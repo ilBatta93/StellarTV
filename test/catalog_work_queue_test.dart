@@ -1,4 +1,4 @@
-import '../lib/services/catalog_work_queue.dart';
+import 'package:stellar_tv/services/catalog_work_queue.dart';
 
 void main() {
   final now = DateTime.utc(2026, 10, 21);

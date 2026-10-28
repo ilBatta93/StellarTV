@@ -16,8 +16,9 @@ class UiScale extends StatelessWidget {
     if (scale == 1) return Builder(builder: builder);
     return LayoutBuilder(
       builder: (context, bounds) {
-        if (!bounds.hasBoundedWidth || !bounds.hasBoundedHeight)
+        if (!bounds.hasBoundedWidth || !bounds.hasBoundedHeight) {
           return Builder(builder: builder);
+        }
         final mq = MediaQuery.of(context);
         final size = Size(bounds.maxWidth / scale, bounds.maxHeight / scale);
         EdgeInsets adjust(EdgeInsets edge) => edge / scale;

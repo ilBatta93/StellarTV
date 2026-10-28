@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import '../lib/services/playback_work_policy.dart';
+import 'package:stellar_tv/services/playback_work_policy.dart';
 
 void check(bool value, String rule) {
   if (!value) throw StateError(rule);

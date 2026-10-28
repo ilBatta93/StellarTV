@@ -45,8 +45,9 @@ class EpisodeMetadataService {
         if (known.isNotEmpty &&
             known.every(
               (c) => store.isFresh('tv:${item.id}:$season:${c.episode}'),
-            ))
+            )) {
           return;
+        }
         final data = await TmdbService().seasonMetadata(item.id, season);
         for (final e in data) {
           if (PlaybackWorkPolicy.instance.blocksGuide) return;

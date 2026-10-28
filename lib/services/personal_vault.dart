@@ -17,8 +17,9 @@ class VaultKeyStore {
   Future<void> save(String account, String key) async {
     PersonalVault.keyBytes(key);
     await _storage.write(key: 'personal_vault_$account', value: key);
-    if (await read(account) != key)
+    if (await read(account) != key) {
       throw StateError('Chiave non salvata sul dispositivo');
+    }
   }
 
   Future<void> forget(String account) =>
@@ -96,8 +97,9 @@ class PersonalVault {
         .trim()
         .replaceFirst(RegExp(r'^STV1-', caseSensitive: false), '')
         .replaceAll(RegExp(r'[\s-]'), '');
-    if (!RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(s))
+    if (!RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(s)) {
       throw const FormatException('Chiave di recupero non valida');
+    }
     return [
       for (var i = 0; i < 64; i += 2)
         int.parse(s.substring(i, i + 2), radix: 16),
@@ -123,7 +125,7 @@ class PersonalVault {
       return null;
     }
     if (v is List) return v.map(preference).where((v) => v != null).toList();
-    if (v is Map)
+    if (v is Map) {
       return {
         for (final e in object(v).entries)
           if (RegExp(r'^[a-zA-Z0-9_-]{1,40}$').hasMatch(e.key) &&
@@ -134,6 +136,7 @@ class PersonalVault {
               preference(e.value) != null)
             e.key: preference(e.value),
       };
+    }
     return null;
   }
 
@@ -213,8 +216,9 @@ class PersonalVault {
                   ? ((object(e.value)['pos'] as num?) ?? 3) <
                         ((object(old)['pos'] as num?) ?? 3)
                   : object(e.value)['deleted'] == true ||
-                        object(old)['deleted'] != true))
+                        object(old)['deleted'] != true)) {
         out[e.key] = e.value;
+      }
     }
     return out;
   }
@@ -311,15 +315,18 @@ class PersonalVault {
         e['alg'] != 'A256GCM' ||
         e['keyId'] != await keyId(recovery, account) ||
         e['nonce'] is! String ||
-        e['ciphertext'] is! String)
+        e['ciphertext'] is! String) {
       throw const FormatException('Chiave non corretta per questo account');
+    }
     final text = e['ciphertext'] as String;
     if (text.length > 12000000 ||
-        !RegExp(r'^[A-Za-z0-9+/]+={0,2}$').hasMatch(text))
+        !RegExp(r'^[A-Za-z0-9+/]+={0,2}$').hasMatch(text)) {
       throw const FormatException('Salvataggio non valido');
+    }
     final nonce = base64Decode(e['nonce'] as String), data = base64Decode(text);
-    if (nonce.length != 12 || data.length < 16)
+    if (nonce.length != 12 || data.length < 16) {
       throw const FormatException('Salvataggio non valido');
+    }
     final plain = await _aes.decrypt(
       SecretBox(
         data.sublist(0, data.length - 16),

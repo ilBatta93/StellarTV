@@ -1,4 +1,4 @@
-import '../lib/services/live_preview_policy.dart';
+import 'package:stellar_tv/services/live_preview_policy.dart';
 
 void main() {
   void check(bool condition, String name) {

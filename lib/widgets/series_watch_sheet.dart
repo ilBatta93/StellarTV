@@ -26,10 +26,11 @@ class _SeriesWatchSheetState extends State<SeriesWatchSheet> {
         seriesId: widget.details.series.seriesKey ?? widget.details.series.id,
       );
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Salvataggio non riuscito. Riprova.')),
         );
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -98,8 +99,9 @@ class _SeriesWatchSheetState extends State<SeriesWatchSheet> {
     if (manual == false) return 'Non visto · manuale';
     final entry = history.entryFor(id);
     if (history.isWatched(id)) return 'Visto · automatico';
-    if (entry == null || entry.position == Duration.zero)
+    if (entry == null || entry.position == Duration.zero) {
       return 'Non iniziato · automatico';
+    }
     final progress = entry.progress;
     if (progress == null) return 'In corso · durata non disponibile';
     return 'In corso · ${(progress * 100).round()}%';
@@ -178,10 +180,11 @@ class _SeriesWatchSheetState extends State<SeriesWatchSheet> {
           TextButton(
             autofocus: true,
             onPressed: () {
-              if (season == null)
+              if (season == null) {
                 Navigator.pop(context);
-              else
+              } else {
                 setState(() => selected = null);
+              }
             },
             child: Text(season == null ? 'Chiudi' : 'Stagioni'),
           ),

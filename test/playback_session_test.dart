@@ -789,8 +789,8 @@ void main() {
 }
 
 class _StickyEngine extends _FakeEngine {
-  _StickyEngine(PlayerEngineType type, String url)
-    : super(type, url, succeed: true);
+  _StickyEngine(super.type, super.url)
+    : super(succeed: true);
 
   int reopens = 0;
 
@@ -802,7 +802,7 @@ class _StickyEngine extends _FakeEngine {
 }
 
 class _FrameEngine extends _FakeEngine {
-  _FrameEngine(PlayerEngineType type, String url) : super(type, url, succeed: true);
+  _FrameEngine(super.type, super.url) : super(succeed: true);
 
   int frames = 0;
 
@@ -811,16 +811,16 @@ class _FrameEngine extends _FakeEngine {
 }
 
 class _PausedNoPictureEngine extends _FakeEngine {
-  _PausedNoPictureEngine(PlayerEngineType type, String url)
-      : super(type, url, succeed: true);
+  _PausedNoPictureEngine(super.type, super.url)
+      : super(succeed: true);
   @override
   bool? get videoFrameRendered => false;
 }
 
 /// Opens fine and plays, but never draws a picture.
 class _NoPictureEngine extends _FakeEngine {
-  _NoPictureEngine(PlayerEngineType type, String url)
-    : super(type, url, succeed: true);
+  _NoPictureEngine(super.type, super.url)
+    : super(succeed: true);
 
   @override
   bool? get videoFrameRendered => false;

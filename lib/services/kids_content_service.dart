@@ -28,12 +28,14 @@ class KidsContentService {
   }
   bool _resumePending = false;
   void _resume() {
-    if (_running && !PlaybackWorkPolicy.instance.blocksGuide)
+    if (_running && !PlaybackWorkPolicy.instance.blocksGuide) {
       _resumePending = true;
+    }
     if (!_running &&
         _work.pending.isNotEmpty &&
-        !PlaybackWorkPolicy.instance.blocksGuide)
+        !PlaybackWorkPolicy.instance.blocksGuide) {
       unawaited(_run());
+    }
   }
 
   void dispose() {
@@ -331,8 +333,9 @@ class KidsContentService {
           _work.release(work.keys, resolved, DateTime.now());
           if (PlaybackWorkPolicy.instance.blocksGuide) {
             for (final e in work.entries) {
-              if (!resolved.contains(e.key))
+              if (!resolved.contains(e.key)) {
                 _work.pending.putIfAbsent(e.key, () => e.value);
+              }
             }
           }
         }

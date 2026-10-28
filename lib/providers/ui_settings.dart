@@ -394,8 +394,9 @@ class UiSettings extends ChangeNotifier {
 
   Future<void> setSectionOrder(List<AppSection> value) async {
     if (value.length != AppSection.values.length ||
-        value.toSet().length != AppSection.values.length)
+        value.toSet().length != AppSection.values.length) {
       return;
+    }
     _sectionOrder = List.of(value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(sectionOrderKey, value.map((e) => e.id).toList());

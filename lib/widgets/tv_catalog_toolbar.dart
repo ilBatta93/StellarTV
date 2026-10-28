@@ -184,8 +184,9 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
       _expanded = true;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && token == _transition && _expanded)
+      if (mounted && token == _transition && _expanded) {
         TvTextField.focusWithKeyboard(_field);
+      }
     });
   }
 
@@ -231,8 +232,9 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   void _focusPanel() {
     final token = _transition;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || token != _transition || !(_filtersOpen || _platformsOpen))
+      if (!mounted || token != _transition || !(_filtersOpen || _platformsOpen)) {
         return;
+      }
       final nodes = _panel.traversalDescendants.where(
         (n) => n.canRequestFocus && !n.skipTraversal,
       );

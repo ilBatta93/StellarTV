@@ -182,8 +182,9 @@ PreparedCatalog prepareCatalogSync({
         byId[c.id] = entry;
       }
     }
-    if (entries.isNotEmpty)
+    if (entries.isNotEmpty) {
       base.add(CatalogGroup(label: label, entries: entries));
+    }
   }
   final labels = <String, CatalogGroup>{};
   for (final c in custom) {
@@ -218,8 +219,9 @@ PreparedCatalog prepareCatalogSync({
   final recent = <CatalogEntry>[];
   final recentSeen = <String>{};
   for (final (_, c) in newest) {
-    if (recentSeen.add(key(c)))
+    if (recentSeen.add(key(c))) {
       recent.add(CatalogEntry(primary: c, variants: [c]));
+    }
     if (recent.length == 100) break;
   }
   final all = <CatalogEntry>[];

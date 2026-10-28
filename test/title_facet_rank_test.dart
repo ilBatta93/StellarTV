@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/services/catalog_sort.dart';
-import '../lib/services/title_matching.dart';
+import 'package:stellar_tv/services/catalog_sort.dart';
+import 'package:stellar_tv/services/title_matching.dart';
 
 void main() {
   test('known scores order the ids and omit the rest', () {

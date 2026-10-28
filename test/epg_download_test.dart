@@ -2,9 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/providers/epg_provider.dart';
-import '../lib/services/epg_archive.dart';
-import '../lib/services/epg_downloader.dart';
+import 'package:stellar_tv/providers/epg_provider.dart';
+import 'package:stellar_tv/services/epg_downloader.dart';
 
 String fixture() {
   final now = DateTime.now().toUtc();

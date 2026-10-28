@@ -33,11 +33,12 @@ class _ProviderCheckButtonState extends State<ProviderCheckButton> {
       playbackUrl: widget.playbackUrl,
       playbackFailed: widget.playbackFailed,
     );
-    if (mounted)
+    if (mounted) {
       setState(() {
         _result = result;
         _busy = false;
       });
+    }
   }
 
   @override

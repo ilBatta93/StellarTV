@@ -19,13 +19,15 @@ class FrameTelemetryStore {
         final previous = File('${dir.path}/telemetry_previous.json');
         Future<Map<String, Object?>?> read(File file) async {
           try {
-            if (!await file.exists() || await file.length() > maxBytes)
+            if (!await file.exists() || await file.length() > maxBytes) {
               return null;
+            }
             final value = jsonDecode(await file.readAsString());
             if (value is! Map ||
                 value['kind'] != 'performance' ||
-                value['v'] != 2)
+                value['v'] != 2) {
               return null;
+            }
             return Map<String, Object?>.from(value);
           } catch (_) {
             return null;
@@ -61,8 +63,9 @@ class FrameTelemetryStore {
     Map<String, Object?> report,
   ) async {
     final bytes = utf8.encode(jsonEncode(report));
-    if (bytes.length > maxBytes)
+    if (bytes.length > maxBytes) {
       throw const FormatException('checkpoint too large');
+    }
     await File(path).parent.create(recursive: true);
     final temporary = File('$path.tmp');
     await temporary.writeAsBytes(bytes, flush: true);

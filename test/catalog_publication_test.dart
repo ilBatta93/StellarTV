@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/models/channel.dart';
-import '../lib/models/content_type.dart';
-import '../lib/services/catalog_publication.dart';
+import 'package:stellar_tv/models/channel.dart';
+import 'package:stellar_tv/models/content_type.dart';
+import 'package:stellar_tv/services/catalog_publication.dart';
 
 Channel item(int n, ContentType type) => Channel(
   id: '$n',

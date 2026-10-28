@@ -74,7 +74,7 @@ function onYouTubeIframeAPIReady(){
     playerVars:{autoplay:1,controls:0,rel:0,modestbranding:1,playsinline:1,hl:'it',fs:0,iv_load_policy:3,cc_lang_pref:'it',cc_load_policy:${subtitles ? 1 : 0}},
     events:{
       onReady:function(e){e.target.playVideo();},
-      onApiChange:function(e){if(${subtitles})italianCaptions();},
+      onApiChange:function(e){if($subtitles)italianCaptions();},
       onStateChange:function(e){
         if(e.data==1)send('playing');else if(e.data==2)send('paused');else if(e.data==0)send('ended');},
       onError:function(e){send('error');}

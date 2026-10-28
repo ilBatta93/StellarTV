@@ -211,8 +211,9 @@ void main() {
         await tester.tap(find.byTooltip(tooltip));
         await tester.pumpAndSettle();
         // Home must resolve the toolbar even when primaryFocus was detached.
-        if (!TvCatalogToolbar.handleBack(null, context: homeContext))
+        if (!TvCatalogToolbar.handleBack(null, context: homeContext)) {
           menuBacks++;
+        }
         expect(TvCatalogToolbar.handleBack(null, context: homeContext), isTrue);
         await tester.pumpAndSettle();
         expect(opener?.hasFocus, isTrue);

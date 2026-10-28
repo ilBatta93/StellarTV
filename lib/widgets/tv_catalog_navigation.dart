@@ -106,8 +106,9 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
     if (primary == null) return false;
     if (!primary.ancestors.contains(_tools) &&
         !primary.ancestors.contains(_filters) &&
-        !primary.ancestors.contains(_items))
+        !primary.ancestors.contains(_items)) {
       return false;
+    }
     if (primary.context
             ?.findAncestorStateOfType<ScaffoldState>()
             ?.isDrawerOpen ==

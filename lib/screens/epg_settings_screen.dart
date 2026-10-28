@@ -139,8 +139,9 @@ class EpgSettingsScreen extends StatelessWidget {
                     current: interval,
                     label: (v) => v.label,
                   );
-                  if (chosen != null)
+                  if (chosen != null) {
                     await epg.setIntervalMinutes(chosen.minutes);
+                  }
                 },
               ),
             ],

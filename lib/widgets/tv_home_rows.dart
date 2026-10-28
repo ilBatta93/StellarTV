@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import 'tv_focusable.dart';
@@ -155,17 +156,13 @@ class _TvHomeRowsState extends State<TvHomeRows> {
       builder: (context, bounds) {
         _extent = bounds.maxHeight;
         return ListView.builder(
-          controller: _scroll,
+          scrollCacheExtent: ScrollCacheExtent.pixels(_extent *
+              TvRenderPolicy.rowCacheFraction(
+                memoryPressure: TvImageMemoryGuard.reducedRendering.value,
+              )), controller: _scroll,
           physics: const _NoImplicitScroll(),
           padding: EdgeInsets.zero,
           itemExtent: _extent,
-          // Neighbouring rows only: building every row offscreen decoded all
-          // posters at once and exhausted TV memory under load.
-          cacheExtent:
-              _extent *
-              TvRenderPolicy.rowCacheFraction(
-                memoryPressure: TvImageMemoryGuard.reducedRendering.value,
-              ),
           itemCount: widget.sections.length,
           itemBuilder: (context, index) => Focus(
             focusNode: _rows[index],
@@ -179,12 +176,14 @@ class _TvHomeRowsState extends State<TvHomeRows> {
               }
             },
             onKeyEvent: (node, event) {
-              if (event is! KeyDownEvent && event is! KeyRepeatEvent)
+              if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
                 return KeyEventResult.ignored;
+              }
               final key = event.logicalKey;
               if (key != LogicalKeyboardKey.arrowDown &&
-                  key != LogicalKeyboardKey.arrowUp)
+                  key != LogicalKeyboardKey.arrowUp) {
                 return KeyEventResult.ignored;
+              }
               RemoteNavigation.note();
               try {
                 return _move(index, event);

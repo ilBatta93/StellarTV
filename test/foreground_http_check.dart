@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import '../lib/services/foreground_http_client.dart';
-import '../lib/services/foreground_policy.dart';
+import 'package:stellar_tv/services/foreground_http_client.dart';
+import 'package:stellar_tv/services/foreground_policy.dart';
 
 void check(bool result, String rule) {
   if (!result) throw StateError(rule);

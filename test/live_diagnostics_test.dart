@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/services/live_diagnostics_log.dart';
+import 'package:stellar_tv/services/live_diagnostics_log.dart';
 
 void main() {
   test('diagnostics is off by default and stops recording when disabled', () {

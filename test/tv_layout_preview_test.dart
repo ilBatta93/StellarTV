@@ -40,13 +40,11 @@ const mediaDir = '/tmp/stellar-tv/media';
 const logoUrl = 'https://preview.invalid/silo.png';
 List<TmdbItem> loadTitles() => [
   for (final id in [125988, 95396, 97546, 111110])
-    if (TmdbItem.tryParse(
+    ?TmdbItem.tryParse(
           jsonDecode(File('$mediaDir/$id.json').readAsStringSync())
               as Map<String, dynamic>,
           fallbackType: 'tv',
-        )
-        case final item?)
-      item,
+        ),
 ];
 
 class ArtService extends TmdbService {
@@ -200,8 +198,9 @@ Future<void> cacheImage(
 Future<void> save(WidgetTester tester, GlobalKey key, String name) async {
   await tester.runAsync(() async {
     final boundary = key.currentContext?.findRenderObject();
-    if (boundary is! RenderRepaintBoundary)
+    if (boundary is! RenderRepaintBoundary) {
       throw StateError('No screenshot boundary');
+    }
     final image = await boundary.toImage(pixelRatio: 1);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     if (bytes == null) throw StateError('No image bytes');

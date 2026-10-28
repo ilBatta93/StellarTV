@@ -25,8 +25,9 @@ class PlaybackWorkPolicy {
   void addListener(void Function() listener) => _listeners.add(listener);
   void removeListener(void Function() listener) => _listeners.remove(listener);
   void update(Object owner, {required bool cloudBlocked}) {
-    if (_sessions[owner] == cloudBlocked && _sessions.containsKey(owner))
+    if (_sessions[owner] == cloudBlocked && _sessions.containsKey(owner)) {
       return;
+    }
     _sessions[owner] = cloudBlocked;
     _changed();
   }
@@ -36,7 +37,9 @@ class PlaybackWorkPolicy {
   }
 
   void _changed() {
-    for (final listener in List<void Function()>.of(_listeners)) listener();
+    for (final listener in List<void Function()>.of(_listeners)) {
+      listener();
+    }
   }
 
   static Duration conflictDelay(Random random) =>

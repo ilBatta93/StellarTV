@@ -129,8 +129,9 @@ class _HomeTitleArtState extends State<HomeTitleArt> {
 }
 
 double homeCardWidth([BuildContext? context]) {
-  if (context != null && HomePresentation.contains(context))
+  if (context != null && HomePresentation.contains(context)) {
     return HomePresentation.width(context, recent: true);
+  }
   if (!DeviceTypeService.isTv) return 208;
   if (context == null) return 244;
   final layout = TvHomeLayout.maybeOf(context);

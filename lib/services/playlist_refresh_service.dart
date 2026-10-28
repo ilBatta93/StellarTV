@@ -96,8 +96,9 @@ class PlaylistRefreshService {
     _timer?.cancel();
     final epoch = ++_epoch;
     final remaining = await timeUntilDue();
-    if (epoch != _epoch || !ForegroundPolicy.instance.active || !_enabled)
+    if (epoch != _epoch || !ForegroundPolicy.instance.active || !_enabled) {
       return;
+    }
     if (remaining == null) return;
     final wait = remaining < startupDelay ? startupDelay : remaining;
     _timer = Timer(wait, _run);
@@ -115,8 +116,9 @@ class PlaylistRefreshService {
       _running = false;
     }
     final remaining = await timeUntilDue();
-    if (remaining == null || !_enabled || !ForegroundPolicy.instance.active)
+    if (remaining == null || !_enabled || !ForegroundPolicy.instance.active) {
       return;
+    }
     _timer?.cancel();
     // Failed attempt: try again in 30 minutes instead of a full interval.
     _timer = Timer(

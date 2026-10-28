@@ -121,8 +121,9 @@ String? _tokenFromPoll(int statusCode, String body) {
   if (statusCode != 200) throw const PairingOffline();
   final json = _jsonMap(body);
   final status = json['status'];
-  if (status == 'expired' || status == 'not_found')
+  if (status == 'expired' || status == 'not_found') {
     throw const PairingExpired();
+  }
   if (status != 'approved') return null;
   final token = json['token_hash'];
   if (token is! String || token.isEmpty) return null;

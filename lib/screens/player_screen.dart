@@ -1058,8 +1058,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!mounted) return;
     _remoteFocus.requestFocus();
     _scheduleHide();
-    if (selected == null || selected.id == _channel.id || _advancing)
+    if (selected == null || selected.id == _channel.id || _advancing) {
       return;
+    }
     _advancing = true;
     await _saveResume();
     // Retire the old stream before opening another on single-connection providers.
@@ -1137,11 +1138,12 @@ class _PlayerScreenState extends State<PlayerScreen>
       if (!mounted) return;
       // Evita la doppia scritta spegnendo la traccia incorporata.
       await _session?.setExternalSubtitles(true);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _onlineCues = cues;
           _onlineVariant = variant;
         });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1196,8 +1198,9 @@ class _PlayerScreenState extends State<PlayerScreen>
   Future<void> _readLocalChapters(PlaybackSession session) async {
     final engine = session.engine;
     final movie = _channel.type == ContentType.movie;
-    if ((!_isEpisode && !movie) || engine == null || _chapterReadInFlight)
+    if ((!_isEpisode && !movie) || engine == null || _chapterReadInFlight) {
       return;
+    }
     if (!identical(engine, _chaptersEngine)) {
       _chaptersEngine = engine;
       _chapterAttempts = 0;
@@ -1208,16 +1211,18 @@ class _PlayerScreenState extends State<PlayerScreen>
         session.value.duration <= Duration.zero ||
         DateTime.now().isBefore(_chaptersNotBefore) ||
         _chapterAttempts >= 3 ||
-        _chapterSegments.all.isNotEmpty)
+        _chapterSegments.all.isNotEmpty) {
       return;
+    }
     _chapterReadInFlight = true;
     _chapterAttempts++;
     try {
       final chapters = await engine.chapters();
       if (!mounted ||
           !identical(_session, session) ||
-          !identical(session.engine, engine))
+          !identical(session.engine, engine)) {
         return;
+      }
       final parsed = chapterSegments(chapters, session.value.duration);
       if (parsed.all.isEmpty) {
         if (_chapterAttempts < 3) {
@@ -1249,8 +1254,9 @@ class _PlayerScreenState extends State<PlayerScreen>
   void _checkOutro(Duration position) {
     final session = _session;
     final outro = _effectiveSegments.outro;
-    if (session == null || _next == null || _outroDisabled || _advancing)
+    if (session == null || _next == null || _outroDisabled || _advancing) {
       return;
+    }
     final inOutro = outro != null
         ? position >= outro.start
         : suggestNext(position: position, duration: session.value.duration);
@@ -1259,15 +1265,16 @@ class _PlayerScreenState extends State<PlayerScreen>
       _outroActive = true;
       _outroCountdown = 5;
       _outroTimer?.cancel();
-      if (_settings?.autoNextEpisode == true && _outroVerified)
+      if (_settings?.autoNextEpisode == true && _outroVerified) {
         _outroTimer = Timer.periodic(const Duration(seconds: 1), (t) {
           if (!mounted || _settings?.autoNextEpisode != true) return t.cancel();
           final current = _session;
           if (current == null ||
               !current.value.isPlaying ||
               !ForegroundPolicy.instance.active ||
-              _route?.isCurrent != true)
+              _route?.isCurrent != true) {
             return;
+          }
           if (_outroCountdown <= 1) {
             t.cancel();
             playNextEpisode();
@@ -1275,6 +1282,7 @@ class _PlayerScreenState extends State<PlayerScreen>
             setState(() => _outroCountdown--);
           }
         });
+      }
     } else if (!inOutro && _outroActive) {
       // The user seeked back before the credits.
       _outroActive = false;
@@ -1570,8 +1578,9 @@ class _PlayerScreenState extends State<PlayerScreen>
             _settings?.autoNextEpisode == true &&
             _session?.value.isEnded == true &&
             ForegroundPolicy.instance.active &&
-            _route?.isCurrent == true)
+            _route?.isCurrent == true) {
           _playNext();
+        }
       });
     }
 

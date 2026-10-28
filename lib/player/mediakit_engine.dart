@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -25,6 +24,9 @@ class MediaKitEngine extends PlaybackEngine {
          configuration: PlayerConfiguration(
            // The old value (network caching ms * 1 KB, ~1.5 MB) held about a
            // second of HD video: any network hiccup stuttered. 32 MB minimum.
+           // Fire TV live: raise the forward buffer to the 16 MB TV floor so
+           // the first picture waits less on slow providers and jitter does not
+           // stall the audio/video sync.
            bufferSize: cacheBytes(
              settings,
              isLive: isLive,
@@ -559,7 +561,7 @@ class MediaKitEngine extends PlaybackEngine {
         final value = await platform
             .getProperty(property)
             .timeout(const Duration(milliseconds: 400));
-        if (value is num || value is String && value.length <= 32) {
+        if (value is num || value.length <= 32) {
           out[key] = value;
         }
       } catch (_) {}
@@ -581,14 +583,16 @@ class MediaKitEngine extends PlaybackEngine {
   @override
   Future<List<Map<String, Object?>>> chapters() async {
     final platform = _player.platform;
-    if (_disposed || isLive || previewMode || platform is! NativePlayer)
+    if (_disposed || isLive || previewMode || platform is! NativePlayer) {
       return const [];
+    }
     try {
       final deadline = Stopwatch()..start();
       Future<String> read(String property) {
         final remaining = 2200 - deadline.elapsedMilliseconds;
-        if (_disposed || remaining <= 0)
+        if (_disposed || remaining <= 0) {
           throw TimeoutException('Chapter read deadline');
+        }
         return platform
             .getProperty(property)
             .timeout(Duration(milliseconds: remaining));
@@ -596,8 +600,9 @@ class MediaKitEngine extends PlaybackEngine {
 
       return await (() async {
         final count = int.tryParse(await read('chapter-list/count')) ?? 0;
-        if (count <= 0 || count > 40 || _disposed)
+        if (count <= 0 || count > 40 || _disposed) {
           return <Map<String, Object?>>[];
+        }
         final result = <Map<String, Object?>>[];
         for (var i = 0; i < count; i++) {
           if (_disposed) return <Map<String, Object?>>[];
@@ -724,9 +729,9 @@ class MediaKitEngine extends PlaybackEngine {
   Future<void> sampleOutput() => _sampleOutputSignal();
 
   @override
-  Future<bool> reopen(String next) async {
+  Future<bool> reopen(String url) async {
     if (_disposed) return false;
-    url = next;
+    this.url = url;
     _firstFrameRendered = false;
     _outputFrames = null;
     _outputToken = null;
@@ -735,7 +740,7 @@ class MediaKitEngine extends PlaybackEngine {
     try {
       final ua = effectiveStreamUserAgent(_settings.userAgent);
       await _player.open(
-        Media(next, httpHeaders: {'User-Agent': ua}),
+        Media(url, httpHeaders: {'User-Agent': ua}),
         play: true,
       );
     } catch (_) {

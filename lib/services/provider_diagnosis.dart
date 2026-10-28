@@ -27,46 +27,53 @@ ProviderDiagnosis classifyProvider(
   Object? data, {
   bool playbackFailed = false,
 }) {
-  if (status == 401 || status == 403)
+  if (status == 401 || status == 403) {
     return const ProviderDiagnosis(
       ProviderCondition.unauthorized,
       'Accesso rifiutato: verifica i dati di accesso.',
     );
-  if (status >= 500)
+  }
+  if (status >= 500) {
     return const ProviderDiagnosis(
       ProviderCondition.unreachable,
       'Il server segnala un errore. Potrebbe essere temporaneo.',
     );
-  if (status != 200 || data is! Map || data['user_info'] is! Map)
+  }
+  if (status != 200 || data is! Map || data['user_info'] is! Map) {
     return const ProviderDiagnosis(
       ProviderCondition.unknown,
       'Risposta non verificabile: impossibile stabilire la causa.',
     );
+  }
   final u = data['user_info'] as Map;
   final state = '${u['status'] ?? ''}'.toLowerCase();
-  if (['expired', 'disabled', 'banned'].contains(state))
+  if (['expired', 'disabled', 'banned'].contains(state)) {
     return const ProviderDiagnosis(
       ProviderCondition.inactive,
       'Account non attivo: scaduto o disabilitato.',
     );
-  if (u['auth'] == 0 || u['auth'] == '0')
+  }
+  if (u['auth'] == 0 || u['auth'] == '0') {
     return const ProviderDiagnosis(
       ProviderCondition.unauthorized,
       'Accesso rifiutato: verifica i dati di accesso.',
     );
+  }
   int? count(Object? x) => int.tryParse('$x');
   final active = count(u['active_cons']);
   final max = count(u['max_connections']);
-  if (active != null && active >= 0 && max != null && max > 0 && active >= max)
+  if (active != null && active >= 0 && max != null && max > 0 && active >= max) {
     return ProviderDiagnosis(
       ProviderCondition.limit,
       'Limite connessioni raggiunto ($active/$max). Può includere questa riproduzione o una connessione appena chiusa: non prova che sia un altro dispositivo.',
     );
-  if (state != 'active')
+  }
+  if (state != 'active') {
     return const ProviderDiagnosis(
       ProviderCondition.unknown,
       'Il server risponde, ma lo stato dell’account non è verificabile.',
     );
+  }
   return ProviderDiagnosis(
     ProviderCondition.online,
     playbackFailed
@@ -82,11 +89,12 @@ class ProviderDiagnosisService {
     String? playbackUrl,
     bool playbackFailed = false,
   }) async {
-    if (_busy)
+    if (_busy) {
       return const ProviderDiagnosis(
         ProviderCondition.unknown,
         'È già in corso una verifica. Riprova tra pochi secondi.',
       );
+    }
     _busy = true;
     try {
       return await _check(playbackUrl, playbackFailed);
@@ -101,27 +109,30 @@ class ProviderDiagnosisService {
   ) async {
     http.Client? client;
     try {
-      if (!ForegroundPolicy.instance.active)
+      if (!ForegroundPolicy.instance.active) {
         return const ProviderDiagnosis(
           ProviderCondition.unknown,
           'Verifica sospesa: torna nell’app e riprova.',
         );
+      }
       final credentials = await SettingsService().getXtreamCredentials();
-      if (credentials == null)
+      if (credentials == null) {
         return const ProviderDiagnosis(
           ProviderCondition.unsupported,
           'Questo accesso non espone informazioni sullo stato del servizio.',
         );
+      }
       var base = credentials['server'] ?? '';
       if (!base.contains('://')) base = 'http://$base';
       final server = Uri.tryParse(base);
       if (server == null ||
           !['http', 'https'].contains(server.scheme) ||
-          server.host.isEmpty)
+          server.host.isEmpty) {
         return const ProviderDiagnosis(
           ProviderCondition.unsupported,
           'Configurazione non verificabile.',
         );
+      }
       if (playbackUrl != null) {
         final media = Uri.tryParse(playbackUrl);
         final parts = media?.pathSegments ?? const <String>[];
@@ -141,11 +152,12 @@ class ProviderDiagnosisService {
         if (media == null ||
             media.host != server.host ||
             media.port != server.port ||
-            !(pathAccount || queryAccount || shortLive))
+            !(pathAccount || queryAccount || shortLive)) {
           return const ProviderDiagnosis(
             ProviderCondition.unsupported,
             'Questa riproduzione non è associabile all’account salvato.',
           );
+        }
       }
       final path =
           '${server.path.replaceAll(RegExp(r'/+$'), '')}/player_api.php';
@@ -166,19 +178,21 @@ class ProviderDiagnosisService {
             ..headers['Connection'] = 'close'
             ..headers['User-Agent'] = 'StellarTV/1.0',
         );
-        if (response.statusCode != 200)
+        if (response.statusCode != 200) {
           return classifyProvider(
             response.statusCode,
             null,
             playbackFailed: failed,
           );
+        }
         final bytes = <int>[];
         await for (final chunk in response.stream) {
-          if (bytes.length + chunk.length > 65536)
+          if (bytes.length + chunk.length > 65536) {
             return const ProviderDiagnosis(
               ProviderCondition.unknown,
               'Risposta non verificabile.',
             );
+          }
           bytes.addAll(chunk);
         }
         return classifyProvider(

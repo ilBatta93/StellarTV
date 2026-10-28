@@ -162,8 +162,9 @@ class PlayerSettingsService {
       tv: tv,
     );
     await save(defaults, scope: scope);
-    if (scope != PlayerSettingsScope.liveTv)
+    if (scope != PlayerSettingsScope.liveTv) {
       await setAutoNextEpisode(defaults.autoNextEpisode);
+    }
   }
 
   Future<Map<String, int>> _resumeMap(SharedPreferences prefs) async {

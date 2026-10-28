@@ -48,7 +48,7 @@ class LiveDiagnosticsTracker {
         'engine': engine,
         'preview': preview,
         'softwareDecode': software,
-        if (userAgent != null) 'userAgent': userAgent,
+        'userAgent': ?userAgent,
         'format': Uri.tryParse(url)?.path.endsWith('.m3u8') == true
             ? 'hls'
             : Uri.tryParse(url)?.path.endsWith('.ts') == true
@@ -89,11 +89,12 @@ class LiveDiagnosticsTracker {
     } else if ((!v.isBuffering || !active) && bufferingAt != null) {
       final since = bufferingAt;
       bufferingAt = null;
-      if (since != null)
+      if (since != null) {
         event(
           'buffer_end',
           data: {'durationMs': (clock.elapsed - since).inMilliseconds},
         );
+      }
     }
 
     // clock_pinned: after the first frame the position never exceeds ~500 ms.
@@ -126,7 +127,7 @@ class LiveDiagnosticsTracker {
         data: {
           'positionMs': v.position.inMilliseconds,
           'videoFrameConfirmed': firstFrame,
-          if (frameDelta != null) 'frameDelta': frameDelta,
+          'frameDelta': ?frameDelta,
         },
       );
       // Snapshot the current frame count so the next delta is relative.
@@ -139,11 +140,12 @@ class LiveDiagnosticsTracker {
     if (!running) return;
     running = false;
     final since = bufferingAt;
-    if (since != null)
+    if (since != null) {
       event(
         'buffer_interrupted',
         data: {'durationMs': (clock.elapsed - since).inMilliseconds},
       );
+    }
     bufferingAt = null;
     event('attempt_end', data: {'reason': reason});
     clock.stop();

@@ -123,7 +123,7 @@ class PlatformBadge extends StatelessWidget {
         platform.logoAsset,
         fit: BoxFit.contain,
         filterQuality: FilterQuality.medium,
-        errorBuilder: (_, __, ___) => Text(
+        errorBuilder: (_, _, _) => Text(
           platform.name,
           style: TextStyle(
             color: platform.color,
@@ -222,7 +222,7 @@ class ImdbRatingBadge extends StatelessWidget {
       ImdbRatingService.instance.store,
       TitleFacetIndex.instance,
     ]),
-    builder: (_, __) {
+    builder: (_, _) {
       if (priority) {
         ImdbRatingService.instance.ratingOf(item, priority: true);
       } else if (reveal) {
@@ -270,8 +270,9 @@ class _ChannelRatingBadgeState extends State<ChannelRatingBadge> {
   }
 
   void _request() {
-    if (!TitleMetadataStore.disabled)
+    if (!TitleMetadataStore.disabled) {
       CatalogRatingService.instance.request([widget.channel], priority: true);
+    }
   }
 
   @override
@@ -284,7 +285,7 @@ class _ChannelRatingBadgeState extends State<ChannelRatingBadge> {
         ImdbRatingService.instance.store,
         TitleFacetIndex.instance,
       ]),
-      builder: (_, __) {
+      builder: (_, _) {
         final item = service.itemOf(widget.channel);
         // Posters read the device cache only. A full lookup is reserved for
         // the open title, so scrolling cannot delay that page.
@@ -313,7 +314,7 @@ class EpisodeRatingBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: ImdbRatingService.instance.store,
-    builder: (_, __) => RatingValue(
+    builder: (_, _) => RatingValue(
       imdb: ImdbRatingService.instance.episodeRating(
         metadata.seriesId,
         metadata.season,

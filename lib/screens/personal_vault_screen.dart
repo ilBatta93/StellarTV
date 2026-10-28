@@ -63,11 +63,12 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
     try {
       await action();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _status =
               'Operazione non riuscita. Verifica la chiave e la connessione. Nessun dato precedente è stato eliminato. (dettaglio: $e)',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -75,48 +76,53 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
 
   Future<void> _create() => _run(() async {
     if (await context.read<SyncProvider>().hasCloudVault()) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _status =
               'La cassaforte esiste già: usa la tua chiave attuale. Una chiave nuova non aprirebbe i dati salvati.';
           _state = _VaultState.existing;
         });
+      }
       return;
     }
     final key = PersonalVault.generateKey();
-    if (mounted)
+    if (mounted) {
       setState(() {
         _generated = key;
         _input.text = key;
         _reveal = true;
         _saved = false;
       });
+    }
   });
   Future<void> _authorize() => _run(() async {
     final sync = context.read<SyncProvider>();
     final history = context.read<HistoryProvider>();
     await sync.authorizeVault(_input.text.trim());
     // Merge existing ciphertext before publishing the device copy.
-    if (await sync.hasCloudVault() && !await history.pullFromCloud())
+    if (await sync.hasCloudVault() && !await history.pullFromCloud()) {
       throw StateError('Ripristino non riuscito');
+    }
     // The key is already proven by the restore above: a failed upload is a
     // warning, not a failed import.
     final pushed = await sync.pushNow(silent: true);
-    if (!pushed && !await sync.hasCloudVault())
+    if (!pushed && !await sync.hasCloudVault()) {
       throw StateError(sync.lastPushError ?? 'Salvataggio non verificato');
+    }
     await history.pullFromCloud();
     if (mounted) _state = _VaultState.active;
-    if (mounted)
+    if (mounted) {
       setState(
         () => _status = pushed
             ? 'Salvataggio cifrato verificato. Sincronizzazione attiva; copie precedenti conservate.'
             : 'Chiave importata e dati ripristinati. Invio al cloud non riuscito, riprova più tardi'
                 '${sync.lastPushError == null ? '.' : ' (dettaglio: ${sync.lastPushError}).'}',
       );
+    }
   });
   Future<void> _show() => _run(() async {
     final key = await context.read<SyncProvider>().recoveryKey();
-    if (mounted)
+    if (mounted) {
       setState(() {
         _input.text = key ?? '';
         _reveal = key != null;
@@ -124,6 +130,7 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
             ? 'Importa una chiave o creane una se non esiste un salvataggio.'
             : '';
       });
+    }
   });
   void _fromPhone() => setState(() {
     _phone = !_phone;

@@ -1,4 +1,4 @@
-import '../lib/player/tv_playback_shortcuts.dart';
+import 'package:stellar_tv/player/tv_playback_shortcuts.dart';
 
 void expectEqual(Object? actual, Object? expected, String rule) {
   if (actual != expected) throw StateError('$rule: $actual != $expected');

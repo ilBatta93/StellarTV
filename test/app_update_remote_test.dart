@@ -118,8 +118,7 @@ void main() {
   ) async {
     await open(
       tester,
-      '<!-- stellar-summary -->\n- Navigazione migliorata\n<!-- /stellar-summary -->\n' +
-          List.generate(80, (i) => 'Change $i').join('\n'),
+      '<!-- stellar-summary -->\n- Navigazione migliorata\n<!-- /stellar-summary -->\n${List.generate(80, (i) => 'Change $i').join('\n')}',
     );
     expect(actionNode(tester, 'Aggiorna ora')?.hasFocus, isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);

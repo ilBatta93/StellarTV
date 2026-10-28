@@ -37,8 +37,9 @@ class EpisodeMetadata {
     if (raw is! Map ||
         raw['id'] is! num ||
         raw['season'] is! num ||
-        raw['episode'] is! num)
+        raw['episode'] is! num) {
       return null;
+    }
     return EpisodeMetadata(
       seriesId: (raw['id'] as num).toInt(),
       season: (raw['season'] as num).toInt(),

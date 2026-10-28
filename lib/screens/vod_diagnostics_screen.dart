@@ -41,11 +41,12 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
       await work();
       if (mounted) setState(() => message = success);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => message =
               'Operazione non riuscita. Verifica la connessione e riprova.',
         );
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -133,7 +134,7 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
                               : null;
                           action(() async {
                             final file = await service.exportFile();
-                            if (problem != null)
+                            if (problem != null) {
                               await file.writeAsString(
                                 guidedDiagnosticReport(
                                   await file.readAsString(),
@@ -141,6 +142,7 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
                                 ),
                                 flush: true,
                               );
+                            }
                             await SharePlus.instance.share(
                               ShareParams(
                                 files: [XFile(file.path)],
@@ -176,8 +178,9 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
                             ],
                           ),
                         );
-                        if (yes == true)
+                        if (yes == true) {
                           await action(service.clear, 'Dati locali cancellati');
+                        }
                       },
               ),
             ],

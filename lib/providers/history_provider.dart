@@ -209,8 +209,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     final event = EpisodeWatchEvent.parse(row);
     if (event != null) {
       final previous = _watchEvents[event.key];
-      if (previous == null || event.newerThan(previous))
+      if (previous == null || event.newerThan(previous)) {
         _watchEvents[event.key] = event;
+      }
     }
     return true;
   }
@@ -243,14 +244,16 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
         account = _sync.currentUserId;
     final next = _manualWrites.then((_) async {
       await _loadFuture;
-      if (_disposed || epoch != _profileEpoch || account != _sync.currentUserId)
+      if (_disposed || epoch != _profileEpoch || account != _sync.currentUserId) {
         return;
+      }
       final before = Map<String, EpisodeWatchEvent>.from(_watchEvents);
       var at = DateTime.now().toUtc();
       for (final id in targets) {
         final previous = _eventFor(id, suggestion: suggestion);
-        if (previous != null && !at.isAfter(previous.at))
+        if (previous != null && !at.isAfter(previous.at)) {
           at = previous.at.add(const Duration(microseconds: 1));
+        }
         final event = EpisodeWatchEvent(
           id,
           value,
@@ -265,8 +268,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
         await _sync.saveLocalHistory(snapshot, profileId: profile);
         if (_disposed ||
             epoch != _profileEpoch ||
-            account != _sync.currentUserId)
+            account != _sync.currentUserId) {
           return;
+        }
         _notify();
         _scheduleCloudPush();
       } catch (_) {
@@ -482,8 +486,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       for (final e in payload.profileHistories.entries) {
         if (e.key == PersonalVault.favoriteLane ||
             e.key == _profileId ||
-            e.value is! Map<String, dynamic>)
+            e.value is! Map<String, dynamic>) {
           continue;
+        }
         await _sync.mergeHistoryInto(
           e.value as Map<String, dynamic>,
           profileId: e.key,
@@ -600,8 +605,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     _pulling = true;
     try {
       if (await _sync.getStoredCode() == null ||
-          PlaybackWorkPolicy.instance.blocksGuide)
+          PlaybackWorkPolicy.instance.blocksGuide) {
         return;
+      }
       final ok = await pullFromCloud();
       if (ok) _syncProvider?.schedulePush();
       if (ForegroundPolicy.instance.active) await onAfterAutoPull?.call();

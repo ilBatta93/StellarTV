@@ -86,8 +86,9 @@ class IntroDbService {
         !e.isFinite ||
         s < 0 ||
         e <= s ||
-        e > 86400)
+        e > 86400) {
       return null;
+    }
     return SkipSegment(
       type,
       Duration(milliseconds: (s * 1000).round()),
@@ -111,8 +112,9 @@ class IntroDbService {
               : null);
     if (list != null) {
       for (final r in list) {
-        if (r is Map)
+        if (r is Map) {
           add('${r['segment_type'] ?? r['type'] ?? ''}'.toLowerCase(), r);
+        }
       }
     } else if (body is Map) {
       for (final t in ['recap', 'intro', 'outro', 'post_credits']) {

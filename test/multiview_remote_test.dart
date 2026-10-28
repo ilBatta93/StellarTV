@@ -176,9 +176,10 @@ void main() {
             final bytes = await image.toByteData(
               format: ui.ImageByteFormat.png,
             );
-            if (bytes != null)
+            if (bytes != null) {
               await File('/tmp/stv/multiview-${size.width.toInt()}.png')
                   .writeAsBytes(bytes.buffer.asUint8List());
+            }
             image.dispose();
           });
         }

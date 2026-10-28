@@ -40,11 +40,12 @@ class _LiveDiagnosticsScreenState extends State<LiveDiagnosticsScreen> {
       await work();
       if (mounted) setState(() => message = success);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => message =
               'Operazione non riuscita. Verifica la connessione e riprova.',
         );
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -132,7 +133,7 @@ class _LiveDiagnosticsScreenState extends State<LiveDiagnosticsScreen> {
                               : null;
                           action(() async {
                             final file = await service.exportFile();
-                            if (problem != null)
+                            if (problem != null) {
                               await file.writeAsString(
                                 guidedDiagnosticReport(
                                   await file.readAsString(),
@@ -140,6 +141,7 @@ class _LiveDiagnosticsScreenState extends State<LiveDiagnosticsScreen> {
                                 ),
                                 flush: true,
                               );
+                            }
                             await SharePlus.instance.share(
                               ShareParams(
                                 files: [XFile(file.path)],
@@ -175,8 +177,9 @@ class _LiveDiagnosticsScreenState extends State<LiveDiagnosticsScreen> {
                             ],
                           ),
                         );
-                        if (yes == true)
+                        if (yes == true) {
                           await action(service.clear, 'Dati locali cancellati');
+                        }
                       },
               ),
             ],

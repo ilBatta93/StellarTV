@@ -86,8 +86,9 @@ class AppUpdateService {
 
   /// Silent check ~20 s after launch, only on CI builds with a known version.
   static void scheduleStartupCheck() {
-    if (kIsWeb || !Platform.isAndroid || _defined.isEmpty || _startupDone)
+    if (kIsWeb || !Platform.isAndroid || _defined.isEmpty || _startupDone) {
       return;
+    }
     _startupDone = true;
     Future.delayed(const Duration(seconds: 20), () async {
       try {
@@ -161,8 +162,9 @@ class AppUpdateService {
     final client = http.Client();
     try {
       final res = await client.send(http.Request('GET', Uri.parse(rel.apkUrl)));
-      if (res.statusCode != 200)
+      if (res.statusCode != 200) {
         throw Exception('Download non riuscito (${res.statusCode})');
+      }
       final total = res.contentLength ?? 0;
       var got = 0;
       final sink = file.openWrite();

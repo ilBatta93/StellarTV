@@ -1,7 +1,8 @@
 /// The server marks normalized payloads so weighting is applied exactly once.
 double reliableTmdbVote(Object? average, Object? count) {
-  if (average is! num || !average.isFinite || average <= 0 || average > 10)
+  if (average is! num || !average.isFinite || average <= 0 || average > 10) {
     return 0;
+  }
   if (count is! num || !count.isFinite || count <= 0) return 0;
   final value = count >= 20
       ? average.toDouble()

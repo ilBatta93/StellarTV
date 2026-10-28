@@ -63,8 +63,9 @@ class TitleLogoCache {
       if (expiry is! int ||
           expiry <= (now ?? DateTime.now()).millisecondsSinceEpoch ||
           !value.containsKey('url') ||
-          !validUrl(value['url']))
+          !validUrl(value['url'])) {
         return null;
+      }
       return TitleLogoEntry(value['url'] as String?);
     } catch (_) {
       return null;

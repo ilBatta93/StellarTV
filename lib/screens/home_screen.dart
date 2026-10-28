@@ -322,8 +322,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (TvCatalogToolbar.handleBack(
       FocusManager.instance.primaryFocus,
       context: context,
-    ))
+    )) {
       return;
+    }
     if (!_tvNavScope.hasFocus) {
       _focusNav();
       return;
