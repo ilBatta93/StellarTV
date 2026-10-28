@@ -134,7 +134,6 @@ class AuthAction extends StatelessWidget {
     final action = onPressed;
     if (action == null) return ExcludeFocus(child: child);
     return TvFocusable(
-      focusedScale: 1,
       onPressed: action,
       borderRadius: BorderRadius.circular(24),
       child: child,
