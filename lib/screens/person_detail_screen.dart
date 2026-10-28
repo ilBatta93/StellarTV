@@ -1,6 +1,7 @@
 import '../services/image_cache_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 
 import '../models/tmdb_item.dart';
@@ -248,8 +249,7 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
       child: Stack(
         children: [
           CustomScrollView(
-            controller: _tvScroll,
-            cacheExtent: 1200,
+            scrollCacheExtent: ScrollCacheExtent.pixels(1200), controller: _tvScroll,
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(

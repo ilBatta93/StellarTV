@@ -31,8 +31,7 @@ class SectionLayoutScreen extends StatelessWidget {
             physics: const NeverScrollableScrollPhysics(),
             buildDefaultDragHandles: false,
             itemCount: order.length,
-            onReorder: (oldIndex, newIndex) {
-              if (newIndex > oldIndex) newIndex--;
+            onReorderItem: (oldIndex, newIndex) {
               ui.moveSection(oldIndex, newIndex);
             },
             itemBuilder: (context, index) {

@@ -60,8 +60,9 @@ class _EpisodeCardState extends State<EpisodeCard> {
 
   KeyEventResult _arrows(FocusNode node, KeyEvent event) {
     if (!DeviceTypeService.isTv ||
-        (event is! KeyDownEvent && event is! KeyRepeatEvent))
+        (event is! KeyDownEvent && event is! KeyRepeatEvent)) {
       return KeyEventResult.ignored;
+    }
     final key = event.logicalKey;
     final available = DownloadService.canDownload(widget.episode.channel);
     if (_play.hasFocus && key == LogicalKeyboardKey.arrowDown) {
@@ -76,19 +77,9 @@ class _EpisodeCardState extends State<EpisodeCard> {
       if (key == LogicalKeyboardKey.arrowLeft ||
           key == LogicalKeyboardKey.arrowRight) {
         if (key == LogicalKeyboardKey.arrowRight) {
-          if (_download.hasFocus)
-            _watched.requestFocus();
-          else if (_watched.hasFocus)
-            _info.requestFocus();
-        }
-        if (key == LogicalKeyboardKey.arrowLeft && _info.hasFocus) {
-          _watched.requestFocus();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.arrowLeft &&
-            _watched.hasFocus &&
-            available)
-          _download.requestFocus();
+          if (_download.hasFocus) _watched.requestFocus();
+        if (_watched.hasFocus) _info.requestFocus();
+        if (_watched.hasFocus && available) _download.requestFocus();
         return KeyEventResult.handled;
       }
     }
@@ -137,8 +128,9 @@ class _EpisodeCardState extends State<EpisodeCard> {
     final progress = widget.progress;
     final service = EpisodeMetadataService.instance;
     final id = widget.seriesTmdbId;
-    if (id != null)
+    if (id != null) {
       service.bind(episode.channel, id, episode.season, episode.number);
+    }
     return ListenableBuilder(
       listenable: service.store,
       builder: (context, _) {

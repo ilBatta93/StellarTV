@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:ui' show FrameTiming, PlatformDispatcher;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/painting.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -40,9 +39,6 @@ class FrameTelemetryService extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _sampler;
   DateTime _lastNotify = DateTime.fromMillisecondsSinceEpoch(0);
   String _route = 'avvio';
-  String _lastMark = 'avvio';
-  /// Human-readable section visible to the user (home, diretta, film, serie, player).
-  /// Updated at tab changes; used as context in slow-frame records.
   String _section = 'avvio';
   int? _firstFrameMs;
   final List<Map<String, Object?>> _marks = [];
@@ -112,7 +108,7 @@ class FrameTelemetryService extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Named milestone (startup steps, heavy jobs). Cheap no-op when idle.
   void mark(String label) {
-    _lastMark = label;
+    // Named milestone: previously tracked _lastMark; now recorded in marks.
     if (!_recording || _marks.length >= _maxMarks) return;
     _marks.add({'t': sinceLaunch.elapsedMilliseconds, 'label': label});
   }
@@ -120,8 +116,9 @@ class FrameTelemetryService extends ChangeNotifier with WidgetsBindingObserver {
   void _event(String label) {
     if (!_recording || _events.length >= _maxEvents) return;
     _events.add({'t': sinceLaunch.elapsedMilliseconds, 'event': label});
-    if (label == 'memoria scarsa' || label.startsWith('stato app:'))
+    if (label == 'memoria scarsa' || label.startsWith('stato app:')) {
       _checkpoint();
+    }
   }
 
   void start() {
@@ -142,8 +139,9 @@ class FrameTelemetryService extends ChangeNotifier with WidgetsBindingObserver {
     _sample();
     _sampler = Timer.periodic(const Duration(seconds: 1), (_) {
       _sample();
-      if (DateTime.now().difference(_lastCheckpoint).inSeconds >= 5)
+      if (DateTime.now().difference(_lastCheckpoint).inSeconds >= 5) {
         _checkpoint();
+      }
     });
     _checkpoint();
     if (_firstFrameMs == null) {
@@ -415,8 +413,8 @@ class FrameStats {
       'buildMs': _r(build / 1000),
       'rasterMs': _r(raster / 1000),
       'vsyncMs': _r(vsync / 1000),
-      if (at != null) 't': at,
-      if (context != null) 'at': context,
+      't': ?at,
+      'at': ?context,
     });
     slowest.sort((a, b) => (b['ms'] as double).compareTo(a['ms'] as double));
     if (slowest.length > slowestKept) slowest.removeLast();

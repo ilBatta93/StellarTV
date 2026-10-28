@@ -17,7 +17,7 @@ class DeviceIdentity {
       .trim()
       .replaceAll(RegExp(r'\s+'), ' ');
 
-  /// Format parsed by the website: StellarTV/<ver> (kind=..; platform=..; model=..)
+  /// Format parsed by the website: StellarTV/\<ver\> (kind=..; platform=..; model=..)
   static String format({
     required String version,
     required String kind,

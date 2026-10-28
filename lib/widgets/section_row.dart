@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
@@ -88,8 +89,7 @@ class HorizontalRow extends StatelessWidget {
           // navigation never decodes a large batch of off-screen posters.
           // 200 logical pixels covers one typical TV card width.
           // On phone: keep the default (null = Flutter decides).
-          cacheExtent: DeviceTypeService.isTv ? 200 : null,
-          scrollDirection: Axis.horizontal,
+          scrollCacheExtent: ScrollCacheExtent.pixels(DeviceTypeService.isTv ? 200 : null), scrollDirection: Axis.horizontal,
           padding: EdgeInsets.symmetric(
             horizontal: DeviceTypeService.isTv ? 32 : 16,
             vertical: DeviceTypeService.isTv ? 8 : 0,
@@ -129,7 +129,7 @@ class HorizontalRow extends StatelessWidget {
                         outer.position.axis == Axis.vertical &&
                         target is RenderBox &&
                         outer.context.findRenderObject() is RenderBox) {
-                      final cardBox = target as RenderBox;
+                      final cardBox = target;
                       final pageBox =
                           outer.context.findRenderObject()! as RenderBox;
                       final cardRect =

@@ -1,6 +1,7 @@
 import '../widgets/ui_scale.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 
 import '../models/channel.dart';
@@ -87,8 +88,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
 
   Widget _watchSuggestion(HistoryProvider history) {
     final all = _details?.allEpisodes ?? const <SeriesEpisode>[];
-    if (history.suggestionDismissed(widget.series.id))
+    if (history.suggestionDismissed(widget.series.id)) {
       return const SizedBox.shrink();
+    }
     final started = all
         .where(
           (e) =>
@@ -108,8 +110,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
               history.isWatched(e.channel.id) ||
               (history.entryFor(e.channel.id)?.position ?? Duration.zero) >
                   Duration.zero,
-        ))
+        )) {
       return const SizedBox.shrink();
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
@@ -228,8 +231,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   void _prepareEpisodes() {
     final item = _item;
     final seasons = _details?.seasons;
-    if (item == null || seasons == null || _selectedSeason >= seasons.length)
+    if (item == null || seasons == null || _selectedSeason >= seasons.length) {
       return;
+    }
     final season = seasons[_selectedSeason];
     final imdb = ImdbRatingService.instance;
     imdb.prioritizeTitle(ImdbRatingService.keyOf(item));
@@ -273,8 +277,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     final scroll = CustomScrollView(
       // TV: every section stays built, so going up always reaches the
       // title and the buttons at the top of the page.
-      cacheExtent: DeviceTypeService.isTv ? 1200 : null,
-      slivers: [
+      scrollCacheExtent: ScrollCacheExtent.pixels(DeviceTypeService.isTv ? 1200 : null), slivers: [
         if (DeviceTypeService.isTv)
           SliverToBoxAdapter(
             child: SizedBox(height: TvDetailBackdrop.topSpace(context)),
@@ -570,9 +573,10 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         return e;
       }
     }
-    if (hasManual)
+    if (hasManual) {
       return all.where((e) => !history.isWatched(e.channel.id)).firstOrNull ??
           all.first;
+    }
     return lastWatched + 1 < all.length ? all[lastWatched + 1] : all.first;
   }
 

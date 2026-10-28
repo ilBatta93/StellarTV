@@ -5,6 +5,7 @@ import '../services/segment_library.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 
 import '../models/channel.dart';
@@ -146,8 +147,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
     final scroll = CustomScrollView(
       // TV: keep every section built so the remote can always move back
       // up to "Guarda ora", even after scrolling far down.
-      cacheExtent: DeviceTypeService.isTv ? 1200 : null,
-      slivers: [
+      scrollCacheExtent: ScrollCacheExtent.pixels(DeviceTypeService.isTv ? 1200 : null), slivers: [
         if (DeviceTypeService.isTv)
           SliverToBoxAdapter(
             child: SizedBox(height: TvDetailBackdrop.topSpace(context)),
