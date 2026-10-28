@@ -67,9 +67,9 @@ class ExoEngine extends PlaybackEngine {
   bool _polling = false;
   MethodChannel get _liveChannel {
     // The controller exposes the native player identity, distinct from texture.
-    // ignore: invalid_use_of_visible_for_testing_member
     return MethodChannel(
       'stellartv/video_player_android/live/${_controller.playerId}',
+      // ignore: invalid_use_of_visible_for_testing_member
     );
   }
 
@@ -81,8 +81,9 @@ class ExoEngine extends PlaybackEngine {
   Future<void> _pollWindow() async {
     if (_disposed ||
         _polling ||
-        defaultTargetPlatform != TargetPlatform.android)
+        defaultTargetPlatform != TargetPlatform.android) {
       return;
+    }
     _polling = true;
     try {
       final window = await _liveChannel.invokeMapMethod<Object?, Object?>(
@@ -233,9 +234,9 @@ class ExoEngine extends PlaybackEngine {
   Future<void> sampleOutput() => _pollWindow();
 
   @override
-  Future<bool> reopen(String next) async {
+  Future<bool> reopen(String url) async {
     if (_disposed) return false;
-    final hint = _formatHint(next);
+    final hint = _formatHint(url);
     if (hint != _formatHint(_mediaUrl)) return false;
     final mime = switch (hint) {
       VideoFormat.hls => 'application/x-mpegURL',
@@ -245,11 +246,11 @@ class ExoEngine extends PlaybackEngine {
     };
     try {
       final ok = await _liveChannel.invokeMethod<bool>('replaceMedia', {
-        'uri': next,
-        if (mime != null) 'mime': mime,
+        'uri': url,
+        'mime': ?mime,
       });
       if (ok != true || _disposed) return false;
-      _mediaUrl = next;
+      _mediaUrl = url;
       _blackError = null;
       _window = const {'firstFrameRendered': false};
       _sync();
