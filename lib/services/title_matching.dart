@@ -106,7 +106,13 @@ String displayTitle(String raw) {
               .join(' ');
     if (!traits.contains(v)) traits.add(v);
   }
-  var t = parseTitle(dotted.replaceAll(_notable, ' ')).title;
+  var parsed = parseTitle(dotted.replaceAll(_notable, ' '));
+  var t = parsed.title;
+  final year = parsed.year;
+  if (year != null) {
+    // Keep the year when it belongs to the displayed title (e.g. Blade Runner 2049).
+    if (!t.endsWith(' $year')) t = '$t $year';
+  }
   t = t
       .replaceAll(RegExp(r'[\[\]()]\s*[\[\]()]'), ' ')
       .replaceAll(RegExp(r'\s*[-–:|]\s*$'), '')
