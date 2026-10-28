@@ -110,13 +110,12 @@ String displayTitle(String raw) {
   var t = parsed.title;
   final year = parsed.year;
 
-  // Check if original raw had year in parentheses like (YYYY) or after a dot like .YYYY
-  final hasYearInParens = RegExp(r'\(\d{4}\)\s*$').hasMatch(raw.trim());
-  final hasDotYear = RegExp(r'\.\d{4}\s*$').hasMatch(raw.trim());
+  // Check if original raw had year in parentheses like (YYYY) or after a dot like .YYYY anywhere
+  final hasYearInParensOrDot = RegExp(r'\(\d{4}\)|\.\d{4}').hasMatch(raw);
 
   if (year != null) {
     // If year was in parentheses or after a dot, do NOT add it back (e.g. Cave.Diving.(2024) -> Cave Diving)
-    if (hasYearInParens || hasDotYear) {
+    if (hasYearInParensOrDot) {
       // suppress: year already stripped by parseTitle, don't re-add
     } else if (!t.endsWith(' $year')) {
       // Year trailing without parentheses, keep it (e.g. Blade Runner 2049)
