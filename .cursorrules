@@ -13,6 +13,7 @@ Segui tassativamente tutte le regole e i vincoli descritti in questo documento.
    - StellarTV e' esclusivamente un "Lettore multimediale universale e riproduttore personale di flussi TV".
    - E' SEVERAMENTE VIETATO menzionare in qualsiasi testo, commento, commit git, dialogo a schermo, nota di rilascio o documentazione i seguenti termini: IPTV, Xtream Codes, liste m3u, provider, abbonamenti, canali o contenuti protetti da copyright.
    - Usa sempre e solo terminologia neutra: Sorgente multimediale, Flusso TV, Guida programmi (EPG), Catalogo personale, Elemento multimediale.
+- TUTTI i termini vietati (IPTV, Xtream Codes, liste m3u, provider, abbonamenti, canali protetti da copyright) sono proibiti anche nei commenti .dart e nei file di regola.
 2. Dati e Credenziali Solo Locali:
    - URL della sorgente, username, password, token o indirizzi di streaming NON devono mai uscire dal dispositivo e NON devono mai essere salvati nel cloud o nel database Supabase.
    - La disconnessione o la modifica dei dati della sorgente nelle impostazioni opera esclusivamente sulla memoria locale dell'app, preservando cronologia, preferiti e Personal Vault crittografato.
@@ -145,5 +146,5 @@ Ogni schermata o componente deve essere progettato prima per la TV (telecomando 
    - Seguire la serie concordata (es. 3.8.N).
 2. Note di Rilascio (docs/release-current.md):
    - Devono essere redatte sempre in linguaggio chiaro, professionale e neutro.
-   - Elencare solo miglioramenti a stabilita', navigazione D-Pad, interfaccia e riproduzione senza menzionare dettagli interni o termini vietati.
+   - Elencare solo miglioramenti rispetto al commit dell'ultima build riuscita dello stesso workflow (`.github/workflows/build.yml`), una volta sola, senza copiare i testi dei commit.
    - Il riquadro automatico di aggiornamento sulla TV mostra una sintesi breve e scorrevole con il telecomando.

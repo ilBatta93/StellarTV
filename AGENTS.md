@@ -1,6 +1,6 @@
 # Vincoli trasversali
 
-I principi stabili stanno in `.cursorrules`. I dettagli di un'area stanno in `.cursor/rules/` e vengono allegati solo quando i file di quell'area sono nel lavoro. Non accodare resoconti: aggiorna la frase esistente.
+I principi stabili stanno in `.cursorrules`. I dettagli di un'area stanno in `.cursor/rules/*.mdc` e vengono allegati solo quando i file di quell'area sono nel lavoro (alwaysApply: false). Non accodare resoconti: aggiorna la frase esistente.
 
 Al termine di ogni modifica richiesta, crea un commit git e fai push sul branch remoto già tracciato. Non riscrivere la storia pubblicata. «Build Android» avvia il workflow GitHub `StellarTV Android Release` e lo segue fino al successo, correggendo gli errori.
 
@@ -14,4 +14,4 @@ Al termine di ogni modifica richiesta, crea un commit git e fai push sul branch 
 - Un episodio non eredita il voto della serie. Un voto IMDb non ancora arrivato non si mostra.
 - Le note di rilascio pubbliche descrivono solo le novità rispetto al commit dell'ultima build riuscita dello stesso workflow, una volta sola e in linguaggio neutro, a partire da docs/release-current.md, senza copiare il testo dei commit.
 
-Aree: `player.mdc`, `tv-ui.mdc`, `catalog-data.mdc`, `live-guide.mdc`, `sync-account.mdc`, `metadata-kids.mdc`, `history.mdc`, `diagnostics.mdc`.
+Aree: `player.mdc`, `tv-ui.mdc`, `catalog-data.mdc`, `live-guide.mdc`, `sync-account.mdc`, `metadata-kids.mdc`, `history.mdc`, `diagnostics.mdc`, `mobile-touch.mdc`, `android-build.mdc`.
