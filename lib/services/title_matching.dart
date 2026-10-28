@@ -110,8 +110,9 @@ String displayTitle(String raw) {
   var t = parsed.title;
   final year = parsed.year;
 
-  // Check if original raw had year in parentheses like (YYYY) or after a dot like .YYYY anywhere
-  final hasYearInParensOrDot = RegExp(r'\(\d{4}\)|\.\d{4}').hasMatch(raw);
+  // Check if original raw had year in parentheses like (YYYY) or after a dot like .YYYY anywhere,
+  // or as a technical tag preceded by ' - ' (e.g. Animals - 2025 HEVC).
+  final hasYearInParensOrDot = RegExp(r'\(\d{4}\)|\.\d{4}|\s-\s\d{4}\b').hasMatch(raw);
 
   if (year != null) {
     // If year was in parentheses or after a dot, do NOT add it back (e.g. Cave.Diving.(2024) -> Cave Diving)
