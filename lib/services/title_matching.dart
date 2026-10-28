@@ -46,6 +46,8 @@ ParsedTitle parseTitle(String raw) {
   final yearMatch = RegExp(r'\s+((?:19|20)\d{2})\s*$').firstMatch(t);
   final year = yearMatch?.group(1);
   if (yearMatch != null) t = t.substring(0, yearMatch.start).trim();
+  // Remove date patterns like 17/10/2026 or 17-10-2026
+  t = t.replaceAll(RegExp(r'\b\d{1,2}[/_-]\d{1,2}[/_-]\d{4}\b', caseSensitive: false), '');
   t = t
       .replaceAll(RegExp(r'\s*[|]\s*'), ' ')
       .replaceAll(RegExp(r'\s+[-–:]\s*$'), '')
