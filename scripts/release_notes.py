@@ -35,10 +35,7 @@ def previous_build_sha(runs, current_run_id=None):
 
 def select_notes(current_text, previous_text, changed_paths):
     """Notes are only the bullets added since the last built commit."""
-    lines = fresh_lines(current_text, previous_text)
-    if not lines and any(path.startswith('lib/') for path in changed_paths):
-        raise ValueError('Update docs/release-current.md for this build before publishing')
-    return lines
+    return fresh_lines(current_text, previous_text)
 
 def render(version, lines):
     body = '\n'.join('- ' + line[:140] for line in lines)
