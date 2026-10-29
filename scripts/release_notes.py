@@ -59,7 +59,7 @@ def series_version(version, run_number):
 def _workflow_runs(workflow, branch):
     import json
     command = ['gh', 'run', 'list', '--workflow', workflow, '--status', 'success',
-               '--limit', '20, '--json', 'databaseId,headSha']
+               '--limit', '20', '--json', 'databaseId,headSha']
     if branch:
         command.extend(['--branch', branch])
     try:
