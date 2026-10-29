@@ -10,8 +10,10 @@ class StreamSlotPolicy {
   static const storageKey = 'source_max_connections';
   static const releaseTimeoutKey = 'source_release_timeout_seconds';
 
+  static const defaultReleaseTimeout = 8; // Raised from 5s for live streams.
+
   int _max = 1;
-  int _releaseTimeout = 5;
+  int _releaseTimeout = defaultReleaseTimeout;
 
   int get maxConnections => _max;
   int get releaseTimeout => _releaseTimeout;

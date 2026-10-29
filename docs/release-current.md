@@ -15,3 +15,8 @@
 - Le locandine della riga orizzontale si caricano man mano, senza costruire in anticipo tutte quelle fuori schermo.
 - La diagnostica registra quando l'orologio del flusso non parte, con il conteggio dei fotogrammi successivi per distinguere immagine ferma da orologio solo lento.
 - Il titolo della scheda mantiene l'anno nel nome e lo omette solo per le etichette tecniche di formato.
+- Lo scorrimento delle righe orizzontali e delle griglie è più fluido: le locandine fuori schermo vengono prese in memoria con una finestra più ampia, così il telecomando non deve aspettare il decodice quando si passa da una riga all'altra.
+- I comandi del player durante la diretta sono più reattivi: il rilascio del canale precedente è più lento e il buffer di retrocessione è più lungo, così il passaggio tra canali e la pausa non interrompono il flusso.
+- Il passaggio tra canali diretti rispetta meglio il timeout del server: la connessione viene tenuta aperta un po' più a lungo prima di aprire quella successiva, evitando rifiuti di connessione ripetuti.
+- Il catalogo ordina più in fretta: l'elenco è riordinato in background senza aspettare che la griglia si aggiorni.
+- Le impostazioni del player mostrano valori più lunghi per il buffer di retrocessione e il timeout di rilascio, per adattarsi meglio ai server diretti.

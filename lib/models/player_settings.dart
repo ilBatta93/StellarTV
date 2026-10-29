@@ -176,7 +176,7 @@ class PlayerSettings {
     this.hardwareDecoding = HardwareDecoding.auto,
     this.networkCachingMs = 8192,
     this.liveCachingMs = 3000,
-    this.backBufferSeconds = 30,
+    this.backBufferSeconds = 60,
     this.httpReconnect = true,
     this.dropLateFrames = true,
     this.skipFrames = false,

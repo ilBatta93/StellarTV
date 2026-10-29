@@ -28,7 +28,7 @@ class ExoEngine extends PlaybackEngine {
            mixWithOthers: shared,
            allowBackgroundPlayback: settings.backgroundAudio,
            preventsDisplaySleepDuringVideoPlayback: settings.keepScreenOn,
-           backBufferDurationMs: shared ? 0 : settings.backBufferSeconds * 1000,
+           backBufferDurationMs: shared ? 0 : (live ? 60000 : settings.backBufferSeconds * 1000),
          ),
          // Texture on every device. The native-surface (platform view) mode
          // showed a black picture and crashed when released/clipped on Fire
@@ -54,7 +54,7 @@ class ExoEngine extends PlaybackEngine {
       headers[exoLoadControlHeader] = ExoLoadProfile.forPlayback(
         preview: shared,
         live: live,
-        backBufferMs: shared ? 0 : settings.backBufferSeconds * 1000,
+        backBufferMs: shared ? 0 : (live ? 60000 : settings.backBufferSeconds * 1000),
       ).wire;
     }
     return headers;

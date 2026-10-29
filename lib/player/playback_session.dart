@@ -183,7 +183,7 @@ class PlaybackSession extends ChangeNotifier {
   static Duration surfaceReleaseDelay = const Duration(milliseconds: 200);
 
   @visibleForTesting
-  static Duration singleConnectionGap = const Duration(milliseconds: 250);
+  static Duration singleConnectionGap = const Duration(milliseconds: 600);
 
   double speed;
   double volume = 1.0;
