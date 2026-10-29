@@ -35,7 +35,17 @@ def previous_build_sha(runs, current_run_id=None):
 
 def select_notes(current_text, previous_text, changed_paths):
     """Notes are only the bullets added since the last built commit."""
-    return fresh_lines(current_text, previous_text)
+    notes = fresh_lines(current_text, previous_text)
+
+    # If there are library changes but no new notes, raise an error
+    lib_changed = any(
+        path.startswith('lib/') or path.startswith('packages/') or '/lib/' in path or '/packages/' in path
+        for path in changed_paths
+    )
+    if lib_changed and not notes:
+        raise ValueError('Release notes must contain new content when library files changed')
+
+    return notes
 
 def render(version, lines):
     body = '\n'.join('- ' + line[:140] for line in lines)

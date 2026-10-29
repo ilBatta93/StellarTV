@@ -41,9 +41,7 @@ jobs:
           VERSION="3.8.${PATCH}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           python3 -m unittest discover -s scripts -p '*_test.py'
-          # Soluzione drastica: bypass release_notes per garantire il build
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "Release notes bypassed - build passes directly" > RELEASE_NOTES.md
+          python3 scripts/release_notes.py "$VERSION"
 
       - name: Setup Java (JDK 17)
         uses: actions/setup-java@v4
