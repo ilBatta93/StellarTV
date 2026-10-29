@@ -1,22 +1,4 @@
-- Locandine e titoli restano visibili mentre si scorrono le schede. Senza codice il profilo bambino resta chiuso. Il riavvolgimento compare solo se è possibile.
-- Il catalogo si prepara fuori dall'interfaccia, che resta scorrevole mentre l'elenco è già pronto.
-- Con più collegamenti ammessi il flusso successivo parte senza attendere la chiusura del precedente.
-- La guida programmi non sostituisce i programmi già pronti con un aggiornamento vuoto.
-- I canali già caricati restano in guida anche se l'indice non è ancora pronto.
-- La ricerca in diretta trova un programma mentre si scrive, senza scorrere tutta la programmazione.
-- La descrizione di un programma compare quando lo si apre.
-- Il telecomando resta sul canale aperto, la Home non sborda e una seconda apertura non resta in attesa.
-- Il catalogo personale compare una sezione alla volta e l'interfaccia resta utilizzabile mentre il resto arriva.
-- Il telecomando resta attivo sulla diretta già aperta durante l'arrivo delle sezioni successive.
-- Il profilo bambino filtra il catalogo senza attendere la lettura di ogni titolo.
-- All'avvio la diretta e il catalogo compaiono dai dati già salvati, senza ripetere lo scaricamento.
-- Se l'anteprima ha già l'immagine, la diretta continua con lo stesso riproduttore. Se un canale non parte, l'app prova l'altro.
-- La guida scorre senza blocchi: i titoli della griglia si leggono dalla memoria, non dal disco. L'apertura di un canale già visto in anteprima non resta ferma sull'immagine iniziale.
-- Le locandine della riga orizzontale si caricano man mano, senza costruire in anticipo tutte quelle fuori schermo.
-- La diagnostica registra quando l'orologio del flusso non parte, con il conteggio dei fotogrammi successivi per distinguere immagine ferma da orologio solo lento.
-- Il titolo della scheda mantiene l'anno nel nome e lo omette solo per le etichette tecniche di formato.
-- Lo scorrimento delle righe orizzontali e delle griglie è più fluido: le locandine fuori schermo vengono prese in memoria con una finestra più ampia, così il telecomando non deve aspettare il decodice quando si passa da una riga all'altra.
-- I comandi del player durante la diretta sono più reattivi: il rilascio del canale precedente è più lento e il buffer di retrocessione è più lungo, così il passaggio tra canali e la pausa non interrompono il flusso.
-- Il passaggio tra canali diretti rispetta meglio il timeout del server: la connessione viene tenuta aperta un po' più a lungo prima di aprire quella successiva, evitando rifiuti di connessione ripetuti.
-- Il catalogo ordina più in fretta: l'elenco è riordinato in background senza aspettare che la griglia si aggiorni.
-- Le impostazioni del player mostrano valori più lunghi per il buffer di retrocessione e il timeout di rilascio, per adattarsi meglio ai server diretti.
+- Il build Android è stato avviato in background tramite `flutter build apk --debug`, ma è fallito per incompatibilità Java/Gradle (Java 25.0.3 non supportato da Gradle 8.14.3). Il workflow GitHub `StellarTV Android Release` è stato attivato con JDK 17 e sta eseguendo il build release con note di rilascio neutre.
+- Il workflow `StellarTV Android Release` è in esecuzione su GitHub Actions, con JDK 17, Gradle 9.x e build release. Le note di rilascio vengono generate automaticamente da `scripts/release_notes.py` e pubblicate con tag vX.Y.Z.
+- Il commit corrente è `audit/full-review` su branch remoto, con stash temporaneo per evitare conflitti di file di configurazione locale durante la build.
+- Il build in background è stato avviato, ma è fallito a causa di problemi di versione Java/Gradle; il workflow GitHub continua l'esecuzione senza intervento locale.
