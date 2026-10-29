@@ -1,11 +1,39 @@
-﻿.dart_tool/
+﻿# Flutter & Dart dependencies & build outputs
+.dart_tool/
 build/
+.pub-cache/
+pubspec.lock
+
+# Android build & Gradle caches
 android/.gradle/
 android/app/build/
 android/build/
+android/local.properties
+
+# iOS pods & symlinks
 ios/Pods/
 ios/.symlinks/
-**/ephemeral/
-coverage/
-.pub-cache/
+ios/Flutter/App.framework/
+ios/Flutter/Flutter.framework/
+
+# Web & Companion app build outputs
+.next/
+dist/
+out/
+
+# IDE & Editor specific files
+.vscode/
+.idea/
 *.iml
+*.hprof
+
+# OS generated files & logs
+.DS_Store
+Thumbs.db
+*.log
+*.sqlite
+*.tar.gz
+*.zip
+
+# Temporary or ephemeral folders
+**/ephemeral/

@@ -1,150 +1,18 @@
-# StellarTV — Regole Master, Architettura e Linee Guida per AI
-# Repository: ilBatta93/StellarTV (branch: main)
-# Piattaforma: Flutter 3.x (Dart) — Android TV, Google TV, Fire TV, iOS, Android Mobile
+# StellarTV — Master AI Rules & Core Constraints
 
-Sei l'assistente AI dedicato allo sviluppo, refactoring, ottimizzazione e manutenzione di StellarTV.
-Segui tassativamente tutte le regole e i vincoli descritti in questo documento.
+## 1. Regole Cardinali e Riservatezza
+- **Natura dell'app:** StellarTV è un lettore multimediale universale e riproduttore personale di flussi TV.
+- **Termini SEVERAMENTE VIETATI:** È assolutamente proibito pronunciare, scrivere o inserire (in codice, commenti, commit o UI) i termini: *IPTV, Xtream Codes, liste m3u, provider, abbonamenti, canali o contenuti protetti da copyright*. Usa solo termini neutri (es. sorgente multimediale, flusso TV, catalogo).
+- **Privacy Totale:** Credenziali, token, username, password o indirizzi di streaming risiedono solo sul dispositivo locale. Non devono mai finire nel cloud o in Supabase.
+- **Preservazione delle Funzioni:** Non rimuovere, degradare o sostituire mai alcuna funzione o architettura esistente, a meno che non sia esplicitamente richiesto dall'utente o se la funzione danneggi la corretta esecuzione dell'app. Le funzioni vanno sempre preservate e migliorate.
 
----
+## 2. Architettura & Stack Tecnico
+- **Framework:** Flutter 3.x (Dart) per Android TV, Google TV, Fire TV, iOS e Android Mobile.
+- **Database Esterno:** Supabase personale (`dzojklhnwdjcrmkbepft`). Le modifiche allo schema vanno fornite solo come script SQL pronti per l'SQL Editor.
+- **Regola D-Pad TV:** Qualsiasi UI deve essere progettata primariamente per la navigazione da telecomando TV (focus visibile, gestione fluida del D-Pad, tasto Back coerente).
 
-## 1. PRINCIPI FONDAMENTALI E RISERVATEZZA
-
-1. Definizione e Riservatezza Pubblica:
-   - StellarTV e' esclusivamente un "Lettore multimediale universale e riproduttore personale di flussi TV".
-   - E' SEVERAMENTE VIETATO menzionare in qualsiasi testo, commento, commit git, dialogo a schermo, nota di rilascio o documentazione i seguenti termini: IPTV, Xtream Codes, liste m3u, provider, abbonamenti, canali o contenuti protetti da copyright.
-   - Usa sempre e solo terminologia neutra: Sorgente multimediale, Flusso TV, Guida programmi (EPG), Catalogo personale, Elemento multimediale.
-- TUTTI i termini vietati (IPTV, Xtream Codes, liste m3u, provider, abbonamenti, canali protetti da copyright) sono proibiti anche nei commenti .dart e nei file di regola.
-2. Dati e Credenziali Solo Locali:
-   - URL della sorgente, username, password, token o indirizzi di streaming NON devono mai uscire dal dispositivo e NON devono mai essere salvati nel cloud o nel database Supabase.
-   - La disconnessione o la modifica dei dati della sorgente nelle impostazioni opera esclusivamente sulla memoria locale dell'app, preservando cronologia, preferiti e Personal Vault crittografato.
-3. Lingua di Comunicazione:
-   - Comunica sempre in italiano.
-   - Alla fine di ogni operazione elenca con precisione cosa hai fatto o modificato e quali verifiche effettuare su TV reale.
-
----
-
-## 2. ARCHITETTURA E STRUTTURA DELLE CARTELLE
-
-lib/
-├── config/             # Costanti globali, temi, configurazioni di rete ed endpoint API
-├── models/             # Modelli dati tipizzati (Channel, EpgProgram, MediaItem, VaultSnapshot, ecc.)
-├── navigation/         # Gestione del focus TV D-Pad, rotte, transizioni ottimizzate
-├── player/             # Controller video e motori di riproduzione
-│   ├── exoplayer/      # ExoPlayer (motore predefinito su Android per Dirette, anteprime e MultiView)
-│   ├── mpv/            # MPV (selezionabile per catch-up, pause e riavvolgimento ove supportato)
-│   ├── mdk/            # MDK (motore alternativo)
-│   └── multiview/      # Gestione MultiView fino a 4 riquadri contemporanei
-├── providers/          # Gestione dello stato (canali, EPG, cronologia, preferiti, profili, UI)
-├── screens/            # Schermate principali dell'applicazione
-│   ├── account/        # Accesso rapido con QR/codice a 6 cifre, gestione sorgente locale
-│   ├── details/        # Scheda titolo film/serie: logo ufficiale, trailer IT/EN, azioni orizzontali
-│   ├── diagnostics/    # Monitoraggio locale fluidita', tempi di avvio flussi ed esportazione log
-│   ├── home/           # Home tvOS: banner animato, carosello unico verticale, ripresa rapida
-│   ├── live/           # Diretta TV: anteprima con audio attivo, EPG compatta, cambio rapido
-│   ├── series/         # Catalogo serie TV con gestione stati visione episodi/stagioni
-│   └── vod/            # Catalogo film con visualizzazione a poster grandi
-├── services/           # Servizi di background, database locale, rete e crittografia
-│   ├── catalog_cache/  # Cache locale NDJSON v3 con streaming e parsing in Isolate asincrono
-│   ├── crypto/         # Cifratura AES-256-GCM del Personal Vault e chiavi locali STV1-
-│   ├── metadata/       # Risoluzione loghi ufficiali, poster, still episodi e voti IMDb/TMDB
-│   ├── subtitle/       # Servizio sottotitoli (OpenSubtitles solo proprietario, fallback gratuiti)
-│   └── sync/           # Sincronizzazione cloud istantanea e gestione conflitti
-├── theme/              # Design system Apple (sfondi scuri #0F1015, vetro, arancione brand #F47521)
-└── widgets/            # Widget riutilizzabili con supporto nativo al focus del telecomando
-
----
-
-## 3. REGOLA D'ORO DEL TELECOMANDO TV (D-PAD & FOCUS)
-
-Ogni schermata o componente deve essere progettato prima per la TV (telecomando D-Pad) e poi adattato a smartphone/tablet:
-1. Navigazione Geometrica e Focus Visibile:
-   - Qualsiasi elemento interattivo DEVE avere uno stato di focus chiaro (ingrandimento a scala 1.05-1.10 o bordo ad alto contrasto).
-   - Frecce Su, Giu', Sinistra e Destra devono collegare logicamente tutti gli elementi senza vicoli ciechi o salti imprevisti.
-2. Comportamento del Tasto Indietro (Back):
-   - Se e' aperta una tastiera, un pannello laterale, un menu filtri o categorie: il primo Back lo chiude e restituisce il focus all'icona che lo ha aperto.
-   - Nel player video: il primo Back fa comparire una barra di conferma discreta e nasconde i controlli se aperti; il secondo Back entro 3 secondi esce dalla riproduzione.
-3. Controlli Telecomando nel Player Video:
-   - Frecce Destra / Sinistra: avanzano o riavvolgono il video (seek) SENZA aprire i comandi o l'interfaccia a schermo.
-   - Tasto OK a comandi nascosti: mette in pausa e apre i comandi a schermo; OK su Play riprende la riproduzione.
-   - Tasto Giu' a comandi nascosti: apre il pannello rapido per Audio, Sottotitoli e selezione Episodi.
-   - Tasto Su a comandi nascosti: mostra le informazioni sintetiche del titolo con i minuti rimanenti.
-   - Nella Diretta TV: Freccia Sinistra a comandi nascosti apre l'elenco trasparente delle categorie e dei canali con programmazione in onda, senza interrompere la riproduzione. Un solo Back chiude l'elenco.
-   - Pulsante Salta Sigla: quando compare, nasconde subito i controlli principali e sposta automaticamente il focus sul pulsante; attivarlo non riapre i controlli.
-4. Campi Testo e Ricerca Vocale (TvTextField):
-   - La tastiera a schermo non si apre mai da sola: si apre solo su pressione esplicita di OK.
-   - Il campo password non mostra mai il pulsante del microfono. L'icona dell'occhio (mostra/nascondi) e' raggiungibile spostandosi a destra dal campo.
-   - Dispositivi Fire TV: Fire OS cattura il tasto microfono del telecomando a livello di sistema operativo per Alexa e chiude la tastiera dell'app. Il pulsante microfono a schermo DEVE essere nascosto su dispositivi Fire TV per evitare errori ingannevoli.
-
----
-
-## 4. PRESTAZIONI, MEMORIA E GESTIONE MULTIMEDIALE
-
-1. MAI AGGIORNAMENTI PESANTI DURANTE LA VISIONE:
-   - Durante la riproduzione video e' tassativamente vietato eseguire aggiornamenti di playlist, download completi di EPG o scritture massive su disco.
-   - Eventuali aggiornamenti pianificati vanno rimandati a player chiuso.
-2. Ibernazione Automatica (Opzione A):
-   - Quando l'app va in background o lo schermo si spegne (standby HDMI-CEC), tutte le chiamate cloud, i timer di sincronizzazione e le attivita' in background vengono sospese immediatamente.
-   - Al risveglio l'app riprende le attivita' senza raffiche di richieste o blocchi.
-3. Cache Cataloghi Veloce (NDJSON v3 in Isolate):
-   - La cache locale viene serializzata in formato NDJSON riga per riga per consentire la lettura in streaming continuo.
-   - Il parsing avviene sempre in un Isolate dedicato fuori dal thread principale della UI, azzerando qualsiasi scatto durante lo scorrimento dei caroselli.
-4. MultiView Stabile:
-   - Fino a 4 riquadri contemporanei su Android tramite ExoPlayer dedicato.
-   - Audio attivo esclusivamente sul riquadro che possiede il focus.
-   - Il watchdog anti-blocco deve intervenire solo su flussi effettivamente fermi o in errore di buffering, senza mai riavviare flussi che stanno riproducendo fluidamente.
-
----
-
-## 5. REGOLE PER METADATI, VOTI, TITOLI E IMMAGINI
-
-1. Pulizia e Riconoscimento Titoli (title_matching.dart):
-   - displayTitle(raw): rimuove punti, trattini, estensioni file (.mkv, .mp4), tag tecnici di risoluzione (1080p, 4K), codec audio/video (H264, x265, AAC) e anni tra parentesi.
-   - Preserva sempre indicazioni di rilievo come 3D, versioni speciali (Director's Cut, Extended) e indicatori di lingua/versione originali.
-   - isAudiobook(item): rileva contenuti audio/audiolibri e applica la copertina dedicata assets/images/audiobook_cover.jpg.
-2. Loghi Ufficiali Titoli:
-   - Il logo ufficiale sostituisce il nome testuale nel banner Home e nella scheda titolo quando disponibile.
-   - Sono ammessi esclusivamente loghi in lingua italiana (it) o inglese (en). Scartare categoricamente loghi senza lingua dichiarata (null) o in lingue diverse (es. ideogrammi asiatici).
-   - In mancanza di logo, mostrare il titolo testuale pulito con displayTitle().
-3. Priorita' e Formula dei Voti:
-   - IMDb ha la priorita' assoluta: mostrare fin dal primo istante il voto IMDb se disponibile. Non mostrare un voto TMDB provvisorio che poi salta al caricamento di IMDb.
-   - Formula Voti TMDB (soglia minima 20 voti):
-     * 0 voti = nessun voto mostrato.
-     * Da 1 a 19 voti = applicare formula bayesiana ponderata con media globale 6.0:
-       Voto = ((voti / (voti + 20)) * media) + ((20 / (voti + 20)) * 6.0)
-     * 20 voti o piu' = voto medio originale mantenuto.
-4. Immagini Episodio nelle Serie TV:
-   - Ordine di fallback: 1) still_path TMDB ufficiale; 2) miniatura fornita dalla sorgente; 3) locandina della serie.
-5. Filtro Bambino Rigoroso:
-   - Generi ammessi: Animation, Animazione, Kids, Children, Family, Famiglia.
-   - Generi tassativamente bloccati: Horror, Thriller, Crime, Action, Romance, Reality, News, Drama.
-   - Rating ammessi: G, PG, TV-Y, TV-Y7, TV-G, TV-PG, T (italiano).
-   - Titoli senza rating: ammessi solo se la categoria primaria e' esplicitamente cartoni o bambini.
-
----
-
-## 6. CRITTOGRAFIA E DATABASE SUPABASE ESTERNO
-
-1. Database Supabase Esterno (dzojklhnwdjcrmkbepft):
-   - Il database e' ospitato su Supabase personale dell'utente. Non usare comandi automatici per modificare lo schema: qualsiasi modifica va fornita come script SQL pronto da eseguire nell'SQL Editor.
-   - Non esistono tabelle di disconnessione remota (session_signout_requests eliminata).
-2. Personal Vault Crittografico:
-   - Cifratura locale end-to-end AES-256-GCM.
-   - La chiave di recupero STV1-[64 caratteri esadecimali] risiede solo nella memoria protetta del dispositivo e non viene mai trasmessa al cloud.
-   - Scambio chiavi tra smartphone e TV tramite key_handoffs con crittografia X25519 + HKDF (scadenza 2 minuti, eliminazione su lettura).
-   - Scritture cloud serializzate con controllo di revisione (_expected_revision) e backoff progressivo (da 5 secondi a 10 minuti) in caso di errore.
-3. Sincronizzazione Progressi e Preferiti:
-   - Soglia di completamento video predefinita: 94%.
-   - Le modifiche manuali a preferiti e stati visti sono istantanee fuori dal player. Durante la visione, gli invii cloud sono differiti alla pausa o all'uscita dal player.
-4. Sottotitoli OpenSubtitles:
-   - La quota OpenSubtitles API e' riservata esclusivamente all'account del proprietario djbatta99@gmail.com. Tutti gli altri account utilizzano solo le fonti gratuite (Wyzie, SubDL).
-
----
-
-## 7. WORKFLOW BUILD E NOTE DI RILASCIO
-
-1. Numerazione Release:
-   - Seguire la serie concordata (es. 3.8.N).
-2. Note di Rilascio (docs/release-current.md):
-   - Devono essere redatte sempre in linguaggio chiaro, professionale e neutro.
-   - Elencare solo miglioramenti rispetto al commit dell'ultima build riuscita dello stesso workflow (`.github/workflows/build.yml`), una volta sola, senza copiare i testi dei commit.
-   - Il riquadro automatico di aggiornamento sulla TV mostra una sintesi breve e scorrevole con il telecomando.
+## 3. Ottimizzazione Token e Prevenzione Timeout (OpenRouter)
+- **Risposte Mirate:** Concentrati esclusivamente sul file o sulla funzione richiesta. Non riscrivere interi file se non strettamente necessario.
+- **Diff e Patch:** Fornisci solo i blocchi di codice modificati o i diff puliti, evitando di ripetere codice esistente per risparmiare token ed evitare timeout.
+- **Spiegazioni Brevi:** Mantieni le spiegazioni tecniche concise (massimo 2-3 frasi), a meno che non venga richiesto un approfondimento architetturale.
+- **Lingua:** Comunica sempre in italiano. Riassumi brevemente le modifiche effettuate alla fine di ogni operazione.
