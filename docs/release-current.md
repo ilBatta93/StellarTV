@@ -14,3 +14,4 @@
 - La guida scorre senza blocchi: i titoli della griglia si leggono dalla memoria, non dal disco. L'apertura di un canale già visto in anteprima non resta ferma sull'immagine iniziale.
 - Le locandine della riga orizzontale si caricano man mano, senza costruire in anticipo tutte quelle fuori schermo.
 - La diagnostica registra quando l'orologio del flusso non parte, con il conteggio dei fotogrammi successivi per distinguere immagine ferma da orologio solo lento.
+- Il titolo della scheda mantiene l'anno nel nome e lo omette solo per le etichette tecniche di formato.
