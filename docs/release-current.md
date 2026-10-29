@@ -3,3 +3,7 @@
 - Ottimizzazione playback e decoder per diretta e anteprima live su TV.
 - Correzione sincronizzazione e gestione della memoria del player.
 - Aggiornamento guida e impostazioni della schermata iniziale.
+- Fix: rimozione metodo _syncDelayTick inutilizzato e completamento sincronizzazione.
+- Fix: regolazione regex note rilascio e fallback tag per build.
+- Perf: liste più fluide e rendering live con anticipazione del player.
+- Aggiornamento versioni Gradle e configurazione locale Android.
