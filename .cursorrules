@@ -9,7 +9,7 @@
 ## 2. Architettura & Stack Tecnico
 - **Framework:** Flutter 3.x (Dart) per Android TV, Google TV, Fire TV, iOS e Android Mobile.
 - **Database Esterno:** Supabase personale (`dzojklhnwdjcrmkbepft`). Le modifiche allo schema vanno fornite solo come script SQL pronti per l'SQL Editor.
-- **Aggiornamento note di rilascio:** dopo ogni modifica in `lib/` o in aree che cambiano il comportamento visibile, aggiorno sempre `docs/release-current.md` con voci neutre prima del commit, così `scripts/release_notes.py` passa.
+- **Aggiornamento note di rilascio:** dopo ogni modifica in `lib/` o in aree che cambiano il comportamento visibile, aggiorno sempre `docs/release-current.md` con voci neutre prima del commit, così `scripts/release_notes.py` passa. Le note vanno sempre aggiornate **prima di avviare il workflow** di rilascio.
 - **Regola D-Pad TV:** Qualsiasi UI deve essere progettata primariamente per la navigazione da telecomando TV (focus visibile, gestione fluida del D-Pad, tasto Back coerente).
 
 ## 3. Ottimizzazione Token e Prevenzione Timeout (OpenRouter)
