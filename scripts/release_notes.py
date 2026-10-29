@@ -59,7 +59,7 @@ def series_version(version, run_number):
 def _workflow_runs(workflow, branch):
     import json
     command = ['gh', 'run', 'list', '--workflow', workflow, '--status', 'success',
-               '--limit', '20', '--json', 'databaseId,headSha']
+               '--limit', '20, '--json', 'databaseId,headSha']
     if branch:
         command.extend(['--branch', branch])
     try:
@@ -98,6 +98,7 @@ def main():
     runs = successful_runs()
     baseline = previous_build_sha(runs or [], os.environ.get('GITHUB_RUN_ID'))
     if not baseline:
+        # Fallback: latest production tag (v3.8.X), regardless of branch.
         tags = git('tag', '--list', 'v3.*', '--sort=-v:refname').splitlines()
         previous = next((t for t in tags if t != 'v' + version), None)
         if previous:
