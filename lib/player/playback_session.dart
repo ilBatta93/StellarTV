@@ -177,13 +177,13 @@ class PlaybackSession extends ChangeNotifier {
   /// Hard cap so a stuck native dispose cannot pin the next open forever.
   /// A deadline does not complete [released].
   @visibleForTesting
-  static Duration nativeDisposeTimeout = const Duration(seconds: 3);
+  static Duration nativeDisposeTimeout = const Duration(seconds: 4);
 
   @visibleForTesting
-  static Duration surfaceReleaseDelay = const Duration(milliseconds: 350);
+  static Duration surfaceReleaseDelay = const Duration(milliseconds: 200);
 
   @visibleForTesting
-  static Duration singleConnectionGap = const Duration(milliseconds: 450);
+  static Duration singleConnectionGap = const Duration(milliseconds: 250);
 
   double speed;
   double volume = 1.0;
@@ -602,7 +602,7 @@ class PlaybackSession extends ChangeNotifier {
   Future<bool> _reserveSlot() async {
     if (_nativeOutstanding < _connectionSlots) return true;
     try {
-      await _releasing.timeout(nativeDisposeTimeout);
+      await _releasing.timeout(Duration(seconds: StreamSlotPolicy.instance.releaseTimeout));
     } on TimeoutException {
       // The slot is still taken. A single connection must not open another.
     }

@@ -8,10 +8,13 @@ class StreamSlotPolicy {
   StreamSlotPolicy._();
   static final instance = StreamSlotPolicy._();
   static const storageKey = 'source_max_connections';
+  static const releaseTimeoutKey = 'source_release_timeout_seconds';
 
   int _max = 1;
+  int _releaseTimeout = 5;
 
   int get maxConnections => _max;
+  int get releaseTimeout => _releaseTimeout;
 
   bool get allowsOverlap => _max > 1;
 
@@ -19,6 +22,13 @@ class StreamSlotPolicy {
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getInt(storageKey);
     if (stored != null && stored > 0) _max = stored;
+    await loadReleaseTimeout();
+  }
+
+  Future<void> loadReleaseTimeout() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getInt(releaseTimeoutKey);
+    if (stored != null && stored > 0) _releaseTimeout = stored;
   }
 
   Future<void> remember(Object? raw) async {
@@ -27,6 +37,13 @@ class StreamSlotPolicy {
     _max = parsed;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(storageKey, parsed);
+  }
+
+  Future<void> setReleaseTimeout(int seconds) async {
+    if (seconds <= 0 || seconds == _releaseTimeout) return;
+    _releaseTimeout = seconds;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(releaseTimeoutKey, seconds);
   }
 }
 
