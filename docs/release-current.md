@@ -1,4 +1,5 @@
-- Il build Android è stato avviato in background tramite `flutter build apk --debug`, ma è fallito per incompatibilità Java/Gradle (Java 25.0.3 non supportato da Gradle 8.14.3). Il workflow GitHub `StellarTV Android Release` è stato attivato con JDK 17 e sta eseguendo il build release con note di rilascio neutre.
-- Il workflow `StellarTV Android Release` è in esecuzione su GitHub Actions, con JDK 17, Gradle 9.x e build release. Le note di rilascio vengono generate automaticamente da `scripts/release_notes.py` e pubblicate con tag vX.Y.Z.
-- Il commit corrente è `audit/full-review` su branch remoto, con stash temporaneo per evitare conflitti di file di configurazione locale durante la build.
-- Il build in background è stato avviato, ma è fallito a causa di problemi di versione Java/Gradle; il workflow GitHub continua l'esecuzione senza intervento locale.
+- Aggiornamento scheda e navigazione della sezione aperta per voto e classifiche.
+- Miglioramento sottotitoli e loghi con dati locali; risoluzione locandine uniforme.
+- Ottimizzazione playback e decoder per diretta e anteprima live su TV.
+- Correzione sincronizzazione e gestione della memoria del player.
+- Aggiornamento guida e impostazioni della schermata iniziale.
