@@ -351,10 +351,8 @@ class PlaybackSession extends ChangeNotifier {
       if (_disposed) return;
       // Software decoding is a decoder choice, not an engine switch: it
       // stays available even when automatic engine fallback is off.
-      // Su Google TV, Fire TV e altri decoder TV spesso non decodificano live MPEG-TS correttamente,
-      // quindi attiva FFmpeg per live su qualsiasi TV per evitare schermo nero su codec broadcast.
-      final shouldEnableSoftware = !previewMode || previewFallback;
-      if (shouldEnableSoftware) {
+      if ((!previewMode || previewFallback) &&
+          DecoderMemory.needsSoftware(_playbackUrl)) {
         _softwareDecode = true;
         // DecoderMemory.remember viene chiamato più tardi per persistenza.
       }

@@ -5,6 +5,7 @@
 - Aggiornamento guida e impostazioni della schermata iniziale.
 - Fix: rimozione metodo _syncDelayTick inutilizzato e completamento sincronizzazione.
 - Fix: regolazione regex note rilascio e fallback tag per build.
+- Fix: attivazione decodifica software live solo sui canali con decoder noto (DecoderMemory), evitando switch indesiderati su MPEG-TS.
 - Perf: liste più fluide e rendering live con anticipazione del player.
 - Aggiornamento versioni Gradle e configurazione locale Android
 - Aggiornato script release_notes.py - rimosso blocco che impediva la build quando le note non coprivano tutte le modifiche lib/
