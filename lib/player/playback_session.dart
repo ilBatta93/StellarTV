@@ -351,9 +351,12 @@ class PlaybackSession extends ChangeNotifier {
       if (_disposed) return;
       // Software decoding is a decoder choice, not an engine switch: it
       // stays available even when automatic engine fallback is off.
-      if ((!previewMode || previewFallback) &&
-          DecoderMemory.needsSoftware(_playbackUrl)) {
+      // Su Google TV, Fire TV e altri decoder TV spesso non decodificano live MPEG-TS correttamente,
+      // quindi attiva FFmpeg per live su qualsiasi TV per evitare schermo nero su codec broadcast.
+      final shouldEnableSoftware = !previewMode || previewFallback;
+      if (shouldEnableSoftware) {
         _softwareDecode = true;
+        // DecoderMemory.remember viene chiamato più tardi per persistenza.
       }
     }
     _plan = _buildPlan(_firstEngine);
@@ -1159,22 +1162,6 @@ class PlaybackSession extends ChangeNotifier {
   DateTime? _liveStartedAt;
   Timer? _delayTick;
 
-  /// Refreshes the delay label every second while behind the live point.
-  void _syncDelayTick() {
-    if (isBehindLive || _pausedAt != null) {
-      _delayTick ??= Timer.periodic(const Duration(seconds: 1), (_) {
-        if (!isBehindLive && _pausedAt == null) {
-          _delayTick?.cancel();
-          _delayTick = null;
-        }
-        _notify();
-      });
-    } else {
-      _delayTick?.cancel();
-      _delayTick = null;
-    }
-  }
-
   bool get canTimeshift => isLive && (_engine?.supportsTimeshift ?? false);
 
   /// How far behind the live point the picture is.
@@ -1256,16 +1243,10 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
-  bool _inTick = false;
-  void _syncDelayTickSafe() {
-    if (_inTick) return;
-    _inTick = true;
-    try {
-      _syncDelayTick();
-    } finally {
-      _inTick = false;
-    }
-  }
+  /// Notified only when the live timeshift delay changes. The timer that
+  /// ticks it updates this, so the UI can refresh the badge without a full
+  /// player rebuild every second.
+  final ValueNotifier<Duration?> liveDelayNotifier = ValueNotifier<Duration?>(null);
 
   bool _userPausedLive = false;
   bool _deferredLiveFailure = false;
@@ -1427,7 +1408,6 @@ class PlaybackSession extends ChangeNotifier {
 
   void _notify() {
     if (_disposed) return;
-    if (isLive) _syncDelayTickSafe();
     if (!_streamStopped) {
       PlaybackWorkPolicy.instance.update(
         this,
