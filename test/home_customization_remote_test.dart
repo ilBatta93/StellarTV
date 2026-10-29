@@ -210,9 +210,6 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pump(const Duration(milliseconds: 500));
       expect(ui.homePosterShape, HomePosterShape.square);
-      final shapeRow = find
-          .ancestor(of: field, matching: find.byType(TvFocusable))
-          .first;
       final contentFocus = Focus.of(tester.element(field));
       contentFocus.requestFocus();
       await tester.pump();

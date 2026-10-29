@@ -10,26 +10,33 @@ import 'tv_focusable.dart';
 
 /// "Aggiungi a categoria" on film and series pages: toggles the title in the
 /// user's personal categories, or creates a new one on the spot.
-class CategoryAssignButton extends StatelessWidget {
+class CategoryAssignButton extends StatefulWidget {
   const CategoryAssignButton({super.key, required this.item});
   final Channel item;
 
-  ContentType get _type =>
-      item.type == ContentType.movie ? ContentType.movie : ContentType.series;
+  @override
+  State<CategoryAssignButton> createState() => _CategoryAssignButtonState();
+}
 
-  Future<void> _open(BuildContext context) async {
+class _CategoryAssignButtonState extends State<CategoryAssignButton> {
+  ContentType get _type =>
+      widget.item.type == ContentType.movie ? ContentType.movie : ContentType.series;
+
+  Future<void> _open() async {
     final app = context.read<AppProvider>();
-    while (context.mounted) {
+    if (!mounted) return;
+    while (mounted) {
       final customs = app.customCategoriesOf(_type);
       const create = '__new__';
       final chosen = await pickCategoryAction<String>(
+        // ignore: use_build_context_synchronously
         context,
         title: 'Aggiungi a categoria',
         actions: [
           for (final c in customs)
             CategoryAction(
               c.id,
-              app.isInCustomCategory(c.id, item)
+              app.isInCustomCategory(c.id, widget.item)
                   ? Icons.check_circle_rounded
                   : Icons.radio_button_unchecked_rounded,
               c.name,
@@ -41,13 +48,13 @@ class CategoryAssignButton extends StatelessWidget {
           ),
         ],
       );
-      if (chosen == null || !context.mounted) return;
+      if (chosen == null || !mounted) return;
       if (chosen == create) {
         final name = await askCategoryName(context, title: 'Nuova categoria');
-        if (name == null || !context.mounted) continue;
+        if (name == null || !mounted) continue;
         final failure = await app.createCustomCategory(_type, name);
         if (failure != null) {
-          if (context.mounted) {
+          if (mounted) {
             ScaffoldMessenger.of(
               context,
             ).showSnackBar(SnackBar(content: Text(failure)));
@@ -55,9 +62,9 @@ class CategoryAssignButton extends StatelessWidget {
           continue;
         }
         final created = app.customCategoriesOf(_type).last;
-        await app.toggleInCustomCategory(created.id, item);
+        await app.toggleInCustomCategory(created.id, widget.item);
       } else {
-        await app.toggleInCustomCategory(chosen, item);
+        await app.toggleInCustomCategory(chosen, widget.item);
       }
       // Reopen so several categories can be ticked in a row; Back closes.
     }
@@ -68,11 +75,11 @@ class CategoryAssignButton extends StatelessWidget {
     final app = context.watch<AppProvider>();
     final inAny = app
         .customCategoriesOf(_type)
-        .any((c) => c.itemIds.contains(item.id));
+        .any((c) => c.itemIds.contains(widget.item.id));
     return TvFocusable(
-      onPressed: () => _open(context),
+      onPressed: _open,
       child: OutlinedButton.icon(
-        onPressed: () => _open(context),
+        onPressed: _open,
         icon: Icon(
           inAny ? Icons.bookmark_added_rounded : Icons.bookmark_add_outlined,
           color: inAny ? AppColors.primary : AppColors.textPrimary,

@@ -28,7 +28,7 @@ class ExoEngine extends PlaybackEngine {
            mixWithOthers: shared,
            allowBackgroundPlayback: settings.backgroundAudio,
            preventsDisplaySleepDuringVideoPlayback: settings.keepScreenOn,
-           backBufferDurationMs: shared ? 0 : (live ? 60000 : settings.backBufferSeconds * 1000),
+           backBufferDurationMs: shared ? 0 : (isLive ? 60000 : settings.backBufferSeconds * 1000),
          ),
          // Texture on every device. The native-surface (platform view) mode
          // showed a black picture and crashed when released/clipped on Fire
@@ -65,11 +65,14 @@ class ExoEngine extends PlaybackEngine {
   Timer? _livePoll;
   Map<Object?, Object?> _window = const {};
   bool _polling = false;
+  int? _playerId;
+
   MethodChannel get _liveChannel {
-    // The controller exposes the native player identity, distinct from texture.
+    // _playerId is set in open() after initialize(); avoid direct access to
+    // the restricted controller.playerId member outside video_player package.
     return MethodChannel(
-      'stellartv/video_player_android/live/${_controller.playerId}',
       // ignore: invalid_use_of_visible_for_testing_member
+      'stellartv/video_player_android/live/${_playerId ?? _controller.playerId}',
     );
   }
 
@@ -204,6 +207,8 @@ class ExoEngine extends PlaybackEngine {
     _controller.addListener(_sync);
     try {
       await _controller.initialize();
+      // ignore: invalid_use_of_visible_for_testing_member
+      _playerId = _controller.playerId; // memorizza per _liveChannel
       if (_disposed) return;
     } catch (e) {
       throw PlaybackException(_describeInitError(e));
@@ -224,6 +229,8 @@ class ExoEngine extends PlaybackEngine {
     _sync();
     await _pollWindow();
     if (_disposed) return;
+    // ignore: invalid_use_of_visible_for_testing_member
+    _playerId = _controller.playerId; // assicurati di avere un id valido per liveChannel
     _livePoll = Timer.periodic(
       const Duration(seconds: 1),
       (_) => _pollWindow(),
@@ -247,7 +254,7 @@ class ExoEngine extends PlaybackEngine {
     try {
       final ok = await _liveChannel.invokeMethod<bool>('replaceMedia', {
         'uri': url,
-        'mime': ?mime,
+        'mime': mime,
       });
       if (ok != true || _disposed) return false;
       _mediaUrl = url;

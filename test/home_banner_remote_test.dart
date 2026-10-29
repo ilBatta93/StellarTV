@@ -43,8 +43,6 @@ class HomeApp extends fixtures.TestApp {
   bool isAvailable(TmdbItem item) => true;
   @override
   bool isTmdbAllowed(TmdbItem item) => true;
-  @override
-  Channel? findForTmdb(TmdbItem item) => null;
 }
 
 class FakeTmdb extends TmdbService {

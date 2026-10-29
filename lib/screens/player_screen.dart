@@ -1461,6 +1461,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         return _saveResume(position: position);
       },
     )..addListener(_onSessionChanged);
+    session.liveDelayNotifier.addListener(_onLiveDelayChanged);
 
     setState(() {
       _settings = settings;
@@ -1509,6 +1510,11 @@ class _PlayerScreenState extends State<PlayerScreen>
       case PlayerOrientation.followVideo:
         _setOrientation('sensor');
     }
+  }
+
+  void _onLiveDelayChanged() {
+    if (!_needsRebuild(_session!)) return;
+    setState(() {});
   }
 
   void _onSessionChanged() {
@@ -1806,6 +1812,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _screenOffSub?.cancel();
     _backgroundStop?.cancel();
     _session?.removeListener(_onSessionChanged);
+    _session?.liveDelayNotifier.removeListener(_onLiveDelayChanged);
     _session?.dispose();
     _bridge.setAutoPip(false);
     _bridge.setKeepScreenOn(false);
@@ -1960,9 +1967,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                   duration: session.value.duration,
                   buffered: session.value.bufferedUntil,
                   pendingSeek: _tvSeekTarget,
-                  liveDelay: _isLive && session.isBehindLive
-                      ? session.liveDelay
-                      : null,
+      liveDelay: _isLive && session.liveDelayNotifier.value != null
+          ? session.liveDelayNotifier.value
+          : null,
                 ),
               ),
             ),
