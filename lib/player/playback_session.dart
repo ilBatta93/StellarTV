@@ -183,7 +183,7 @@ class PlaybackSession extends ChangeNotifier {
   static Duration surfaceReleaseDelay = const Duration(milliseconds: 200);
 
   @visibleForTesting
-  static Duration singleConnectionGap = const Duration(milliseconds: 600);
+  static Duration singleConnectionGap = const Duration(milliseconds: 250);
 
   double speed;
   double volume = 1.0;
@@ -354,7 +354,6 @@ class PlaybackSession extends ChangeNotifier {
       if ((!previewMode || previewFallback) &&
           DecoderMemory.needsSoftware(_playbackUrl)) {
         _softwareDecode = true;
-        // DecoderMemory.remember viene chiamato più tardi per persistenza.
       }
     }
     _plan = _buildPlan(_firstEngine);
@@ -1160,6 +1159,22 @@ class PlaybackSession extends ChangeNotifier {
   DateTime? _liveStartedAt;
   Timer? _delayTick;
 
+  /// Refreshes the delay label every second while behind the live point.
+  void _syncDelayTick() {
+    if (isBehindLive || _pausedAt != null) {
+      _delayTick ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!isBehindLive && _pausedAt == null) {
+          _delayTick?.cancel();
+          _delayTick = null;
+        }
+        _notify();
+      });
+    } else {
+      _delayTick?.cancel();
+      _delayTick = null;
+    }
+  }
+
   bool get canTimeshift => isLive && (_engine?.supportsTimeshift ?? false);
 
   /// How far behind the live point the picture is.
@@ -1241,10 +1256,16 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
-  /// Notified only when the live timeshift delay changes. The timer that
-  /// ticks it updates this, so the UI can refresh the badge without a full
-  /// player rebuild every second.
-  final ValueNotifier<Duration?> liveDelayNotifier = ValueNotifier<Duration?>(null);
+  bool _inTick = false;
+  void _syncDelayTickSafe() {
+    if (_inTick) return;
+    _inTick = true;
+    try {
+      _syncDelayTick();
+    } finally {
+      _inTick = false;
+    }
+  }
 
   bool _userPausedLive = false;
   bool _deferredLiveFailure = false;
@@ -1406,6 +1427,7 @@ class PlaybackSession extends ChangeNotifier {
 
   void _notify() {
     if (_disposed) return;
+    if (isLive) _syncDelayTickSafe();
     if (!_streamStopped) {
       PlaybackWorkPolicy.instance.update(
         this,
