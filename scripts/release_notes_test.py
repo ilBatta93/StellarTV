@@ -6,6 +6,10 @@ class NotesTest(unittest.TestCase):
         self.assertEqual(series_version('3.7.20', 110), '3.8.0')
         self.assertEqual(series_version('3.7.21', 111), '3.8.1')
         self.assertEqual(series_version('3.7.16', 106), '3.7.16')
+    def test_series_39_starts_at_build_169(self):
+        self.assertEqual(series_version('3.9.0', 168), '3.8.58')
+        self.assertEqual(series_version('3.9.0', 169), '3.9.0')
+        self.assertEqual(series_version('3.9.0', 170), '3.9.1')
     def test_notes_list_every_new_change_once(self):
         output = render('3.8.10', ['Ordine per voto aggiornato', 'Risoluzione separata dal voto'])
         self.assertNotIn('## Modifiche', output)

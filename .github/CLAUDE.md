@@ -17,6 +17,6 @@ Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`
 ## Regole
 - `build.yml` ha `concurrency: android-release`: mai due build in coda insieme.
 - I segreti si leggono solo da `secrets.*`; mai stampati nei log, mai scritti in file versionati.
-- La versione si calcola dal numero di run (`3.8.<run - 110>`): non cambiarla a mano.
+- La versione si calcola dal numero di run (`3.9.<run - 169>`): non cambiarla a mano.
 - I rilasci pubblici vanno anche su `ilBatta93/StellarTV-releases`, da cui il sito serve `/apk` e `/ipa`.
 - Un workflow modificato si prova con una run di `verify.yml`, non con una build di rilascio.

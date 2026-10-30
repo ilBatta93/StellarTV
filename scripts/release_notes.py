@@ -57,12 +57,15 @@ def render(version, lines):
 def git(*args):
     return subprocess.check_output(['git', *args], text=True).strip()
 
-SERIES_FROM_RUN = 110  # run 110 publishes 3.8.0
+# (first run, series): run 110 publishes 3.8.0, run 169 publishes 3.9.0.
+SERIES = [(169, '3.9'), (110, '3.8')]
 
 def series_version(version, run_number):
-    """3.8.N from build 108 on; older runs keep the version they received."""
-    if run_number is not None and run_number >= SERIES_FROM_RUN:
-        return f'3.8.{run_number - SERIES_FROM_RUN}'
+    """Series version from the run number; older runs keep their version."""
+    if run_number is not None:
+        for first, series in SERIES:
+            if run_number >= first:
+                return f'{series}.{run_number - first}'
     return version
 
 def _workflow_runs(workflow, branch):
@@ -101,7 +104,7 @@ def main():
     version = series_version(sys.argv[1], int(run) if run and run.isdigit() else None)
     env_file = os.environ.get('GITHUB_ENV')
     if env_file and version != sys.argv[1]:
-        # Later GITHUB_ENV lines win: the APK, tag and release use 3.8.N.
+        # Later GITHUB_ENV lines win: the APK, tag and release use the series version.
         with open(env_file, 'a') as f:
             f.write(f'VERSION={version}\n')
     runs = successful_runs()
