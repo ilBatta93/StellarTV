@@ -67,7 +67,7 @@ jobs:
         continue-on-error: true
         run: dart format --output=none --set-exit-if-changed lib test 2>&1 | tee format.txt
 
-      - name: Script di policy (tutti e 9)
+      - name: Script di policy
         id: checks
         continue-on-error: true
         run: |
