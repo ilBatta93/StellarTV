@@ -1,4 +1,7 @@
+import 'package:logging/logging.dart';
 import 'package:stellar_tv/services/catalog_work_queue.dart';
+
+final Logger _logger = Logger('catalog_work_queue_test');
 
 void main() {
   final now = DateTime.utc(2026, 10, 21);
@@ -21,5 +24,5 @@ void main() {
   q.release(retry.keys, retry.keys.toSet(), now);
   q.add('movie:a', 'movie\u0000A', now);
   check(q.pending.containsKey('movie:a'), 'success releases ownership');
-  print('6 catalog queue checks passed');
+  _logger.info('6 catalog queue checks passed');
 }
