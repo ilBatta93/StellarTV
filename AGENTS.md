@@ -2,7 +2,7 @@
 
 I principi stabili stanno in `.cursorrules`. Non accodare resoconti: aggiorna la frase esistente.
 
-Al termine di ogni modifica richiesta, crea un commit git e fai push sul branch remoto già tracciato. Non riscrivere la storia pubblicata. «Build Android» avvia il workflow GitHub `StellarTV Android Release` e lo segue fino al successo, correggendo gli errori.
+«fai build android» sincronizza la repo locale con quella remota e avvia il workflow GitHub `StellarTV Android Release` e lo segue fino al successo, correggendo gli errori.
 
 - Le cache bambino sul dispositivo includono le certificazioni. I verdetti in cloud si rivalutano. Un consenso vecchio basato solo sul rating non basta. Un verdetto sconosciuto resta nascosto.
 - L'identità nativa è StellarTV su ogni piattaforma. I nomi Dart e i bridge nativi del player cambiano insieme.
