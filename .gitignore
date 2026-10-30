@@ -3,3 +3,7 @@ node_modules/
 *.env
 *.local
 assets/config.local.json
+# Firma Android: arriva dai secret di GitHub, mai nel repo
+android/key.properties
+*.jks
+*.keystore
