@@ -47,7 +47,6 @@ class PlaybackSession extends ChangeNotifier {
     this.startAt,
     this.previewMode = false,
     this.previewFallback = false,
-    this.openedWithPreviewFrame = false,
     this.engineFactory,
     this.onPositionCommitted,
     this.maxConnections,
@@ -73,11 +72,6 @@ class PlaybackSession extends ChangeNotifier {
   /// MultiView tiles: a tile whose hardware decoder is busy (cheap TV sticks
   /// have one) may fall back to mpv/FFmpeg instead of staying black.
   final bool previewFallback;
-
-  /// The Diretta preview of this channel already drew a picture. Fullscreen
-  /// then starts on that same ExoPlayer path and keeps mpv as the fallback.
-  /// The saved engine choice is left unchanged.
-  final bool openedWithPreviewFrame;
 
   /// Allows deterministic playback/lifecycle tests without a native decoder.
   final PlaybackEngine Function(PlayerEngineType)? engineFactory;
@@ -234,14 +228,13 @@ class PlaybackSession extends ChangeNotifier {
 
   /// Channels already known to give a black picture with the hardware
   /// decoder open directly in mpv with FFmpeg software decoding, including
-  /// the next preview. A preview that already drew, and is not one of those
-  /// channels, opens fullscreen on ExoPlayer.
+  /// the next preview. Fullscreen always opens the engine chosen in the
+  /// settings: switching to ExoPlayer after a preview frame gave black
+  /// pictures that the health check could not see.
   PlayerEngineType get _firstEngine => _softwareDecode
       ? PlayerEngineType.mediakit
       : previewMode
       ? previewEngine(settings)
-      : openedWithPreviewFrame
-      ? PlayerEngineType.exo
       : settings.primaryEngine;
 
   @visibleForTesting

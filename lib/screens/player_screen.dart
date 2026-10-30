@@ -66,9 +66,6 @@ class PlayerScreen extends StatefulWidget {
   /// Ordered episodes of the series being watched (null for films/live).
   final List<Channel>? queue;
 
-  /// Diretta only: the preview of this channel already drew a frame.
-  final bool openedWithPreviewFrame;
-
   const PlayerScreen({
     super.key,
     required this.channel,
@@ -77,7 +74,6 @@ class PlayerScreen extends StatefulWidget {
     this.engineFactory,
     this.segmentsSource,
     this.queue,
-    this.openedWithPreviewFrame = false,
   });
 
   @override
@@ -1489,7 +1485,6 @@ class _PlayerScreenState extends State<PlayerScreen>
       isLive: _isLive,
       settings: settings,
       startAt: startAt,
-      openedWithPreviewFrame: _isLive && widget.openedWithPreviewFrame,
       engineFactory: widget.engineFactory,
       onPositionCommitted: (position) {
         _pendingResume = position;

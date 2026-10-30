@@ -73,6 +73,21 @@ class LiveDiagnosticsLog {
         e.key: e.value,
   };
 
+  /// Numeric/boolean fields of `engine_state`.
+  static const engineStateKeys = <String>{
+    'playing',
+    'buffering',
+    'audioOnly',
+    'videoWidth',
+    'videoHeight',
+    'frameDropCount',
+    'decoderFrameDropCount',
+    'estimatedFps',
+    'cacheSeconds',
+    'avSyncSeconds',
+    'cacheKib',
+  };
+
   /// Numeric/boolean fields of the opt-in stream probe (no text, no hosts).
   static final probeKeys = <String>{
     for (final p in ['probe', 'variant', 'seg']) ...{
@@ -110,6 +125,7 @@ class LiveDiagnosticsLog {
             'frameDelta',
             'renderedFrames',
             'frozenMs',
+            ...engineStateKeys,
             ...probeKeys,
           }.contains(e.key) &&
           (e.value is bool ||
@@ -131,6 +147,7 @@ class LiveDiagnosticsLog {
                     'clock_pinned',
                     'picture_frozen',
                     'picture_resumed',
+                    'engine_state',
                     'open_ready',
                     'stream_probe',
                   }.contains(e.value)))
@@ -145,6 +162,11 @@ class LiveDiagnosticsLog {
     }.contains(raw['engine']))
       'engine': raw['engine'],
     if ({'hls', 'ts', 'other'}.contains(raw['format'])) 'format': raw['format'],
+    // Codec and decoder names only: lowercase, short, no separators of a URL.
+    for (final k in const ['videoCodec', 'hwdecCurrent'])
+      if (raw[k] is String &&
+          RegExp(r'^[a-z0-9_\-]{1,24}$').hasMatch(raw[k] as String))
+        k: raw[k],
     if ({'vlc', 'android', 'smarters', 'custom'}.contains(raw['userAgent']))
       'userAgent': raw['userAgent'],
     for (final k in const ['probeKind', 'variantKind', 'segKind'])
@@ -197,7 +219,7 @@ class LiveDiagnosticsLog {
         'device': _safeDevice(device),
         'events': events.map(_safeEvent).toList(),
         'privacy': 'No URLs, credentials, channel titles, account identifiers or raw error messages.',
-        'measurement': 'open_ready is player readiness; first_video_frame is renderer confirmation. clock_pinned means the TS live clock never moved beyond ~500 ms (not a stall, emitted once per attempt). suspected_stall is a media clock that moved and then froze; frameDelta (native frames since the freeze) is positive when the picture is still flowing and zero when both clock and picture are stuck. picture_frozen is a native frame count that stopped for 3 s while playing and not buffering (black or frozen picture), picture_resumed its end; renderedFrames is the native count, frozenMs a freeze still open when the attempt ended. attempt_end.reason: left=user navigated away, replaced=channel switched, health=engine recovery, startup=no first frame, error=player error.',
+        'measurement': 'open_ready is player readiness; first_video_frame is renderer confirmation. clock_pinned means the TS live clock never moved beyond ~500 ms (not a stall, emitted once per attempt). suspected_stall is a media clock that moved and then froze; frameDelta (native frames since the freeze) is positive when the picture is still flowing and zero when both clock and picture are stuck. picture_frozen is a native frame count that stopped for 3 s while playing and not buffering (black or frozen picture), picture_resumed its end; renderedFrames is the native count, frozenMs a freeze still open when the attempt ended. engine_state (at 5 s and 15 s) is what the engine reports: playing, buffering, audioOnly (no video track found), video size, codec, hardware decoder in use and dropped frames. attempt_end.reason: left=user navigated away, replaced=channel switched, health=engine recovery, startup=no first frame, error=player error.',
       });
 }
 

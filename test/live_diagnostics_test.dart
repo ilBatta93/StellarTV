@@ -1,5 +1,8 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stellar_tv/services/live_diagnostics_log.dart';
+import 'package:stellar_tv/services/live_diagnostics_tracker.dart';
 
 void main() {
   test('diagnostics is off by default and stops recording when disabled', () {
@@ -41,6 +44,36 @@ void main() {
       log.streamId(url),
       isNot(LiveDiagnosticsLog(salt: 'other').streamId(url)),
     );
+  });
+  test('engine state keeps numbers and codec names, never other text', () {
+    final data = engineStateData(
+      playing: true,
+      buffering: false,
+      positionMs: 314,
+      audioOnly: false,
+      firstFrame: true,
+      size: const Size(1920, 1080),
+      renderedFrames: null,
+      metrics: {
+        'frameDropCount': '12',
+        'estimatedFps': '24.9',
+        'cacheSeconds': 'nan',
+        'videoCodec': 'h264',
+        'hwdecCurrent': 'https://host.example/x',
+        'cacheKib': 'abc',
+      },
+    );
+    final log = LiveDiagnosticsLog()..enabled = true;
+    log.add('engine_state', data: data);
+    final report = log.report({'platform': 'android'});
+    expect(report, contains('"frameDropCount": 12'));
+    expect(report, contains('"estimatedFps": 24.9'));
+    expect(report, contains('"videoCodec": "h264"'));
+    expect(report, contains('"videoWidth": 1920'));
+    expect(report, contains('"engine_state"'));
+    expect(report, isNot(contains('host.example')));
+    expect(report, isNot(contains('cacheSeconds')));
+    expect(report, isNot(contains('cacheKib')));
   });
   test('stationary clock is one suspected stall after 5s, never during pause or buffering', () {
     final probe = LiveStallProbe();

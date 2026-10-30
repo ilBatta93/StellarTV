@@ -21,7 +21,6 @@ void playChannel(
   List<Channel>? queue,
   bool replace = false,
   bool archivePlayback = false,
-  bool openedWithPreviewFrame = false,
 }) {
   final app = context.read<AppProvider>();
   if (app.kidsMode && !app.isKidsContent(channel)) return;
@@ -48,7 +47,6 @@ void playChannel(
       startAt: startAt,
       queue: queue,
       archivePlayback: archivePlayback,
-      openedWithPreviewFrame: openedWithPreviewFrame,
     ),
   );
   if (replace) {

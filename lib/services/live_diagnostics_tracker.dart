@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../player/playback_engine.dart';
@@ -27,6 +29,12 @@ class LiveDiagnosticsTracker {
   Duration? _frozenAt;
   static const _frozenAfter = Duration(seconds: 3);
 
+  // engine_state: what the engine reports a few seconds in, so a black
+  // picture can be told apart from a stalled stream, a missing video track
+  // or a decoder that cannot keep up.
+  static const _stateAt = [Duration(seconds: 5), Duration(seconds: 15)];
+  int _stateSent = 0;
+
   void begin(
     String url,
     String engine,
@@ -50,6 +58,7 @@ class LiveDiagnosticsTracker {
     _frames = null;
     _framesMovedAt = Duration.zero;
     _frozenAt = null;
+    _stateSent = 0;
     service.record(
       observed ? 'observation_started_midstream' : 'attempt_start',
       session: session,
@@ -97,6 +106,10 @@ class LiveDiagnosticsTracker {
       probe.snapshotFrameCount(engine.renderedFrameCount);
     }
     _samplePicture(engine, playing: active && v.isPlaying && !v.isBuffering);
+    if (_stateSent < _stateAt.length && clock.elapsed >= _stateAt[_stateSent]) {
+      _stateSent++;
+      unawaited(_reportState(engine));
+    }
     if (active && v.isBuffering && bufferingAt == null) {
       bufferingAt = clock.elapsed;
       event('buffer_start');
@@ -181,6 +194,31 @@ class LiveDiagnosticsTracker {
     }
   }
 
+  Future<void> _reportState(PlaybackEngine engine) async {
+    final at = attempt;
+    Map<String, Object?> metrics;
+    try {
+      metrics = await engine.metrics();
+    } catch (_) {
+      metrics = const {};
+    }
+    if (!running || attempt != at) return;
+    final v = engine.value;
+    event(
+      'engine_state',
+      data: engineStateData(
+        playing: v.isPlaying,
+        buffering: v.isBuffering,
+        positionMs: v.position.inMilliseconds,
+        audioOnly: engine.audioOnly,
+        firstFrame: firstFrame,
+        size: v.size,
+        renderedFrames: engine.renderedFrameCount,
+        metrics: metrics,
+      ),
+    );
+  }
+
   /// [reason] must be one of: left, replaced, health, startup, error.
   void end({String reason = 'left'}) {
     if (!running) return;
@@ -204,4 +242,47 @@ class LiveDiagnosticsTracker {
     );
     clock.stop();
   }
+}
+
+/// Fields of an `engine_state` event. mpv answers with text: numbers are
+/// parsed and only short codec or decoder names are kept.
+Map<String, Object?> engineStateData({
+  required bool playing,
+  required bool buffering,
+  required int positionMs,
+  required bool audioOnly,
+  required bool firstFrame,
+  required Size size,
+  required int? renderedFrames,
+  required Map<String, Object?> metrics,
+}) {
+  final out = <String, Object?>{
+    'playing': playing,
+    'buffering': buffering,
+    'positionMs': positionMs,
+    'audioOnly': audioOnly,
+    'videoFrameConfirmed': firstFrame,
+    if (size.width > 0) 'videoWidth': size.width.round(),
+    if (size.height > 0) 'videoHeight': size.height.round(),
+    'renderedFrames': ?renderedFrames,
+  };
+  const numbers = {
+    'frameDropCount',
+    'decoderFrameDropCount',
+    'estimatedFps',
+    'cacheSeconds',
+    'avSyncSeconds',
+    'cacheKib',
+  };
+  final name = RegExp(r'^[a-z0-9_\-]{1,24}$');
+  metrics.forEach((key, value) {
+    if (numbers.contains(key)) {
+      final n = value is num ? value : num.tryParse('$value');
+      if (n != null && n.isFinite) out[key] = n;
+    } else if (key == 'hwdecCurrent' || key == 'videoCodec') {
+      final text = '$value'.toLowerCase();
+      if (name.hasMatch(text)) out[key] = text;
+    }
+  });
+  return out;
 }

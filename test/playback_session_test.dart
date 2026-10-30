@@ -557,24 +557,16 @@ void main() {
     await session.released;
   });
 
-  test('a preview that already drew opens fullscreen on ExoPlayer', () {
-    final settings = PlayerSettings()
-      ..primaryEngine = PlayerEngineType.mediakit;
-    final previewed = PlaybackSession(
-      url: 'http://tv.example.com/live/user/pass/42.ts',
-      isLive: true,
-      settings: settings,
-      openedWithPreviewFrame: true,
-    );
-    final plain = PlaybackSession(
-      url: 'http://tv.example.com/live/user/pass/42.ts',
-      isLive: true,
-      settings: settings,
-    );
-    expect(previewed.openingEngine, PlayerEngineType.exo);
-    expect(plain.openingEngine, PlayerEngineType.mediakit);
-    previewed.dispose();
-    plain.dispose();
+  test('fullscreen live opens the engine chosen in the settings', () {
+    for (final chosen in PlayerEngineType.values) {
+      final session = PlaybackSession(
+        url: 'http://tv.example.com/live/user/pass/42.ts',
+        isLive: true,
+        settings: PlayerSettings()..primaryEngine = chosen,
+      );
+      expect(session.openingEngine, chosen);
+      session.dispose();
+    }
   });
 
   test('immagine assente: suono che avanza = decoder, fermo = server', () {
