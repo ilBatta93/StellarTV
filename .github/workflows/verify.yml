@@ -5,7 +5,7 @@ name: StellarTV Verifica (senza rilascio)
 on:
   workflow_dispatch:
   push:
-    branches: [audit/full-review]
+    branches: [main]
 
 permissions:
   contents: read

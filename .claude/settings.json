@@ -26,7 +26,6 @@
       "Bash(git ls-files *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push origin audit/full-review)",
       "Bash(git push origin main)",
       "Bash(gh run list *)",
       "Bash(gh run view *)",
