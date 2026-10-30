@@ -172,13 +172,14 @@ class _PlayerScreenState extends State<PlayerScreen>
   static int _activePlayers = 0;
   late final AppProvider _app;
 
-  @override
+@override
   void initState() {
     super.initState();
     _activePlayers++;
     _app = context.read<AppProvider>()..setPlaybackActive(true);
-    WidgetsBinding.instance.addObserver(this);
+   WidgetsBinding.instance.addObserver(this);
     _history = context.read<HistoryProvider>();
+    // Imposta UI immersive sticky per fullscreen immediato su TV.
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _screenOffSub = _bridge.screenOff.listen((_) {
       // Phones may keep on-demand audio with the screen off when allowed.
@@ -202,6 +203,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       // work whatever widget holds the focus, and the D-Pad can never get
       // lost behind the video or inside a control.
       FocusManager.instance.addEarlyKeyEventHandler(_onEarlyKey);
+      // Richiesta focus immediata dopo il primo frame, non dopo il rebuild.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _remoteFocus.requestFocus();
       });
@@ -1757,7 +1759,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     _hideTimer?.cancel();
     final seconds = _settings?.controlsHideSeconds ?? 4;
     if (seconds <= 0) return;
-    _hideTimer = Timer(Duration(seconds: seconds), () {
+    // Su TV il controllo parte sempre dal primo frame, senza attese.
+    final hideSeconds = DeviceTypeService.isTv ? seconds.clamp(1, 12) : seconds;
+    _hideTimer = Timer(Duration(seconds: hideSeconds), () {
       final playing = _session?.value.isPlaying ?? false;
       if (mounted && playing) {
         setState(() => _controlsVisible = false);

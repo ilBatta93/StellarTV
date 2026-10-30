@@ -555,11 +555,11 @@ void main() {
     );
     expect(
       PlaybackSession.firstPictureDeadline(PlayerEngineType.exo),
-      const Duration(seconds: 8),
+      const Duration(seconds: 4),
     );
     expect(
       PlaybackSession.firstPictureDeadline(PlayerEngineType.mediakit),
-      const Duration(seconds: 14),
+      const Duration(seconds: 10),
     );
   });
 

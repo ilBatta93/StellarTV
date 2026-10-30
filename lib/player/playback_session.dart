@@ -809,8 +809,8 @@ class PlaybackSession extends ChangeNotifier {
   @visibleForTesting
   static Duration firstPictureDeadline(PlayerEngineType engine) =>
       engine == PlayerEngineType.exo
-      ? const Duration(seconds: 8)
-      : const Duration(seconds: 14);
+      ? const Duration(seconds: 4)
+      : const Duration(seconds: 10);
 
   /// Picks the failure for a live player that never drew a picture: media
   /// advancing (sound) means the decoder cannot draw this video; a stalled
@@ -827,7 +827,7 @@ class PlaybackSession extends ChangeNotifier {
   /// Frozen output samples before one mid-play recovery. The reconnect budget
   /// itself stays the one already used for a dropped stream.
   @visibleForTesting
-  static int frameStallSamples = 8;
+  static int frameStallSamples = 4;
 
   /// True when play is active, frames were already moving, and the native
   /// counter did not advance. A pause, a buffer, or an unknown counter is not

@@ -415,11 +415,6 @@ class ExoLoadProfile {
 
   static const previewTargetBytes = 8 * 1024 * 1024;
 
-  factory ExoLoadProfile.forPlayback({
-    required bool preview,
-    required bool live,
-    required int backBufferMs,
-  }) {
     final back = backBufferMs < 0 ? 0 : backBufferMs;
     if (preview) {
       return const ExoLoadProfile(

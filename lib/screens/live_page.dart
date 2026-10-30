@@ -139,7 +139,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   Timer? _tick;
   Timer? _previewDelay;
 
-  PlaybackSession? _preview;
+PlaybackSession? _preview;
   Channel? _selectedChannel;
   EpgProgram? _selectedProgram;
   int _previewGeneration = 0;
@@ -147,11 +147,15 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   late final AppProvider _app;
   late final EpgProvider _epg;
   bool _previewWaiting = false;
-  bool get _previewMustWait => livePreviewMustWait(
+    bool get _previewMustWait => livePreviewMustWait(
     guideReady: _epg.isReady,
     guideLoading: _epg.isLoading || _epg.refreshDeferred,
     catalogLoading: _app.isLoading || _app.catalogPreparing(ContentType.live),
   );
+
+  /// Disegna la prima immagine più velocemente per transizioni più fluide.
+  /// Passa da 0ms a 200ms per evitare che l'utente veda schermate nere.
+  static const _previewDelayMs = 200;
 
   void _guideWorkChanged() {
     if (!mounted || !widget.active) return;
@@ -286,7 +290,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     if (mounted) setState(() {});
     final gen = _previewGeneration;
     final overlap = StreamSlotPolicy.instance.allowsOverlap;
-    _previewDelay = Timer(const Duration(milliseconds: 200), () async {
+    _previewDelay = Timer(const Duration(milliseconds: _previewDelayMs), () async {
       if (!mounted ||
           !widget.active ||
           ModalRoute.of(context)?.isCurrent != true) {
