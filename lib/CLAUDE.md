@@ -1,6 +1,6 @@
 # lib/ — codice Dart dell'app
 
-Regole comuni: master `C:\Progetti\CLAUDE.md` e `CLAUDE.md` della radice. Qui le regole valide per tutto `lib/`.
+Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`, l'`AGENTS.md` della radice e i `CLAUDE.md` delle cartelle superiori. Qui le regole valide per tutto `lib/`.
 
 ## Struttura
 - `main.dart`: avvio, provider di stato, servizi in primo piano.

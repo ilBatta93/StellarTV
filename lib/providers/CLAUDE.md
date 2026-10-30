@@ -1,6 +1,6 @@
 # lib/providers/ — stato condiviso
 
-Regole comuni: master, radice e `lib/CLAUDE.md`.
+Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`, l'`AGENTS.md` della radice e i `CLAUDE.md` delle cartelle superiori.
 Qui «provider» è il pacchetto Flutter di stato, non un termine di dominio: il divieto lessicale (master §4) non si applica a questa cartella.
 
 ## Contenuto

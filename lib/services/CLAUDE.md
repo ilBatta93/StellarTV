@@ -1,6 +1,6 @@
 # lib/services/ — logica senza interfaccia
 
-Regole comuni: master, radice e `lib/CLAUDE.md`.
+Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`, l'`AGENTS.md` della radice e i `CLAUDE.md` delle cartelle superiori.
 
 ## Famiglie di file
 - Sorgente e catalogo: `catalog_*`, `series_grouping`, `title_*`, `playlist_refresh_service`, `download_service` e i file legacy della sorgente.

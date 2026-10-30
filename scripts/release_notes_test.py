@@ -30,6 +30,11 @@ class NotesTest(unittest.TestCase):
             select_notes('- Voce già pubblicata\n', '- Voce già pubblicata\n', ['scripts/release_notes.py']),
             [],
         )
+    def test_rule_files_inside_lib_do_not_require_a_new_line(self):
+        self.assertEqual(
+            select_notes('- Voce già pubblicata\n', '- Voce già pubblicata\n', ['lib/CLAUDE.md']),
+            [],
+        )
     def test_previous_build_is_the_newest_successful_commit(self):
         runs = [
             {'databaseId': 9, 'headSha': 'current'},

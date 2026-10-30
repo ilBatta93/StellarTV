@@ -1,6 +1,6 @@
 # .github/ — workflow
 
-Regole comuni: master e `CLAUDE.md` della radice.
+Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`, l'`AGENTS.md` della radice e i `CLAUDE.md` delle cartelle superiori.
 
 ## Workflow
 | File | Nome | Avvio |

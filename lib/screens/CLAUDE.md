@@ -1,6 +1,6 @@
 # lib/screens/ — schermate complete
 
-Regole comuni: master, radice e `lib/CLAUDE.md`. Le regole di focus e telecomando sono in `widgets/CLAUDE.md` e valgono anche qui.
+Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`, l'`AGENTS.md` della radice e i `CLAUDE.md` delle cartelle superiori. Le regole di focus e telecomando sono in `widgets/CLAUDE.md` e valgono anche qui.
 
 ## Regole
 - Una schermata compone widget e legge provider; la logica sta in `services/`.

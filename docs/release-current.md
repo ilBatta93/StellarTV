@@ -1,8 +1,5 @@
-# Release Notes — Ottimizzazioni
+# Release Notes — Novità
 
-- Ripristino del player: correzione di un errore di compilazione relativo alla configurazione del buffer di caricamento in background.
-- Correzione struttura classe ExoLoadProfile: metodo forPlayback ripristinato per il caricamento del profilo di buffer.
-- Diretta: ridotto il tempo di attesa iniziale per anteprime e apertura di canali; pre-inizializzazione più rapida del player locale.
-- Fullscreen: transizione più fluida dell'orientamento e dell'interfaccia utente; nessun chiusura anticipata dei progetti in background.
-- Stutter: buffer live ottimizzato e rilevamento problemi più sensibile; fallback del decoder gestito correttamente.
-- Controller TV: comandi D-Pad più reattivi e focus più veloce; nessun blocco nello scroll del progresso.
+- Testi a schermo più chiari e neutri nelle schermate di accesso, scadenza, archivio e diagnostica.
+- Messaggio più chiaro quando la sorgente non consente altre connessioni contemporanee.
+- Manutenzione interna e pulizia del codice, senza cambiamenti nelle funzioni.

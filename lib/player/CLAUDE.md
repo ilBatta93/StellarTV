@@ -1,6 +1,6 @@
 # lib/player/ — motori e sessione di riproduzione
 
-Regole comuni: master, radice e `lib/CLAUDE.md`.
+Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`, l'`AGENTS.md` della radice e i `CLAUDE.md` delle cartelle superiori.
 
 ## Contenuto
 - `playback_engine.dart`: interfaccia comune (`PlaybackEngine`, tracce, snapshot, eccezioni).

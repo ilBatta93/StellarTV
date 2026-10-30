@@ -1,6 +1,6 @@
 # android/ — progetto nativo Android
 
-Regole comuni: master e `CLAUDE.md` della radice.
+Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`, l'`AGENTS.md` della radice e i `CLAUDE.md` delle cartelle superiori.
 
 ## Contenuto
 - `app/build.gradle.kts`: `applicationId = "tv.stellar.app"`, firma letta da `key.properties` (non versionato, negato in lettura).

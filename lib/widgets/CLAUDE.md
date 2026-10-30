@@ -1,6 +1,6 @@
 # lib/widgets/ — componenti riusabili
 
-Regole comuni: master, radice e `lib/CLAUDE.md`.
+Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`, l'`AGENTS.md` della radice e i `CLAUDE.md` delle cartelle superiori.
 
 ## Contenuto
 - `tv_*`: componenti per telecomando (focus, righe home, pannelli, campo testo, navigazione a griglia).

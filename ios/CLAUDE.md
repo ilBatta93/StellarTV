@@ -1,6 +1,6 @@
 # ios/ — progetto nativo iOS
 
-Regole comuni: master e `CLAUDE.md` della radice.
+Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`, l'`AGENTS.md` della radice e i `CLAUDE.md` delle cartelle superiori.
 
 ## Contenuto
 - Bundle `tv.stellar.app`, piattaforma minima iOS 15 (`Podfile`).

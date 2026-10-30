@@ -38,8 +38,10 @@ def select_notes(current_text, previous_text, changed_paths):
     notes = fresh_lines(current_text, previous_text)
 
     # If there are library changes but no new notes, raise an error
+    # Rule files such as lib/CLAUDE.md live beside the code but change nothing for users.
     lib_changed = any(
-        path.startswith('lib/') or path.startswith('packages/') or '/lib/' in path or '/packages/' in path
+        (path.startswith('lib/') or path.startswith('packages/') or '/lib/' in path or '/packages/' in path)
+        and not path.endswith('.md')
         for path in changed_paths
     )
     if lib_changed and not notes:

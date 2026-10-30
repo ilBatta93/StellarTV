@@ -1,9 +1,9 @@
 # scripts/ — note di rilascio
 
-Regole comuni: master e `CLAUDE.md` della radice (sezione 5).
+Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`, l'`AGENTS.md` della radice e i `CLAUDE.md` delle cartelle superiori.
 
 ## Contenuto
-- `release_notes.py`: legge `docs/release-current.md`, scarta le righe già presenti all'ultimo commit buildato con successo e pubblica solo le nuove. Rifiuta righe con termini bloccati (`BLOCKED`).
+- `release_notes.py`: legge `docs/release-current.md`, scarta le righe già presenti all'ultimo commit buildato con successo e pubblica solo le nuove. Rifiuta righe con termini bloccati (`BLOCKED`). Regole di contenuto in `AGENTS.md` §6.
 - `release_notes_test.py`: test `unittest`, eseguiti dal workflow di rilascio prima della pubblicazione.
 
 ## Regole

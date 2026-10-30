@@ -1,5 +1,3 @@
-<!-- 25/10/2026 - Progetto sincronizzato con successo tramite Cursor e Gemini API -->
-
 # StellarTV
 
 Player multimediale per contenuti TV configurati dall’utente sui propri dispositivi.
@@ -17,3 +15,7 @@ Android, Android TV, Fire TV e iOS. I controlli sono utilizzabili anche con tele
 ## Installazione
 
 Usa il collegamento condiviso dal proprietario per ottenere l’ultima versione disponibile.
+
+## Regole di lavoro
+
+Le regole per chi lavora sul codice, persone o AI, sono in `AGENTS.md`.

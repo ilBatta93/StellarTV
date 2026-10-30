@@ -1,6 +1,6 @@
 # test/ — test e script di policy
 
-Regole comuni: master e `CLAUDE.md` della radice.
+Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`, l'`AGENTS.md` della radice e i `CLAUDE.md` delle cartelle superiori.
 
 ## Due tipi di file
 - `*_test.dart`: test Flutter, eseguiti con `flutter test` (anche singolarmente: `flutter test test/<nome>_test.dart`).

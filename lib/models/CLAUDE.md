@@ -1,6 +1,6 @@
 # lib/models/ — modelli dati e policy pure
 
-Regole comuni: master, radice e `lib/CLAUDE.md`.
+Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`, l'`AGENTS.md` della radice e i `CLAUDE.md` delle cartelle superiori.
 
 ## Regole
 - I modelli non fanno I/O e non chiamano servizi. Serializzazione JSON con `fromJson`/`toJson` scritti a mano, come nei file esistenti.
