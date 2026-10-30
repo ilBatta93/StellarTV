@@ -136,15 +136,14 @@ class AndroidVideoPlayer extends VideoPlayerPlatform {
 
   // Returns the user agent to use with ExoPlayer for the given headers.
   String? _userAgentFromHeaders(Map<String, String> httpHeaders) {
-    // TODO(stuartmorgan): HTTP headers are case-insensitive, so this should be
-    //  adjusted to find any entry where the key has a case-insensitive match.
     const userAgentKey = 'User-Agent';
-    // TODO(stuartmorgan): Investigate removing this. The use of a hard-coded
-    //  default agent dates back to the original ExoPlayer implementation of the
-    //  plugin, but it's not clear why the default isn't null, which would let
-    //  ExoPlayer use its own default value.
     const defaultUserAgent = 'ExoPlayer';
-    return httpHeaders[userAgentKey] ?? defaultUserAgent;
+    for (final entry in httpHeaders.entries) {
+      if (entry.key.toLowerCase() == userAgentKey.toLowerCase()) {
+        return entry.value;
+      }
+    }
+    return defaultUserAgent;
   }
 
   /// Returns the player instance for [playerId], creating it if it doesn't

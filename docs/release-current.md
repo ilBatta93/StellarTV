@@ -7,6 +7,7 @@
 - Fix: regolazione regex note rilascio e fallback tag per build.
 - Fix: attivazione decodifica software live solo sui canali con decoder noto (DecoderMemory), evitando switch indesiderati su MPEG-TS.
 - Perf: liste più fluide e rendering live con anticipazione del player.
+- Fix: utilizzo di package:logging per sostituire print() in produzione (catalog_sort_background_check.dart).
 - Aggiornamento versioni Gradle e configurazione locale Android
 - Aggiornato script release_notes.py - rimosso blocco che impediva la build quando le note non coprivano tutte le modifiche lib/
 - Migliorata convalida dello script per garantire nuovi contenuti quando cambiano i file della libreria

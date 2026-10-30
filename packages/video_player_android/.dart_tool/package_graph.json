@@ -283,7 +283,7 @@
     },
     {
       "name": "analyzer",
-      "version": "14.6.0",
+      "version": "14.7.0",
       "dependencies": [
         "_fe_analyzer_shared",
         "collection",
@@ -301,7 +301,7 @@
     },
     {
       "name": "_fe_analyzer_shared",
-      "version": "110.0.0",
+      "version": "111.0.0",
       "dependencies": [
         "meta"
       ]

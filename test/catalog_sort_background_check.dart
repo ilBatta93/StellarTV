@@ -1,8 +1,11 @@
+import 'package:logging/logging.dart';
 import 'package:stellar_tv/models/channel.dart';
 import 'package:stellar_tv/models/content_type.dart';
 import 'package:stellar_tv/services/catalog_builder.dart';
 import 'package:stellar_tv/services/catalog_sort.dart';
 import 'package:stellar_tv/services/title_matching.dart';
+
+final Logger _logger = Logger('catalog_sort_background_check');
 
 void require(bool ok, String message) {
   if (!ok) throw StateError(message);
@@ -106,7 +109,5 @@ Future<void> main() async {
     byRating.map((e) => e.primary.id).join(',') == 'new,old,missing',
     'known ratings prefer IMDb, then the stored vote, unknown last',
   );
-  print(
-    'PASS: eight isolate orders, release dates, rating snapshots and 100000 entries',
-  );
+  _logger.info('PASS: eight isolate orders, release dates, rating snapshots and 100000 entries');
 }
