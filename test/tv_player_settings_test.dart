@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,29 +27,25 @@ void main() {
       live.startTimeoutSeconds = 9;
       await service.save(live, scope: PlayerSettingsScope.liveTv);
       expect(
-        (await PlayerSettingsService().load(
-          scope: PlayerSettingsScope.liveTv,
-        )).primaryEngine,
+        (await PlayerSettingsService().load(scope: PlayerSettingsScope.liveTv))
+            .primaryEngine,
         PlayerEngineType.exo,
       );
       expect(
-        (await service.load(
-          scope: PlayerSettingsScope.filmSeriesTv,
-        )).startTimeoutSeconds,
+        (await service.load(scope: PlayerSettingsScope.filmSeriesTv))
+            .startTimeoutSeconds,
         23,
       );
       expect((await service.load()).startTimeoutSeconds, 23);
       await service.reset(scope: PlayerSettingsScope.filmSeriesTv);
       expect(
-        (await service.load(
-          scope: PlayerSettingsScope.filmSeriesTv,
-        )).startTimeoutSeconds,
+        (await service.load(scope: PlayerSettingsScope.filmSeriesTv))
+            .startTimeoutSeconds,
         PlayerSettings().startTimeoutSeconds,
       );
       expect(
-        (await service.load(
-          scope: PlayerSettingsScope.liveTv,
-        )).startTimeoutSeconds,
+        (await service.load(scope: PlayerSettingsScope.liveTv))
+            .startTimeoutSeconds,
         9,
       );
       expect((await service.load()).startTimeoutSeconds, 23);
@@ -62,9 +59,8 @@ void main() {
       final tv = await service.load(scope: PlayerSettingsScope.liveTv);
       await service.save(PlayerSettings()..startTimeoutSeconds = 28);
       expect(
-        (await service.load(
-          scope: PlayerSettingsScope.liveTv,
-        )).startTimeoutSeconds,
+        (await service.load(scope: PlayerSettingsScope.liveTv))
+            .startTimeoutSeconds,
         tv.startTimeoutSeconds,
       );
     },
@@ -94,10 +90,7 @@ void main() {
     final legacy = PlayerSettings()
       ..liveCachingMs = 1500
       ..networkCachingMs = 5000;
-    expect(
-      MediaKitEngine.cacheBytes(legacy, isLive: true, tv: true),
-      16 * mib,
-    );
+    expect(MediaKitEngine.cacheBytes(legacy, isLive: true, tv: true), 16 * mib);
     expect(
       MediaKitEngine.cacheBytes(legacy, isLive: false, tv: true, preview: true),
       8 * mib,
@@ -109,7 +102,7 @@ void main() {
     expect(
       MediaKitEngine.streamLavfOptions(reconnect: true, live: true),
       'reconnect=1,reconnect_at_eof=1,reconnect_on_network_error=1,'
-          'reconnect_delay_max=0',
+      'reconnect_delay_max=0',
     );
     expect(
       MediaKitEngine.useCheapLiveDecode(
@@ -168,9 +161,8 @@ void main() {
       'player_settings_tv_live_v1': jsonEncode(chosen.toJson()),
     });
     expect(
-      (await PlayerSettingsService().load(
-        scope: PlayerSettingsScope.liveTv,
-      )).primaryEngine,
+      (await PlayerSettingsService().load(scope: PlayerSettingsScope.liveTv))
+          .primaryEngine,
       PlayerEngineType.exo,
     );
     expect(chosen.toJson()['liveEngineV'], 6);

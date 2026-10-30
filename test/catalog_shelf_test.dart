@@ -43,9 +43,7 @@ void main() {
     final dir = Directory.systemTemp.createTempSync('stv_append_');
     final live = File('${dir.path}/live.ndjson');
     final movies = File('${dir.path}/movie.ndjson');
-    writeSection(live, [
-      row(1, name: 'Alfa Uno', type: ContentType.live),
-    ]);
+    writeSection(live, [row(1, name: 'Alfa Uno', type: ContentType.live)]);
     writeSection(movies, [row(2, name: 'Il Padrino')]);
     final shelf = CatalogShelf.empty();
     addTearDown(() async {
@@ -145,8 +143,7 @@ void main() {
 }
 
 void writeSection(File file, List<Channel> rows) {
-  final buffer = StringBuffer()
-    ..writeln(jsonEncode({'stellar_catalog': 3}));
+  final buffer = StringBuffer()..writeln(jsonEncode({'stellar_catalog': 3}));
   for (final row in rows) {
     buffer.writeln(jsonEncode(row.toMap()));
   }

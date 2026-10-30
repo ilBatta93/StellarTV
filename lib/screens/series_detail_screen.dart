@@ -277,7 +277,10 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     final scroll = CustomScrollView(
       // TV: every section stays built, so going up always reaches the
       // title and the buttons at the top of the page.
-      scrollCacheExtent: DeviceTypeService.isTv ? ScrollCacheExtent.pixels(1200) : null, slivers: [
+      scrollCacheExtent: DeviceTypeService.isTv
+          ? ScrollCacheExtent.pixels(1200)
+          : null,
+      slivers: [
         if (DeviceTypeService.isTv)
           SliverToBoxAdapter(
             child: SizedBox(height: TvDetailBackdrop.topSpace(context)),
@@ -617,11 +620,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     if (!DeviceTypeService.isTv) {
       return SizedBox(width: double.infinity, child: button);
     }
-    return TvFocusable(
-      autofocus: true,
-      onPressed: play,
-      child: button,
-    );
+    return TvFocusable(autofocus: true, onPressed: play, child: button);
   }
 
   /// TV only: focusable buttons at the top of the page (first focus).

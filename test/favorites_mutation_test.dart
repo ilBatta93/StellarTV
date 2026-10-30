@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stellar_tv/models/channel.dart';
@@ -97,28 +98,25 @@ void main() {
       );
     },
   );
-  test(
-    'new local addition follows a queued remote removal without resurrection races',
-    () async {
-      final service = FavoritesService();
-      await Future.wait([
-        service.applyEncrypted({
-          'profile_histories': {
-            PersonalVault.favoriteLane: {
-              'c:a': {'deleted': true, 'watched': '2020-01-01T00:00:00Z'},
-            },
+  test('new local addition follows a queued remote removal without resurrection races', () async {
+    final service = FavoritesService();
+    await Future.wait([
+      service.applyEncrypted({
+        'profile_histories': {
+          PersonalVault.favoriteLane: {
+            'c:a': {'deleted': true, 'watched': '2020-01-01T00:00:00Z'},
           },
-        }),
-        service.toggleFavorite(channel('a')),
-      ]);
-      expect(await service.getFavoriteIds(), {'a'});
-      final prefs = await SharedPreferences.getInstance();
-      expect(
-        jsonDecode(
-          prefs.getString('vault_favorite_events_v1') ?? '{}',
-        )['c:a']['deleted'],
-        false,
-      );
-    },
-  );
+        },
+      }),
+      service.toggleFavorite(channel('a')),
+    ]);
+    expect(await service.getFavoriteIds(), {'a'});
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      jsonDecode(
+        prefs.getString('vault_favorite_events_v1') ?? '{}',
+      )['c:a']['deleted'],
+      false,
+    );
+  });
 }

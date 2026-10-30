@@ -49,9 +49,8 @@ class MovieHash {
     if (uri.path.toLowerCase().endsWith('.m3u8')) return null;
     final c = client ?? http.Client();
     try {
-      Future<http.Response> range(int start, int end) => c
-          .get(uri, headers: {'Range': 'bytes=$start-$end'})
-          .timeout(timeout);
+      Future<http.Response> range(int start, int end) =>
+          c.get(uri, headers: {'Range': 'bytes=$start-$end'}).timeout(timeout);
       final first = await range(0, chunk - 1);
       if (first.statusCode != 206 || first.bodyBytes.length < chunk) {
         return null;

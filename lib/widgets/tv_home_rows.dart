@@ -156,10 +156,13 @@ class _TvHomeRowsState extends State<TvHomeRows> {
       builder: (context, bounds) {
         _extent = bounds.maxHeight;
         return ListView.builder(
-          scrollCacheExtent: ScrollCacheExtent.pixels(_extent *
-              TvRenderPolicy.rowCacheFraction(
-                memoryPressure: TvImageMemoryGuard.reducedRendering.value,
-              )), controller: _scroll,
+          scrollCacheExtent: ScrollCacheExtent.pixels(
+            _extent *
+                TvRenderPolicy.rowCacheFraction(
+                  memoryPressure: TvImageMemoryGuard.reducedRendering.value,
+                ),
+          ),
+          controller: _scroll,
           physics: const _NoImplicitScroll(),
           padding: EdgeInsets.zero,
           itemExtent: _extent,

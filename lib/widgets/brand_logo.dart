@@ -25,13 +25,14 @@ const kBrandNameBox = BrandBox(577.0, 77.8, 1478.1, 374.3);
 final double kBrandWordmarkAspect = kBrandFullBox.aspect;
 final double kBrandNameAspect = kBrandNameBox.aspect;
 
-Widget brandArt(String asset, double w, double h, String label) => SvgPicture.asset(
-  asset,
-  width: w,
-  height: h,
-  fit: BoxFit.contain,
-  semanticsLabel: label,
-);
+Widget brandArt(String asset, double w, double h, String label) =>
+    SvgPicture.asset(
+      asset,
+      width: w,
+      height: h,
+      fit: BoxFit.contain,
+      semanticsLabel: label,
+    );
 
 /// Star symbol only (icons, compact headers, loading).
 class BrandMark extends StatelessWidget {
@@ -59,15 +60,20 @@ class BrandLockup extends StatelessWidget {
   final double tv;
   final double maxWidth;
 
-  static Widget _part(String asset, BrandBox b, double scale, double left, double opacity) =>
-      Positioned(
-        left: left,
-        top: (b.y - kBrandFullBox.y) * scale,
-        child: Opacity(
-          opacity: opacity,
-          child: brandArt(asset, b.w * scale, b.h * scale, ''),
-        ),
-      );
+  static Widget _part(
+    String asset,
+    BrandBox b,
+    double scale,
+    double left,
+    double opacity,
+  ) => Positioned(
+    left: left,
+    top: (b.y - kBrandFullBox.y) * scale,
+    child: Opacity(
+      opacity: opacity,
+      child: brandArt(asset, b.w * scale, b.h * scale, ''),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +124,13 @@ class BrandLockup extends StatelessWidget {
                   ),
                 ),
               ),
-              _part(kBrandStellarAsset, kBrandStellarBox, scale, at(kBrandStellarBox), stellar),
+              _part(
+                kBrandStellarAsset,
+                kBrandStellarBox,
+                scale,
+                at(kBrandStellarBox),
+                stellar,
+              ),
               _part(kBrandTvAsset, kBrandTvBox, scale, at(kBrandTvBox), tv),
             ],
           ),
@@ -174,6 +186,10 @@ class BrandName extends StatelessWidget {
   final double height;
   const BrandName({super.key, this.height = 36});
   @override
-  Widget build(BuildContext context) =>
-      brandArt(kBrandNameAsset, height * kBrandNameAspect, height, 'STELLAR TV');
+  Widget build(BuildContext context) => brandArt(
+    kBrandNameAsset,
+    height * kBrandNameAspect,
+    height,
+    'STELLAR TV',
+  );
 }

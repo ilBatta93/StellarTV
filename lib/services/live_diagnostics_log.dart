@@ -175,9 +175,13 @@ class LiveDiagnosticsLog {
     }.contains(raw['category']))
       'category': raw['category'],
     // attempt_end close reason (no free text).
-    if ({'left', 'replaced', 'health', 'startup', 'error'}.contains(
-      raw['reason'],
-    ))
+    if ({
+      'left',
+      'replaced',
+      'health',
+      'startup',
+      'error',
+    }.contains(raw['reason']))
       'reason': raw['reason'],
   };
 

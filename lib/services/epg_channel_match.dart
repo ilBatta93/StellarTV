@@ -39,7 +39,10 @@ String epgBaseKey(String s) => s
     .replaceAll(RegExp(r'^\s*[a-z]{2,3}\s*[:|\-]\s*'), '')
     .replaceAll(RegExp(r'\.(it|uk|de|fr|es|us|com)$'), '')
     .replaceAll(_shiftRe, ' ')
-    .replaceAll(RegExp(r'\b(fhd|uhd|hd|sd|4k|hevc|h265|backup|ita|italia)\b'), ' ')
+    .replaceAll(
+      RegExp(r'\b(fhd|uhd|hd|sd|4k|hevc|h265|backup|ita|italia)\b'),
+      ' ',
+    )
     .replaceAll(RegExp(r'[^a-z0-9]+'), '');
 
 class EpgMatcher {
@@ -57,7 +60,9 @@ class EpgMatcher {
 
   List<String> _namesOf(String id) => [
     id,
-    ...(displayNames[id] ?? '').split(epgNameSeparator).where((n) => n.trim().isNotEmpty),
+    ...(displayNames[id] ?? '')
+        .split(epgNameSeparator)
+        .where((n) => n.trim().isNotEmpty),
   ];
 
   void _build() {
@@ -98,7 +103,10 @@ class EpgMatcher {
   }
 
   EpgMatch? match({required String name, String? tvgName, String? tvgId}) {
-    final names = [name, if (tvgName != null && tvgName.trim().isNotEmpty) tvgName];
+    final names = [
+      name,
+      if (tvgName != null && tvgName.trim().isNotEmpty) tvgName,
+    ];
     // The visible channel name decides the timeshift: providers often copy
     // the base tvg-id/tvg-name onto the "+1" channel.
     var shift = 0;
@@ -112,7 +120,9 @@ class EpgMatcher {
     if (exact != null) return EpgMatch(exact, 0);
     if (shift == 0) return null;
     // No dedicated timeshift guide: base channel moved forward.
-    final base = (tvg != null && _guideShift[tvg] == 0) ? tvg : _byNameKey(names, 0);
+    final base = (tvg != null && _guideShift[tvg] == 0)
+        ? tvg
+        : _byNameKey(names, 0);
     return base == null ? null : EpgMatch(base, shift);
   }
 }
@@ -124,7 +134,10 @@ Map<String, List<String>> epgCatalogIdsByGuide(
   Map<String, String> displayNames,
   List<Map<String, String>> rows,
 ) {
-  final matcher = EpgMatcher(guideIds: guideIds.toSet(), displayNames: displayNames);
+  final matcher = EpgMatcher(
+    guideIds: guideIds.toSet(),
+    displayNames: displayNames,
+  );
   final out = <String, List<String>>{};
   for (final row in rows) {
     final id = row['id'];

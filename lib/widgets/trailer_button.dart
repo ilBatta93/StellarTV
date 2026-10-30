@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../screens/trailer_screen.dart';
 import '../models/tmdb_item.dart';
 import '../models/title_trailer.dart';
@@ -41,8 +42,10 @@ class _TrailerButtonState extends State<TrailerButton> {
   Future<void> _open(TitleTrailer trailer) =>
       TrailerButton.opener?.call(context, trailer) ??
       Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => TrailerScreen(trailer: trailer)),
-  );
+        MaterialPageRoute<void>(
+          builder: (_) => TrailerScreen(trailer: trailer),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) => FutureBuilder<TitleTrailer?>(

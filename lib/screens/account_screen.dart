@@ -208,9 +208,8 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   void _openPairing() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const TvPairingScreen()));
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const TvPairingScreen()));
   }
 
   Widget _action(VoidCallback? callback, Widget child) =>

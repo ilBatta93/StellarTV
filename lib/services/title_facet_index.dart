@@ -536,12 +536,18 @@ _Facet _decode(Map<String, Object?> raw) {
   }
   final genres = raw['g'];
   if (genres is List) {
-    row.genres = [for (final n in genres) if (n is num) n.toInt()];
+    row.genres = [
+      for (final n in genres)
+        if (n is num) n.toInt(),
+    ];
   }
   if (raw['ga'] is num) row.genresAt = (raw['ga'] as num).toInt();
   final platforms = raw['p'];
   if (platforms is List) {
-    row.platforms = [for (final name in platforms) if (name is String) name];
+    row.platforms = [
+      for (final name in platforms)
+        if (name is String) name,
+    ];
   }
   if (raw['pa'] is num) row.platformsAt = (raw['pa'] as num).toInt();
   if (raw.containsKey('l')) {

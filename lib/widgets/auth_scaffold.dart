@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import 'brand_logo.dart';

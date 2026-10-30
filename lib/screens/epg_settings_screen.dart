@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../widgets/apple_page_scaffold.dart';
+
 import 'package:provider/provider.dart';
 
 import '../providers/epg_provider.dart';
@@ -95,8 +97,7 @@ class EpgSettingsScreen extends StatelessWidget {
           ),
           SettingsSection(
             title: 'Fonti',
-            description:
-                'La guida disponibile viene usata in automatico.',
+            description: 'La guida disponibile viene usata in automatico.',
             children: [
               SettingsSwitchTile(
                 icon: Icons.playlist_play_rounded,

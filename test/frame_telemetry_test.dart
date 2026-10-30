@@ -27,7 +27,12 @@ void main() {
   test('histogram, cause split and slowest list stay bounded', () {
     final s = FrameStats();
     for (var i = 0; i < 40; i++) {
-      s.add(buildUs: 1000, rasterUs: 40000 + i * 1000, totalUs: 50000 + i * 10000, context: 'home');
+      s.add(
+        buildUs: 1000,
+        rasterUs: 40000 + i * 1000,
+        totalUs: 50000 + i * 10000,
+        context: 'home',
+      );
     }
     s.add(buildUs: 120000, rasterUs: 1000, totalUs: 300000);
     expect(s.histogram.reduce((a, b) => a + b), 41);

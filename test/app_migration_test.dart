@@ -5,9 +5,12 @@ void main() {
   test('first install runs no cleanup, only records the build', () {
     expect(migrationAction(null, 3005002), MigrationAction.firstRun);
   });
-  test('a newer installed build triggers the one-time derived-cache cleanup', () {
-    expect(migrationAction(3005002, 3005003), MigrationAction.upgrade);
-  });
+  test(
+    'a newer installed build triggers the one-time derived-cache cleanup',
+    () {
+      expect(migrationAction(3005002, 3005003), MigrationAction.upgrade);
+    },
+  );
   test('the same build never re-runs cleanup', () {
     expect(migrationAction(3005002, 3005002), MigrationAction.none);
   });

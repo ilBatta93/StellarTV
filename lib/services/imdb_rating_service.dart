@@ -172,7 +172,11 @@ class ImdbRatingService {
 
   /// IMDb rating, 0 when IMDb has none, null while unknown.
   /// [priority] is the open title: it is served before catalog lookups.
-  double? ratingOf(TmdbItem item, {bool request = true, bool priority = false}) {
+  double? ratingOf(
+    TmdbItem item, {
+    bool request = true,
+    bool priority = false,
+  }) {
     final key = keyOf(item);
     if (request) {
       if (priority) {

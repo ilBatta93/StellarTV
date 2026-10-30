@@ -255,7 +255,10 @@ class KidsContentService {
           _certifications[key] = r['certification'] as String;
           final g = r['genre_ids'];
           _genres[key] = g is List
-              ? [for (final n in g) if (n is num) n.toInt()]
+              ? [
+                  for (final n in g)
+                    if (n is num) n.toInt(),
+                ]
               : const [];
           TitleFacetIndex.instance.putGenres(key, _genres[key]!);
           if (keys.containsKey(key)) _work.complete(key);
@@ -320,7 +323,10 @@ class KidsContentService {
             _certifications[key] = r['certification'] as String;
             final g = r['genre_ids'];
             _genres[key] = g is List
-                ? [for (final n in g) if (n is num) n.toInt()]
+                ? [
+                    for (final n in g)
+                      if (n is num) n.toInt(),
+                  ]
                 : const [];
             TitleFacetIndex.instance.putGenres(key, _genres[key]!);
             resolved.add(key);

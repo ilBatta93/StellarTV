@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -10,7 +11,11 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   test('manual seasons survive reload, reversals, clear and profile switch without fake history', () async {
     SharedPreferences.setMockInitialValues({});
-    final client = SupabaseClient('https://example.test', 'test', authOptions: const AuthClientOptions(autoRefreshToken: false));
+    final client = SupabaseClient(
+      'https://example.test',
+      'test',
+      authOptions: const AuthClientOptions(autoRefreshToken: false),
+    );
     final service = SyncService(client);
     final history = HistoryProvider(service);
     await history.switchProfile('p1');
@@ -38,18 +43,48 @@ void main() {
   });
   test('late playback save cannot erase a manual choice', () async {
     SharedPreferences.setMockInitialValues({});
-    final client = SupabaseClient('https://example.test', 'test', authOptions: const AuthClientOptions(autoRefreshToken: false));
+    final client = SupabaseClient(
+      'https://example.test',
+      'test',
+      authOptions: const AuthClientOptions(autoRefreshToken: false),
+    );
     final service = SyncService(client);
-    await service.saveLocalHistory({'manual': {'id': 'manual', 'type': '__stellar_seen_v1', 'pos': 1, 'watched': '2026-10-21T00:00:00Z'}});
-    await service.saveLocalHistory({'ep': {'id': 'ep', 'title': 'Episode', 'pos': 12, 'dur': 100, 'watched': '2026-10-21T00:00:01Z'}});
+    await service.saveLocalHistory({
+      'manual': {
+        'id': 'manual',
+        'type': '__stellar_seen_v1',
+        'pos': 1,
+        'watched': '2026-10-21T00:00:00Z',
+      },
+    });
+    await service.saveLocalHistory({
+      'ep': {
+        'id': 'ep',
+        'title': 'Episode',
+        'pos': 12,
+        'dur': 100,
+        'watched': '2026-10-21T00:00:01Z',
+      },
+    });
     final stored = await service.loadLocalHistory();
     expect(stored['manual']['pos'], 1);
     expect(stored['ep']['pos'], 12);
     await client.dispose();
   });
   test('500 playback cap preserves all manual reversals through JSON and sanitizer', () {
-    final raw = {'manual': {'id': 'manual', 'type': '__stellar_seen_v1', 'pos': 0, 'watched': '2026-10-01T00:00:00Z'}, for (var i = 0; i < 501; i++) '$i': {'id': '$i', 'pos': i, 'watched': '2026-10-21T00:00:00Z'}};
-    final snapshot = PersonalVault.clean(jsonDecode(jsonEncode({'history': raw})));
+    final raw = {
+      'manual': {
+        'id': 'manual',
+        'type': '__stellar_seen_v1',
+        'pos': 0,
+        'watched': '2026-10-01T00:00:00Z',
+      },
+      for (var i = 0; i < 501; i++)
+        '$i': {'id': '$i', 'pos': i, 'watched': '2026-10-21T00:00:00Z'},
+    };
+    final snapshot = PersonalVault.clean(
+      jsonDecode(jsonEncode({'history': raw})),
+    );
     final capped = PersonalVault.capHistory(snapshot['history']);
     expect(capped.length, 501);
     expect(capped['manual']['pos'], 0);

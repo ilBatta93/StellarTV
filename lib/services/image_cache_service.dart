@@ -47,9 +47,7 @@ class AppImageCache {
       try {
         if (PlaybackWorkPolicy.instance.blocksGuide) return;
         final root = (await getTemporaryDirectory()).path;
-        await Isolate.run(
-          () => trimCacheDirectory('$root/$_key', budgetBytes),
-        );
+        await Isolate.run(() => trimCacheDirectory('$root/$_key', budgetBytes));
         try {
           // A cache read schedules the library's own file-count cleanup.
           await manager.getFileFromCache('__budget__');
@@ -83,9 +81,7 @@ int trimCacheDirectory(String path, int budgetBytes) {
     files.add(entity);
   }
   if (total <= budgetBytes) return 0;
-  files.sort(
-    (a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()),
-  );
+  files.sort((a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()));
   final target = (budgetBytes * 0.85).round();
   var removed = 0;
   for (final file in files) {
@@ -106,9 +102,8 @@ int trimCacheDirectory(String path, int budgetBytes) {
 /// that still covers [decodeWidth] device pixels; never upscales the request.
 String tmdbSizedUrl(String url, int? decodeWidth) {
   if (decodeWidth == null || decodeWidth <= 0) return url;
-  final m = RegExp(
-    r'^(https://image\.tmdb\.org/t/p/)w(\d+)(/.+)$',
-  ).firstMatch(url);
+  final m = RegExp(r'^(https://image\.tmdb\.org/t/p/)w(\d+)(/.+)$')
+      .firstMatch(url);
   if (m == null) return url;
   final current = int.parse(m.group(2)!);
   const sizes = [185, 342, 500, 780, 1280];

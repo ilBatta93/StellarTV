@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/content_type.dart';
 import '../providers/app_provider.dart';
 import '../theme/app_theme.dart';

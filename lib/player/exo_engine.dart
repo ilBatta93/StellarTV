@@ -28,7 +28,9 @@ class ExoEngine extends PlaybackEngine {
            mixWithOthers: shared,
            allowBackgroundPlayback: settings.backgroundAudio,
            preventsDisplaySleepDuringVideoPlayback: settings.keepScreenOn,
-           backBufferDurationMs: shared ? 0 : (isLive ? 60000 : settings.backBufferSeconds * 1000),
+           backBufferDurationMs: shared
+               ? 0
+               : (isLive ? 60000 : settings.backBufferSeconds * 1000),
          ),
          // Texture on every device. The native-surface (platform view) mode
          // showed a black picture and crashed when released/clipped on Fire
@@ -54,11 +56,14 @@ class ExoEngine extends PlaybackEngine {
       headers[exoLoadControlHeader] = ExoLoadProfile.forPlayback(
         preview: shared,
         live: live,
-        backBufferMs: shared ? 0 : (live ? 60000 : settings.backBufferSeconds * 1000),
+        backBufferMs: shared
+            ? 0
+            : (live ? 60000 : settings.backBufferSeconds * 1000),
       ).wire;
     }
     return headers;
   }
+
   final Map<String, VideoTrack> _videoTracks = {};
   PlaybackSnapshot _value = const PlaybackSnapshot();
   bool _disposed = false;
@@ -149,13 +154,12 @@ class ExoEngine extends PlaybackEngine {
     return {
       'cacheSeconds':
           (ahead < Duration.zero ? Duration.zero : ahead).inMilliseconds /
-              1000.0,
+          1000.0,
     };
   }
 
   @override
   PlaybackSnapshot get value => _value;
-
 
   @override
   bool get supportsAudioTracks => _controller.isAudioTrackSupportAvailable();
@@ -230,7 +234,8 @@ class ExoEngine extends PlaybackEngine {
     await _pollWindow();
     if (_disposed) return;
     // ignore: invalid_use_of_visible_for_testing_member
-    _playerId = _controller.playerId; // assicurati di avere un id valido per liveChannel
+    _playerId = _controller
+        .playerId; // assicurati di avere un id valido per liveChannel
     _livePoll = Timer.periodic(
       const Duration(seconds: 1),
       (_) => _pollWindow(),

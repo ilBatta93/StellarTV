@@ -6,22 +6,19 @@ String? chapterSkipType(String raw) {
   if (name.isEmpty || name.length > 80) return null;
   if (RegExp(r'^(op|ncop)$').hasMatch(name)) return 'intro';
   if (RegExp(r'^(ed|nced)$').hasMatch(name)) return 'outro';
-  if (RegExp(
-    r'post[\s-]?credits?|after credits|scena dopo i titoli',
-  ).hasMatch(name)) {
+  if (RegExp(r'post[\s-]?credits?|after credits|scena dopo i titoli')
+      .hasMatch(name)) {
     return 'post_credits';
   }
-  if (RegExp(
-    r'\b(recap|previously|riepilogo|negli episodi precedenti)\b',
-  ).hasMatch(name)) {
+  if (RegExp(r'\b(recap|previously|riepilogo|negli episodi precedenti)\b')
+      .hasMatch(name)) {
     return 'recap';
   }
   final intro = RegExp(
     r'\b(intro|introduction|opening|sigla|titoli di testa|theme song)\b',
   ).hasMatch(name);
-  final closing = RegExp(
-    r'\b(end|ending|closing|coda|chiusura)\b',
-  ).hasMatch(name);
+  final closing = RegExp(r'\b(end|ending|closing|coda|chiusura)\b')
+      .hasMatch(name);
   if (intro && !closing) return 'intro';
   if (RegExp(
     r'\b(end credits|ending|outro|closing|titoli di coda|titoli di chiusura|credits)\b',
@@ -73,7 +70,8 @@ SkipSegment? fitSegment(SkipSegment s, Duration duration) {
   if (s.end <= duration) return s;
   final overshoot = s.end - duration;
   final halfway = Duration(microseconds: duration.inMicroseconds ~/ 2);
-  if (overshoot <= const Duration(seconds: 20) || (tail && s.start >= halfway)) {
+  if (overshoot <= const Duration(seconds: 20) ||
+      (tail && s.start >= halfway)) {
     return SkipSegment(s.type, s.start, duration);
   }
   return null;
@@ -134,9 +132,7 @@ class SkipChoice {
 /// both, in one press.
 SkipChoice? activeSkip(EpisodeSegments segments, Duration position) {
   final skips =
-      segments.all
-          .where((s) => s.type == 'intro' || s.type == 'recap')
-          .toList()
+      segments.all.where((s) => s.type == 'intro' || s.type == 'recap').toList()
         ..sort((a, b) => a.start.compareTo(b.start));
   SkipSegment? current;
   for (final s in skips) {
@@ -167,9 +163,7 @@ SkipChoice? activeSkip(EpisodeSegments segments, Duration position) {
 /// Movies and a last episode: jump to the scene after the credits.
 SkipChoice? postCreditsSkip(EpisodeSegments segments, Duration position) {
   final outro = segments.outro;
-  final scene = segments.all
-      .where((s) => s.type == 'post_credits')
-      .firstOrNull;
+  final scene = segments.all.where((s) => s.type == 'post_credits').firstOrNull;
   if (outro == null ||
       scene == null ||
       scene.start <= outro.start ||

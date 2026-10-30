@@ -1,6 +1,8 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/tmdb_item.dart';
 
 /// Timestamped per-profile reactions; neutral entries are tombstones for sync.

@@ -159,8 +159,7 @@ class _TvFilterPanelState extends State<TvFilterPanel> {
         builder: (context, constraints) {
           final width = math.max(0.0, constraints.maxWidth - 8);
           _columns = TvFilterPanel.columnsFor(width);
-          final rows =
-              (widget.options.length + _columns - 1) ~/ _columns;
+          final rows = (widget.options.length + _columns - 1) ~/ _columns;
           final content =
               8 + rows * _rowExtent + math.max(0, rows - 1) * _spacing;
           final cap = constraints.maxHeight.isFinite

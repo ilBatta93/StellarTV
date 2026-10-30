@@ -79,12 +79,10 @@ class CatalogRatingService extends ChangeNotifier {
     if (link != null) TitleFacetIndex.instance.putImdbId(link.mediaKey, imdbId);
     final item = identities.valueOf(key);
     if (item != null) {
-      TitleFacetIndex.instance.putImdbId(
-        ImdbRatingService.keyOf(item),
-        imdbId,
-      );
+      TitleFacetIndex.instance.putImdbId(ImdbRatingService.keyOf(item), imdbId);
     }
   }
+
   void remember(Channel c, TmdbItem item) {
     final key = _key(c);
     identities.put(key, item);
@@ -99,6 +97,7 @@ class CatalogRatingService extends ChangeNotifier {
           : null,
     );
   }
+
   final Map<String, double> _ratings = {};
   final LinkedHashMap<String, Channel> _queue = LinkedHashMap();
   final Set<String> _active = {};

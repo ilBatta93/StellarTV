@@ -1,46 +1,103 @@
 import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:stellar_tv/models/title_trailer.dart';
 import 'package:stellar_tv/services/tmdb_service.dart';
+
 import 'home_banner_remote_test.dart' as fixture;
-Map<String, dynamic> video(String key, String language, {String type = 'Trailer'}) =>
- {'key': key, 'iso_639_1': language, 'type': type, 'site': 'YouTube', 'official': true};
+
+Map<String, dynamic> video(
+  String key,
+  String language, {
+  String type = 'Trailer',
+}) => {
+  'key': key,
+  'iso_639_1': language,
+  'type': type,
+  'site': 'YouTube',
+  'official': true,
+};
 void main() {
- test('Italian trailer has priority and does not request English', () async {
-  final languages = <String>[];
-  await http.runWithClient(() async {
-   final result = await TmdbService().trailer(fixture.item(7, 'Film'));
-   expect(result?.language, 'it');
-   expect(result?.url.toString(), 'https://www.youtube.com/watch?v=abcDEF12345');
-   expect(languages, ['it-IT']);
-  }, () => MockClient((request) async {
-   languages.add(request.url.queryParameters['language'] ?? '');
-   return http.Response(jsonEncode({'results': [video('abcDEF12345','it')]}), 200);
-  }));
- });
- test('English trailer is fallback when Italian has no trailer', () async {
-  final languages = <String>[];
-  await http.runWithClient(() async {
-   final result = await TmdbService().trailer(fixture.item(7, 'Film'));
-   expect(result?.language, 'en');
-   expect(result?.key, 'abcDEF12345');
-   expect(languages, ['it-IT', 'en-US']);
-  }, () => MockClient((request) async {
-   final lang = request.url.queryParameters['language']; languages.add(lang ?? '');
-   return http.Response(jsonEncode({'results': lang == 'en-US' ? [video('abcDEF12345','en')] : []}), 200);
-  }));
- });
- test('Unsafe keys, other languages and clips are excluded', () {
-  expect(TitleTrailer.select({'results': [video('../unsafe','it'), video('abcDEF12345','en'), video('abcDEF12345','it',type: 'Clip')]},'it'), isNull);
- });
- test('Italian teaser is used when no Italian trailer exists, trailer wins otherwise', () {
-  expect(TitleTrailer.select({'results': [video('teaserKEY01','it',type: 'Teaser')]},'it')?.key, 'teaserKEY01');
-  expect(TitleTrailer.select({'results': [video('teaserKEY01','it',type: 'Teaser'), video('trailerKEY1','it')]},'it')?.key, 'trailerKEY1');
- });
- test('English fallback is marked SUB ITA, Italian is ITA', () {
-  expect(const TitleTrailer(key: 'abcDEF12345', language: 'en').badge, 'SUB ITA');
-  expect(const TitleTrailer(key: 'abcDEF12345', language: 'it').badge, 'ITA');
- });
+  test('Italian trailer has priority and does not request English', () async {
+    final languages = <String>[];
+    await http.runWithClient(
+      () async {
+        final result = await TmdbService().trailer(fixture.item(7, 'Film'));
+        expect(result?.language, 'it');
+        expect(
+          result?.url.toString(),
+          'https://www.youtube.com/watch?v=abcDEF12345',
+        );
+        expect(languages, ['it-IT']);
+      },
+      () => MockClient((request) async {
+        languages.add(request.url.queryParameters['language'] ?? '');
+        return http.Response(
+          jsonEncode({
+            'results': [video('abcDEF12345', 'it')],
+          }),
+          200,
+        );
+      }),
+    );
+  });
+  test('English trailer is fallback when Italian has no trailer', () async {
+    final languages = <String>[];
+    await http.runWithClient(
+      () async {
+        final result = await TmdbService().trailer(fixture.item(7, 'Film'));
+        expect(result?.language, 'en');
+        expect(result?.key, 'abcDEF12345');
+        expect(languages, ['it-IT', 'en-US']);
+      },
+      () => MockClient((request) async {
+        final lang = request.url.queryParameters['language'];
+        languages.add(lang ?? '');
+        return http.Response(
+          jsonEncode({
+            'results': lang == 'en-US' ? [video('abcDEF12345', 'en')] : [],
+          }),
+          200,
+        );
+      }),
+    );
+  });
+  test('Unsafe keys, other languages and clips are excluded', () {
+    expect(
+      TitleTrailer.select({
+        'results': [
+          video('../unsafe', 'it'),
+          video('abcDEF12345', 'en'),
+          video('abcDEF12345', 'it', type: 'Clip'),
+        ],
+      }, 'it'),
+      isNull,
+    );
+  });
+  test('Italian teaser is used when no Italian trailer exists, trailer wins otherwise', () {
+    expect(
+      TitleTrailer.select({
+        'results': [video('teaserKEY01', 'it', type: 'Teaser')],
+      }, 'it')?.key,
+      'teaserKEY01',
+    );
+    expect(
+      TitleTrailer.select({
+        'results': [
+          video('teaserKEY01', 'it', type: 'Teaser'),
+          video('trailerKEY1', 'it'),
+        ],
+      }, 'it')?.key,
+      'trailerKEY1',
+    );
+  });
+  test('English fallback is marked SUB ITA, Italian is ITA', () {
+    expect(
+      const TitleTrailer(key: 'abcDEF12345', language: 'en').badge,
+      'SUB ITA',
+    );
+    expect(const TitleTrailer(key: 'abcDEF12345', language: 'it').badge, 'ITA');
+  });
 }

@@ -26,6 +26,7 @@ class EpgData {
     if (channelIndex.isNotEmpty || declaredCount > 0) return declaredCount;
     return programmes.values.fold(0, (sum, list) => sum + list.length);
   }
+
   static EpgData fromJson(Map<String, dynamic> json) {
     final progs = <String, List<EpgProgram>>{};
     final raw = json['p'];

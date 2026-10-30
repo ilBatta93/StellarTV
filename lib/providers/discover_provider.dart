@@ -4,11 +4,13 @@ import '../services/title_facet_index.dart';
 import '../services/title_logo_cache.dart';
 import '../services/segment_library.dart';
 import '../services/platform_catalog_service.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/streaming_platform.dart';

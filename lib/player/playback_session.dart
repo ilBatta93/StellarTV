@@ -224,6 +224,7 @@ class PlaybackSession extends ChangeNotifier {
       } catch (_) {}
     }
   }
+
   SessionStatus get status => _status;
   String? get notice => _notice;
   String? get error => _error;
@@ -580,9 +581,7 @@ class PlaybackSession extends ChangeNotifier {
     previous.removeListener(_onEngineChanged);
     _held = previous;
     _engine = null;
-    unawaited(
-      previous.setVolume(0).catchError((Object _) {}),
-    );
+    unawaited(previous.setVolume(0).catchError((Object _) {}));
     _notify();
   }
 
@@ -602,7 +601,9 @@ class PlaybackSession extends ChangeNotifier {
   Future<bool> _reserveSlot() async {
     if (_nativeOutstanding < _connectionSlots) return true;
     try {
-      await _releasing.timeout(Duration(seconds: StreamSlotPolicy.instance.releaseTimeout));
+      await _releasing.timeout(
+        Duration(seconds: StreamSlotPolicy.instance.releaseTimeout),
+      );
     } on TimeoutException {
       // The slot is still taken. A single connection must not open another.
     }

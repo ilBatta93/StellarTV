@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/user_profile.dart';
 import '../services/profile_service.dart';
 import '../services/sync_service.dart';

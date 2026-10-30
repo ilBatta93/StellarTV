@@ -66,7 +66,9 @@ String shelfSettingsToken({
   }
   buffer.write('|');
   for (final category in custom) {
-    buffer.write('${category.type.name}:${category.name}:${category.itemIds.join(',')};');
+    buffer.write(
+      '${category.type.name}:${category.name}:${category.itemIds.join(',')};',
+    );
   }
   buffer.write('|');
   final orderKeys = order.keys.toList()..sort();
@@ -94,7 +96,10 @@ class ShelfPlan {
   final List<int> recent;
   final List<int> alphabetical;
 
-  static ShelfPlan fromPrepared(PreparedCatalog prepared, Map<Channel, int> slotOf) {
+  static ShelfPlan fromPrepared(
+    PreparedCatalog prepared,
+    Map<Channel, int> slotOf,
+  ) {
     int slot(Channel channel) {
       final index = slotOf[channel];
       if (index == null) {
@@ -103,16 +108,15 @@ class ShelfPlan {
       return index;
     }
 
-    List<int> entries(List<CatalogEntry> list) =>
-        [for (final entry in list) slot(entry.primary)];
+    List<int> entries(List<CatalogEntry> list) => [
+      for (final entry in list) slot(entry.primary),
+    ];
 
     return ShelfPlan(
       channels: [for (final channel in prepared.channels) slot(channel)],
       catalog: [for (final channel in prepared.catalog) slot(channel)],
       labels: [for (final group in prepared.groups) group.label],
-      groupSlots: [
-        for (final group in prepared.groups) entries(group.entries),
-      ],
+      groupSlots: [for (final group in prepared.groups) entries(group.entries)],
       recent: entries(prepared.recent),
       alphabetical: entries(prepared.all),
     );
@@ -368,9 +372,7 @@ _ShelfImage _finishImage({
     final channel = channels[slot];
     final target = channel.isSeriesFolder
         ? slot
-        : folders[channel.seriesKey ?? ''] ??
-              folders[channel.id] ??
-              slot;
+        : folders[channel.seriesKey ?? ''] ?? folders[channel.id] ?? slot;
     _addWords(words, channel.name, target);
     final seriesName = channel.seriesName;
     if (seriesName != null && seriesName.isNotEmpty) {
@@ -433,7 +435,10 @@ Map<String, ShelfPlan> _plansFor(
       snapshot: channels,
       type: type,
       hidden: hidden[type.name] ?? const [],
-      custom: [for (final category in custom) if (category.type == type) category],
+      custom: [
+        for (final category in custom)
+          if (category.type == type) category,
+      ],
       order: order[type.name] ?? const [],
     );
     for (final channel in [
@@ -466,7 +471,11 @@ _ShelfImage _buildShelfFromChannels(
     for (var i = 0; i < channels.length; i++) channels[i]: i,
   };
   final sourceCount = channels.length;
-  final token = shelfSettingsToken(hidden: hidden, custom: custom, order: order);
+  final token = shelfSettingsToken(
+    hidden: hidden,
+    custom: custom,
+    order: order,
+  );
   final plans = _plansFor(channels, hidden, custom, order, slotOf);
   final synthetic = <bool>[
     for (var i = 0; i < channels.length; i++) i >= sourceCount,
@@ -855,7 +864,13 @@ _ShelfImage _mergePieces(List<_ShelfImage> pieces, String token) {
             : 0,
       );
     }
-    _absorbPostings(words, piece.words, piece.wordStarts, piece.wordPostings, base);
+    _absorbPostings(
+      words,
+      piece.words,
+      piece.wordStarts,
+      piece.wordPostings,
+      base,
+    );
     _absorbPostings(
       exact,
       piece.exactKeys,
@@ -1037,9 +1052,7 @@ void _writeStringIntList(_IndexSink out, Map<String, List<int>> values) {
 
 Map<String, List<int>> _readStringIntList(_IndexCursor cursor) {
   final count = cursor.u32();
-  return {
-    for (var i = 0; i < count; i++) cursor.str(): cursor.i32s(),
-  };
+  return {for (var i = 0; i < count; i++) cursor.str(): cursor.i32s()};
 }
 
 void _writeStringInt(_IndexSink out, Map<String, int> values) {
@@ -1357,9 +1370,8 @@ class CatalogShelf implements CatalogChannelSource {
     while (_files.length <= fileIndex) {
       _files.add(null);
     }
-    final handle = _files[fileIndex] ??= File(
-      _image.paths[fileIndex],
-    ).openSync();
+    final handle = _files[fileIndex] ??= File(_image.paths[fileIndex])
+        .openSync();
     handle.setPositionSync(_image.offsets[slot]);
     final bytes = handle.readSync(_image.lengths[slot]);
     final decoded = jsonDecode(utf8.decode(bytes));
@@ -1510,7 +1522,10 @@ class CatalogShelf implements CatalogChannelSource {
     return CatalogShelf._(image, generation);
   }
 
-  Future<void> warmNames(ContentType type, void Function(List<String> ids, List<String> names) apply) async {
+  Future<void> warmNames(
+    ContentType type,
+    void Function(List<String> ids, List<String> names) apply,
+  ) async {
     final plan = this.plan(type);
     if (plan == null || _image.paths.isEmpty || plan.alphabetical.isEmpty) {
       return;
@@ -1644,7 +1659,10 @@ class SlotEntryList extends ListBase<CatalogEntry> {
     if (current == null) return slots;
     if (_stamp != current.stamp) {
       _stamp = current.stamp;
-      _visible = [for (final slot in slots) if (current.shows(slot)) slot];
+      _visible = [
+        for (final slot in slots)
+          if (current.shows(slot)) slot,
+      ];
     }
     return _visible;
   }
@@ -1722,7 +1740,10 @@ class ShelfChannelList extends ListBase<Channel> {
     if (current == null) return slots;
     if (_stamp != current.stamp) {
       _stamp = current.stamp;
-      _visible = [for (final slot in slots) if (current.shows(slot)) slot];
+      _visible = [
+        for (final slot in slots)
+          if (current.shows(slot)) slot,
+      ];
     }
     return _visible;
   }
@@ -1741,17 +1762,18 @@ class ShelfChannelList extends ListBase<Channel> {
   }
 
   ShelfChannelList whereIds(Set<String> wanted) {
-    return ShelfChannelList(
-      shelf,
-      [for (final slot in _shown) if (wanted.contains(shelf.idAt(slot))) slot],
-    );
+    return ShelfChannelList(shelf, [
+      for (final slot in _shown)
+        if (wanted.contains(shelf.idAt(slot))) slot,
+    ]);
   }
 
   @override
   int get length => _shown.length;
 
   @override
-  set length(int newLength) => throw UnsupportedError('catalogo in sola lettura');
+  set length(int newLength) =>
+      throw UnsupportedError('catalogo in sola lettura');
 
   @override
   Channel operator [](int index) => shelf.readSlot(_shown[index]);

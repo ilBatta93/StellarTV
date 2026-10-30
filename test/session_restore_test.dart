@@ -38,9 +38,9 @@ void main() {
     () async {
       final client = SupabaseClient('https://example.test', 'test');
       expect(
-        await SyncService(
-          client,
-        ).waitForSession().timeout(const Duration(milliseconds: 500)),
+        await SyncService(client)
+            .waitForSession()
+            .timeout(const Duration(milliseconds: 500)),
         isFalse,
       );
       await client.dispose();

@@ -6,7 +6,10 @@ final Logger _logger = Logger('catalog_work_queue_test');
 void main() {
   final now = DateTime.utc(2026, 10, 21);
   final q = CatalogWorkQueue();
-  void check(bool ok, String message) { if (!ok) throw StateError(message); }
+  void check(bool ok, String message) {
+    if (!ok) throw StateError(message);
+  }
+
   q.add('movie:a', 'movie\u0000A', now);
   q.add('movie:a', 'movie\u0000A!', now);
   check(q.pending.length == 1, 'normalized duplicates');

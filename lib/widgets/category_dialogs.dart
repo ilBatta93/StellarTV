@@ -68,7 +68,12 @@ Future<String?> askCategoryName(
 }
 
 class CategoryAction<T> {
-  const CategoryAction(this.value, this.icon, this.label, {this.danger = false});
+  const CategoryAction(
+    this.value,
+    this.icon,
+    this.label, {
+    this.danger = false,
+  });
   final T value;
   final IconData icon;
   final String label;

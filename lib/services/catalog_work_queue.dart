@@ -5,7 +5,8 @@ class CatalogWorkQueue {
   final Map<String, DateTime> _retryAfter = {};
 
   void add(String key, String value, DateTime now) {
-    if (_active.contains(key) || (_retryAfter[key]?.isAfter(now) ?? false)) return;
+    if (_active.contains(key) || (_retryAfter[key]?.isAfter(now) ?? false))
+      return;
     pending.putIfAbsent(key, () => value);
   }
 

@@ -32,10 +32,13 @@ class TitleTrailer {
     videos.sort((a, b) {
       final type = _typeRank(a['type']).compareTo(_typeRank(b['type']));
       if (type != 0) return type;
-      final official = (b['official'] == true ? 1 : 0)
-          .compareTo(a['official'] == true ? 1 : 0);
+      final official = (b['official'] == true ? 1 : 0).compareTo(
+        a['official'] == true ? 1 : 0,
+      );
       if (official != 0) return official;
-      return '${b['published_at'] ?? ''}'.compareTo('${a['published_at'] ?? ''}');
+      return '${b['published_at'] ?? ''}'.compareTo(
+        '${a['published_at'] ?? ''}',
+      );
     });
     if (videos.isEmpty) return null;
     return TitleTrailer(key: videos.first['key'] as String, language: language);

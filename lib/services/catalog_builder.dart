@@ -10,20 +10,25 @@ class CatalogEntry {
   final List<Channel>? _boundVariants;
   final List<int>? _variantSlots;
 
-  const CatalogEntry({required Channel primary, required List<Channel> variants})
-    : _bound = primary,
-      _slot = null,
-      _source = null,
-      _boundVariants = variants,
-      _variantSlots = null;
+  const CatalogEntry({
+    required Channel primary,
+    required List<Channel> variants,
+  }) : _bound = primary,
+       _slot = null,
+       _source = null,
+       _boundVariants = variants,
+       _variantSlots = null;
 
   /// Resolves the title from the indexed shelf the first time a tile reads it.
-  CatalogEntry.slot(int slot, CatalogChannelSource source, {List<int>? variants})
-    : _bound = null,
-      _slot = slot,
-      _source = source,
-      _boundVariants = null,
-      _variantSlots = variants;
+  CatalogEntry.slot(
+    int slot,
+    CatalogChannelSource source, {
+    List<int>? variants,
+  }) : _bound = null,
+       _slot = slot,
+       _source = source,
+       _boundVariants = null,
+       _variantSlots = variants;
 
   Channel get primary => _bound ?? _source!.readSlot(_slot!);
 

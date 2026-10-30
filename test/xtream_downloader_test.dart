@@ -22,23 +22,29 @@ void main() {
           res.write('\uFEFF[');
           for (var i = 0; i < 5000; i++) {
             if (i > 0) res.write(',');
-            res.write(jsonEncode({
-              'stream_id': i,
-              'name': 'Canale "$i" {HD} [IT]',
-              'category_id': '1',
-              'stream_icon': '',
-            }));
+            res.write(
+              jsonEncode({
+                'stream_id': i,
+                'name': 'Canale "$i" {HD} [IT]',
+                'category_id': '1',
+                'stream_icon': '',
+              }),
+            );
             if (i % 200 == 0) await res.flush();
           }
           res.write(']');
         case 'get_vod_streams':
           // Truncated payload: the last element is incomplete.
-          res.write('[{"stream_id":1,"name":"A"},{"stream_id":2,"name":"B"},'
-              '{"stream_id":3,"na');
+          res.write(
+            '[{"stream_id":1,"name":"A"},{"stream_id":2,"name":"B"},'
+            '{"stream_id":3,"na',
+          );
         case 'get_series':
           // Some panels answer with an object keyed by id.
-          res.write('{"7":{"series_id":7,"name":"Serie"},'
-              '"8":{"series_id":8,"name":"Altra"}}');
+          res.write(
+            '{"7":{"series_id":7,"name":"Serie"},'
+            '"8":{"series_id":8,"name":"Altra"}}',
+          );
         default:
           res.write('[]');
       }
@@ -50,7 +56,10 @@ void main() {
   test('Streams a big list in background and reports progress', () async {
     final progress = <CatalogProgress>[];
     final channels = await downloadXtreamSection(
-      base: await start(), username: 'u', password: 'p', type: ContentType.live,
+      base: await start(),
+      username: 'u',
+      password: 'p',
+      type: ContentType.live,
       onProgress: progress.add,
     );
     expect(channels, hasLength(5000));
@@ -61,14 +70,20 @@ void main() {
 
   test('Keeps complete items of a truncated list', () async {
     final channels = await downloadXtreamSection(
-      base: await start(), username: 'u', password: 'p', type: ContentType.movie,
+      base: await start(),
+      username: 'u',
+      password: 'p',
+      type: ContentType.movie,
     );
     expect(channels.map((c) => c.name), ['A', 'B']);
   }, timeout: const Timeout(Duration(seconds: 40)));
 
   test('Accepts object-shaped responses', () async {
     final channels = await downloadXtreamSection(
-      base: await start(), username: 'u', password: 'p', type: ContentType.series,
+      base: await start(),
+      username: 'u',
+      password: 'p',
+      type: ContentType.series,
     );
     expect(channels.map((c) => c.id), ['series_7', 'series_8']);
   });
@@ -76,11 +91,18 @@ void main() {
   test('Unreachable server fails with a readable message', () async {
     await expectLater(
       downloadXtreamSection(
-        base: 'http://127.0.0.1:1', username: 'u', password: 'p',
+        base: 'http://127.0.0.1:1',
+        username: 'u',
+        password: 'p',
         type: ContentType.live,
       ),
-      throwsA(isA<XtreamDownloadException>().having(
-        (e) => e.message, 'message', contains('server della playlist'))),
+      throwsA(
+        isA<XtreamDownloadException>().having(
+          (e) => e.message,
+          'message',
+          contains('server della playlist'),
+        ),
+      ),
     );
   }, timeout: const Timeout(Duration(seconds: 40)));
 }

@@ -78,7 +78,9 @@ class EpgPrefixIndex {
     final hits = <int>{};
     while (index < words.length && words[index].startsWith(token)) {
       final from = starts[index];
-      final to = index + 1 < starts.length ? starts[index + 1] : postings.length;
+      final to = index + 1 < starts.length
+          ? starts[index + 1]
+          : postings.length;
       for (var i = from; i < to && i < postings.length; i++) {
         hits.add(postings[i]);
       }
@@ -101,7 +103,10 @@ EpgPrefixIndex readEpgPrefixFile(String path) {
 }
 
 List<int> _ints(Object? raw) => raw is List
-    ? [for (final value in raw) if (value is num) value.toInt()]
+    ? [
+        for (final value in raw)
+          if (value is num) value.toInt(),
+      ]
     : const [0];
 
 int _lowerBound(List<String> keys, String token) {

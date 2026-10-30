@@ -50,6 +50,6 @@ class SeriesDetails {
   });
 
   List<SeriesEpisode> get allEpisodes => [
-        for (final season in seasons) ...season.episodes,
-      ];
+    for (final season in seasons) ...season.episodes,
+  ];
 }

@@ -111,21 +111,40 @@ void main() {
     expect(local.intro?.start, const Duration(seconds: 12));
     final remote = validSegments(
       const EpisodeSegments(
-        intro: SkipSegment('intro', Duration(seconds: 90), Duration(seconds: 140)),
+        intro: SkipSegment(
+          'intro',
+          Duration(seconds: 90),
+          Duration(seconds: 140),
+        ),
         all: [
           SkipSegment('intro', Duration(seconds: 90), Duration(seconds: 140)),
         ],
       ),
       const Duration(seconds: 600),
     );
-    expect(mergeSkipSegments(remote, local).intro?.start, const Duration(seconds: 12));
+    expect(
+      mergeSkipSegments(remote, local).intro?.start,
+      const Duration(seconds: 12),
+    );
     final scene = postCreditsSkip(
       validSegments(
         const EpisodeSegments(
-          outro: SkipSegment('outro', Duration(seconds: 500), Duration(seconds: 600)),
+          outro: SkipSegment(
+            'outro',
+            Duration(seconds: 500),
+            Duration(seconds: 600),
+          ),
           all: [
-            SkipSegment('outro', Duration(seconds: 500), Duration(seconds: 600)),
-            SkipSegment('post_credits', Duration(seconds: 560), Duration(seconds: 590)),
+            SkipSegment(
+              'outro',
+              Duration(seconds: 500),
+              Duration(seconds: 600),
+            ),
+            SkipSegment(
+              'post_credits',
+              Duration(seconds: 560),
+              Duration(seconds: 590),
+            ),
           ],
         ),
         const Duration(seconds: 600),

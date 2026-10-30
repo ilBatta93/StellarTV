@@ -62,7 +62,11 @@ class VodDiagnosticsTracker {
     service.record(
       type,
       session: session,
-      data: {'attempt': attempt, 'elapsedMs': clock.elapsedMilliseconds, ...data},
+      data: {
+        'attempt': attempt,
+        'elapsedMs': clock.elapsedMilliseconds,
+        ...data,
+      },
     );
   }
 
@@ -74,9 +78,7 @@ class VodDiagnosticsTracker {
   void sample(PlaybackEngine engine) {
     if (_sampling) return;
     _sampling = true;
-    unawaited(
-      _sample(engine).whenComplete(() => _sampling = false),
-    );
+    unawaited(_sample(engine).whenComplete(() => _sampling = false));
   }
 
   Future<void> _sample(PlaybackEngine engine) async {
@@ -114,12 +116,15 @@ class VodDiagnosticsTracker {
     final fps = _int(metrics['estimatedFps']);
     if (!_infoRecorded) {
       _infoRecorded = true;
-      event('playback_info', data: {
-        'hwdec': metrics['hwdecCurrent'],
-        'codec': _codec(metrics['videoCodec']),
-        'fps': ?fps,
-        'cacheMs': ?cacheMs,
-      });
+      event(
+        'playback_info',
+        data: {
+          'hwdec': metrics['hwdecCurrent'],
+          'codec': _codec(metrics['videoCodec']),
+          'fps': ?fps,
+          'cacheMs': ?cacheMs,
+        },
+      );
     }
     for (final signal in probe.check(
       elapsed: clock.elapsed,
@@ -136,7 +141,6 @@ class VodDiagnosticsTracker {
   }
 
   static int? _int(Object? value) => value is num ? value.round() : null;
-
 
   /// mpv reports the read-ahead in seconds; a negative or absurd value is
   /// simply no measurement at all.

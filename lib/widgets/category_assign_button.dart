@@ -19,8 +19,9 @@ class CategoryAssignButton extends StatefulWidget {
 }
 
 class _CategoryAssignButtonState extends State<CategoryAssignButton> {
-  ContentType get _type =>
-      widget.item.type == ContentType.movie ? ContentType.movie : ContentType.series;
+  ContentType get _type => widget.item.type == ContentType.movie
+      ? ContentType.movie
+      : ContentType.series;
 
   Future<void> _open() async {
     final app = context.read<AppProvider>();
@@ -55,9 +56,8 @@ class _CategoryAssignButtonState extends State<CategoryAssignButton> {
         final failure = await app.createCustomCategory(_type, name);
         if (failure != null) {
           if (mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(failure)));
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text(failure)));
           }
           continue;
         }

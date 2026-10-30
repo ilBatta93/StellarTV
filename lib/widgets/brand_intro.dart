@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'brand_logo.dart';
 
 /// Timeline contains no startup, session or navigation work.

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/tmdb_item.dart';
 import '../providers/reactions_provider.dart';
 import '../theme/app_theme.dart';

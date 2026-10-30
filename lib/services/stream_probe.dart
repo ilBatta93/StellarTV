@@ -15,14 +15,20 @@ class StreamProbe {
       ..connectionTimeout = const Duration(seconds: 3)
       ..userAgent = userAgent;
     try {
-      final first = await _fetch(client, Uri.parse(url), userAgent, 'probe', out)
-          .timeout(_budget);
+      final first = await _fetch(
+        client,
+        Uri.parse(url),
+        userAgent,
+        'probe',
+        out,
+      ).timeout(_budget);
       if (first == null) return out;
       final (body, base) = first;
       final text = _ascii(body);
       if (!text.startsWith('#EXTM3U')) return out;
-      out['playlistType'] =
-          text.contains('#EXT-X-STREAM-INF') ? 'master' : 'media';
+      out['playlistType'] = text.contains('#EXT-X-STREAM-INF')
+          ? 'master'
+          : 'media';
       final lines = const LineSplitter()
           .convert(text)
           .map((l) => l.trim())
@@ -35,8 +41,13 @@ class StreamProbe {
       if (lines.isEmpty) return out;
       var next = base.resolve(lines.first);
       if (out['playlistType'] == 'master') {
-        final variant = await _fetch(client, next, userAgent, 'variant', out)
-            .timeout(_budget);
+        final variant = await _fetch(
+          client,
+          next,
+          userAgent,
+          'variant',
+          out,
+        ).timeout(_budget);
         if (variant == null) return out;
         final vt = _ascii(variant.$1);
         final seg = const LineSplitter()

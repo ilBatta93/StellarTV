@@ -392,8 +392,7 @@ void main() {
       }
     });
     final movie = File('${dir.path}/movie.ndjson');
-    final buffer = StringBuffer()
-      ..writeln(jsonEncode({'stellar_catalog': 3}));
+    final buffer = StringBuffer()..writeln(jsonEncode({'stellar_catalog': 3}));
     final rows = [
       Channel(
         id: 'kids',

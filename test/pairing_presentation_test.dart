@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -69,9 +70,8 @@ void main() {
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
           if (bytes != null) {
             await Directory('/tmp/stv').create(recursive: true);
-            await File(
-              '/tmp/stv/qr-${size.width.toInt()}.png',
-            ).writeAsBytes(bytes.buffer.asUint8List());
+            await File('/tmp/stv/qr-${size.width.toInt()}.png')
+                .writeAsBytes(bytes.buffer.asUint8List());
           }
           image.dispose();
         });

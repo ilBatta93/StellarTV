@@ -185,8 +185,9 @@ class _MultiViewScreenState extends State<MultiViewScreen>
     _app.addListener(_checkAllowed);
     _watchdog = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     WidgetsBinding.instance.addObserver(this);
-    _screenOffSub =
-        NativePlayerBridge.instance.screenOff.listen((_) => _closeAllStreams());
+    _screenOffSub = NativePlayerBridge.instance.screenOff.listen(
+      (_) => _closeAllStreams(),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final channel = widget.initialChannel;

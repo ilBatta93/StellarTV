@@ -219,7 +219,8 @@ class EpgProvider extends ChangeNotifier {
 
   Future<void> _loadPrefix(EpgArchive archive, int token) async {
     final index = await archive.loadPrefix();
-    if (_disposed || token != _prefixToken || !identical(archive, _archive)) return;
+    if (_disposed || token != _prefixToken || !identical(archive, _archive))
+      return;
     _prefix = index;
     _searchRevision++;
     notifyListeners();
@@ -238,7 +239,9 @@ class EpgProvider extends ChangeNotifier {
       final reverse = rows.isEmpty || ids.isEmpty
           ? <String, List<String>>{}
           : await Isolate.run(() => epgCatalogIdsByGuide(ids, names, rows));
-      if (_disposed || token != _prefixToken || revision != _app.catalogIndexRevision) {
+      if (_disposed ||
+          token != _prefixToken ||
+          revision != _app.catalogIndexRevision) {
         return;
       }
       _catalogIdsByGuide = reverse;
@@ -468,7 +471,8 @@ class EpgProvider extends ChangeNotifier {
   List<String> catalogIdsForProgrammeQuery(String query) {
     final prefix = _prefix;
     final reverse = _catalogIdsByGuide;
-    if (prefix == null || reverse == null || query.trim().length < 2) return const [];
+    if (prefix == null || reverse == null || query.trim().length < 2)
+      return const [];
     final ids = _data.guideIds;
     final out = <String>[];
     final seen = <String>{};
@@ -567,7 +571,8 @@ class EpgProvider extends ChangeNotifier {
 
   void _requestShort(Channel channel) {
     if (_disposed || channel.type != ContentType.live) return;
-    if (_short.containsKey(channel.id) || _shortTried.contains(channel.id)) return;
+    if (_short.containsKey(channel.id) || _shortTried.contains(channel.id))
+      return;
     if (_shortQueued.contains(channel.id)) return;
     if (epgStreamId(channel.id) == null) {
       _shortTried.add(channel.id);
@@ -649,16 +654,19 @@ class EpgProvider extends ChangeNotifier {
     return trimmed;
   }
 
-  List<EpgTimelineSlot> _trim(List<EpgTimelineSlot> slots, DateTime notBefore) =>
-      List<EpgTimelineSlot>.unmodifiable([
-        for (final slot in slots)
-          if (slot.end.isAfter(notBefore)) slot,
-      ]);
+  List<EpgTimelineSlot> _trim(
+    List<EpgTimelineSlot> slots,
+    DateTime notBefore,
+  ) => List<EpgTimelineSlot>.unmodifiable([
+    for (final slot in slots)
+      if (slot.end.isAfter(notBefore)) slot,
+  ]);
 
   EpgProgram? nowFor(Channel channel) {
     final now = DateTime.now();
     for (final program in programmesFor(channel)) {
-      if (!program.startTime.isAfter(now) && program.endTime.isAfter(now)) return program;
+      if (!program.startTime.isAfter(now) && program.endTime.isAfter(now))
+        return program;
     }
     return null;
   }

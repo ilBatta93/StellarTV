@@ -36,8 +36,12 @@ class HistoryEntry {
   final String seriesPoster;
   final int watchedPercent;
   final bool? manualWatched;
-  bool get isAutomaticallyWatched => !isLive && duration > Duration.zero &&
-      position.inMilliseconds * 100 >= duration.inMilliseconds * WatchCompletionPolicy.normalize(watchedPercent);
+  bool get isAutomaticallyWatched =>
+      !isLive &&
+      duration > Duration.zero &&
+      position.inMilliseconds * 100 >=
+          duration.inMilliseconds *
+              WatchCompletionPolicy.normalize(watchedPercent);
 
   bool get isLive => type == ContentType.live;
 
@@ -70,7 +74,8 @@ class HistoryEntry {
       position > Duration.zero ? remainingMinutes : null;
 
   Duration? get resumePosition {
-    if (isLive || duration <= Duration.zero || isAutomaticallyWatched) return null;
+    if (isLive || duration <= Duration.zero || isAutomaticallyWatched)
+      return null;
     if (position <= const Duration(seconds: 5)) {
       return null;
     }

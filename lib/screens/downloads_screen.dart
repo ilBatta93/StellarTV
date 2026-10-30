@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../widgets/apple_page_scaffold.dart';
+
 import 'package:provider/provider.dart';
 
 import '../navigation/app_routes.dart';

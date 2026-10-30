@@ -13,7 +13,9 @@ SeriesEpisode? nextEpisodeInSequence(
 }) {
   var index = episodes.indexWhere((e) => e.channel.id == contentId);
   if (index < 0 && season != null && number != null) {
-    index = episodes.indexWhere((e) => e.season == season && e.number == number);
+    index = episodes.indexWhere(
+      (e) => e.season == season && e.number == number,
+    );
   }
   if (index < 0) throw StateError('episode not found in series details');
   return index + 1 < episodes.length ? episodes[index + 1] : null;
@@ -29,7 +31,9 @@ SeriesEpisode? latestSeriesReplay(
   final byId = {for (final episode in episodes) episode.channel.id: episode};
   for (final entry in history) {
     final episode = byId[entry.contentId];
-    if (episode == null || latest != null && !entry.lastWatchedAt.isAfter(latest.lastWatchedAt)) continue;
+    if (episode == null ||
+        latest != null && !entry.lastWatchedAt.isAfter(latest.lastWatchedAt))
+      continue;
     latest = entry;
     current = episode;
   }
@@ -41,6 +45,10 @@ SeriesEpisode? latestSeriesReplay(
 /// Cached end-of-sequence answers cannot hide a newer replay or another profile.
 typedef SeriesReplayKey = (String?, String, DateTime, Duration, Duration, int);
 SeriesReplayKey seriesReplayKey(String? profileId, HistoryEntry entry) => (
-  profileId, entry.contentId, entry.lastWatchedAt, entry.position,
-  entry.duration, entry.watchedPercent,
+  profileId,
+  entry.contentId,
+  entry.lastWatchedAt,
+  entry.position,
+  entry.duration,
+  entry.watchedPercent,
 );

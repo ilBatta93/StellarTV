@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'sync_hooks.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/custom_category.dart';
 
 class SettingsService {
@@ -78,8 +80,9 @@ class SettingsService {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map<String, dynamic>) return {};
-      return decoded.map((k, v) =>
-          MapEntry(k, (v as List?)?.cast<String>() ?? <String>[]));
+      return decoded.map(
+        (k, v) => MapEntry(k, (v as List?)?.cast<String>() ?? <String>[]),
+      );
     } catch (_) {
       return {};
     }
@@ -121,7 +124,10 @@ class SettingsService {
     try {
       final decoded = jsonDecode(prefs.getString(_customCategoriesKey) ?? '[]');
       if (decoded is! List) return [];
-      return decoded.map(CustomCategory.tryParse).whereType<CustomCategory>().toList();
+      return decoded
+          .map(CustomCategory.tryParse)
+          .whereType<CustomCategory>()
+          .toList();
     } catch (_) {
       return [];
     }

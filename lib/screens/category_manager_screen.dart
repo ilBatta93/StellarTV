@@ -84,9 +84,8 @@ class _TypeTab extends StatelessWidget {
     if (name == null) return;
     final failure = await app.createCustomCategory(type, name);
     if (failure != null && context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(failure)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(failure)));
     }
   }
 
@@ -126,11 +125,7 @@ class _TypeTab extends StatelessWidget {
             Icons.video_library_outlined,
             'Contenuti della categoria',
           ),
-          const CategoryAction(
-            _Action.rename,
-            Icons.edit_outlined,
-            'Rinomina',
-          ),
+          const CategoryAction(_Action.rename, Icons.edit_outlined, 'Rinomina'),
           const CategoryAction(
             _Action.delete,
             Icons.delete_outline_rounded,
@@ -163,9 +158,8 @@ class _TypeTab extends StatelessWidget {
         if (name == null) return;
         final failure = await app.renameCustomCategory(custom.id, name);
         if (failure != null && context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(failure)));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(failure)));
         }
       case _Action.delete:
         await app.deleteCustomCategory(custom!.id);
@@ -293,7 +287,10 @@ class _CustomContents extends StatelessWidget {
               children: [
                 const Text(
                   'Premi OK su un titolo per toglierlo dalla categoria.',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 for (final (i, e) in entries.indexed)

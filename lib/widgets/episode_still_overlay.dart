@@ -23,8 +23,7 @@ class EpisodeStillOverlay extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (watched)
-          const ColoredBox(color: Color(0xB3000000)),
+        if (watched) const ColoredBox(color: Color(0xB3000000)),
         if (watched)
           Align(
             alignment: Alignment.bottomLeft,

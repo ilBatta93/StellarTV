@@ -9,14 +9,19 @@ import 'epg_prefix_index.dart';
 import 'epg_timeline.dart';
 
 String _child(String directory, String name) {
-  if (directory.endsWith('/') || directory.endsWith(r'\')) return '$directory$name';
+  if (directory.endsWith('/') || directory.endsWith(r'\'))
+    return '$directory$name';
   return '$directory${Platform.pathSeparator}$name';
 }
 
 /// Random-access guide: one index plus a byte range per channel.
 class EpgArchive {
-  EpgArchive(this.directory, this.offsets, this.lengths, List<String> channelIds)
-    : _at = {
+  EpgArchive(
+    this.directory,
+    this.offsets,
+    this.lengths,
+    List<String> channelIds,
+  ) : _at = {
         for (
           var i = 0;
           i < channelIds.length && i < offsets.length && i < lengths.length;
@@ -109,14 +114,17 @@ class EpgGuideSnapshot {
       });
     }
     final channels = <String>[
-      for (final id in header['channels'] is List ? header['channels'] as List : const [])
+      for (final id
+          in header['channels'] is List ? header['channels'] as List : const [])
         id.toString(),
     ];
     final data = EpgData(
       displayNames: names,
       fetchedAt: DateTime.tryParse(header['t']?.toString() ?? ''),
       degraded: header['d'] == true,
-      declaredCount: header['count'] is num ? (header['count'] as num).toInt() : 0,
+      declaredCount: header['count'] is num
+          ? (header['count'] as num).toInt()
+          : 0,
       channelIndex: List.unmodifiable(channels),
     );
     final dir = header['dir']?.toString();
@@ -139,7 +147,9 @@ List<EpgProgram> decodeEpgChannel(String id, List<int> bytes) {
           channelId: id,
           title: row[2].toString(),
           description: row[3].toString(),
-          startTime: DateTime.fromMillisecondsSinceEpoch((row[0] as num).toInt()),
+          startTime: DateTime.fromMillisecondsSinceEpoch(
+            (row[0] as num).toInt(),
+          ),
           endTime: DateTime.fromMillisecondsSinceEpoch((row[1] as num).toInt()),
         ),
   ]);
@@ -147,7 +157,10 @@ List<EpgProgram> decodeEpgChannel(String id, List<int> bytes) {
 
 /// Writes `directory` atomically (a sibling `.part` is renamed into place).
 /// Returns a header the UI isolate can keep without the programme bodies.
-Map<String, Object?> writeEpgArchive(String directory, Map<String, dynamic> parsed) {
+Map<String, Object?> writeEpgArchive(
+  String directory,
+  Map<String, dynamic> parsed,
+) {
   final part = '$directory.part';
   final partDir = Directory(part);
   if (partDir.existsSync()) partDir.deleteSync(recursive: true);
@@ -232,10 +245,8 @@ Map<String, Object?> writeEpgArchive(String directory, Map<String, dynamic> pars
     slots.closeSync();
   }
   final prefix = EpgPrefixIndex.build(texts);
-  File(_child(part, 'words.json')).writeAsStringSync(
-    jsonEncode(prefix.toJson()),
-    flush: true,
-  );
+  File(_child(part, 'words.json'))
+      .writeAsStringSync(jsonEncode(prefix.toJson()), flush: true);
   final index = <String, Object?>{
     'v': 3,
     't': parsed['t']?.toString() ?? DateTime.now().toIso8601String(),
@@ -246,7 +257,8 @@ Map<String, Object?> writeEpgArchive(String directory, Map<String, dynamic> pars
     'off': offsets,
     'len': lengths,
   };
-  File(_child(part, 'index.json')).writeAsStringSync(jsonEncode(index), flush: true);
+  File(_child(part, 'index.json'))
+      .writeAsStringSync(jsonEncode(index), flush: true);
   final dest = Directory(directory);
   if (dest.existsSync()) dest.deleteSync(recursive: true);
   partDir.renameSync(directory);
@@ -277,7 +289,8 @@ Map<String, Object?>? loadEpgCacheHeader(String support, String key) {
       ),
     );
     final header = writeEpgArchive(directory, {
-      't': data.fetchedAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
+      't':
+          data.fetchedAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
       'd': false,
       'n': data.displayNames,
       'p': {
@@ -312,5 +325,9 @@ Map<String, Object?>? _readIndex(File file) {
   }
 }
 
-List<int> _nums(Object? raw) =>
-    raw is List ? [for (final value in raw) if (value is num) value.toInt()] : const [];
+List<int> _nums(Object? raw) => raw is List
+    ? [
+        for (final value in raw)
+          if (value is num) value.toInt(),
+      ]
+    : const [];

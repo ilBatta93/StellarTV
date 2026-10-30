@@ -50,7 +50,9 @@ class Channel {
     this.archiveDays = 0,
   });
 
-  static final RegExp _titleYear = RegExp(r'(?:^|[^0-9])((?:19|20)[0-9]{2})(?![0-9])');
+  static final RegExp _titleYear = RegExp(
+    r'(?:^|[^0-9])((?:19|20)[0-9]{2})(?![0-9])',
+  );
 
   /// Release key used for sorting: stored date or the year in the title.
   int get releaseKey {
@@ -64,7 +66,9 @@ class Channel {
   static int parseReleaseDate(Object? raw) {
     final s = raw?.toString().trim() ?? '';
     if (s.isEmpty) return 0;
-    final iso = RegExp(r'^((?:19|20)[0-9]{2})(?:[-/.]([0-9]{1,2})(?:[-/.]([0-9]{1,2}))?)?').firstMatch(s);
+    final iso = RegExp(
+      r'^((?:19|20)[0-9]{2})(?:[-/.]([0-9]{1,2})(?:[-/.]([0-9]{1,2}))?)?',
+    ).firstMatch(s);
     if (iso != null) {
       final y = int.parse(iso.group(1)!);
       final mo = int.tryParse(iso.group(2) ?? '') ?? 1;
@@ -72,7 +76,9 @@ class Channel {
       if (mo < 1 || mo > 12 || d < 1 || d > 31) return y * 10000 + 101;
       return y * 10000 + mo * 100 + d;
     }
-    final dmy = RegExp(r'^([0-9]{1,2})[-/.]([0-9]{1,2})[-/.]((?:19|20)[0-9]{2})').firstMatch(s);
+    final dmy = RegExp(
+      r'^([0-9]{1,2})[-/.]([0-9]{1,2})[-/.]((?:19|20)[0-9]{2})',
+    ).firstMatch(s);
     if (dmy != null) {
       final d = int.parse(dmy.group(1)!), mo = int.parse(dmy.group(2)!);
       final y = int.parse(dmy.group(3)!);

@@ -7,7 +7,11 @@ class VideoSurface extends StatelessWidget {
   final PlaybackSession session;
   final PlayerSettings settings;
 
-  const VideoSurface({super.key, required this.session, required this.settings});
+  const VideoSurface({
+    super.key,
+    required this.session,
+    required this.settings,
+  });
 
   static Size _contain(double ratio, double w, double h) =>
       ratio > w / h ? Size(w, w / ratio) : Size(h * ratio, h);
@@ -35,43 +39,45 @@ class VideoSurface extends StatelessWidget {
         final engine = session.presentedEngine;
         return ColoredBox(
           color: Colors.black,
-          child: LayoutBuilder(builder: (context, box) {
-            if (engine == null || box.maxHeight == 0) {
-              return const SizedBox.expand();
-            }
-            session.updateBoxRatio(box.maxWidth / box.maxHeight);
-            final size = _targetSize(box.maxWidth, box.maxHeight);
-            // The key is the engine, so a recycled native surface is not
-            // remounted. A hot swap keeps the previous picture until the
-            // new one has drawn a frame.
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                ClipRect(
-                  child: OverflowBox(
-                    minWidth: size.width,
-                    maxWidth: size.width,
-                    minHeight: size.height,
-                    maxHeight: size.height,
-                    child: KeyedSubtree(
-                      key: ObjectKey(engine),
-                      child: engine.buildView(size.width / size.height),
+          child: LayoutBuilder(
+            builder: (context, box) {
+              if (engine == null || box.maxHeight == 0) {
+                return const SizedBox.expand();
+              }
+              session.updateBoxRatio(box.maxWidth / box.maxHeight);
+              final size = _targetSize(box.maxWidth, box.maxHeight);
+              // The key is the engine, so a recycled native surface is not
+              // remounted. A hot swap keeps the previous picture until the
+              // new one has drawn a frame.
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRect(
+                    child: OverflowBox(
+                      minWidth: size.width,
+                      maxWidth: size.width,
+                      minHeight: size.height,
+                      maxHeight: size.height,
+                      child: KeyedSubtree(
+                        key: ObjectKey(engine),
+                        child: engine.buildView(size.width / size.height),
+                      ),
                     ),
                   ),
-                ),
-                if (session.value.caption.isNotEmpty)
-                  Positioned(
-                    left: 48,
-                    right: 48,
-                    bottom: 32,
-                    child: SubtitleCaption(
-                      text: session.value.caption,
-                      settings: settings,
+                  if (session.value.caption.isNotEmpty)
+                    Positioned(
+                      left: 48,
+                      right: 48,
+                      bottom: 32,
+                      child: SubtitleCaption(
+                        text: session.value.caption,
+                        settings: settings,
+                      ),
                     ),
-                  ),
-              ],
-            );
-          }),
+                ],
+              );
+            },
+          ),
         );
       },
     );
@@ -82,7 +88,11 @@ class SubtitleCaption extends StatelessWidget {
   final String text;
   final PlayerSettings settings;
 
-  const SubtitleCaption({super.key, required this.text, required this.settings});
+  const SubtitleCaption({
+    super.key,
+    required this.text,
+    required this.settings,
+  });
 
   @override
   Widget build(BuildContext context) {

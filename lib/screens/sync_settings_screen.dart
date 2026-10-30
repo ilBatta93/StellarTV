@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../widgets/apple_page_scaffold.dart';
+
 import 'package:provider/provider.dart';
 
 import '../providers/history_provider.dart';
@@ -37,14 +39,23 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
         children: [
           SettingsSection(
             title: 'Come funziona',
-            description:
-                'Profili e preferenze sono legati all’account. Cronologia e preferiti si sincronizzano cifrati solo dopo aver autorizzato questo dispositivo con la chiave separata. La configurazione dei contenuti resta locale.',
+            description: 'Profili e preferenze sono legati all’account. Cronologia e preferiti si sincronizzano cifrati solo dopo aver autorizzato questo dispositivo con la chiave separata. La configurazione dei contenuti resta locale.',
             children: const [],
           ),
           SettingsSection(
             title: 'Il tuo account',
             children: [
-              SettingsValueTile(icon:Icons.lock_outline,title:'Dati cifrati',subtitle:'Autorizza il dispositivo e conserva la chiave di recupero',onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const PersonalVaultScreen()))),
+              SettingsValueTile(
+                icon: Icons.lock_outline,
+                title: 'Dati cifrati',
+                subtitle:
+                    'Autorizza il dispositivo e conserva la chiave di recupero',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const PersonalVaultScreen(),
+                  ),
+                ),
+              ),
               SettingsValueTile(
                 icon: Icons.account_circle_outlined,
                 title: 'Email',

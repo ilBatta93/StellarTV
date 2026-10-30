@@ -131,7 +131,8 @@ Future<void> _downloadEntry((SendPort, List<String>, String) job) async {
     var read = 0;
     for (final url in job.$2) {
       try {
-        final parsed = await _readSource(url).timeout(const Duration(minutes: 6));
+        final parsed = await _readSource(url)
+            .timeout(const Duration(minutes: 6));
         if (parsed['d'] == true) merged['d'] = true;
         for (final key in ['p', 'n']) {
           final source = parsed[key];
@@ -149,7 +150,8 @@ Future<void> _downloadEntry((SendPort, List<String>, String) job) async {
       }
     }
     if (read == 0) {
-      throw lastError ?? const EpgDownloadException('Nessuna guida configurata.');
+      throw lastError ??
+          const EpgDownloadException('Nessuna guida configurata.');
     }
     merged['t'] = DateTime.now().toIso8601String();
     final header = writeEpgArchive(job.$3, merged);
@@ -278,7 +280,9 @@ Future<Map<String, dynamic>> parseXmltvStream(
   final cap = programmeCap < 1 ? 1 : programmeCap;
   // Past includes the timeshift margin so a "+N" channel can still fill the
   // visible grid after its programmes move forward.
-  final from = now.subtract(epgGuidePast + epgMaxTimeshift).millisecondsSinceEpoch;
+  final from = now
+      .subtract(epgGuidePast + epgMaxTimeshift)
+      .millisecondsSinceEpoch;
   final to = now.add(epgGuideFuture).millisecondsSinceEpoch;
   String? channel;
   Map<String, String>? programme;

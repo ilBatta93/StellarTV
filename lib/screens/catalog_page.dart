@@ -39,7 +39,11 @@ import '../widgets/section_row.dart';
 import 'settings_screen.dart';
 
 /// Genre check from the facet already stored on the slot.
-bool catalogSlotMatchesGenre(AppProvider app, CatalogEntry entry, int? genreId) {
+bool catalogSlotMatchesGenre(
+  AppProvider app,
+  CatalogEntry entry,
+  int? genreId,
+) {
   if (genreId == null) return true;
   final slot = entry.shelfSlot;
   if (slot != null) return app.genresForSlot(slot)?.contains(genreId) ?? false;
@@ -390,7 +394,8 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 
   void _savedOrderLoaded() {
-    if (!mounted || _sort != CatalogSort.rating || _publishedIds != null) return;
+    if (!mounted || _sort != CatalogSort.rating || _publishedIds != null)
+      return;
     setState(() {
       _sortedSource = null;
       _sortedEntries = null;
@@ -827,7 +832,8 @@ class _CatalogPageState extends State<CatalogPage> {
     return [
       for (final g in app.groupedCatalog(widget.type))
         for (final e in g.entries)
-          if (_matchesGenre(app, e) && seen.add(catalogEntryIdentity(app, e))) e,
+          if (_matchesGenre(app, e) && seen.add(catalogEntryIdentity(app, e)))
+            e,
     ];
   }
 
@@ -967,7 +973,9 @@ class _CatalogPageState extends State<CatalogPage> {
     final current = _spotlight.value;
     if (current == null ||
         !entries.any(
-          (e) => catalogEntryIdentity(app, e) == catalogEntryIdentity(app, current),
+          (e) =>
+              catalogEntryIdentity(app, e) ==
+              catalogEntryIdentity(app, current),
         )) {
       _spotlight.value = entries.first;
     }
@@ -1179,7 +1187,8 @@ class _CatalogPageState extends State<CatalogPage> {
   List<CatalogEntry> _orderedByRating(List<CatalogEntry> entries) {
     final key = _ratingOrderKey();
     final ids = _publishedIds;
-    final current = identical(entries, _sortedSource) &&
+    final current =
+        identical(entries, _sortedSource) &&
         _sortedOrder == CatalogSort.rating &&
         _ratingKey == key &&
         _sortedEntries != null;

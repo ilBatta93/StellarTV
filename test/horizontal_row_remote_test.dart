@@ -22,51 +22,57 @@ void main() {
   });
 
   for (final count in [50, 100]) {
-    testWidgets('Remote reaches all $count titles and keeps selection visible',
-        (tester) async {
+    testWidgets('Remote reaches all $count titles and keeps selection visible', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(960, 540);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      final nodes = List.generate(count, (i) => FocusNode(debugLabel: 'card $i'));
+      final nodes = List.generate(
+        count,
+        (i) => FocusNode(debugLabel: 'card $i'),
+      );
       final below = FocusNode(debugLabel: 'below');
       final vertical = ScrollController();
       var bannerIndex = -1;
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: ListView(
-            controller: vertical,
-            children: [
-              const SizedBox(height: 80),
-              const Text('Recenti'),
-              HorizontalRow(
-                height: 200,
-                spacing: 20,
-                itemCount: count,
-                itemBuilder: (_, i) => Focus(
-                  focusNode: nodes[i],
-                  // Reproduce Home: a custom banner/heading callback disables
-                  // the generic poster reveal, but the row must still scroll.
-                  onFocusChange: (focused) {
-                    if (focused) bannerIndex = i;
-                  },
-                  child: SizedBox(
-                    key: ValueKey('card-$i'),
-                    width: 112,
-                    height: 180,
-                    child: Text('Titolo $i'),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              controller: vertical,
+              children: [
+                const SizedBox(height: 80),
+                const Text('Recenti'),
+                HorizontalRow(
+                  height: 200,
+                  spacing: 20,
+                  itemCount: count,
+                  itemBuilder: (_, i) => Focus(
+                    focusNode: nodes[i],
+                    // Reproduce Home: a custom banner/heading callback disables
+                    // the generic poster reveal, but the row must still scroll.
+                    onFocusChange: (focused) {
+                      if (focused) bannerIndex = i;
+                    },
+                    child: SizedBox(
+                      key: ValueKey('card-$i'),
+                      width: 112,
+                      height: 180,
+                      child: Text('Titolo $i'),
+                    ),
                   ),
                 ),
-              ),
-              Focus(
-                focusNode: below,
-                child: const SizedBox(width: 112, height: 80),
-              ),
-              const SizedBox(height: 600),
-            ],
+                Focus(
+                  focusNode: below,
+                  child: const SizedBox(width: 112, height: 80),
+                ),
+                const SizedBox(height: 600),
+              ],
+            ),
           ),
         ),
-      ));
+      );
       nodes.first.requestFocus();
       await tester.pump();
       await tester.pump();
@@ -113,39 +119,42 @@ void main() {
     });
   }
 
-  testWidgets('Entering a row from above reveals an off-screen card',
-      (tester) async {
+  testWidgets('Entering a row from above reveals an off-screen card', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(960, 540);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final nodes = List.generate(6, (i) => FocusNode(debugLabel: 'card $i'));
     final vertical = ScrollController();
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ListView(
-          controller: vertical,
-          children: [
-            const SizedBox(height: 700),
-            HorizontalRow(
-              height: 200,
-              spacing: 20,
-              itemCount: 6,
-              itemBuilder: (_, i) => Focus(
-                focusNode: nodes[i],
-                child: SizedBox(
-                  key: ValueKey('card-$i'),
-                  width: 112,
-                  height: 180,
-                  child: Text('Titolo $i'),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListView(
+            controller: vertical,
+            children: [
+              const SizedBox(height: 700),
+              HorizontalRow(
+                height: 200,
+                spacing: 20,
+                itemCount: 6,
+                itemBuilder: (_, i) => Focus(
+                  focusNode: nodes[i],
+                  child: SizedBox(
+                    key: ValueKey('card-$i'),
+                    width: 112,
+                    height: 180,
+                    child: Text('Titolo $i'),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 600),
-          ],
+              const SizedBox(height: 600),
+            ],
+          ),
         ),
       ),
-    ));
+    );
     nodes.first.requestFocus();
     await tester.pump();
     await tester.pump();

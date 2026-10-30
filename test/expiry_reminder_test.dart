@@ -12,13 +12,29 @@ void main() {
   });
 
   test('disabled schedules nothing', () {
-    expect(ExpiryPlan.schedule(expiry, s.copyWith(enabled: false), DateTime(2026, 1, 1)), isEmpty);
+    expect(
+      ExpiryPlan.schedule(
+        expiry,
+        s.copyWith(enabled: false),
+        DateTime(2026, 1, 1),
+      ),
+      isEmpty,
+    );
   });
 
   test('active threshold picks smallest entered window', () {
-    expect(ExpiryPlan.activeThreshold(expiry, s, DateTime(2026, 11, 1)), isNull);
-    expect(ExpiryPlan.activeThreshold(expiry, s, DateTime(2026, 11, 15, 12)), 7);
-    expect(ExpiryPlan.activeThreshold(expiry, s, DateTime(2026, 11, 19, 20)), 1);
+    expect(
+      ExpiryPlan.activeThreshold(expiry, s, DateTime(2026, 11, 1)),
+      isNull,
+    );
+    expect(
+      ExpiryPlan.activeThreshold(expiry, s, DateTime(2026, 11, 15, 12)),
+      7,
+    );
+    expect(
+      ExpiryPlan.activeThreshold(expiry, s, DateTime(2026, 11, 19, 20)),
+      1,
+    );
     expect(ExpiryPlan.activeThreshold(expiry, s, DateTime(2026, 11, 21)), 0);
   });
 
@@ -29,7 +45,9 @@ void main() {
   });
 
   test('settings roundtrip', () {
-    final r = ExpiryReminderSettings.fromJson(s.copyWith(thresholds: {30, 1}, hour: 9).toJson());
+    final r = ExpiryReminderSettings.fromJson(
+      s.copyWith(thresholds: {30, 1}, hour: 9).toJson(),
+    );
     expect(r.thresholds, {30, 1});
     expect(r.hour, 9);
   });

@@ -1,6 +1,8 @@
 import '../services/image_cache_service.dart';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
 import '../models/tmdb_person.dart';
 import '../screens/person_detail_screen.dart';
 import '../theme/app_theme.dart';
@@ -48,7 +50,9 @@ class CastRow extends StatelessWidget {
                             ? CachedNetworkImage(
                                 cacheManager: AppImageCache.manager,
                                 imageUrl: person.profileUrl,
-                                fadeInDuration: const Duration(milliseconds: 150),
+                                fadeInDuration: const Duration(
+                                  milliseconds: 150,
+                                ),
                                 memCacheWidth: 256,
                                 fit: BoxFit.cover,
                                 errorWidget: (_, _, _) => _fallback(person),

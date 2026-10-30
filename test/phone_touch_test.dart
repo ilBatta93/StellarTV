@@ -10,10 +10,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: PhoneTap(
-            onTap: () => taps++,
-            child: const Text('Aspetto'),
-          ),
+          body: PhoneTap(onTap: () => taps++, child: const Text('Aspetto')),
         ),
       ),
     );

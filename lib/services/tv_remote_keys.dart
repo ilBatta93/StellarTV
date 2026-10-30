@@ -48,7 +48,9 @@ class TvRemoteKeys {
       final current = _lastEditing;
       if (_pendingEditing == current) return;
       _lastEditing = _pendingEditing;
-      _device.invokeMethod<void>('setTextEditing', _pendingEditing).catchError((_) {});
+      _device
+          .invokeMethod<void>('setTextEditing', _pendingEditing)
+          .catchError((_) {});
     });
   }
 

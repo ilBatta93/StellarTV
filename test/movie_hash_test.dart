@@ -18,8 +18,13 @@ void main() {
     final client = MockClient((req) async {
       final r = req.headers['Range']!;
       ranges.add(r);
-      return http.Response.bytes(r == 'bytes=0-65535' ? head : tail, 206,
-          headers: {'content-range': '$r/200000'.replaceFirst('bytes=', 'bytes ')});
+      return http.Response.bytes(
+        r == 'bytes=0-65535' ? head : tail,
+        206,
+        headers: {
+          'content-range': '$r/200000'.replaceFirst('bytes=', 'bytes '),
+        },
+      );
     });
     final h = await MovieHash.fromUrl('http://x/movie.mkv', client: client);
     expect(h?.hash, 'ba35b030ac289403');
@@ -29,7 +34,13 @@ void main() {
 
   test('servers ignoring Range fall back to title matching', () async {
     final client = MockClient((_) async => http.Response('x', 200));
-    expect(await MovieHash.fromUrl('http://x/movie.mkv', client: client), isNull);
-    expect(await MovieHash.fromUrl('http://x/live.m3u8', client: client), isNull);
+    expect(
+      await MovieHash.fromUrl('http://x/movie.mkv', client: client),
+      isNull,
+    );
+    expect(
+      await MovieHash.fromUrl('http://x/live.m3u8', client: client),
+      isNull,
+    );
   });
 }

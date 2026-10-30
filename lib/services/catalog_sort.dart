@@ -110,7 +110,8 @@ List<CatalogEntry> _sortByKnownRatings(
   final scores = <String, double>{};
   for (final entry in entries) {
     final channel = entry.primary;
-    final titleKey = parseTitle(channel.displaySeriesName).key(channel.type.name);
+    final titleKey = parseTitle(channel.displaySeriesName)
+        .key(channel.type.name);
     final imdbKey = imdbKeyByTitle[titleKey];
     final imdb = imdbKey == null ? null : imdbByKey[imdbKey];
     final score = imdb != null && imdb > 0

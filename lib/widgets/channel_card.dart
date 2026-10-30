@@ -42,11 +42,15 @@ class ChannelCard extends StatelessWidget {
     final tmdb = audiobook
         ? null
         : CatalogRatingService.instance.itemOf(channel)?.posterUrl;
-    final icon = channel.type == ContentType.series ||
-            channel.type == ContentType.anime
+    final icon =
+        channel.type == ContentType.series || channel.type == ContentType.anime
         ? Icons.video_library_outlined
         : Icons.movie_outlined;
-    final cover = Image.asset(_audiobookCover, fit: BoxFit.cover, cacheWidth: 360);
+    final cover = Image.asset(
+      _audiobookCover,
+      fit: BoxFit.cover,
+      cacheWidth: 360,
+    );
     if (channel.logo.isEmpty && tmdb == null && audiobook) return cover;
     return PosterImage(
       url: channel.logo.isEmpty ? tmdb : channel.logo,

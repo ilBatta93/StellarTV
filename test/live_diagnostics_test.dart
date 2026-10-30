@@ -42,25 +42,22 @@ void main() {
       isNot(LiveDiagnosticsLog(salt: 'other').streamId(url)),
     );
   });
-  test(
-    'stationary clock is one suspected stall after 5s, never during pause or buffering',
-    () {
-      final probe = LiveStallProbe();
-      bool check(int seconds, {bool playing = true, bool buffering = false}) =>
-          probe.check(
-            elapsed: Duration(seconds: seconds),
-            position: const Duration(seconds: 10),
-            playing: playing,
-            buffering: buffering,
-          );
-      expect(check(0), false);
-      expect(check(4), false);
-      expect(check(5), true);
-      expect(check(8), false);
-      expect(check(15, playing: false), false);
-      expect(check(25, buffering: true), false);
-      expect(check(26), false);
-      expect(check(29), false);
-    },
-  );
+  test('stationary clock is one suspected stall after 5s, never during pause or buffering', () {
+    final probe = LiveStallProbe();
+    bool check(int seconds, {bool playing = true, bool buffering = false}) =>
+        probe.check(
+          elapsed: Duration(seconds: seconds),
+          position: const Duration(seconds: 10),
+          playing: playing,
+          buffering: buffering,
+        );
+    expect(check(0), false);
+    expect(check(4), false);
+    expect(check(5), true);
+    expect(check(8), false);
+    expect(check(15, playing: false), false);
+    expect(check(25, buffering: true), false);
+    expect(check(26), false);
+    expect(check(29), false);
+  });
 }

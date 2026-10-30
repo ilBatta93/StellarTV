@@ -89,7 +89,10 @@ class HorizontalRow extends StatelessWidget {
           // navigation never decodes a large batch of off-screen posters.
           // 200 logical pixels covers one typical TV card width.
           // On phone: keep the default (null = Flutter decides).
-          scrollCacheExtent: ScrollCacheExtent.pixels(DeviceTypeService.isTv ? 300 : 0), scrollDirection: Axis.horizontal,
+          scrollCacheExtent: ScrollCacheExtent.pixels(
+            DeviceTypeService.isTv ? 300 : 0,
+          ),
+          scrollDirection: Axis.horizontal,
           padding: EdgeInsets.symmetric(
             horizontal: DeviceTypeService.isTv ? 32 : 16,
             vertical: DeviceTypeService.isTv ? 8 : 0,

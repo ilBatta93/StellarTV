@@ -76,6 +76,7 @@ class TvCatalogToolbar extends StatefulWidget {
 
   /// Shared by key events and Android system Back (Home owns the route).
   static final _mountedToolbars = <_TvCatalogToolbarState>{};
+
   /// Android delivers the system Back (PopScope) after the key event that
   /// already closed a panel, sometimes several frames later. That single
   /// echo is swallowed; the next real key press clears the guard, so a
@@ -232,7 +233,9 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   void _focusPanel() {
     final token = _transition;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || token != _transition || !(_filtersOpen || _platformsOpen)) {
+      if (!mounted ||
+          token != _transition ||
+          !(_filtersOpen || _platformsOpen)) {
         return;
       }
       final nodes = _panel.traversalDescendants.where(
@@ -361,11 +364,13 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
     return Focus(
       canRequestFocus: false,
       onKeyEvent: (_, event) {
-        final isBack = event.logicalKey == LogicalKeyboardKey.goBack ||
+        final isBack =
+            event.logicalKey == LogicalKeyboardKey.goBack ||
             event.logicalKey == LogicalKeyboardKey.escape ||
             event.logicalKey == LogicalKeyboardKey.browserBack;
         if (!isBack) return KeyEventResult.ignored;
-        if (event is KeyDownEvent && (_filtersOpen || _platformsOpen || _expanded)) {
+        if (event is KeyDownEvent &&
+            (_filtersOpen || _platformsOpen || _expanded)) {
           if (_back()) {
             TvCatalogToolbar._armEcho();
             return KeyEventResult.handled;

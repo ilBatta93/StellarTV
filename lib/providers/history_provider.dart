@@ -244,7 +244,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
         account = _sync.currentUserId;
     final next = _manualWrites.then((_) async {
       await _loadFuture;
-      if (_disposed || epoch != _profileEpoch || account != _sync.currentUserId) {
+      if (_disposed ||
+          epoch != _profileEpoch ||
+          account != _sync.currentUserId) {
         return;
       }
       final before = Map<String, EpisodeWatchEvent>.from(_watchEvents);

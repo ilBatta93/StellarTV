@@ -1165,7 +1165,9 @@ class _TvDiscoverState extends State<_TvDiscover> {
 
   void _seedInitialHistory() {
     final resume = widget.initialHistory;
-    if (_userFocused || resume == null || _seededHistory == resume.$1.contentId) {
+    if (_userFocused ||
+        resume == null ||
+        _seededHistory == resume.$1.contentId) {
       return;
     }
     _seededHistory = resume.$1.contentId;

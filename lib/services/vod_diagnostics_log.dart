@@ -37,7 +37,8 @@ class VodDiagnosticsLog {
   }
 
   /// One shared wording for both records: an error bucket is an error bucket.
-  static String errorKind(String reason) => LiveDiagnosticsLog.errorKind(reason);
+  static String errorKind(String reason) =>
+      LiveDiagnosticsLog.errorKind(reason);
 
   static Map<String, Object?> _safeDevice(Map<String, Object?> raw) => {
     for (final e in raw.entries)
@@ -59,8 +60,7 @@ class VodDiagnosticsLog {
                   !RegExp(
                     r'https?://|password|username|token=',
                     caseSensitive: false,
-                  ).hasMatch(e.value as String))
-        )
+                  ).hasMatch(e.value as String)))
         e.key: e.value,
   };
 
@@ -184,10 +184,8 @@ class VodDiagnosticsLog {
         'exportedAt': DateTime.now().toUtc().toIso8601String(),
         'device': _safeDevice(device),
         'events': events.map(_safeEvent).toList(),
-        'privacy':
-            'No URLs, credentials, titles, account identifiers or raw error messages.',
-        'measurement':
-            'droppedFrames is the player counter of discarded pictures; cacheMs is the read-ahead still in memory; avSyncMs is the audio clock minus the video clock; jumpMs is a media-clock move that does not match the wall clock.',
+        'privacy': 'No URLs, credentials, titles, account identifiers or raw error messages.',
+        'measurement': 'droppedFrames is the player counter of discarded pictures; cacheMs is the read-ahead still in memory; avSyncMs is the audio clock minus the video clock; jumpMs is a media-clock move that does not match the wall clock.',
       });
 }
 
@@ -253,15 +251,10 @@ class VodStutterProbe {
       final since = _stallSince ??= elapsed;
       if (!_stallReported && elapsed - since >= const Duration(seconds: 2)) {
         _stallReported = true;
-        _add(
-          out,
-          elapsed,
-          'suspected_stall',
-          {
-            'stallMs': (elapsed - since).inMilliseconds,
-            'positionMs': position.inMilliseconds,
-          },
-        );
+        _add(out, elapsed, 'suspected_stall', {
+          'stallMs': (elapsed - since).inMilliseconds,
+          'positionMs': position.inMilliseconds,
+        });
       }
     } else {
       _stallSince = null;

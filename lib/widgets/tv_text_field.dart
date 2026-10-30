@@ -314,7 +314,8 @@ class _TvTextFieldState extends State<TvTextField> with WidgetsBindingObserver {
   List<FocusNode> _trailingStops() => [
     if (_mic.context != null) _mic,
     if (_clear.context != null) _clear,
-    if (_extra.context != null && _extra.descendants.any((n) => n.canRequestFocus))
+    if (_extra.context != null &&
+        _extra.descendants.any((n) => n.canRequestFocus))
       _extra,
   ];
 

@@ -45,8 +45,13 @@ void main() {
 
   test('Sort by real release date, title year fallback, unknown last', () {
     Channel c(String id, String name, int release) => Channel(
-      id: id, name: name, url: 'u', logo: '', group: 'g',
-      type: ContentType.movie, releaseDate: release,
+      id: id,
+      name: name,
+      url: 'u',
+      logo: '',
+      group: 'g',
+      type: ContentType.movie,
+      releaseDate: release,
     );
     final source = [
       c('old', 'Vecchio', 19950610),

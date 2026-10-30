@@ -1,6 +1,8 @@
 import 'package:stellar_tv/widgets/poster_card.dart';
+
 import 'dart:io';
 import 'dart:ui' as image_ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:stellar_tv/widgets/tv_focusable.dart';
@@ -24,6 +26,7 @@ import 'package:stellar_tv/services/profile_service.dart';
 import 'package:stellar_tv/services/sync_service.dart';
 import 'package:stellar_tv/services/tmdb_service.dart';
 import 'package:stellar_tv/theme/app_theme.dart';
+
 import 'october_live_multiview_test.dart' as fixtures;
 
 TmdbItem item(int id, String title) => TmdbItem(
@@ -177,9 +180,8 @@ void main() {
             );
             if (bytes != null) {
               await Directory('/tmp/stv').create(recursive: true);
-              await File(
-                '/tmp/stv/home-${size.width.toInt()}.png',
-              ).writeAsBytes(bytes.buffer.asUint8List());
+              await File('/tmp/stv/home-${size.width.toInt()}.png')
+                  .writeAsBytes(bytes.buffer.asUint8List());
             }
             image.dispose();
           });

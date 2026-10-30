@@ -62,7 +62,11 @@ ProviderDiagnosis classifyProvider(
   int? count(Object? x) => int.tryParse('$x');
   final active = count(u['active_cons']);
   final max = count(u['max_connections']);
-  if (active != null && active >= 0 && max != null && max > 0 && active >= max) {
+  if (active != null &&
+      active >= 0 &&
+      max != null &&
+      max > 0 &&
+      active >= max) {
     return ProviderDiagnosis(
       ProviderCondition.limit,
       'Limite connessioni raggiunto ($active/$max). Può includere questa riproduzione o una connessione appena chiusa: non prova che sia un altro dispositivo.',

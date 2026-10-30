@@ -186,7 +186,8 @@ class _HistorySettingsScreenState extends State<HistorySettingsScreen> {
               );
             }
             final entry = shown[i - 2];
-            final isSeries = entry.type == ContentType.series ||
+            final isSeries =
+                entry.type == ContentType.series ||
                 entry.type == ContentType.anime;
             if (!isSeries) {
               return _HistoryTile(key: ValueKey(entry.contentId), entry: entry);
@@ -308,16 +309,14 @@ class _SeriesGroupState extends State<_SeriesGroup> {
           onToggleEpisodes: () => setState(() => _open = !_open),
         ),
         if (!DeviceTypeService.isTv)
-        Padding(
-          padding: const EdgeInsets.only(left: 16, top: 4),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
                 onPressed: () => setState(() => _open = !_open),
                 icon: Icon(
-                  _open
-                      ? Icons.expand_less_rounded
-                      : Icons.expand_more_rounded,
+                  _open ? Icons.expand_less_rounded : Icons.expand_more_rounded,
                 ),
                 label: Text(
                   _open
@@ -327,8 +326,8 @@ class _SeriesGroupState extends State<_SeriesGroup> {
                       : 'Mostra $n episodi',
                 ),
               ),
+            ),
           ),
-        ),
         if (_open)
           for (final ep in widget.episodes)
             Padding(
@@ -482,14 +481,24 @@ class _HistoryTile extends StatelessWidget {
     final progress = entry.progress;
     final subtitle = [
       if (episodeOnly) 'Episodio' else _typeLabel(entry.type),
-      if (series) 'Ultimo: ${entry.title}'
-      else if (!episodeOnly && entry.group.isNotEmpty) entry.group,
+      if (series)
+        'Ultimo: ${entry.title}'
+      else if (!episodeOnly && entry.group.isNotEmpty)
+        entry.group,
       if (DeviceTypeService.isTv && series)
-        episodesOpen ? 'Tieni premuto OK: opzioni' : 'Tieni premuto OK: episodi e opzioni',
+        episodesOpen
+            ? 'Tieni premuto OK: opzioni'
+            : 'Tieni premuto OK: episodi e opzioni',
     ].join(' · ');
 
     return Dismissible(
-      key: ValueKey('dismiss-${series ? 's' : episodeOnly ? 'e' : 'x'}-${entry.contentId}'),
+      key: ValueKey(
+        'dismiss-${series
+            ? 's'
+            : episodeOnly
+            ? 'e'
+            : 'x'}-${entry.contentId}',
+      ),
       direction: DismissDirection.endToStart,
       onDismissed: (_) => _remove(context),
       background: Container(
@@ -515,127 +524,127 @@ class _HistoryTile extends StatelessWidget {
         ),
       ),
       child: Row(
-          children: [
-            Expanded(
-              child: TvFocusable(
-                onPressed: () => _open(context),
-                onLongPress: () => _actions(context),
-                focusedScale: 1,
-                child: Material(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () => _open(context),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              color: AppColors.card,
-                              width: isLive ? 96 : 56,
-                              height: 80,
-                              child: PosterImage(
-                                url: series && entry.seriesPoster.isNotEmpty
-                                    ? entry.seriesPoster
-                                    : entry.posterUrl,
-                                fit: isLive ? BoxFit.contain : BoxFit.cover,
-                                fallbackIcon: isLive
-                                    ? Icons.live_tv_rounded
-                                    : Icons.movie_outlined,
-                              ),
+        children: [
+          Expanded(
+            child: TvFocusable(
+              onPressed: () => _open(context),
+              onLongPress: () => _actions(context),
+              focusedScale: 1,
+              child: Material(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => _open(context),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            color: AppColors.card,
+                            width: isLive ? 96 : 56,
+                            height: 80,
+                            child: PosterImage(
+                              url: series && entry.seriesPoster.isNotEmpty
+                                  ? entry.seriesPoster
+                                  : entry.posterUrl,
+                              fit: isLive ? BoxFit.contain : BoxFit.cover,
+                              fallbackIcon: isLive
+                                  ? Icons.live_tv_rounded
+                                  : Icons.movie_outlined,
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  titleOverride ?? entry.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.2,
-                                  ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                titleOverride ?? entry.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.2,
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  subtitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 12,
-                                  ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
                                 ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.schedule_rounded,
-                                      size: 13,
-                                      color: AppColors.textMuted,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      _when(entry.lastWatchedAt),
-                                      style: const TextStyle(
-                                        color: AppColors.textMuted,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                if (progress != null) ...[
-                                  const SizedBox(height: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(2),
-                                    child: LinearProgressIndicator(
-                                      value: progress,
-                                      minHeight: 3,
-                                      backgroundColor: AppColors.border,
-                                      color: AppColors.primary,
-                                    ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.schedule_rounded,
+                                    size: 13,
+                                    color: AppColors.textMuted,
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(width: 4),
                                   Text(
-                                    _remaining(entry),
+                                    _when(entry.lastWatchedAt),
                                     style: const TextStyle(
                                       color: AppColors.textMuted,
-                                      fontSize: 11,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ],
-                              ],
-                            ),
-                          ),
-                          if (!DeviceTypeService.isTv)
-                            IconButton(
-                              tooltip: series
-                      ? 'Rimuovi serie dalla cronologia'
-                      : episodeOnly
-                      ? 'Rimuovi episodio'
-                      : 'Rimuovi dalla cronologia',
-                              icon: const Icon(
-                                Icons.close_rounded,
-                                color: AppColors.textSecondary,
                               ),
-                              onPressed: () => _remove(context),
+                              if (progress != null) ...[
+                                const SizedBox(height: 8),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(2),
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    minHeight: 3,
+                                    backgroundColor: AppColors.border,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _remaining(entry),
+                                  style: const TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        if (!DeviceTypeService.isTv)
+                          IconButton(
+                            tooltip: series
+                                ? 'Rimuovi serie dalla cronologia'
+                                : episodeOnly
+                                ? 'Rimuovi episodio'
+                                : 'Rimuovi dalla cronologia',
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: AppColors.textSecondary,
                             ),
-                        ],
-                      ),
+                            onPressed: () => _remove(context),
+                          ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
     );
   }
 }

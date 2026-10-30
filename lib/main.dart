@@ -1,6 +1,7 @@
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
+
 import 'services/image_cache_service.dart';
 import 'services/image_warmup_service.dart';
 import 'services/frame_telemetry_service.dart';

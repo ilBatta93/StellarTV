@@ -118,8 +118,11 @@ class MediaKitEngine extends PlaybackEngine {
 
   /// Four threads on a four-core stick leave nothing for the picture.
   @visibleForTesting
-  static String decoderThreads({required bool tv, required bool live}) =>
-      !tv ? '0' : live ? '2' : '4';
+  static String decoderThreads({required bool tv, required bool live}) => !tv
+      ? '0'
+      : live
+      ? '2'
+      : '4';
 
   /// TV boxes have weak GPUs: mpv's high-quality scalers and dithering
   /// dropped frames at 1080p/4K. Fast scaling looks the same at TV distance.

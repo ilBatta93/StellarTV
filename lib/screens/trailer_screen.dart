@@ -40,28 +40,35 @@ class _TrailerScreenState extends State<TrailerScreen> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
       ..addJavaScriptChannel('Trailer', onMessageReceived: _onMessage)
-      ..setNavigationDelegate(NavigationDelegate(
-        onNavigationRequest: (r) => r.url.contains('youtube') ||
-                r.url.contains('ytimg') ||
-                r.url.startsWith('about:') ||
-                r.url.startsWith('https://stellartv.vercel.app')
-            ? NavigationDecision.navigate
-            : NavigationDecision.prevent,
-      ));
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (r) =>
+              r.url.contains('youtube') ||
+                  r.url.contains('ytimg') ||
+                  r.url.startsWith('about:') ||
+                  r.url.startsWith('https://stellartv.vercel.app')
+              ? NavigationDecision.navigate
+              : NavigationDecision.prevent,
+        ),
+      );
     final platform = _web.platform;
     if (platform is AndroidWebViewController) {
       // Play/pause come from the remote through Flutter, never from a tap
       // inside the page: allow the API to start the video.
       platform.setMediaPlaybackRequiresUserGesture(false);
     }
-    _web.loadHtmlString(trailerHtml(key, subtitles: widget.trailer.italianSubtitles), baseUrl: 'https://stellartv.vercel.app');
+    _web.loadHtmlString(
+      trailerHtml(key, subtitles: widget.trailer.italianSubtitles),
+      baseUrl: 'https://stellartv.vercel.app',
+    );
     _scheduleHide();
   }
 
   /// YouTube IFrame API page: the player reports its state to Flutter and
   /// exposes play/pause/seek for the on-screen controls.
   @visibleForTesting
-  static String trailerHtml(String key, {bool subtitles = false}) => '''
+  static String trailerHtml(String key, {bool subtitles = false}) =>
+      '''
 <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#p{width:100%;height:100%}</style>
 </head><body><div id="p"></div>
@@ -129,9 +136,13 @@ function seekBy(d){if(!player)return;player.seekTo(Math.max(0,player.getCurrentT
     // Release the hardware video decoder at once: stop the YouTube player and
     // blank the page so live channels opened next get a free decoder.
     _web
-        .runJavaScript('try{player&&player.stopVideo();player&&player.destroy()}catch(e){}')
+        .runJavaScript(
+          'try{player&&player.stopVideo();player&&player.destroy()}catch(e){}',
+        )
         .catchError((_) {})
-        .whenComplete(() => _web.loadRequest(Uri.parse('about:blank')).catchError((_) {}));
+        .whenComplete(
+          () => _web.loadRequest(Uri.parse('about:blank')).catchError((_) {}),
+        );
     _playFocus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -144,9 +155,11 @@ function seekBy(d){if(!player)return;player.seekTo(Math.max(0,player.getCurrentT
   }
 
   void _toggle() {
-    _run(_state == TrailerState.ended
-        ? 'player&&(player.seekTo(0,true),player.playVideo())'
-        : 'toggle()');
+    _run(
+      _state == TrailerState.ended
+          ? 'player&&(player.seekTo(0,true),player.playVideo())'
+          : 'toggle()',
+    );
     _show();
   }
 
@@ -180,7 +193,9 @@ function seekBy(d){if(!player)return;player.seekTo(Math.max(0,player.getCurrentT
       _seek(-10);
       return KeyEventResult.handled;
     }
-    if (!_controls && key != LogicalKeyboardKey.goBack && key != LogicalKeyboardKey.escape) {
+    if (!_controls &&
+        key != LogicalKeyboardKey.goBack &&
+        key != LogicalKeyboardKey.escape) {
       _show();
       _playFocus.requestFocus();
       return KeyEventResult.handled;
@@ -211,11 +226,17 @@ function seekBy(d){if(!player)return;player.seekTo(Math.max(0,player.getCurrentT
           borderRadius: BorderRadius.circular(24),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, size: 22, color: scheme.onSurface),
-              const SizedBox(width: 8),
-              Text(label, style: TextStyle(color: scheme.onSurface, fontSize: 15)),
-            ]),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 22, color: scheme.onSurface),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(color: scheme.onSurface, fontSize: 15),
+                ),
+              ],
+            ),
           ),
         ),
       ),

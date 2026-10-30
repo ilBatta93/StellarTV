@@ -29,12 +29,18 @@ class _FakeEngine extends PlaybackEngine {
     _value = snapshot;
     notifyListeners();
   }
-  void _playing(bool playing) => emitSnapshot(PlaybackSnapshot(
-    isReady: true, isPlaying: playing, isEnded: _value.isEnded,
-    position: _value.position, duration: _value.duration,
-    nativeLiveSeekable: _value.nativeLiveSeekable,
-    nativeLiveOffset: _value.nativeLiveOffset,
-  ));
+
+  void _playing(bool playing) => emitSnapshot(
+    PlaybackSnapshot(
+      isReady: true,
+      isPlaying: playing,
+      isEnded: _value.isEnded,
+      position: _value.position,
+      duration: _value.duration,
+      nativeLiveSeekable: _value.nativeLiveSeekable,
+      nativeLiveOffset: _value.nativeLiveOffset,
+    ),
+  );
   @override
   bool get supportsTimeshift => _value.nativeLiveSeekable;
   void liveWindow() {
@@ -78,9 +84,17 @@ class _FakeEngine extends PlaybackEngine {
   @override
   Widget buildView(double boxRatio) => const SizedBox();
   @override
-  Future<void> play() async { playCalls++; _playing(true); }
+  Future<void> play() async {
+    playCalls++;
+    _playing(true);
+  }
+
   @override
-  Future<void> pause() async { pauseCalls++; _playing(false); }
+  Future<void> pause() async {
+    pauseCalls++;
+    _playing(false);
+  }
+
   @override
   Future<void> seekTo(Duration position) async {
     sought = position;
@@ -128,46 +142,59 @@ const _xtream = 'http://tv.example.com/live/user/pass/42.m3u8';
 
 void main() {
   for (final type in PlayerEngineType.values) {
-    test('Live completion never seeks zero and pause survives errors on $type', () async {
-      final engines = <_FakeEngine>[];
-      final session = PlaybackSession(
-        url: 'https://example.invalid/live.ts', isLive: true,
-        settings: PlayerSettings(primaryEngine: type),
-        engineFactory: (kind) {
-          final engine = _FakeEngine(kind, _xtream, succeed: true);
-          engines.add(engine);
-          return engine;
-        },
-      );
-      await session.start();
-      final engine = engines.single;
-      engine.emitSnapshot(const PlaybackSnapshot(isReady: true,
-        isPlaying: true, isEnded: true, position: Duration(seconds: 12)));
-      await session.togglePlay();
-      expect(engine.pauseCalls, 1);
-      expect(engine.playCalls, 0);
-      expect(engine.sought, isNull);
-      expect(session.value.isPlaying, isFalse);
-      await session.ensurePlaying();
-      expect(engine.playCalls, 0);
-      engine.emitError('HTTP error 503');
-      engine.emitError('HTTP error 503');
-      await Future<void>.delayed(const Duration(seconds: 2));
-      expect(engines.length, 1);
-      expect(session.liveResumePending, isTrue);
-      await session.togglePlay();
-      expect(engines.length, 2);
-      expect(engines.last.value.isPlaying, isTrue);
-      expect(engines.last.sought, isNull);
-      expect(_FakeEngine.maxAlive, 1);
-      session.dispose();
-      await session.released;
-    });
+    test(
+      'Live completion never seeks zero and pause survives errors on $type',
+      () async {
+        final engines = <_FakeEngine>[];
+        final session = PlaybackSession(
+          url: 'https://example.invalid/live.ts',
+          isLive: true,
+          settings: PlayerSettings(primaryEngine: type),
+          engineFactory: (kind) {
+            final engine = _FakeEngine(kind, _xtream, succeed: true);
+            engines.add(engine);
+            return engine;
+          },
+        );
+        await session.start();
+        final engine = engines.single;
+        engine.emitSnapshot(
+          const PlaybackSnapshot(
+            isReady: true,
+            isPlaying: true,
+            isEnded: true,
+            position: Duration(seconds: 12),
+          ),
+        );
+        await session.togglePlay();
+        expect(engine.pauseCalls, 1);
+        expect(engine.playCalls, 0);
+        expect(engine.sought, isNull);
+        expect(session.value.isPlaying, isFalse);
+        await session.ensurePlaying();
+        expect(engine.playCalls, 0);
+        engine.emitError('HTTP error 503');
+        engine.emitError('HTTP error 503');
+        await Future<void>.delayed(const Duration(seconds: 2));
+        expect(engines.length, 1);
+        expect(session.liveResumePending, isTrue);
+        await session.togglePlay();
+        expect(engines.length, 2);
+        expect(engines.last.value.isPlaying, isTrue);
+        expect(engines.last.sought, isNull);
+        expect(_FakeEngine.maxAlive, 1);
+        session.dispose();
+        await session.released;
+      },
+    );
     test('VOD completion still replays from zero on $type', () async {
       final engine = _FakeEngine(type, _xtream, succeed: true);
-      final session = PlaybackSession(url: 'https://example.invalid/video.mp4',
-        isLive: false, settings: PlayerSettings(primaryEngine: type),
-        engineFactory: (_) => engine);
+      final session = PlaybackSession(
+        url: 'https://example.invalid/video.mp4',
+        isLive: false,
+        settings: PlayerSettings(primaryEngine: type),
+        engineFactory: (_) => engine,
+      );
       await session.start();
       engine.emitSnapshot(const PlaybackSnapshot(isReady: true, isEnded: true));
       await session.togglePlay();
@@ -177,28 +204,34 @@ void main() {
       await session.released;
     });
   }
-  test('Pausing before first picture cancels startup recovery until manual resume', () async {
-    final engines = <_PausedNoPictureEngine>[];
-    final session = PlaybackSession(url: 'https://example.invalid/live.ts',
-      isLive: true, settings: PlayerSettings(primaryEngine: PlayerEngineType.exo),
-      engineFactory: (type) {
-        final engine = _PausedNoPictureEngine(type, _xtream);
-        engines.add(engine);
-        return engine;
-      });
-    await session.start();
-    await session.togglePlay();
-    await Future<void>.delayed(const Duration(seconds: 9));
-    expect(engines.length, 1);
-    expect(session.value.isPlaying, isFalse);
-    await session.togglePlay();
-    expect(session.value.isPlaying, isTrue);
-    await Future<void>.delayed(const Duration(seconds: 12));
-    expect(engines.length, 2);
-    expect(_FakeEngine.maxAlive, 1);
-    session.dispose();
-    await session.released;
-  });
+  test(
+    'Pausing before first picture cancels startup recovery until manual resume',
+    () async {
+      final engines = <_PausedNoPictureEngine>[];
+      final session = PlaybackSession(
+        url: 'https://example.invalid/live.ts',
+        isLive: true,
+        settings: PlayerSettings(primaryEngine: PlayerEngineType.exo),
+        engineFactory: (type) {
+          final engine = _PausedNoPictureEngine(type, _xtream);
+          engines.add(engine);
+          return engine;
+        },
+      );
+      await session.start();
+      await session.togglePlay();
+      await Future<void>.delayed(const Duration(seconds: 9));
+      expect(engines.length, 1);
+      expect(session.value.isPlaying, isFalse);
+      await session.togglePlay();
+      expect(session.value.isPlaying, isTrue);
+      await Future<void>.delayed(const Duration(seconds: 12));
+      expect(engines.length, 2);
+      expect(_FakeEngine.maxAlive, 1);
+      session.dispose();
+      await session.released;
+    },
+  );
 
   test('stopStream closes the provider connection without dispose', () async {
     final engines = <_FakeEngine>[];
@@ -698,36 +731,41 @@ void main() {
     await session.released;
   });
 
-  test('con più connessioni il canale successivo parte prima del dispose', () async {
-    final gate = Completer<void>();
-    final engines = <_FakeEngine>[];
-    late PlaybackSession session;
-    session = PlaybackSession(
-      url: _xtream,
-      isLive: true,
-      maxConnections: 2,
-      settings: PlayerSettings(
-        primaryEngine: PlayerEngineType.exo,
-        autoFallback: false,
-      ),
-      engineFactory: (type) {
-        final engine = _FakeEngine(type, session.currentUrl, succeed: true);
-        engines.add(engine);
-        return engine;
-      },
-    );
-    await session.start();
-    engines.single.releaseGate = gate;
-    final pending = session.retune('http://tv.example.com/live/user/pass/43.ts');
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    expect(engines, hasLength(2));
-    expect(gate.isCompleted, isFalse);
-    expect(_FakeEngine.alive, 2);
-    gate.complete();
-    await pending.timeout(const Duration(seconds: 3));
-    session.dispose();
-    await session.released.timeout(const Duration(seconds: 3));
-  });
+  test(
+    'con più connessioni il canale successivo parte prima del dispose',
+    () async {
+      final gate = Completer<void>();
+      final engines = <_FakeEngine>[];
+      late PlaybackSession session;
+      session = PlaybackSession(
+        url: _xtream,
+        isLive: true,
+        maxConnections: 2,
+        settings: PlayerSettings(
+          primaryEngine: PlayerEngineType.exo,
+          autoFallback: false,
+        ),
+        engineFactory: (type) {
+          final engine = _FakeEngine(type, session.currentUrl, succeed: true);
+          engines.add(engine);
+          return engine;
+        },
+      );
+      await session.start();
+      engines.single.releaseGate = gate;
+      final pending = session.retune(
+        'http://tv.example.com/live/user/pass/43.ts',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(engines, hasLength(2));
+      expect(gate.isCompleted, isFalse);
+      expect(_FakeEngine.alive, 2);
+      gate.complete();
+      await pending.timeout(const Duration(seconds: 3));
+      session.dispose();
+      await session.released.timeout(const Duration(seconds: 3));
+    },
+  );
 
   test('con una sola connessione il successivo aspetta il rilascio', () async {
     final gate = Completer<void>();
@@ -749,7 +787,9 @@ void main() {
     );
     await session.start();
     engines.single.releaseGate = gate;
-    final pending = session.retune('http://tv.example.com/live/user/pass/43.ts');
+    final pending = session.retune(
+      'http://tv.example.com/live/user/pass/43.ts',
+    );
     await Future<void>.delayed(const Duration(milliseconds: 200));
     expect(engines, hasLength(1));
     gate.complete();
@@ -789,8 +829,7 @@ void main() {
 }
 
 class _StickyEngine extends _FakeEngine {
-  _StickyEngine(super.type, super.url)
-    : super(succeed: true);
+  _StickyEngine(super.type, super.url) : super(succeed: true);
 
   int reopens = 0;
 
@@ -811,16 +850,14 @@ class _FrameEngine extends _FakeEngine {
 }
 
 class _PausedNoPictureEngine extends _FakeEngine {
-  _PausedNoPictureEngine(super.type, super.url)
-      : super(succeed: true);
+  _PausedNoPictureEngine(super.type, super.url) : super(succeed: true);
   @override
   bool? get videoFrameRendered => false;
 }
 
 /// Opens fine and plays, but never draws a picture.
 class _NoPictureEngine extends _FakeEngine {
-  _NoPictureEngine(super.type, super.url)
-    : super(succeed: true);
+  _NoPictureEngine(super.type, super.url) : super(succeed: true);
 
   @override
   bool? get videoFrameRendered => false;

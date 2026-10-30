@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../widgets/apple_page_scaffold.dart';
+
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -99,10 +101,8 @@ class _OrderLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
     'ORDINE',
-    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-      color: AppColors.textMuted,
-      fontWeight: FontWeight.w700,
-    ),
+    style: Theme.of(context).textTheme.labelMedium
+        ?.copyWith(color: AppColors.textMuted, fontWeight: FontWeight.w700),
   );
 }
 

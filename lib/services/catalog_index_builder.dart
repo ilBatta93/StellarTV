@@ -38,10 +38,12 @@ CatalogIndexData buildCatalogIndex(
   List<Channel> animeItems, {
   (bool, bool) alreadyGrouped = (false, false),
 }) {
-  final series =
-      alreadyGrouped.$1 ? seriesItems : SeriesGrouping.catalog(seriesItems);
-  final anime =
-      alreadyGrouped.$2 ? animeItems : SeriesGrouping.catalog(animeItems);
+  final series = alreadyGrouped.$1
+      ? seriesItems
+      : SeriesGrouping.catalog(seriesItems);
+  final anime = alreadyGrouped.$2
+      ? animeItems
+      : SeriesGrouping.catalog(animeItems);
   final titles = <String, List<int>>{};
   void add(String raw, int code) {
     final key = catalogTitleKey(raw);
@@ -74,12 +76,13 @@ final _brackets = RegExp(r'\[[^\]]*\]|\([^)]*\)');
 final _nonWord = RegExp(r'[^a-z0-9à-ÿ]+');
 
 /// Title key shared by the playlist index and the TMDB lookups.
-String catalogTitleKey(String raw) => TmdbService.cleanTitle(raw)
-    .toLowerCase()
-    .replaceAll(_langPrefix, '')
-    .replaceAll(_brackets, ' ')
-    .replaceAll(_nonWord, ' ')
-    .trim();
+String catalogTitleKey(String raw) =>
+    TmdbService.cleanTitle(raw)
+        .toLowerCase()
+        .replaceAll(_langPrefix, '')
+        .replaceAll(_brackets, ' ')
+        .replaceAll(_nonWord, ' ')
+        .trim();
 
 /// One slice of a catalog snapshot. Only the fields the search needs travel
 /// to the background isolate: playback addresses stay on the UI heap.

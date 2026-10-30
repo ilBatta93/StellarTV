@@ -1,5 +1,6 @@
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/epg_program.dart';

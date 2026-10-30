@@ -21,7 +21,13 @@ ParsedTitle parseTitle(String raw) {
     RegExp(r'^\s*\[(IT|ITA|ENG|4K|UHD|HD)\]\s*', caseSensitive: false),
     '',
   );
-  t = t.replaceAll(RegExp(r'^\s*(?:NETFLIX|CINEMA|FILM|TOP|PRIME|IT|ITA|ENG)\s*[|:]\s+', caseSensitive: false), '');
+  t = t.replaceAll(
+    RegExp(
+      r'^\s*(?:NETFLIX|CINEMA|FILM|TOP|PRIME|IT|ITA|ENG)\s*[|:]\s+',
+      caseSensitive: false,
+    ),
+    '',
+  );
   t = t.replaceAll(RegExp(r'^\s*[A-Z]{2,3}\s*-\s+'), '');
   t = t.replaceAll(RegExp(r'[._]'), ' ');
   t = t.replaceAllMapped(RegExp(r'\[([^\]]*)\]|\(([^)]*)\)'), (m) {
@@ -47,7 +53,10 @@ ParsedTitle parseTitle(String raw) {
   final year = yearMatch?.group(1);
   if (yearMatch != null) t = t.substring(0, yearMatch.start).trim();
   // Remove date patterns like 17/10/2026 or 17-10-2026
-  t = t.replaceAll(RegExp(r'\b\d{1,2}[/_-]\d{1,2}[/_-]\d{4}\b', caseSensitive: false), '');
+  t = t.replaceAll(
+    RegExp(r'\b\d{1,2}[/_-]\d{1,2}[/_-]\d{4}\b', caseSensitive: false),
+    '',
+  );
   t = t
       .replaceAll(RegExp(r'\s*[|]\s*'), ' ')
       .replaceAll(RegExp(r'\s+[-–:]\s*$'), '')
@@ -92,14 +101,15 @@ String displayTitle(String raw) {
         '',
       )
       .replaceAllMapped(
-    RegExp(r'(?<=[A-Za-zÀ-ÿ0-9])[._](?=[A-Za-zÀ-ÿ0-9(\[])'),
-    (_) => ' ',
-  );
+        RegExp(r'(?<=[A-Za-zÀ-ÿ0-9])[._](?=[A-Za-zÀ-ÿ0-9(\[])'),
+        (_) => ' ',
+      );
   final traits = <String>[];
   for (final m in _notable.allMatches(dotted)) {
     final v = m.group(1)!.toUpperCase() == '3D'
         ? '3D'
-        : m.group(1)!
+        : m
+              .group(1)!
               .toLowerCase()
               .split(' ')
               .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
@@ -112,7 +122,8 @@ String displayTitle(String raw) {
 
   // Check if original raw had year in parentheses like (YYYY) or after a dot like .YYYY anywhere,
   // or as a technical tag preceded by ' - ' (e.g. Animals - 2025 HEVC).
-  final hasYearInParensOrDot = RegExp(r'\(\d{4}\)|\.\d{4}|\s-\s\d{4}\b').hasMatch(raw);
+  final hasYearInParensOrDot = RegExp(r'\(\d{4}\)|\.\d{4}|\s-\s\d{4}\b')
+      .hasMatch(raw);
 
   if (year != null) {
     // If year was in parentheses or after a dot, do NOT add it back (e.g. Cave.Diving.(2024) -> Cave Diving)
@@ -134,6 +145,7 @@ String displayTitle(String raw) {
 }
 
 /// Audiobook entries get a dedicated cover when the provider has none.
-bool isAudiobook(String name, String group) =>
-    RegExp(r'audio ?libr|audiobook', caseSensitive: false)
-        .hasMatch('$group $name');
+bool isAudiobook(String name, String group) => RegExp(
+  r'audio ?libr|audiobook',
+  caseSensitive: false,
+).hasMatch('$group $name');

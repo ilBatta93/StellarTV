@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stellar_tv/providers/epg_provider.dart';
 import 'package:stellar_tv/services/epg_downloader.dart';
@@ -13,21 +14,18 @@ String fixture() {
 }
 
 void main() {
-  test(
-    'XMLTV accepts colon offsets and rejects invalid dates and trailing garbage',
-    () {
-      expect(
-        parseXmltvTime('20261023021900 +02:00'),
-        DateTime.utc(2026, 10, 23, 0, 19).millisecondsSinceEpoch,
-      );
-      expect(
-        parseXmltvTime('20261023021900 +0200'),
-        parseXmltvTime('20261023021900 +02:00'),
-      );
-      expect(parseXmltvTime('20260231021900 +0200'), isNull);
-      expect(parseXmltvTime('20261023021900 +0200garbage'), isNull);
-    },
-  );
+  test('XMLTV accepts colon offsets and rejects invalid dates and trailing garbage', () {
+    expect(
+      parseXmltvTime('20261023021900 +02:00'),
+      DateTime.utc(2026, 10, 23, 0, 19).millisecondsSinceEpoch,
+    );
+    expect(
+      parseXmltvTime('20261023021900 +0200'),
+      parseXmltvTime('20261023021900 +02:00'),
+    );
+    expect(parseXmltvTime('20260231021900 +0200'), isNull);
+    expect(parseXmltvTime('20261023021900 +0200garbage'), isNull);
+  });
   test(
     'incremental XML keeps past six hours, quote variants, CDATA and entities',
     () async {
@@ -44,105 +42,105 @@ void main() {
       expect((parsed['n'] as Map)['c'], 'C & é');
     },
   );
-  test('a guide past the programme cap stays partial instead of failing', () async {
-    final parsed = await parseXmltvStream(
-      Stream.value(utf8.encode(fixture())),
-      DateTime.now(),
-      programmeCap: 1,
-    );
-    expect(parsed['d'], isTrue);
-    expect((parsed['p'] as Map)['c'], hasLength(1));
-    expect(((parsed['p'] as Map)['c'] as List).first[2], 'Past <title>');
+  test(
+    'a guide past the programme cap stays partial instead of failing',
+    () async {
+      final parsed = await parseXmltvStream(
+        Stream.value(utf8.encode(fixture())),
+        DateTime.now(),
+        programmeCap: 1,
+      );
+      expect(parsed['d'], isTrue);
+      expect((parsed['p'] as Map)['c'], hasLength(1));
+      expect(((parsed['p'] as Map)['c'] as List).first[2], 'Past <title>');
+    },
+  );
+  test('download handles redirect and gzip, stages cache and uses explicit headers', () async {
+    final directory = await Directory.systemTemp.createTemp('epg-check-');
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final headers = <String?>[];
+    server.listen((request) async {
+      headers.add(request.headers.value(HttpHeaders.userAgentHeader));
+      if (request.uri.path == '/redirect') {
+        request.response.statusCode = 302;
+        request.response.headers.set('location', '/guide');
+      } else {
+        request.response.headers.contentType = ContentType(
+          'application',
+          'xml',
+        );
+        request.response.headers.set('content-encoding', 'gzip');
+        request.response.add(gzip.encode(utf8.encode(fixture())));
+      }
+      await request.response.close();
+    });
+    EpgGuideSnapshot? data;
+    try {
+      final path = '${directory.path}/cache.pending';
+      final loaded = await EpgDownloadJob([
+        'http://127.0.0.1:${server.port}/redirect',
+      ], path).run();
+      data = loaded;
+      expect(loaded.programmeCount, 2);
+      expect(loaded.programmesOf('c'), hasLength(2));
+      expect(
+        File('$path${Platform.pathSeparator}index.json').existsSync(),
+        isTrue,
+      );
+      expect(headers.every((h) => h == 'StellarTV/1.0'), true);
+    } finally {
+      data?.archive?.close();
+      await server.close(force: true);
+      await directory.delete(recursive: true);
+    }
   });
-  test(
-    'download handles redirect and gzip, stages cache and uses explicit headers',
-    () async {
-      final directory = await Directory.systemTemp.createTemp('epg-check-');
-      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      final headers = <String?>[];
-      server.listen((request) async {
-        headers.add(request.headers.value(HttpHeaders.userAgentHeader));
-        if (request.uri.path == '/redirect') {
-          request.response.statusCode = 302;
-          request.response.headers.set('location', '/guide');
-        } else {
-          request.response.headers.contentType = ContentType(
-            'application',
-            'xml',
-          );
-          request.response.headers.set('content-encoding', 'gzip');
-          request.response.add(gzip.encode(utf8.encode(fixture())));
-        }
-        await request.response.close();
-      });
-      EpgGuideSnapshot? data;
-      try {
-        final path = '${directory.path}/cache.pending';
-        final loaded = await EpgDownloadJob([
-          'http://127.0.0.1:${server.port}/redirect',
-        ], path).run();
-        data = loaded;
-        expect(loaded.programmeCount, 2);
-        expect(loaded.programmesOf('c'), hasLength(2));
-        expect(File('$path${Platform.pathSeparator}index.json').existsSync(), isTrue);
-        expect(headers.every((h) => h == 'StellarTV/1.0'), true);
-      } finally {
-        data?.archive?.close();
-        await server.close(force: true);
-        await directory.delete(recursive: true);
-      }
-    },
-  );
-  test(
-    '403 fallback is bounded; 401 does not retry or expose credentials',
-    () async {
-      final directory = await Directory.systemTemp.createTemp('epg-check-');
-      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      var calls = 0;
-      var status = 403;
-      server.listen((request) async {
-        calls++;
-        request.response.statusCode = status;
-        request.response.write('secret response');
-        await request.response.close();
-      });
-      try {
-        final url =
-            'http://127.0.0.1:${server.port}/guide?username=private&password=secret';
-        await expectLater(
-          EpgDownloadJob([url], '${directory.path}/cache').run(),
-          throwsA(
-            isA<EpgDownloadException>().having(
-              (e) => e.message,
-              'message',
-              'Guida non disponibile (HTTP 403).',
-            ),
+  test('403 fallback is bounded; 401 does not retry or expose credentials', () async {
+    final directory = await Directory.systemTemp.createTemp('epg-check-');
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    var calls = 0;
+    var status = 403;
+    server.listen((request) async {
+      calls++;
+      request.response.statusCode = status;
+      request.response.write('secret response');
+      await request.response.close();
+    });
+    try {
+      final url =
+          'http://127.0.0.1:${server.port}/guide?username=private&password=secret';
+      await expectLater(
+        EpgDownloadJob([url], '${directory.path}/cache').run(),
+        throwsA(
+          isA<EpgDownloadException>().having(
+            (e) => e.message,
+            'message',
+            'Guida non disponibile (HTTP 403).',
           ),
-        );
-        expect(calls, 3);
-        status = 401;
-        calls = 0;
-        await expectLater(
-          EpgDownloadJob([url], '${directory.path}/cache').run(),
-          throwsA(
-            isA<EpgDownloadException>().having(
-              (e) => e.message,
-              'message',
-              'Guida non disponibile (HTTP 401).',
-            ),
+        ),
+      );
+      expect(calls, 3);
+      status = 401;
+      calls = 0;
+      await expectLater(
+        EpgDownloadJob([url], '${directory.path}/cache').run(),
+        throwsA(
+          isA<EpgDownloadException>().having(
+            (e) => e.message,
+            'message',
+            'Guida non disponibile (HTTP 401).',
           ),
-        );
-        expect(calls, 1);
-        expect(
-          friendlyEpgError(Exception(url)).message,
-          'La risposta non contiene una guida TV valida.',
-        );
-      } finally {
-        await server.close(force: true);
-        await directory.delete(recursive: true);
-      }
-    },
-  );
+        ),
+      );
+      expect(calls, 1);
+      expect(
+        friendlyEpgError(Exception(url)).message,
+        'La risposta non contiene una guida TV valida.',
+      );
+    } finally {
+      await server.close(force: true);
+      await directory.delete(recursive: true);
+    }
+  });
   test(
     'cancellation stops an in-flight guide without publishing a cache',
     () async {
@@ -196,14 +194,8 @@ void main() {
   });
 
   test('an empty guide does not replace programmes or count as fresh', () {
-    expect(
-      epgKeepsPreviousGuide(previousCount: 40, incomingCount: 0),
-      isTrue,
-    );
-    expect(
-      epgKeepsPreviousGuide(previousCount: 0, incomingCount: 0),
-      isFalse,
-    );
+    expect(epgKeepsPreviousGuide(previousCount: 40, incomingCount: 0), isTrue);
+    expect(epgKeepsPreviousGuide(previousCount: 0, incomingCount: 0), isFalse);
     expect(epgGuideIsFresh(0), isFalse);
     expect(epgGuideIsFresh(3), isTrue);
     final now = DateTime.utc(2026, 10, 26, 22);

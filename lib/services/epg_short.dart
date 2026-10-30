@@ -22,7 +22,11 @@ String epgListingText(Object? raw) {
     final decoded = utf8.decode(base64.decode(normalized));
     if (decoded.isEmpty) return text;
     final printable = decoded.runes.every(
-      (unit) => unit == 9 || unit == 10 || unit == 13 || (unit >= 32 && unit != 0xFFFD),
+      (unit) =>
+          unit == 9 ||
+          unit == 10 ||
+          unit == 13 ||
+          (unit >= 32 && unit != 0xFFFD),
     );
     return printable ? decoded : text;
   } catch (_) {
@@ -103,10 +107,14 @@ class EpgShortGuide {
       ..connectionTimeout = const Duration(seconds: 12)
       ..userAgent = 'StellarTV/1.0';
     try {
-      final request = await client.getUrl(uri).timeout(const Duration(seconds: 12));
+      final request = await client
+          .getUrl(uri)
+          .timeout(const Duration(seconds: 12));
       request.headers.set(HttpHeaders.acceptHeader, 'application/json, */*');
       request.headers.set(HttpHeaders.connectionHeader, 'close');
-      final response = await request.close().timeout(const Duration(seconds: 15));
+      final response = await request.close().timeout(
+        const Duration(seconds: 15),
+      );
       if (response.statusCode != 200) {
         await response.drain<void>().catchError((_) {});
         return const [];

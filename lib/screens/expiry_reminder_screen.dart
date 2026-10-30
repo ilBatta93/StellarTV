@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../widgets/apple_page_scaffold.dart';
+
 import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
@@ -54,8 +56,7 @@ class ExpiryReminderScreen extends StatelessWidget {
               ),
               SettingsSection(
                 title: 'Promemoria',
-                description:
-                    'Notifica sul dispositivo e avviso nella Home prima della scadenza.',
+                description: 'Notifica sul dispositivo e avviso nella Home prima della scadenza.',
                 children: [
                   SettingsSwitchTile(
                     icon: Icons.notifications_active_outlined,

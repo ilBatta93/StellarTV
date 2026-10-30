@@ -40,8 +40,7 @@ final _liveWord = RegExp(r'[^a-z0-9à-ÿ]+');
 
 /// Slots already in memory. Building the guide from these does not open titles.
 List<int> liveEntrySlots(Iterable<CatalogEntry> entries) => [
-  for (final entry in entries)
-    ?entry.shelfSlot,
+  for (final entry in entries) ?entry.shelfSlot,
 ];
 
 bool _nameHasTokens(String name, List<String> tokens) {
@@ -139,7 +138,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   Timer? _tick;
   Timer? _previewDelay;
 
-PlaybackSession? _preview;
+  PlaybackSession? _preview;
   Channel? _selectedChannel;
   EpgProgram? _selectedProgram;
   int _previewGeneration = 0;
@@ -147,7 +146,7 @@ PlaybackSession? _preview;
   late final AppProvider _app;
   late final EpgProvider _epg;
   bool _previewWaiting = false;
-    bool get _previewMustWait => livePreviewMustWait(
+  bool get _previewMustWait => livePreviewMustWait(
     guideReady: _epg.isReady,
     guideLoading: _epg.isLoading || _epg.refreshDeferred,
     catalogLoading: _app.isLoading || _app.catalogPreparing(ContentType.live),
@@ -290,51 +289,54 @@ PlaybackSession? _preview;
     if (mounted) setState(() {});
     final gen = _previewGeneration;
     final overlap = StreamSlotPolicy.instance.allowsOverlap;
-    _previewDelay = Timer(const Duration(milliseconds: _previewDelayMs), () async {
-      if (!mounted ||
-          !widget.active ||
-          ModalRoute.of(context)?.isCurrent != true) {
-        return;
-      }
-      final settings = await PlayerSettingsService().load(
-        scope: PlayerSettingsScope.liveTv,
-      );
-      if (!mounted ||
-          gen != _previewGeneration ||
-          !widget.active ||
-          ModalRoute.of(context)?.isCurrent != true) {
-        return;
-      }
-      if (_app.kidsMode && !_app.isKidsContent(channel)) return;
-      if (_previewMustWait) {
-        _previewWaiting = true;
-        return;
-      }
-      if (!overlap) await _releaseQueue;
-      if (!mounted ||
-          gen != _previewGeneration ||
-          !widget.active ||
-          ModalRoute.of(context)?.isCurrent != true) {
-        return;
-      }
-      if (_previewMustWait) {
-        _previewWaiting = true;
-        return;
-      }
-      final session = PlaybackSession(
-        url: channel.url,
-        isLive: true,
-        settings: settings,
-        previewMode: true,
-        previewFallback: true,
-      );
-      _app.setPlaybackActive(true);
-      setState(() => _preview = session);
-      final start = session.start();
-      try {
-        await start;
-      } catch (_) {}
-    });
+    _previewDelay = Timer(
+      const Duration(milliseconds: _previewDelayMs),
+      () async {
+        if (!mounted ||
+            !widget.active ||
+            ModalRoute.of(context)?.isCurrent != true) {
+          return;
+        }
+        final settings = await PlayerSettingsService().load(
+          scope: PlayerSettingsScope.liveTv,
+        );
+        if (!mounted ||
+            gen != _previewGeneration ||
+            !widget.active ||
+            ModalRoute.of(context)?.isCurrent != true) {
+          return;
+        }
+        if (_app.kidsMode && !_app.isKidsContent(channel)) return;
+        if (_previewMustWait) {
+          _previewWaiting = true;
+          return;
+        }
+        if (!overlap) await _releaseQueue;
+        if (!mounted ||
+            gen != _previewGeneration ||
+            !widget.active ||
+            ModalRoute.of(context)?.isCurrent != true) {
+          return;
+        }
+        if (_previewMustWait) {
+          _previewWaiting = true;
+          return;
+        }
+        final session = PlaybackSession(
+          url: channel.url,
+          isLive: true,
+          settings: settings,
+          previewMode: true,
+          previewFallback: true,
+        );
+        _app.setPlaybackActive(true);
+        setState(() => _preview = session);
+        final start = session.start();
+        try {
+          await start;
+        } catch (_) {}
+      },
+    );
   }
 
   Future<void> _watch(Channel channel) async {
@@ -943,7 +945,9 @@ PlaybackSession? _preview;
           if (channel.name.toLowerCase().contains(needle)) channel,
       ];
     }
-    if (channels is ShelfChannelList && query.length >= 2 && app.catalogIndexReady) {
+    if (channels is ShelfChannelList &&
+        query.length >= 2 &&
+        app.catalogIndexReady) {
       final named = app.matchingChannelIds(
         ContentType.live,
         query,
@@ -1135,11 +1139,11 @@ PlaybackSession? _preview;
                   ),
                 for (final group in groups)
                   if (group.entries.isNotEmpty)
-                  TvFilterOption(
-                    group.label,
-                    _category == group.label,
-                    () => setState(() => _category = group.label),
-                  ),
+                    TvFilterOption(
+                      group.label,
+                      _category == group.label,
+                      () => setState(() => _category = group.label),
+                    ),
               ],
             ),
             onSort: (value) => setState(() => _sort = value),
@@ -1324,8 +1328,7 @@ PlaybackSession? _preview;
           ),
           _watchedLabel: watched.length,
           for (final group in groups)
-            if (group.entries.isNotEmpty)
-              group.label: group.entries.length,
+            if (group.entries.isNotEmpty) group.label: group.entries.length,
         },
         selected: _category ?? 'Tutti',
         onSelected: (category) =>

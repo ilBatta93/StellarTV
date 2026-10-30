@@ -84,7 +84,8 @@ class SeriesGrouping {
 
   static ParsedEpisodeTitle parseTitle(String raw) {
     final name = raw.trim();
-    final match = _sxe.firstMatch(name) ??
+    final match =
+        _sxe.firstMatch(name) ??
         _sSpaceE.firstMatch(name) ??
         _nxn.firstMatch(name) ??
         _seasonWords.firstMatch(name);
@@ -111,7 +112,9 @@ class SeriesGrouping {
     if (seriesItems.isEmpty) return const [];
     final folders = seriesItems.where((c) => c.isSeriesFolder).toList();
     if (folders.isNotEmpty) {
-      folders.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      folders.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
       return folders;
     }
 
@@ -126,8 +129,8 @@ class SeriesGrouping {
       entries.sort(_compareEpisodes);
       final first = entries.first;
       final logo = entries
-              .map((e) => e.logo)
-              .firstWhere((l) => l.isNotEmpty, orElse: () => first.logo);
+          .map((e) => e.logo)
+          .firstWhere((l) => l.isNotEmpty, orElse: () => first.logo);
       result.add(
         first.copyWith(
           id: first.seriesKey ?? first.id,
@@ -148,13 +151,16 @@ class SeriesGrouping {
 
   static SeriesDetails detailsFromEpisodes(Channel series, List<Channel> all) {
     final key = series.seriesKey ?? series.id;
-    final episodes = all
-        .where((c) =>
-            c.type == ContentType.series &&
-            c.isPlayable &&
-            (c.seriesKey == key || c.id == series.id))
-        .toList()
-      ..sort(_compareEpisodes);
+    final episodes =
+        all
+            .where(
+              (c) =>
+                  c.type == ContentType.series &&
+                  c.isPlayable &&
+                  (c.seriesKey == key || c.id == series.id),
+            )
+            .toList()
+          ..sort(_compareEpisodes);
 
     if (episodes.isEmpty && series.isPlayable) {
       episodes.add(series);
@@ -165,7 +171,9 @@ class SeriesGrouping {
       final parsed = parseTitle(channel.name);
       final season = channel.season ?? parsed.season ?? 1;
       final number =
-          channel.episode ?? parsed.episode ?? (bySeason[season]?.length ?? 0) + 1;
+          channel.episode ??
+          parsed.episode ??
+          (bySeason[season]?.length ?? 0) + 1;
       final title = _episodeLabel(channel, parsed);
       (bySeason[season] ??= []).add(
         SeriesEpisode(
@@ -208,7 +216,9 @@ class SeriesGrouping {
   static String _episodeLabel(Channel channel, ParsedEpisodeTitle parsed) {
     if (channel.seriesName != null &&
         channel.name != channel.seriesName &&
-        !channel.name.toLowerCase().startsWith(channel.seriesName!.toLowerCase())) {
+        !channel.name.toLowerCase().startsWith(
+          channel.seriesName!.toLowerCase(),
+        )) {
       return channel.name;
     }
     var label = channel.name;
@@ -216,9 +226,10 @@ class SeriesGrouping {
         label.toLowerCase().startsWith(channel.seriesName!.toLowerCase())) {
       label = label.substring(channel.seriesName!.length);
     }
-    label = label.replaceFirst(
-        RegExp(r'^[\s\-–—:|·.]+'), '');
-    return label.isEmpty ? 'Episodio ${channel.episode ?? parsed.episode ?? ''}'.trim() : label;
+    label = label.replaceFirst(RegExp(r'^[\s\-–—:|·.]+'), '');
+    return label.isEmpty
+        ? 'Episodio ${channel.episode ?? parsed.episode ?? ''}'.trim()
+        : label;
   }
 
   static String _cleanSeriesName(String raw) {
@@ -228,8 +239,6 @@ class SeriesGrouping {
     return name.isEmpty ? raw.trim() : name;
   }
 
-  static String _normalize(String s) => s
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9à-ÿ]+'), ' ')
-      .trim();
+  static String _normalize(String s) =>
+      s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9à-ÿ]+'), ' ').trim();
 }

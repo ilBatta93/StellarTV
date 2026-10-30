@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+
 import '../widgets/phone_handoff_panel.dart';
 import '../providers/sync_provider.dart';
 import '../providers/history_provider.dart';
@@ -78,8 +79,7 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
     if (await context.read<SyncProvider>().hasCloudVault()) {
       if (mounted) {
         setState(() {
-          _status =
-              'La cassaforte esiste già: usa la tua chiave attuale. Una chiave nuova non aprirebbe i dati salvati.';
+          _status = 'La cassaforte esiste già: usa la tua chiave attuale. Una chiave nuova non aprirebbe i dati salvati.';
           _state = _VaultState.existing;
         });
       }
@@ -116,7 +116,7 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
         () => _status = pushed
             ? 'Salvataggio cifrato verificato. Sincronizzazione attiva; copie precedenti conservate.'
             : 'Chiave importata e dati ripristinati. Invio al cloud non riuscito, riprova più tardi'
-                '${sync.lastPushError == null ? '.' : ' (dettaglio: ${sync.lastPushError}).'}',
+                  '${sync.lastPushError == null ? '.' : ' (dettaglio: ${sync.lastPushError}).'}',
       );
     }
   });
@@ -217,9 +217,7 @@ class _PersonalVaultScreenState extends State<PersonalVaultScreen> {
               child: CheckboxListTile(
                 value: _saved,
                 onChanged: (v) => setState(() => _saved = v ?? false),
-                title: const Text(
-                  'Ho conservato la chiave in un posto sicuro',
-                ),
+                title: const Text('Ho conservato la chiave in un posto sicuro'),
               ),
             ),
             _action('Conferma e attiva', Icons.lock_outline, () {

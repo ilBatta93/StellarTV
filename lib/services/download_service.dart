@@ -36,28 +36,27 @@ class DownloadItem {
       total > 0 ? (received / total).clamp(0, 1).toDouble() : null;
 
   Map<String, dynamic> toJson() => {
-        'channel': channel.toMap(),
-        'status': status.name,
-        'received': received,
-        'total': total,
-        'error': error,
-        'path': path,
-        'addedAt': addedAt,
-      };
+    'channel': channel.toMap(),
+    'status': status.name,
+    'received': received,
+    'total': total,
+    'error': error,
+    'path': path,
+    'addedAt': addedAt,
+  };
 
   factory DownloadItem.fromJson(Map<String, dynamic> m) => DownloadItem(
-        channel:
-            Channel.fromMap(Map<String, dynamic>.from(m['channel'] as Map)),
-        path: m['path'] as String,
-        status: DownloadStatus.values.firstWhere(
-          (s) => s.name == m['status'],
-          orElse: () => DownloadStatus.paused,
-        ),
-        received: (m['received'] as num?)?.toInt() ?? 0,
-        total: (m['total'] as num?)?.toInt() ?? 0,
-        error: m['error'] as String?,
-        addedAt: (m['addedAt'] as num?)?.toInt() ?? 0,
-      );
+    channel: Channel.fromMap(Map<String, dynamic>.from(m['channel'] as Map)),
+    path: m['path'] as String,
+    status: DownloadStatus.values.firstWhere(
+      (s) => s.name == m['status'],
+      orElse: () => DownloadStatus.paused,
+    ),
+    received: (m['received'] as num?)?.toInt() ?? 0,
+    total: (m['total'] as num?)?.toInt() ?? 0,
+    error: m['error'] as String?,
+    addedAt: (m['addedAt'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// Offline copies of single films and episodes.
@@ -79,8 +78,8 @@ class DownloadService extends ChangeNotifier {
   http.Client? _client;
   DateTime _lastNotify = DateTime.fromMillisecondsSinceEpoch(0);
 
-  List<DownloadItem> get items => _items.values.toList()
-    ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+  List<DownloadItem> get items =>
+      _items.values.toList()..sort((a, b) => b.addedAt.compareTo(a.addedAt));
 
   DownloadItem? itemFor(String id) => _items[id];
 
@@ -233,10 +232,9 @@ class DownloadService extends ChangeNotifier {
 
   void _pump() {
     if (_activeId != null) return;
-    final next = _items.values
-        .where((i) => i.status == DownloadStatus.queued)
-        .toList()
-      ..sort((a, b) => a.addedAt.compareTo(b.addedAt));
+    final next =
+        _items.values.where((i) => i.status == DownloadStatus.queued).toList()
+          ..sort((a, b) => a.addedAt.compareTo(b.addedAt));
     if (next.isEmpty) return;
     unawaited(_run(next.first));
   }
@@ -311,8 +309,8 @@ class DownloadService extends ChangeNotifier {
       item.error = e is FileSystemException
           ? 'Spazio insufficiente o memoria non scrivibile'
           : e is HttpException
-              ? e.message
-              : 'Rete non disponibile';
+          ? e.message
+          : 'Rete non disponibile';
       _activeId = null;
       notifyListeners();
       await _save();

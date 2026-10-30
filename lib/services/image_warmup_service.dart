@@ -62,7 +62,8 @@ class ImageWarmupService {
     try {
       for (var i = 0; i < pending.length; i++) {
         await RemoteNavigation.idle();
-        if (RemoteNavigation.moving || PlaybackWorkPolicy.instance.blocksGuide) {
+        if (RemoteNavigation.moving ||
+            PlaybackWorkPolicy.instance.blocksGuide) {
           return;
         }
         final u = pending[i];

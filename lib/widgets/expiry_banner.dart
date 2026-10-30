@@ -23,8 +23,8 @@ class ExpiryBanner extends StatelessWidget {
         final text = left.isNegative
             ? 'Il tuo accesso è scaduto.'
             : left.inHours < 24
-                ? 'Il tuo accesso scade oggi.'
-                : 'Il tuo accesso scade tra ${(left.inHours / 24).ceil()} giorni.';
+            ? 'Il tuo accesso scade oggi.'
+            : 'Il tuo accesso scade tra ${(left.inHours / 24).ceil()} giorni.';
         final tv = DeviceTypeService.isTv;
         Widget button(String label, VoidCallback onTap) => tv
             ? TvFocusable(
@@ -32,10 +32,17 @@ class ExpiryBanner extends StatelessWidget {
                 focusedScale: 1,
                 borderRadius: BorderRadius.circular(10),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: Text(label,
-                      style: const TextStyle(
-                          color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               )
             : TextButton(onPressed: onTap, child: Text(label));
@@ -50,15 +57,29 @@ class ExpiryBanner extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.event_busy_rounded, color: AppColors.warning, size: 20),
+              const Icon(
+                Icons.event_busy_rounded,
+                color: AppColors.warning,
+                size: 20,
+              ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(text,
-                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 13)),
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                  ),
+                ),
               ),
-              button('Dettagli', () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const XtreamAccountScreen()),
-                  )),
+              button(
+                'Dettagli',
+                () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const XtreamAccountScreen(),
+                  ),
+                ),
+              ),
               button('Più tardi', svc.dismissBanner),
             ],
           ),

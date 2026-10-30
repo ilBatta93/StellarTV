@@ -16,36 +16,36 @@ class UserProfile {
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
-        id: json['id'].toString(),
-        name: (json['name'] ?? 'Profilo').toString(),
-        avatarKey: (json['avatar_key'] ?? 'rocket').toString(),
-        avatarColor: (json['avatar_color'] ?? 'arancio').toString(),
-        isKids: json['is_kids'] == true,
-        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
-            DateTime.now(),
-      );
+    id: json['id'].toString(),
+    name: (json['name'] ?? 'Profilo').toString(),
+    avatarKey: (json['avatar_key'] ?? 'rocket').toString(),
+    avatarColor: (json['avatar_color'] ?? 'arancio').toString(),
+    isKids: json['is_kids'] == true,
+    createdAt:
+        DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+        DateTime.now(),
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'avatar_key': avatarKey,
-        'avatar_color': avatarColor,
-        'is_kids': isKids,
-        'created_at': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'avatar_key': avatarKey,
+    'avatar_color': avatarColor,
+    'is_kids': isKids,
+    'created_at': createdAt.toIso8601String(),
+  };
 
   UserProfile copyWith({
     String? name,
     String? avatarKey,
     String? avatarColor,
     bool? isKids,
-  }) =>
-      UserProfile(
-        id: id,
-        name: name ?? this.name,
-        avatarKey: avatarKey ?? this.avatarKey,
-        avatarColor: avatarColor ?? this.avatarColor,
-        isKids: isKids ?? this.isKids,
-        createdAt: createdAt,
-      );
+  }) => UserProfile(
+    id: id,
+    name: name ?? this.name,
+    avatarKey: avatarKey ?? this.avatarKey,
+    avatarColor: avatarColor ?? this.avatarColor,
+    isKids: isKids ?? this.isKids,
+    createdAt: createdAt,
+  );
 }

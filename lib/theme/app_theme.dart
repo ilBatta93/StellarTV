@@ -33,6 +33,7 @@ class AppColors {
   static const qrInk = Color(0xFF000000);
 
   static const textPrimary = Color(0xFFFFFFFF);
+
   /// Light pill behind official brand logos.
   static const badgeLight = Color(0xFFF4F4F6);
   static const textSecondary = Color(0xFFAEAEB2);
@@ -250,9 +251,7 @@ class AppTheme {
           tapTargetSize: isTv ? null : MaterialTapTargetSize.padded,
           foregroundColor: const WidgetStatePropertyAll(AppColors.textPrimary),
           side: WidgetStateProperty.resolveWith(
-            (states) => isTv
-                ? focusRing(states, accent)
-                : BorderSide.none,
+            (states) => isTv ? focusRing(states, accent) : BorderSide.none,
           ),
         ),
       ),
@@ -265,9 +264,7 @@ class AppTheme {
               tapTargetSize: isTv ? null : MaterialTapTargetSize.padded,
             ).copyWith(
               side: WidgetStateProperty.resolveWith(
-                (states) => isTv
-                    ? focusRing(states, accent)
-                    : BorderSide.none,
+                (states) => isTv ? focusRing(states, accent) : BorderSide.none,
               ),
             ),
       ),

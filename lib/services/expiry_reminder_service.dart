@@ -25,15 +25,21 @@ class ExpiryReminderSettings {
     this.hour = 10,
   });
 
-  ExpiryReminderSettings copyWith({bool? enabled, Set<int>? thresholds, int? hour}) =>
-      ExpiryReminderSettings(
-        enabled: enabled ?? this.enabled,
-        thresholds: thresholds ?? this.thresholds,
-        hour: hour ?? this.hour,
-      );
+  ExpiryReminderSettings copyWith({
+    bool? enabled,
+    Set<int>? thresholds,
+    int? hour,
+  }) => ExpiryReminderSettings(
+    enabled: enabled ?? this.enabled,
+    thresholds: thresholds ?? this.thresholds,
+    hour: hour ?? this.hour,
+  );
 
-  Map<String, dynamic> toJson() =>
-      {'enabled': enabled, 'days': (thresholds.toList()..sort()), 'hour': hour};
+  Map<String, dynamic> toJson() => {
+    'enabled': enabled,
+    'days': (thresholds.toList()..sort()),
+    'hour': hour,
+  };
 
   factory ExpiryReminderSettings.fromJson(Map<String, dynamic> j) {
     final days = (j['days'] as List?)
@@ -59,10 +65,14 @@ class ExpiryPlan {
     if (!s.enabled) return const {};
     final out = <int, DateTime>{};
     for (final d in s.thresholds) {
-      final day = DateTime(expiry.year, expiry.month, expiry.day)
-          .subtract(Duration(days: d));
+      final day = DateTime(
+        expiry.year,
+        expiry.month,
+        expiry.day,
+      ).subtract(Duration(days: d));
       var when = DateTime(day.year, day.month, day.day, s.hour);
-      if (when.isAfter(expiry)) when = expiry.subtract(const Duration(hours: 1));
+      if (when.isAfter(expiry))
+        when = expiry.subtract(const Duration(hours: 1));
       if (when.isAfter(now)) out[d] = when;
     }
     return out;
@@ -136,7 +146,9 @@ class ExpiryReminderService extends ChangeNotifier {
       final raw = prefs.getString(settingsKey);
       _settings = raw == null
           ? const ExpiryReminderSettings()
-          : ExpiryReminderSettings.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+          : ExpiryReminderSettings.fromJson(
+              jsonDecode(raw) as Map<String, dynamic>,
+            );
     } catch (_) {}
     try {
       final raw = prefs.getString(_stateKey);
@@ -146,7 +158,9 @@ class ExpiryReminderService extends ChangeNotifier {
         _expiry = ExpiryPlan.parseExpiry(j['exp']);
         _knownUnlimited = j['unlimited'] as bool? ?? false;
         final last = j['last'] as int?;
-        _lastCheck = last == null ? null : DateTime.fromMillisecondsSinceEpoch(last);
+        _lastCheck = last == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(last);
         _dismissed.addAll((j['dismissed'] as List? ?? const []).cast<String>());
       }
     } catch (_) {}
@@ -191,7 +205,10 @@ class ExpiryReminderService extends ChangeNotifier {
   }
 
   /// Feeds an already-fetched `player_api.php` answer (account screen).
-  Future<void> applyAccountInfo(String account, Map<String, dynamic> info) async {
+  Future<void> applyAccountInfo(
+    String account,
+    Map<String, dynamic> info,
+  ) async {
     final user = info['user_info'];
     if (user is! Map) return;
     await StreamSlotPolicy.instance.remember(user['max_connections']);
@@ -211,7 +228,10 @@ class ExpiryReminderService extends ChangeNotifier {
 
   /// Refreshes the expiry from the provider at most every 12 hours unless
   /// [force]; never throws (no network ⇒ keeps the saved date).
-  Future<void> check(Map<String, String>? credentials, {bool force = false}) async {
+  Future<void> check(
+    Map<String, String>? credentials, {
+    bool force = false,
+  }) async {
     if (credentials == null) {
       if (_expiry != null || _account.isNotEmpty) {
         _expiry = null;
@@ -224,7 +244,8 @@ class ExpiryReminderService extends ChangeNotifier {
       return;
     }
     final account = '${credentials['server']}|${credentials['username']}';
-    final fresh = account == _account &&
+    final fresh =
+        account == _account &&
         _lastCheck != null &&
         DateTime.now().difference(_lastCheck!) < const Duration(hours: 12);
     if ((fresh && !force) || _checking) {
@@ -273,11 +294,13 @@ class ExpiryReminderService extends ChangeNotifier {
     try {
       await _plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.requestNotificationsPermission();
       await _plugin
           .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
+            IOSFlutterLocalNotificationsPlugin
+          >()
           ?.requestPermissions(alert: true, sound: true);
     } catch (_) {}
   }

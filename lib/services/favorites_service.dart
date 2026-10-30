@@ -1,5 +1,7 @@
 import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/channel.dart';
 import '../models/tmdb_item.dart';
 import 'personal_vault.dart';
@@ -12,10 +14,7 @@ class FavoritesService {
 
   static Future<T> _serialized<T>(Future<T> Function() action) {
     final next = _eventQueue.then((_) => action());
-    _eventQueue = next.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace _) {},
-    );
+    _eventQueue = next.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return next;
   }
 

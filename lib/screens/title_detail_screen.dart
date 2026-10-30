@@ -108,7 +108,10 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
         CatalogRatingService.instance.remember(resolvedChannel, item);
       }
       if (item != null && item.isMovie) {
-        SegmentLibrary.instance.prepareMovie(tmdbId: item.id, title: item.title);
+        SegmentLibrary.instance.prepareMovie(
+          tmdbId: item.id,
+          title: item.title,
+        );
       }
       final similar = item == null
           ? <TmdbItem>[]
@@ -147,7 +150,10 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
     final scroll = CustomScrollView(
       // TV: keep every section built so the remote can always move back
       // up to "Guarda ora", even after scrolling far down.
-      scrollCacheExtent: DeviceTypeService.isTv ? ScrollCacheExtent.pixels(1200) : null, slivers: [
+      scrollCacheExtent: DeviceTypeService.isTv
+          ? ScrollCacheExtent.pixels(1200)
+          : null,
+      slivers: [
         if (DeviceTypeService.isTv)
           SliverToBoxAdapter(
             child: SizedBox(height: TvDetailBackdrop.topSpace(context)),

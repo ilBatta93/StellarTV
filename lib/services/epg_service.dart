@@ -6,6 +6,7 @@ import 'epg_archive.dart';
 import 'epg_downloader.dart';
 export '../models/epg_data.dart';
 export 'epg_downloader.dart' show EpgRefreshDeferred, EpgDownloadException;
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:crypto/crypto.dart';

@@ -10,8 +10,10 @@ void main() {
       final old = File('${dir.path}${Platform.pathSeparator}old')
         ..writeAsStringSync('12345');
       old.setLastModifiedSync(DateTime.now().subtract(const Duration(days: 2)));
-      File('${dir.path}${Platform.pathSeparator}young').writeAsStringSync('abc');
-      File('${dir.path}${Platform.pathSeparator}cache.db').writeAsStringSync('database');
+      File('${dir.path}${Platform.pathSeparator}young')
+          .writeAsStringSync('abc');
+      File('${dir.path}${Platform.pathSeparator}cache.db')
+          .writeAsStringSync('database');
       final removed = trimCacheDirectory(dir.path, 4);
       expect(removed, 5);
       expect(old.existsSync(), isFalse);

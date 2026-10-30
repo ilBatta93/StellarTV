@@ -42,7 +42,8 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   Timer? _hudTimer;
 
   PlaybackSession get _session => widget.session;
-  bool get _canSeek => !_session.isLive && _session.value.duration > Duration.zero;
+  bool get _canSeek =>
+      !_session.isLive && _session.value.duration > Duration.zero;
 
   @override
   void dispose() {
@@ -161,10 +162,13 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
         children: [
           if (_flash != null)
             Align(
-              alignment:
-                  _flashLeft ? const Alignment(-0.6, 0) : const Alignment(0.6, 0),
+              alignment: _flashLeft
+                  ? const Alignment(-0.6, 0)
+                  : const Alignment(0.6, 0),
               child: _Hud(
-                icon: _flashLeft ? Icons.fast_rewind_rounded : Icons.fast_forward_rounded,
+                icon: _flashLeft
+                    ? Icons.fast_rewind_rounded
+                    : Icons.fast_forward_rounded,
                 label: _flash!,
               ),
             ),
@@ -187,8 +191,8 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
           icon: isBrightness
               ? Icons.brightness_6_rounded
               : _level == 0
-                  ? Icons.volume_off_rounded
-                  : Icons.volume_up_rounded,
+              ? Icons.volume_off_rounded
+              : Icons.volume_up_rounded,
           label: '${(_level * 100).round()}%',
           progress: _level,
         );
@@ -196,8 +200,11 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
         final diff = _seekTarget - _seekOrigin;
         final sign = diff.isNegative ? '-' : '+';
         return _Hud(
-          icon: diff.isNegative ? Icons.fast_rewind_rounded : Icons.fast_forward_rounded,
-          label: '$sign${formatDuration(diff.abs())}  ·  ${formatDuration(_seekTarget)}',
+          icon: diff.isNegative
+              ? Icons.fast_rewind_rounded
+              : Icons.fast_forward_rounded,
+          label:
+              '$sign${formatDuration(diff.abs())}  ·  ${formatDuration(_seekTarget)}',
         );
       case _DragKind.none:
         return const SizedBox.shrink();
@@ -225,9 +232,14 @@ class _Hud extends StatelessWidget {
         children: [
           Icon(icon, color: Colors.white, size: 28),
           const SizedBox(height: 8),
-          Text(label,
-              style: const TextStyle(
-                  color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           if (progress != null) ...[
             const SizedBox(height: 8),
             SizedBox(

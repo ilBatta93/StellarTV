@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../widgets/apple_page_scaffold.dart';
+
 import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
@@ -31,7 +33,9 @@ class _XtreamAccountScreenState extends State<XtreamAccountScreen> {
   Future<Map<String, dynamic>> _load() {
     final c = context.read<AppProvider>().xtreamCredentials;
     if (c == null) {
-      return Future.error(Exception('Nessuna configurazione locale collegata.'));
+      return Future.error(
+        Exception('Nessuna configurazione locale collegata.'),
+      );
     }
     return XtreamService()
         .accountInfo(
@@ -59,9 +63,8 @@ class _XtreamAccountScreenState extends State<XtreamAccountScreen> {
   static String? _daysLeft(Object? unix) {
     final n = int.tryParse('${unix ?? ''}');
     if (n == null || n <= 0) return null;
-    final left = DateTime.fromMillisecondsSinceEpoch(
-      n * 1000,
-    ).difference(DateTime.now());
+    final left = DateTime.fromMillisecondsSinceEpoch(n * 1000)
+        .difference(DateTime.now());
     if (left.isNegative) return 'Scaduto';
     return left.inDays == 0 ? 'Scade oggi' : 'Mancano ${left.inDays} giorni';
   }

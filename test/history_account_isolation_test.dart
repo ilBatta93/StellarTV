@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -41,16 +42,32 @@ void main() {
       await client.dispose();
     },
   );
-  test('account exit drains pending favorite writes before clearing local data', () async {
-    SharedPreferences.setMockInitialValues({});
-    final client = SupabaseClient('https://example.test', 'test', authOptions: const AuthClientOptions(autoRefreshToken: false));
-    final service = FavoritesService();
-    final pending = service.toggleFavorite(Channel(id: 'a', name: 'Sample', url: '', logo: '', group: '', type: ContentType.movie));
-    await SyncService(client).signOut();
-    await pending;
-    expect(await service.getFavoriteIds(), isEmpty);
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.containsKey('vault_favorite_events_v1'), false);
-    await client.dispose();
-  });
+  test(
+    'account exit drains pending favorite writes before clearing local data',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final client = SupabaseClient(
+        'https://example.test',
+        'test',
+        authOptions: const AuthClientOptions(autoRefreshToken: false),
+      );
+      final service = FavoritesService();
+      final pending = service.toggleFavorite(
+        Channel(
+          id: 'a',
+          name: 'Sample',
+          url: '',
+          logo: '',
+          group: '',
+          type: ContentType.movie,
+        ),
+      );
+      await SyncService(client).signOut();
+      await pending;
+      expect(await service.getFavoriteIds(), isEmpty);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey('vault_favorite_events_v1'), false);
+      await client.dispose();
+    },
+  );
 }

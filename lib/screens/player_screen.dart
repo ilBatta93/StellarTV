@@ -172,12 +172,12 @@ class _PlayerScreenState extends State<PlayerScreen>
   static int _activePlayers = 0;
   late final AppProvider _app;
 
-@override
+  @override
   void initState() {
     super.initState();
     _activePlayers++;
     _app = context.read<AppProvider>()..setPlaybackActive(true);
-   WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addObserver(this);
     _history = context.read<HistoryProvider>();
     // Imposta UI immersive sticky per fullscreen immediato su TV.
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -942,9 +942,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   void _openTitle() {
     final navigator = Navigator.of(context);
     final app = context.read<AppProvider>();
-    final key = _isEpisode
-        ? (_channel.seriesKey ?? _channel.id)
-        : _channel.id;
+    final key = _isEpisode ? (_channel.seriesKey ?? _channel.id) : _channel.id;
     // The title page is still open below the player: just go back to it,
     // without rebuilding it (and reloading its episodes and pictures).
     final name = titleRouteName(key);
@@ -976,8 +974,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   bool get _isEpisode =>
-      _channel.type == ContentType.series ||
-      _channel.type == ContentType.anime;
+      _channel.type == ContentType.series || _channel.type == ContentType.anime;
 
   /// Finds the next episode: from the list passed by the series page, or by
   /// loading the series (e.g. when resuming from "Continua a guardare").
@@ -1348,9 +1345,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   Channel? _adjacentLiveChannel(int offset) {
     final channels = _liveChannels;
-    final index = channels.indexWhere(
-      (channel) => channel.id == _channel.id,
-    );
+    final index = channels.indexWhere((channel) => channel.id == _channel.id);
     final target = index + offset;
     if (index < 0 || target < 0 || target >= channels.length) return null;
     return channels[target];
@@ -1923,13 +1918,9 @@ class _PlayerScreenState extends State<PlayerScreen>
       if (DeviceTypeService.isTv && _tvInfoVisible && !_controlsVisible)
         TvPlaybackInfo(
           title: _episodeInfoTitle(),
-          episodeMetadata: EpisodeMetadataService.instance.forChannel(
-            _channel,
-          ),
+          episodeMetadata: EpisodeMetadataService.instance.forChannel(_channel),
           plot: episodeSynopsis(
-            EpisodeMetadataService.instance
-                .forChannel(_channel)
-                ?.overview,
+            EpisodeMetadataService.instance.forChannel(_channel)?.overview,
             _channel.plot,
             _app.seriesFolderFor(_channel.seriesKey ?? '')?.plot,
           ),
@@ -1952,10 +1943,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                   selectedColumn: _tvCol,
                   title: _channel.name,
                   subtitle: _isLive
-                      ? (context
-                                .watch<EpgProvider>()
-                                .nowFor(_channel)
-                                ?.title ??
+                      ? (context.watch<EpgProvider>().nowFor(_channel)?.title ??
                             _channel.group)
                       : _channel.group,
                   isLive: _isLive,
@@ -1985,10 +1973,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 playFocusNode: null,
                 title: _channel.name,
                 subtitle: _isLive
-                    ? (context
-                              .watch<EpgProvider>()
-                              .nowFor(_channel)
-                              ?.title ??
+                    ? (context.watch<EpgProvider>().nowFor(_channel)?.title ??
                           _channel.group)
                     : _channel.group,
                 locked: _locked,

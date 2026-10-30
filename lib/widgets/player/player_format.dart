@@ -5,8 +5,9 @@ String formatDuration(Duration d) {
   return h > 0 ? '$h:$m:$s' : '$m:$s';
 }
 
-String formatSpeed(double speed) =>
-    speed == 1.0 ? 'Normale' : '${speed.toString().replaceAll(RegExp(r'\.0$'), '')}x';
+String formatSpeed(double speed) => speed == 1.0
+    ? 'Normale'
+    : '${speed.toString().replaceAll(RegExp(r'\.0$'), '')}x';
 
 String formatDelay(Duration d) {
   final ms = d.inMilliseconds;

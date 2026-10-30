@@ -53,7 +53,8 @@ class SegmentSnapshot {
       final type = '${item['type'] ?? ''}';
       final start = item['start'];
       final end = item['end'];
-      if (type.isEmpty || start is! int || end is! int || end <= start) continue;
+      if (type.isEmpty || start is! int || end is! int || end <= start)
+        continue;
       all.add(
         SkipSegment(
           type,
@@ -132,14 +133,18 @@ class SegmentLibrary {
     if (imdb == null) return;
     for (final episode in episodes.take(40)) {
       if (episode < 1 || PlaybackWorkPolicy.instance.blocksGuide) return;
-      if (_cached(imdb, movie: false, season: season, episode: episode) != null) {
+      if (_cached(imdb, movie: false, season: season, episode: episode) !=
+          null) {
         continue;
       }
       await _resolve(imdb, movie: false, season: season, episode: episode);
     }
   }
 
-  Future<void> prepareMovie({required int tmdbId, required String title}) async {
+  Future<void> prepareMovie({
+    required int tmdbId,
+    required String title,
+  }) async {
     if (TitleMetadataStore.disabled) return;
     await load();
     if (PlaybackWorkPolicy.instance.blocksGuide) return;
@@ -273,16 +278,16 @@ class SegmentLibrary {
       season: season,
       episode: episode,
     );
-    final saved = _cached(
-      imdb,
-      movie: movie,
-      season: season,
-      episode: episode,
-    );
+    final saved = _cached(imdb, movie: movie, season: season, episode: episode);
     if (saved != null) return Future.value(saved);
     return _pending.putIfAbsent(key, () async {
       try {
-        final body = await _fetch(imdb, movie: movie, season: season, episode: episode);
+        final body = await _fetch(
+          imdb,
+          movie: movie,
+          season: season,
+          episode: episode,
+        );
         if (body == null) return null;
         final segments = IntroDbService.parse(body);
         store.put(
@@ -309,16 +314,14 @@ class SegmentLibrary {
       if (!movie && episode != null) 'episode': '$episode',
     };
     final shared = await _get(
-      Uri.parse('${SupabaseConfig.apiBase}/segments').replace(
-        queryParameters: query,
-      ),
+      Uri.parse('${SupabaseConfig.apiBase}/segments')
+          .replace(queryParameters: query),
       headers: _authHeaders(),
     );
     if (shared != null) return shared;
     return _get(
-      Uri.parse('https://api.introdb.app/segments').replace(
-        queryParameters: query,
-      ),
+      Uri.parse('https://api.introdb.app/segments')
+          .replace(queryParameters: query),
     );
   }
 
@@ -333,9 +336,9 @@ class SegmentLibrary {
 
   Future<Object?> _get(Uri uri, {Map<String, String>? headers}) async {
     try {
-      final res = await _http.get(uri, headers: headers).timeout(
-        const Duration(seconds: 8),
-      );
+      final res = await _http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return null;
       final body = jsonDecode(res.body);
       return body is Map ? body : null;

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -15,36 +16,35 @@ class LogoTmdb extends TmdbService {
 }
 
 void main() {
-  testWidgets(
-    'Title text stays visible until a logo replaces it',
-    (tester) async {
-      final tmdb = LogoTmdb();
-      final item = TmdbItem(
-        id: 1,
-        mediaType: 'movie',
-        title: 'Titolo',
-        overview: '',
-        posterPath: null,
-        backdropPath: null,
-        voteAverage: 0,
-        popularity: 0,
-        releaseDate: '2026-01-01',
-      );
-      await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider(create: (_) => DiscoverProvider(tmdb)),
-            ChangeNotifierProvider(create: (_) => UiSettings()),
-          ],
-          child: MaterialApp(
-            home: Scaffold(body: HomeTitleArt(item: item)),
-          ),
+  testWidgets('Title text stays visible until a logo replaces it', (
+    tester,
+  ) async {
+    final tmdb = LogoTmdb();
+    final item = TmdbItem(
+      id: 1,
+      mediaType: 'movie',
+      title: 'Titolo',
+      overview: '',
+      posterPath: null,
+      backdropPath: null,
+      voteAverage: 0,
+      popularity: 0,
+      releaseDate: '2026-01-01',
+    );
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => DiscoverProvider(tmdb)),
+          ChangeNotifierProvider(create: (_) => UiSettings()),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: HomeTitleArt(item: item)),
         ),
-      );
-      expect(find.text('Titolo'), findsOneWidget);
-      tmdb.result.complete(null);
-      await tester.pump();
-      expect(find.byType(Text), findsOneWidget);
-    },
-  );
+      ),
+    );
+    expect(find.text('Titolo'), findsOneWidget);
+    tmdb.result.complete(null);
+    await tester.pump();
+    expect(find.byType(Text), findsOneWidget);
+  });
 }

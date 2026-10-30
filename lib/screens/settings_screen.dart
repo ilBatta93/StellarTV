@@ -511,11 +511,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _phoneDetail = false;
 
   static const _categories = <(IconData, String, String)>[
-    (Icons.person_rounded, 'Account e profili', 'Accesso, sincronizzazione, profili e connessione'),
-    (Icons.palette_rounded, 'Aspetto e Home', 'Colori, testo, locandine, banner e cataloghi'),
-    (Icons.play_circle_fill_rounded, 'Riproduzione', 'Player, sottotitoli, MultiView e cronologia'),
-    (Icons.video_library_rounded, 'Contenuti', 'Categorie, aggiornamento e guida TV'),
-    (Icons.monitor_heart_rounded, 'Diagnostica', 'Rapporti di dirette, film, serie e fluidità'),
+    (
+      Icons.person_rounded,
+      'Account e profili',
+      'Accesso, sincronizzazione, profili e connessione',
+    ),
+    (
+      Icons.palette_rounded,
+      'Aspetto e Home',
+      'Colori, testo, locandine, banner e cataloghi',
+    ),
+    (
+      Icons.play_circle_fill_rounded,
+      'Riproduzione',
+      'Player, sottotitoli, MultiView e cronologia',
+    ),
+    (
+      Icons.video_library_rounded,
+      'Contenuti',
+      'Categorie, aggiornamento e guida TV',
+    ),
+    (
+      Icons.monitor_heart_rounded,
+      'Diagnostica',
+      'Rapporti di dirette, film, serie e fluidità',
+    ),
     (Icons.info_rounded, 'Informazioni', 'Versione e aggiornamenti'),
   ];
 
@@ -523,86 +543,81 @@ class _SettingsScreenState extends State<SettingsScreen> {
     0 => [
       SettingsSection(
         title: 'Account',
-        description: 'Profili e dati personali protetti tra dispositivi autorizzati.',
+        description:
+            'Profili e dati personali protetti tra dispositivi autorizzati.',
         children: [
-              SettingsValueTile(
-                icon: Icons.cloud_sync_outlined,
-                title: 'Backup e sincronizzazione',
-                subtitle: 'Email, sincronizzazione e uscita dall\'account',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SyncSettingsScreen()),
-                ),
-              ),
+          SettingsValueTile(
+            icon: Icons.cloud_sync_outlined,
+            title: 'Backup e sincronizzazione',
+            subtitle: 'Email, sincronizzazione e uscita dall\'account',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SyncSettingsScreen()),
+            ),
+          ),
         ],
       ),
       SettingsSection(
         title: 'Profili',
         children: [
-              SettingsValueTile(
-                icon: Icons.people_outline_rounded,
-                title: 'Gestisci profili',
-                subtitle:
-                    'Cambia profilo, creane uno nuovo o imposta il predefinito',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const ProfilePickerScreen(),
-                  ),
-                ),
-              ),
+          SettingsValueTile(
+            icon: Icons.people_outline_rounded,
+            title: 'Gestisci profili',
+            subtitle:
+                'Cambia profilo, creane uno nuovo o imposta il predefinito',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ProfilePickerScreen()),
+            ),
+          ),
         ],
       ),
       SettingsSection(
         title: 'Connessione',
         children: [
-              SettingsValueTile(
-                icon: Icons.login_rounded,
-                title: 'Metodo di connessione',
-                value: _connectionLabel(provider),
+          SettingsValueTile(
+            icon: Icons.login_rounded,
+            title: 'Metodo di connessione',
+            value: _connectionLabel(provider),
+          ),
+          if (provider.authMethod.name == 'xtream')
+            SettingsValueTile(
+              icon: Icons.edit_outlined,
+              title: 'Modifica connessione locale',
+              subtitle: 'Server URL, nome utente e password',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const XtreamEditScreen()),
               ),
-              if (provider.authMethod.name == 'xtream')
-                SettingsValueTile(
-                  icon: Icons.edit_outlined,
-                  title: 'Modifica connessione locale',
-                  subtitle: 'Server URL, nome utente e password',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const XtreamEditScreen()),
-                  ),
-                ),
-              if (provider.authMethod.name == 'xtream')
-                SettingsValueTile(
-                  icon: Icons.badge_outlined,
-                  title: 'Connessione locale',
-                  subtitle: 'Scadenza, stato, connessioni e dati della sorgente',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const XtreamAccountScreen(),
-                    ),
-                  ),
-                ),
-              if (provider.authMethod.name == 'xtream')
-                SettingsValueTile(
-                  icon: Icons.notifications_active_outlined,
-                  title: 'Promemoria scadenza',
-                  subtitle: 'Avvisi prima della scadenza dell\'accesso',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ExpiryReminderScreen(),
-                    ),
-                  ),
-                ),
-              if (provider.allChannels.isNotEmpty)
-                SettingsValueTile(
-                  icon: Icons.tv_rounded,
-                  title: 'Contenuti caricati',
-                  value: '${provider.allChannels.length}',
-                ),
-              if (provider.isAuthenticated)
-                SettingsValueTile(
-                  icon: Icons.logout_rounded,
-                  title: 'Disconnetti',
-                  color: AppColors.error,
-                  onTap: () => _handleLogout(provider),
-                ),
+            ),
+          if (provider.authMethod.name == 'xtream')
+            SettingsValueTile(
+              icon: Icons.badge_outlined,
+              title: 'Connessione locale',
+              subtitle: 'Scadenza, stato, connessioni e dati della sorgente',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const XtreamAccountScreen()),
+              ),
+            ),
+          if (provider.authMethod.name == 'xtream')
+            SettingsValueTile(
+              icon: Icons.notifications_active_outlined,
+              title: 'Promemoria scadenza',
+              subtitle: 'Avvisi prima della scadenza dell\'accesso',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ExpiryReminderScreen()),
+              ),
+            ),
+          if (provider.allChannels.isNotEmpty)
+            SettingsValueTile(
+              icon: Icons.tv_rounded,
+              title: 'Contenuti caricati',
+              value: '${provider.allChannels.length}',
+            ),
+          if (provider.isAuthenticated)
+            SettingsValueTile(
+              icon: Icons.logout_rounded,
+              title: 'Disconnetti',
+              color: AppColors.error,
+              onTap: () => _handleLogout(provider),
+            ),
         ],
       ),
     ],
@@ -611,36 +626,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SettingsSection(
         title: 'Riproduzione',
         children: [
-              SettingsValueTile(
-                icon: Icons.dashboard_customize_outlined,
-                title: 'MultiView',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const MultiViewSettingsScreen(),
-                  ),
-                ),
+          SettingsValueTile(
+            icon: Icons.dashboard_customize_outlined,
+            title: 'MultiView',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const MultiViewSettingsScreen(),
               ),
-              SettingsValueTile(
-                icon: Icons.play_circle_outline_rounded,
-                title: 'Player video',
-                subtitle: 'Motori, audio, sottotitoli, buffer, HDR e Picture-in-Picture',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const PlayerSettingsScreen(),
-                  ),
-                ),
-              ),
-              SettingsValueTile(
-                icon: Icons.history_rounded,
-                title: 'Cronologia',
-                subtitle:
-                    'Gestisci i contenuti visti e le posizioni di ripresa',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const HistorySettingsScreen(),
-                  ),
-                ),
-              ),
+            ),
+          ),
+          SettingsValueTile(
+            icon: Icons.play_circle_outline_rounded,
+            title: 'Player video',
+            subtitle:
+                'Motori, audio, sottotitoli, buffer, HDR e Picture-in-Picture',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PlayerSettingsScreen()),
+            ),
+          ),
+          SettingsValueTile(
+            icon: Icons.history_rounded,
+            title: 'Cronologia',
+            subtitle: 'Gestisci i contenuti visti e le posizioni di ripresa',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const HistorySettingsScreen()),
+            ),
+          ),
         ],
       ),
     ],
@@ -648,48 +659,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SettingsSection(
         title: 'Categorie',
         children: [
-              SettingsValueTile(
-                icon: Icons.reorder_rounded,
-                title: 'Categorie personali e ordine',
-                subtitle: 'Crea le tue categorie e riordina quelle della playlist',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const CategoryManagerScreen(),
-                  ),
-                ),
-              ),
-              SettingsValueTile(
-                icon: Icons.visibility_off_outlined,
-                title: 'Categorie nascoste',
-                subtitle: 'Nascondi le categorie che non ti interessano',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const HiddenCategoriesScreen(),
-                  ),
-                ),
-              ),
-              SettingsSwitchTile(
-                icon: Icons.no_adult_content_outlined,
-                title: 'Mostra contenuti per adulti',
-                subtitle: 'Contenuti riservati agli adulti (nascosti di base)',
-                value: provider.showAdult,
-                onChanged: provider.setShowAdult,
-              ),
+          SettingsValueTile(
+            icon: Icons.reorder_rounded,
+            title: 'Categorie personali e ordine',
+            subtitle: 'Crea le tue categorie e riordina quelle della playlist',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CategoryManagerScreen()),
+            ),
+          ),
+          SettingsValueTile(
+            icon: Icons.visibility_off_outlined,
+            title: 'Categorie nascoste',
+            subtitle: 'Nascondi le categorie che non ti interessano',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const HiddenCategoriesScreen()),
+            ),
+          ),
+          SettingsSwitchTile(
+            icon: Icons.no_adult_content_outlined,
+            title: 'Mostra contenuti per adulti',
+            subtitle: 'Contenuti riservati agli adulti (nascosti di base)',
+            value: provider.showAdult,
+            onChanged: provider.setShowAdult,
+          ),
         ],
       ),
       _buildPlaylistRefresh(context, provider),
       SettingsSection(
         title: 'Guida TV',
         children: [
-              SettingsValueTile(
-                icon: Icons.calendar_view_day_rounded,
-                title: 'Guida TV (EPG)',
-                subtitle:
-                    'Fonti, aggiornamento automatico (ogni 12 ore di base)',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const EpgSettingsScreen()),
-                ),
-              ),
+          SettingsValueTile(
+            icon: Icons.calendar_view_day_rounded,
+            title: 'Guida TV (EPG)',
+            subtitle: 'Fonti, aggiornamento automatico (ogni 12 ore di base)',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const EpgSettingsScreen()),
+            ),
+          ),
         ],
       ),
     ],
@@ -697,37 +703,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SettingsSection(
         title: 'Diagnostica',
         children: [
-              SettingsValueTile(
-                icon: Icons.monitor_heart_outlined,
-                title: 'Diagnostica dirette',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const LiveDiagnosticsScreen(),
-                  ),
-                ),
+          SettingsValueTile(
+            icon: Icons.monitor_heart_outlined,
+            title: 'Diagnostica dirette',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const LiveDiagnosticsScreen()),
+            ),
+          ),
+          SettingsValueTile(
+            icon: Icons.movie_filter_outlined,
+            title: 'Diagnostica film e serie',
+            subtitle: 'Fotogrammi scartati, buffer e scatti del lettore mpv/ExoPlayer',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const VodDiagnosticsScreen()),
+            ),
+          ),
+          SettingsValueTile(
+            icon: Icons.speed_rounded,
+            title: 'Prestazioni e fluidità',
+            subtitle: 'FPS, fotogrammi lenti, tempi di calcolo e disegno',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const PerformanceDiagnosticsScreen(),
               ),
-              SettingsValueTile(
-                icon: Icons.movie_filter_outlined,
-                title: 'Diagnostica film e serie',
-                subtitle:
-                    'Fotogrammi scartati, buffer e scatti del lettore mpv/ExoPlayer',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const VodDiagnosticsScreen(),
-                  ),
-                ),
-              ),
-              SettingsValueTile(
-                icon: Icons.speed_rounded,
-                title: 'Prestazioni e fluidità',
-                subtitle: 'FPS, fotogrammi lenti, tempi di calcolo e disegno',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const PerformanceDiagnosticsScreen(),
-                  ),
-                ),
-              ),
-
+            ),
+          ),
         ],
       ),
     ],
@@ -735,22 +735,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SettingsSection(
         title: 'Informazioni',
         children: [
-              SettingsValueTile(
-                icon: Icons.info_outline_rounded,
-                title: 'Versione',
-                value: AppUpdateService.currentVersion,
-              ),
-              SettingsValueTile(
-                icon: Icons.system_update_rounded,
-                title: 'Verifica aggiornamenti',
-                subtitle: 'Scarica e installa la nuova versione',
-                onTap: () => AppUpdateService.checkManually(context),
-              ),
-              const SettingsValueTile(
-                icon: Icons.phone_android_rounded,
-                title: 'Piattaforma',
-                value: 'Android e iOS',
-              ),
+          SettingsValueTile(
+            icon: Icons.info_outline_rounded,
+            title: 'Versione',
+            value: AppUpdateService.currentVersion,
+          ),
+          SettingsValueTile(
+            icon: Icons.system_update_rounded,
+            title: 'Verifica aggiornamenti',
+            subtitle: 'Scarica e installa la nuova versione',
+            onTap: () => AppUpdateService.checkManually(context),
+          ),
+          const SettingsValueTile(
+            icon: Icons.phone_android_rounded,
+            title: 'Piattaforma',
+            value: 'Android e iOS',
+          ),
         ],
       ),
     ],
@@ -779,54 +779,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onTap: open,
           borderRadius: BorderRadius.circular(14),
           child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: EdgeInsets.symmetric(horizontal: 14, vertical: tv ? 14 : 12),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.primary.withValues(alpha: 0.16)
-                : AppColors.surface,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(9),
+            duration: const Duration(milliseconds: 160),
+            padding: EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: tv ? 14 : 12,
+            ),
+            decoration: BoxDecoration(
+              color: selected
+                  ? AppColors.primary.withValues(alpha: 0.16)
+                  : AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(icon, size: 20, color: AppColors.textPrimary),
                 ),
-                child: Icon(icon, size: 20, color: AppColors.textPrimary),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: tv ? 17 : 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (!tv)
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        subtitle,
+                        title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: tv ? 17 : 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                  ],
+                      if (!tv)
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
-            ],
-          ),
+                Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+              ],
+            ),
           ),
         ),
       ),
@@ -868,11 +874,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   return KeyEventResult.ignored;
                 },
                 child: FocusTraversalGroup(
-                child: ListView(
-                  key: ValueKey(_category),
-                  padding: const EdgeInsets.fromLTRB(12, 8, 32, 32),
-                  children: _sectionsFor(_category, provider),
-                ),
+                  child: ListView(
+                    key: ValueKey(_category),
+                    padding: const EdgeInsets.fromLTRB(12, 8, 32, 32),
+                    children: _sectionsFor(_category, provider),
+                  ),
                 ),
               ),
             ),

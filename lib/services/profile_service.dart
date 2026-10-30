@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../models/user_profile.dart';
 
 /// Built-in avatar catalog: a fixed set of icons and colors the user can
@@ -30,8 +31,7 @@ class ProfileAvatars {
   static bool exists(String key) => entries.containsKey(key);
   static bool colorExists(String key) => colors.containsKey(key);
 
-  static IconData iconOf(String key) =>
-      entries[key] ?? entries['rocket']!;
+  static IconData iconOf(String key) => entries[key] ?? entries['rocket']!;
 }
 
 /// CRUD for user profiles against the `user_profiles` table. Access is keyed
@@ -62,8 +62,9 @@ class ProfileService {
       'sync_code': syncCode,
       'name': name,
       'avatar_key': ProfileAvatars.exists(avatarKey) ? avatarKey : 'rocket',
-      'avatar_color':
-          ProfileAvatars.colorExists(avatarColor) ? avatarColor : 'arancio',
+      'avatar_color': ProfileAvatars.colorExists(avatarColor)
+          ? avatarColor
+          : 'arancio',
       'is_kids': isKids,
     }).select();
     return UserProfile.fromJson(rows.first);

@@ -152,6 +152,7 @@ class AppProvider extends ChangeNotifier {
     }
     return _shelf.plan(type)?.channels.isNotEmpty ?? false;
   }
+
   bool get isInitialized => _initialized;
   String? get error => _error;
   AuthMethod get authMethod => _authMethod;
@@ -219,7 +220,8 @@ class AppProvider extends ChangeNotifier {
             }
             _swap(next, bumpWarmup: false);
           }
-          if (_disposed || epoch != _shelfEpoch && _allCache.containsKey(type)) {
+          if (_disposed ||
+              epoch != _shelfEpoch && _allCache.containsKey(type)) {
             return;
           }
           if (!_allCache.containsKey(type)) _publishShelf(notify: false);
@@ -290,7 +292,8 @@ class AppProvider extends ChangeNotifier {
     final channel = _episodeIndex[id] ?? _shelf.readId(id);
     if (channel == null) return null;
     if (_kidsMode && !isKidsContent(channel)) return null;
-    if (!_kidsMode && !_showAdult && catalogChannelIsAdult(channel)) return null;
+    if (!_kidsMode && !_showAdult && catalogChannelIsAdult(channel))
+      return null;
     return channel;
   }
 
@@ -471,7 +474,10 @@ class AppProvider extends ChangeNotifier {
     }
     final epoch = _shelfEpoch;
     bool valid() =>
-        !_disposed && key == _currentKey && epoch == _shelfEpoch && !_playbackActive;
+        !_disposed &&
+        key == _currentKey &&
+        epoch == _shelfEpoch &&
+        !_playbackActive;
     final merged = await replaceCatalogSection(
       current: _shelf.materialize(),
       replacement: incoming,
@@ -650,11 +656,9 @@ class AppProvider extends ChangeNotifier {
       unawaited(_warmFacetNames(type, plan.alphabetical));
       unawaited(_ensureGenreCounts(type));
     }
-    _visibleView = ShelfChannelList(
-      _shelf,
-      [for (var slot = 0; slot < _shelf.length; slot++) slot],
-      visibility: _visibility,
-    );
+    _visibleView = ShelfChannelList(_shelf, [
+      for (var slot = 0; slot < _shelf.length; slot++) slot,
+    ], visibility: _visibility);
     _titleCategories = _shelf.titleCategories;
     if (notify) notifyListeners();
   }
@@ -983,10 +987,7 @@ class AppProvider extends ChangeNotifier {
     final byId = <String, CatalogEntry>{
       for (final e in allEntries(category.type)) e.primary.id: e,
     };
-    return [
-      for (final id in category.itemIds)
-        ?byId[id],
-    ];
+    return [for (final id in category.itemIds) ?byId[id]];
   }
 
   /// Recently added items of a type, in the playlist's own order (the
@@ -1214,7 +1215,8 @@ class AppProvider extends ChangeNotifier {
     String query,
     Set<String> among,
   ) {
-    if (!_shelfReady || query.trim().length < 2 || among.isEmpty) return const {};
+    if (!_shelfReady || query.trim().length < 2 || among.isEmpty)
+      return const {};
     return _shelf.idsMatching(query, typeIndex: type.index, among: among);
   }
 
@@ -1717,9 +1719,7 @@ class AppProvider extends ChangeNotifier {
         catalogState(section).isPending) {
       return;
     }
-    if (!force &&
-        (_fullLoadActive || _anyPending) &&
-        _hasSection(section)) {
+    if (!force && (_fullLoadActive || _anyPending) && _hasSection(section)) {
       return;
     }
     _catalogStates[section] = CatalogLoadState(
@@ -1762,9 +1762,7 @@ class AppProvider extends ChangeNotifier {
 
   /// Never true during playback, so the wait screen cannot cover a video.
   bool get isRefreshingAny =>
-      _anyPending &&
-      !_playbackActive &&
-      (!_startupLoading || _shelf.isEmpty);
+      _anyPending && !_playbackActive && (!_startupLoading || _shelf.isEmpty);
 
   Future<void> _enqueue(ContentType type, Map<String, String> credentials) {
     final run = _sectionQueue.then((_) => _loadSection(type, credentials));
