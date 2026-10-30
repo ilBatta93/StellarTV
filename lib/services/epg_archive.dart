@@ -9,8 +9,9 @@ import 'epg_prefix_index.dart';
 import 'epg_timeline.dart';
 
 String _child(String directory, String name) {
-  if (directory.endsWith('/') || directory.endsWith(r'\'))
+  if (directory.endsWith('/') || directory.endsWith(r'\')) {
     return '$directory$name';
+  }
   return '$directory${Platform.pathSeparator}$name';
 }
 

@@ -19,7 +19,8 @@ String? historyEpisodeLabel({
     season ??= int.tryParse(match[1] ?? match[3] ?? '');
     episode ??= int.tryParse(match[2] ?? match[4] ?? '');
   }
-  if (season == null || episode == null || season < 0 || episode < 1)
+  if (season == null || episode == null || season < 0 || episode < 1) {
     return null;
+  }
   return 'S$season · E$episode';
 }

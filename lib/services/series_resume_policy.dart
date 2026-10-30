@@ -32,8 +32,9 @@ SeriesEpisode? latestSeriesReplay(
   for (final entry in history) {
     final episode = byId[entry.contentId];
     if (episode == null ||
-        latest != null && !entry.lastWatchedAt.isAfter(latest.lastWatchedAt))
+        latest != null && !entry.lastWatchedAt.isAfter(latest.lastWatchedAt)) {
       continue;
+    }
     latest = entry;
     current = episode;
   }

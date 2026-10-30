@@ -394,8 +394,9 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 
   void _savedOrderLoaded() {
-    if (!mounted || _sort != CatalogSort.rating || _publishedIds != null)
+    if (!mounted || _sort != CatalogSort.rating || _publishedIds != null) {
       return;
+    }
     setState(() {
       _sortedSource = null;
       _sortedEntries = null;

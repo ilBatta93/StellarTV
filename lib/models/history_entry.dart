@@ -74,8 +74,9 @@ class HistoryEntry {
       position > Duration.zero ? remainingMinutes : null;
 
   Duration? get resumePosition {
-    if (isLive || duration <= Duration.zero || isAutomaticallyWatched)
+    if (isLive || duration <= Duration.zero || isAutomaticallyWatched) {
       return null;
+    }
     if (position <= const Duration(seconds: 5)) {
       return null;
     }

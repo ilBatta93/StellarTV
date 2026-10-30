@@ -47,8 +47,9 @@ void main() {
         final slots = File('${root.path}/guide/slots.bin');
         final broken = slots.readAsBytesSync();
         final betaOffset = (header['off'] as List)[beta] as int;
-        if (betaOffset >= 0 && betaOffset < broken.length)
+        if (betaOffset >= 0 && betaOffset < broken.length) {
           broken[betaOffset] = 0;
+        }
         slots.writeAsBytesSync(broken);
         snapshot.archive!.close();
         expect(snapshot.programmesOf('a').single.title, 'Telegiornale');

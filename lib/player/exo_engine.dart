@@ -233,9 +233,9 @@ class ExoEngine extends PlaybackEngine {
     _sync();
     await _pollWindow();
     if (_disposed) return;
+    // Assicurati di avere un id valido per liveChannel.
     // ignore: invalid_use_of_visible_for_testing_member
-    _playerId = _controller
-        .playerId; // assicurati di avere un id valido per liveChannel
+    _playerId = _controller.playerId;
     _livePoll = Timer.periodic(
       const Duration(seconds: 1),
       (_) => _pollWindow(),

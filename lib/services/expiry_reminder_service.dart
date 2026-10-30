@@ -71,8 +71,9 @@ class ExpiryPlan {
         expiry.day,
       ).subtract(Duration(days: d));
       var when = DateTime(day.year, day.month, day.day, s.hour);
-      if (when.isAfter(expiry))
+      if (when.isAfter(expiry)) {
         when = expiry.subtract(const Duration(hours: 1));
+      }
       if (when.isAfter(now)) out[d] = when;
     }
     return out;

@@ -53,8 +53,9 @@ class SegmentSnapshot {
       final type = '${item['type'] ?? ''}';
       final start = item['start'];
       final end = item['end'];
-      if (type.isEmpty || start is! int || end is! int || end <= start)
+      if (type.isEmpty || start is! int || end is! int || end <= start) {
         continue;
+      }
       all.add(
         SkipSegment(
           type,

@@ -42,8 +42,9 @@ class EpisodeWatchEvent {
       if (target.isEmpty) return null;
       final suggestion = row['group'] == 'suggestion';
       if (suggestion && value != 2 && value != 3 ||
-          !suggestion && value != 0 && value != 1 && value != 3)
+          !suggestion && value != 0 && value != 1 && value != 3) {
         return null;
+      }
       final event = EpisodeWatchEvent(
         target,
         value,

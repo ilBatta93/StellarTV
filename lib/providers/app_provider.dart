@@ -292,8 +292,9 @@ class AppProvider extends ChangeNotifier {
     final channel = _episodeIndex[id] ?? _shelf.readId(id);
     if (channel == null) return null;
     if (_kidsMode && !isKidsContent(channel)) return null;
-    if (!_kidsMode && !_showAdult && catalogChannelIsAdult(channel))
+    if (!_kidsMode && !_showAdult && catalogChannelIsAdult(channel)) {
       return null;
+    }
     return channel;
   }
 
@@ -1215,8 +1216,9 @@ class AppProvider extends ChangeNotifier {
     String query,
     Set<String> among,
   ) {
-    if (!_shelfReady || query.trim().length < 2 || among.isEmpty)
+    if (!_shelfReady || query.trim().length < 2 || among.isEmpty) {
       return const {};
+    }
     return _shelf.idsMatching(query, typeIndex: type.index, among: among);
   }
 
