@@ -87,6 +87,8 @@ node_modules/
 *.env
 *.local
 assets/config.local.json
+# Supabase CLI: cache locale creata da `supabase link`
+supabase/.temp/
 # Firma Android: arriva dai secret di GitHub, mai nel repo
 android/key.properties
 *.jks
