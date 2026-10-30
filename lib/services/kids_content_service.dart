@@ -17,6 +17,7 @@ import '../models/content_type.dart';
 import 'kids_policy.dart';
 import 'catalog_work_queue.dart';
 import 'title_facet_index.dart';
+import 'frame_telemetry_service.dart';
 
 final _foregroundHttp = ForegroundHttpClient();
 
@@ -242,6 +243,7 @@ class KidsContentService {
             )
             .timeout(const Duration(seconds: 30));
         if (res.statusCode != 200) return false;
+        final clock = Stopwatch()..start();
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         for (final r in (body['results'] as List? ?? const [])) {
           if (r is! Map ||
@@ -264,6 +266,7 @@ class KidsContentService {
           if (keys.containsKey(key)) _work.complete(key);
           changed = true;
         }
+        FrameTelemetryService.instance.recordWork('bambini.cache', clock);
       } catch (_) {
         return false;
       }
@@ -307,6 +310,7 @@ class KidsContentService {
             await Future<void>.delayed(const Duration(seconds: 20));
             continue;
           }
+          final clock = Stopwatch()..start();
           final body = jsonDecode(res.body) as Map<String, dynamic>;
           for (final r in (body['results'] as List? ?? const [])) {
             if (r is! Map ||
@@ -331,6 +335,7 @@ class KidsContentService {
             TitleFacetIndex.instance.putGenres(key, _genres[key]!);
             resolved.add(key);
           }
+          FrameTelemetryService.instance.recordWork('bambini.verifica', clock);
           await _save();
           onVerdicts?.call();
         } catch (_) {
@@ -369,12 +374,15 @@ class KidsContentService {
     try {
       final file = await _file();
       final path = file.path;
+      final clock = Stopwatch()..start();
       final verdicts = Map<String, bool>.of(_verdicts);
       final genres = Map<String, List<int>>.of(_genres);
       final certifications = Map<String, String>.of(_certifications);
-      await Isolate.run(
+      final pending = Isolate.run(
         () => _writeStore(path, verdicts, genres, certifications),
       );
+      FrameTelemetryService.instance.recordWork('bambini.salvataggio', clock);
+      await pending;
     } catch (_) {}
   }
 }

@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/content_type.dart';
 import 'catalog_sort.dart';
 import 'title_metadata_store.dart';
+import 'frame_telemetry_service.dart';
 
 /// One compact row of title metadata kept in memory.
 class _Facet {
@@ -390,10 +391,13 @@ class TitleFacetIndex extends ChangeNotifier {
     final ids = subject.ids;
     final names = subject.names;
     final typeName = subject.typeName;
+    final clock = Stopwatch()..start();
     final scores = _titleScores();
-    final ranked = await Isolate.run(
+    final pending = Isolate.run(
       () => rankKnownTitleIds(ids, names, typeName, scores),
     );
+    FrameTelemetryService.instance.recordWork('indice.classifica', clock);
+    final ranked = await pending;
     if (_jobs[type] != job) return;
     _ranked[type] = ranked;
     _generations[type] = (_generations[type] ?? 0) + 1;
@@ -430,12 +434,15 @@ class TitleFacetIndex extends ChangeNotifier {
     _dirty = false;
     try {
       final path = (await _file()).path;
+      final clock = Stopwatch()..start();
       final data = <String, Map<String, Object?>>{};
       for (final entry in _rows.entries) {
         final encoded = _encode(entry.value);
         if (encoded.isNotEmpty) data[entry.key] = encoded;
       }
-      await Isolate.run(() => _writeFacetFile(path, data));
+      final pending = Isolate.run(() => _writeFacetFile(path, data));
+      FrameTelemetryService.instance.recordWork('indice.salvataggio', clock);
+      await pending;
     } catch (_) {
       _dirty = true;
     }

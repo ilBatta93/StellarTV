@@ -608,6 +608,31 @@ List<String> readShelfDisplayNames(
   }
 }
 
+/// Nonzero [flags] of each slot's raw title name, keyed by slot.
+Map<int, int> readShelfNameFlags(
+  String path,
+  List<int> offsets,
+  List<int> lengths,
+  List<int> slots,
+  int Function(String name) flags,
+) {
+  final handle = File(path).openSync();
+  try {
+    final out = <int, int>{};
+    for (final slot in slots) {
+      handle.setPositionSync(offsets[slot]);
+      final value = jsonDecode(utf8.decode(handle.readSync(lengths[slot])));
+      final name = value is Map ? value['name'] : null;
+      if (name is! String || name.isEmpty) continue;
+      final found = flags(name);
+      if (found != 0) out[slot] = found;
+    }
+    return out;
+  } finally {
+    handle.closeSync();
+  }
+}
+
 _ShelfImage _buildShelfFromFiles(
   List<String> sectionPaths,
   String directory,
@@ -1554,6 +1579,35 @@ class CatalogShelf implements CatalogChannelSource {
       [for (final slot in slots) _image.ids[slot]],
       [for (final slot in slots) namesBySlot[slot] ?? ''],
     );
+  }
+
+  /// [flags] of every title name in [slots], computed off the UI isolate.
+  /// Name filters (4K, platform tags) read each title, and doing that in a
+  /// build froze the TV for seconds.
+  Future<Map<int, int>> nameFlags(
+    List<int> slots,
+    int Function(String name) flags,
+  ) async {
+    final out = <int, int>{};
+    if (_image.paths.isEmpty || slots.isEmpty) return out;
+    final byFile = <int, List<int>>{};
+    for (final slot in slots) {
+      if (slot < 0 || slot >= _image.fileOf.length) continue;
+      (byFile[_image.fileOf[slot]] ??= <int>[]).add(slot);
+    }
+    for (final entry in byFile.entries) {
+      if (entry.key < 0 || entry.key >= _image.paths.length) continue;
+      final path = _image.paths[entry.key];
+      final offsets = _image.offsets;
+      final lengths = _image.lengths;
+      final mine = entry.value;
+      out.addAll(
+        await Isolate.run(
+          () => readShelfNameFlags(path, offsets, lengths, mine, flags),
+        ),
+      );
+    }
+    return out;
   }
 
   List<int> searchSlots(String query) {

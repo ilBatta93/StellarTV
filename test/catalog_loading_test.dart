@@ -491,6 +491,26 @@ void main() {
     expect(movies.adjacentInGroup(firstId, 1)?.id, secondId);
     expect(movies.adjacentInGroup(firstId, -1), isNull);
     expect(CatalogShelf.diskReads, 1);
+    // "Solo 4K" and the platform filter check every title name: the names
+    // are read in an isolate, never by the UI thread.
+    CatalogShelf.diskReads = 0;
+    CatalogShelf.forbidDiskReads = true;
+    try {
+      final flags = await app.nameFlagsOf(
+        ContentType.movie,
+        (name) => name == 'Dramma' ? catalogName4k : 0,
+      );
+      expect(flags.keys.map(app.idAt), ['drama']);
+      expect(CatalogShelf.diskReads, 0);
+    } finally {
+      CatalogShelf.forbidDiskReads = false;
+    }
+    expect(catalogNameFlags('Film [4K]', null, true), catalogName4k);
+    expect(catalogNameFlags('Film (1080p)', null, true), 0);
+    expect(
+      catalogNameFlags('Film Netflix', 'Netflix', false),
+      catalogNamePlatform,
+    );
     await loading;
   });
 

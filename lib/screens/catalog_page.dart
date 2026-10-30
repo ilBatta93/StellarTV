@@ -51,6 +51,24 @@ bool catalogSlotMatchesGenre(
   return app.genresOf(entry.primary)?.contains(genreId) ?? false;
 }
 
+const catalogName4k = 1;
+const catalogNamePlatform = 2;
+
+/// Name checks of the "Solo 4K" and platform filters. Runs in an isolate.
+int catalogNameFlags(String name, String? platform, bool only4k) {
+  var flags = 0;
+  if (only4k && CatalogBuilder.qualityLabel(name) == '4K') {
+    flags |= catalogName4k;
+  }
+  final tagged = StreamingPlatform.byName(platform);
+  if (tagged != null && tagged.tagMatches(name)) flags |= catalogNamePlatform;
+  return flags;
+}
+
+// Top level so the closure sent to the isolate captures only its arguments.
+int Function(String) _nameFilter(String? platform, bool only4k) =>
+    (name) => catalogNameFlags(name, platform, only4k);
+
 String catalogEntryIdentity(AppProvider app, CatalogEntry entry) {
   final slot = entry.shelfSlot;
   if (slot != null) return app.idAt(slot);
@@ -732,11 +750,63 @@ class _CatalogPageState extends State<CatalogPage> {
   Map<int, String> get _genreNames =>
       widget.type == ContentType.movie ? _movieGenres : _tvGenres;
 
+  // Name flags of the 4K and platform filters, read off the UI isolate.
+  // Null while the scan runs: slot entries then match nothing.
+  String? _nameFlagsKey;
+  Map<int, int>? _nameFlags;
+  final Map<String, bool> _groupTags = {};
+
+  bool get _namesPending =>
+      (_platform != null || _only4k) && _nameFlags == null;
+
+  Map<int, int>? _nameFlagsFor(AppProvider app) {
+    final platform = _platform?.name;
+    final only4k = _only4k;
+    final key =
+        '${widget.type.name}|$platform|$only4k|${app.catalogIndexRevision}';
+    if (_nameFlagsKey == key) return _nameFlags;
+    _nameFlagsKey = key;
+    _nameFlags = null;
+    _groupTags.clear();
+    app
+        .nameFlagsOf(widget.type, _nameFilter(platform, only4k))
+        .then(
+          (flags) {
+            if (mounted && _nameFlagsKey == key) {
+              setState(() => _nameFlags = flags);
+            }
+          },
+          onError: (Object error, StackTrace stack) {
+            if (mounted && _nameFlagsKey == key) {
+              setState(() => _nameFlags = const {});
+            }
+          },
+        );
+    return null;
+  }
+
+  bool _slotMatchesNames(AppProvider app, int slot) {
+    final flags = _nameFlagsFor(app);
+    if (flags == null) return false;
+    final found = flags[slot] ?? 0;
+    if (_only4k && found & catalogName4k == 0) return false;
+    final platform = _platform;
+    if (platform == null || found & catalogNamePlatform != 0) return true;
+    final group = app.groupAt(slot);
+    return _groupTags.putIfAbsent(group, () => platform.tagMatches(group)) ||
+        _platformMatches(app, platform).contains(app.idAt(slot));
+  }
+
   bool _matchesGenre(AppProvider app, CatalogEntry e) {
     final platform = _platform;
     final id = _genreId;
     if (platform == null && !_only4k) {
       return catalogSlotMatchesGenre(app, e, id);
+    }
+    final slot = e.shelfSlot;
+    if (slot != null) {
+      return _slotMatchesNames(app, slot) &&
+          catalogSlotMatchesGenre(app, e, id);
     }
     if (platform != null &&
         !belongsToPlatform(
@@ -864,7 +934,8 @@ class _CatalogPageState extends State<CatalogPage> {
             )
           : _recent(app),
     );
-    if (entries.isEmpty && app.catalogPreparing(widget.type)) {
+    if (entries.isEmpty &&
+        (app.catalogPreparing(widget.type) || _namesPending)) {
       return Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
     if (entries.isEmpty) {
@@ -1006,7 +1077,8 @@ class _CatalogPageState extends State<CatalogPage> {
         () => all.where((e) => _matchesGenre(app, e)).toList(),
       ),
     );
-    if (entries.isEmpty && app.catalogPreparing(widget.type)) {
+    if (entries.isEmpty &&
+        (app.catalogPreparing(widget.type) || _namesPending)) {
       return Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
     if (entries.isEmpty) {
@@ -1028,7 +1100,8 @@ class _CatalogPageState extends State<CatalogPage> {
         () => group.entries.where((e) => _matchesGenre(app, e)).toList(),
       ),
     );
-    if (entries.isEmpty && app.catalogPreparing(widget.type)) {
+    if (entries.isEmpty &&
+        (app.catalogPreparing(widget.type) || _namesPending)) {
       return Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
     if (entries.isEmpty) {
@@ -1050,7 +1123,10 @@ class _CatalogPageState extends State<CatalogPage> {
     final q = _query.toLowerCase();
     final key =
         '${app.searchStamp}|$q|$_selectedCategory|$_genreId|'
-        '$_platform|$_only4k|${app.titleInfoVersion}|${app.catalogIndexRevision}|${PlatformCatalogService.instance.version}';
+        '$_platform|$_only4k|${identityHashCode(_nameFlagsFor(app))}|${app.titleInfoVersion}|${app.catalogIndexRevision}|${PlatformCatalogService.instance.version}';
+    if (_namesPending) {
+      return Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
     if (_searchKey == key && _searchResult != null) {
       final cached = _ordered(_searchResult!);
       return cached.isEmpty
@@ -1098,6 +1174,7 @@ class _CatalogPageState extends State<CatalogPage> {
   String? _filterPlatform;
   int? _filterInfoVersion;
   int? _filterVisibility;
+  Map<int, int>? _filterNames;
   List<CatalogEntry>? _filterResult;
   bool _filter4k = false;
 
@@ -1121,7 +1198,8 @@ class _CatalogPageState extends State<CatalogPage> {
         _filterPlatform ==
             (_platform == null ? null : _platformKey(app, _platform!)) &&
         _filterInfoVersion == app.titleInfoVersion &&
-        _filterVisibility == app.visibilityStamp) {
+        _filterVisibility == app.visibilityStamp &&
+        identical(_filterNames, _nameFlagsFor(app))) {
       return _filterResult!;
     }
     _filterSource = source;
@@ -1131,6 +1209,7 @@ class _CatalogPageState extends State<CatalogPage> {
     _filterPlatform = _platform == null ? null : _platformKey(app, _platform!);
     _filterInfoVersion = app.titleInfoVersion;
     _filterVisibility = app.visibilityStamp;
+    _filterNames = _nameFlagsFor(app);
     return _filterResult = compute();
   }
 

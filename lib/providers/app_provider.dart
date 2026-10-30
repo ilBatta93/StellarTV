@@ -256,6 +256,24 @@ class AppProvider extends ChangeNotifier {
 
   String idAt(int slot) => _shelf.idAt(slot);
 
+  String groupAt(int slot) => _shelf.groupAt(slot);
+
+  /// Name flags of every [type] title, read off the UI isolate. Keyed by
+  /// slot, so callers drop the result when [catalogIndexRevision] changes.
+  Future<Map<int, int>> nameFlagsOf(
+    ContentType type,
+    int Function(String name) flags,
+  ) {
+    final plan = _shelf.plan(type);
+    if (plan == null) return Future.value(const {});
+    final slots = <int>{
+      ...plan.alphabetical,
+      ...plan.recent,
+      for (final group in plan.groupSlots) ...group,
+    };
+    return _shelf.nameFlags(slots.toList(growable: false), flags);
+  }
+
   List<int>? genresForSlot(int slot) =>
       _kids.genresForKey(_shelf.facetKeyAt(slot));
 
@@ -580,6 +598,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void _rebuildMask() {
+    final clock = Stopwatch()..start();
     final count = _shelf.length;
     final mask = Uint8List(count);
     var visible = 0;
@@ -608,11 +627,13 @@ class AppProvider extends ChangeNotifier {
     _visibleMask = mask;
     _visibleCount = visible;
     _visibility.setMask(mask);
+    FrameTelemetryService.instance.recordWork('catalogo.maschera', clock);
   }
 
   CatalogEntry _slotEntry(int slot) => CatalogEntry.slot(slot, _shelf);
 
   void _publishShelf({bool notify = true}) {
+    final clock = Stopwatch()..start();
     _typedViews.clear();
     _seriesCatalogCache.clear();
     for (final type in ContentType.values) {
@@ -661,6 +682,7 @@ class AppProvider extends ChangeNotifier {
       for (var slot = 0; slot < _shelf.length; slot++) slot,
     ], visibility: _visibility);
     _titleCategories = _shelf.titleCategories;
+    FrameTelemetryService.instance.recordWork('catalogo.pubblica', clock);
     if (notify) notifyListeners();
   }
 
@@ -778,12 +800,14 @@ class AppProvider extends ChangeNotifier {
     _kidsRefresh = Timer(
       _kidsMode ? const Duration(seconds: 3) : const Duration(seconds: 30),
       () {
+        final clock = Stopwatch()..start();
         _titleInfoVersion++;
         if (_kidsMode) _applyAdultFilter();
         for (final type in _groupedCache.keys.toList()) {
           unawaited(_ensureGenreCounts(type));
         }
         notifyListeners();
+        FrameTelemetryService.instance.recordWork('bambini.aggiorna', clock);
       },
     );
   }

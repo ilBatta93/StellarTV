@@ -246,6 +246,11 @@ class FrameTelemetryService extends ChangeNotifier with WidgetsBindingObserver {
     responsiveness.addCommand(name, ms, sinceLaunch.elapsedMilliseconds);
   }
 
+  /// Main-isolate time of a background job, listed with the commands as
+  /// `lavoro.<name>`. A loop lag with no slow frame needs a name to be traced.
+  void recordWork(String name, Stopwatch clock) =>
+      recordCommand('lavoro.$name', clock.elapsedMilliseconds);
+
   /// A periodic timer fires late by exactly how long the main isolate was
   /// busy: that is what a remote press waits before being handled.
   void _probeLoop() {

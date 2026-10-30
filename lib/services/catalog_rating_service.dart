@@ -22,6 +22,8 @@ import '../models/tmdb_item.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'frame_telemetry_service.dart';
+
 final _foregroundHttp = ForegroundHttpClient();
 
 /// Shared TV presentation metadata: only two requests in flight, visible
@@ -112,9 +114,11 @@ class CatalogRatingService extends ChangeNotifier {
   void _scheduleNotify() {
     _notifyTimer ??= Timer(const Duration(milliseconds: 2500), () {
       _notifyTimer = null;
+      final clock = Stopwatch()..start();
       version++;
       notifyListeners();
       _primeImdb();
+      FrameTelemetryService.instance.recordWork('voti.notifica', clock);
     });
   }
 
@@ -325,6 +329,7 @@ class CatalogRatingService extends ChangeNotifier {
           )
           .timeout(const Duration(seconds: 25));
       if (res.statusCode != 200) throw Exception('ratings ${res.statusCode}');
+      final clock = Stopwatch()..start();
       final body = jsonDecode(res.body) as Map;
       final list = body['results'] as List;
       final ids = body['identities'] as List?;
@@ -361,6 +366,7 @@ class CatalogRatingService extends ChangeNotifier {
           _failed[entries[i].key] = DateTime.now();
         }
       }
+      FrameTelemetryService.instance.recordWork('voti.gruppo', clock);
       _scheduleNotify();
       _saveTimer ??= Timer(const Duration(seconds: 10), () {
         _saveTimer = null;
