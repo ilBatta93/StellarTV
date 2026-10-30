@@ -4,6 +4,8 @@ name: StellarTV Verifica (senza rilascio)
 # Non compila APK e non pubblica nulla.
 on:
   workflow_dispatch:
+  push:
+    branches: [audit/full-review]
 
 permissions:
   contents: read
