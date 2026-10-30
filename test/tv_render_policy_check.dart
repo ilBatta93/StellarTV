@@ -1,4 +1,7 @@
+import 'package:logging/logging.dart';
 import 'package:stellar_tv/services/tv_render_policy.dart';
+
+final Logger _logger = Logger('tv_render_policy_check');
 
 void check(bool condition, String rule) {
   if (!condition) throw StateError(rule);
@@ -53,5 +56,5 @@ void main() {
     TvRenderPolicy.homeBackdropDecodeLimit(memoryPressure: false) == 1280,
     'Normal Home backdrop remains bounded',
   );
-  print('PASS: 12 rendering policy checks');
+  _logger.info('PASS: 12 rendering policy checks');
 }

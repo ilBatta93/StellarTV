@@ -2,6 +2,9 @@ import 'package:stellar_tv/services/title_matching.dart';
 import 'package:stellar_tv/models/rating_policy.dart';
 import 'package:stellar_tv/models/episode_metadata.dart';
 import 'package:stellar_tv/models/tmdb_item.dart';
+import 'package:logging/logging.dart';
+
+final Logger _logger = Logger('title_rating_policy_check');
 
 void check(Object? actual, Object? expected) {
   if (actual != expected) throw StateError('$actual != $expected');
@@ -90,5 +93,5 @@ void main() {
     ).stillUrl,
     null,
   );
-  print('32 controlli titoli, voti e immagini superati');
+  _logger.info('32 controlli titoli, voti e immagini superati');
 }

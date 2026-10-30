@@ -2,13 +2,16 @@ import 'dart:async';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:logging/logging.dart';
 
 import 'package:stellar_tv/services/foreground_http_client.dart';
 import 'package:stellar_tv/services/foreground_policy.dart';
 
+final Logger _logger = Logger('foreground_http_check');
+
 void check(bool result, String rule) {
   if (!result) throw StateError(rule);
-  print('PASS: $rule');
+  _logger.info('PASS: $rule');
 }
 
 Future<void> main() async {

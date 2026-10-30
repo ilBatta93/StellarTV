@@ -1,9 +1,12 @@
+import 'package:logging/logging.dart';
 import 'package:stellar_tv/services/foreground_policy.dart';
 import 'package:stellar_tv/services/playback_work_policy.dart';
 
+final Logger _logger = Logger('foreground_policy_check');
+
 void check(bool result, String rule) {
   if (!result) throw StateError(rule);
-  print('PASS: $rule');
+  _logger.info('PASS: $rule');
 }
 
 void main() {

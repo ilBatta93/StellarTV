@@ -1,4 +1,7 @@
+import 'package:logging/logging.dart';
 import 'package:stellar_tv/player/tv_playback_shortcuts.dart';
+
+final Logger _logger = Logger('tv_playback_shortcuts_check');
 
 void expectEqual(Object? actual, Object? expected, String rule) {
   if (actual != expected) throw StateError('$rule: $actual != $expected');
@@ -25,5 +28,5 @@ void main() {
   expectEqual(remainingPlaybackTime(Duration.zero, Duration.zero, 1), null, 'No invented duration');
   expectEqual(remainingPlaybackTime(const Duration(seconds: 10), const Duration(seconds: 11), 1),
     Duration.zero, 'No negative remaining time');
-  print('PASS: 17 playback shortcut and remaining-time checks');
+  _logger.info('PASS: 17 playback shortcut and remaining-time checks');
 }

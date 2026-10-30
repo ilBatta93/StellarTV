@@ -1,6 +1,10 @@
 import 'dart:io';
 
+import 'package:logging/logging.dart';
+
 /// Standalone regression checks: dart run test/no_remote_signout_check.dart.
+
+final Logger _logger = Logger('no_remote_signout_check');
 void main() {
   final files = Directory('lib')
       .listSync(recursive: true)
@@ -14,11 +18,11 @@ void main() {
       throw StateError('Remote signout request path restored: ${file.path}');
     }
   }
-  print('PASS: native app contains no remote signout request path');
+  _logger.info('PASS: native app contains no remote signout request path');
   final sync = File('lib/providers/sync_provider.dart').readAsStringSync();
   if (!sync.contains('Future<void> signOut(') ||
       !sync.contains('await _sync.signOut();')) {
     throw StateError('Explicit account signout must remain available');
   }
-  print('PASS: explicit account signout remains available');
+  _logger.info('PASS: explicit account signout remains available');
 }

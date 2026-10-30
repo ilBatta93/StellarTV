@@ -1,4 +1,7 @@
+import 'package:logging/logging.dart';
 import 'package:stellar_tv/services/live_preview_policy.dart';
+
+final Logger _logger = Logger('live_preview_policy_check');
 
 void main() {
   void check(bool condition, String name) {
@@ -12,5 +15,5 @@ void main() {
       catalogLoading: true), 'Catalog download cannot be blocked by preview');
   check(!livePreviewMustWait(guideReady: true, guideLoading: false,
       catalogLoading: false), 'Settled guide resumes normal preview');
-  print('PASS: 4 live preview loading rules');
+  _logger.info('PASS: 4 live preview loading rules');
 }

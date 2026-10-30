@@ -1,10 +1,13 @@
 import 'dart:math';
 
+import 'package:logging/logging.dart';
 import 'package:stellar_tv/services/playback_work_policy.dart';
+
+final Logger _logger = Logger('playback_work_policy_check');
 
 void check(bool value, String rule) {
   if (!value) throw StateError(rule);
-  print('PASS: $rule');
+  _logger.info('PASS: $rule');
 }
 
 void main() {
