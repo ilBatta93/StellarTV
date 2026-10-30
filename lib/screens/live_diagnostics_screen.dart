@@ -101,7 +101,7 @@ class _LiveDiagnosticsScreenState extends State<LiveDiagnosticsScreen> {
                   () => service.setEnabled(v),
                   v ? 'Registrazione attiva' : 'Registrazione disattivata',
                 ),
-                subtitle: 'Solo su questo dispositivo. Rapporti con modello, sistema e versione app; senza password o indirizzi IPTV.',
+                subtitle: 'Solo su questo dispositivo. Rapporti con modello, sistema e versione app; senza password o indirizzi delle sorgenti.',
               ),
               TvInfoRow(
                 title: Text('${service.log.events.length} eventi salvati'),

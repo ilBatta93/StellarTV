@@ -102,7 +102,7 @@ class _VodDiagnosticsScreenState extends State<VodDiagnosticsScreen> {
                   () => service.setEnabled(v),
                   v ? 'Registrazione attiva' : 'Registrazione disattivata',
                 ),
-                subtitle: 'Solo su questo dispositivo. Rapporti con modello, sistema, versione app e dati del lettore; senza password o indirizzi IPTV.',
+                subtitle: 'Solo su questo dispositivo. Rapporti con modello, sistema, versione app e dati del lettore; senza password o indirizzi delle sorgenti.',
               ),
               TvInfoRow(
                 title: Text('${service.log.events.length} eventi salvati'),

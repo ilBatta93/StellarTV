@@ -1705,7 +1705,7 @@ Future<void> showChannelGuide(BuildContext context, Channel channel) {
                                   ScaffoldMessenger.of(ctx).showSnackBar(
                                     const SnackBar(
                                       content: Text(
-                                        'Recupero non disponibile: controlla il supporto archivio del provider.',
+                                        'Recupero non disponibile: la sorgente non offre l\'archivio per questo canale.',
                                       ),
                                     ),
                                   );
@@ -1838,7 +1838,7 @@ Future<void> playArchiveProgramme(
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'Recupero non disponibile: controlla il supporto archivio del provider.',
+          'Recupero non disponibile: la sorgente non offre l\'archivio per questo canale.',
         ),
       ),
     );

@@ -45,7 +45,7 @@ enum LiveStreamFormat {
   ),
   ts(
     'MPEG-TS (.ts)',
-    'Flusso diretto: avvio più rapido, adatto alla maggior parte dei server Xtream',
+    'Flusso diretto: avvio più rapido, adatto alla maggior parte delle sorgenti',
   ),
   m3u8(
     'HLS (.m3u8)',

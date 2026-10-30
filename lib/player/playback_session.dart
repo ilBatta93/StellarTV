@@ -1045,9 +1045,9 @@ class PlaybackSession extends ChangeNotifier {
       if (gen != _generation) return;
       _status = SessionStatus.failed;
       _error = previewMode
-          ? 'Il provider IPTV non consente più connessioni simultanee.'
+          ? 'La sorgente non consente più connessioni contemporanee.'
           : 'Il server TV ha rifiutato la connessione. Verifica che non ci '
-                'siano altri dispositivi collegati con lo stesso abbonamento e riprova.';
+                'siano altri dispositivi collegati con lo stesso account e riprova.';
       _notify();
       return;
     }

@@ -149,7 +149,7 @@ class _XtreamAccountScreenState extends State<XtreamAccountScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
               SettingsSection(
-                title: 'Abbonamento',
+                title: 'Accesso',
                 children: [
                   _row(
                     Icons.verified_user_outlined,
@@ -188,7 +188,7 @@ class _XtreamAccountScreenState extends State<XtreamAccountScreen> {
                   if (u['message'] != null && '${u['message']}'.isNotEmpty)
                     _row(
                       Icons.campaign_outlined,
-                      'Messaggio del provider',
+                      'Messaggio della sorgente',
                       _text(u['message']),
                     ),
                 ],

@@ -172,12 +172,12 @@ class XtreamService {
         .timeout(const Duration(seconds: 20));
     if (response.statusCode != 200) {
       throw Exception(
-        'Il provider ha risposto con errore ${response.statusCode}.',
+        'La sorgente ha risposto con errore ${response.statusCode}.',
       );
     }
     final data = jsonDecode(response.body);
     if (data is! Map<String, dynamic> || data['user_info'] is! Map) {
-      throw Exception('Il provider non fornisce informazioni sull\'account.');
+      throw Exception('La sorgente non fornisce informazioni sull\'account.');
     }
     return data;
   }

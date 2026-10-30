@@ -446,7 +446,7 @@ class _MultiViewScreenState extends State<MultiViewScreen>
                           padding: const EdgeInsets.all(16),
                           child: Text(
                             _connectionLimit(slot)
-                                ? 'Il provider IPTV non consente più connessioni simultanee.\nPremi OK per riprovare.'
+                                ? 'La sorgente non consente più connessioni contemporanee.\nPremi OK per riprovare.'
                                 : slot.autoRetries < 3
                                 ? 'Canale interrotto, nuovo tentativo tra poco...'
                                 : 'Canale non disponibile.\nPremi OK per riprovare.',

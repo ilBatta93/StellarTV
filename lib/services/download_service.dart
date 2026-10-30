@@ -260,7 +260,7 @@ class DownloadService extends ChangeNotifier {
         return;
       }
       if (res.statusCode != 200 && res.statusCode != 206) {
-        throw HttpException('Il provider ha risposto ${res.statusCode}');
+        throw HttpException('La sorgente ha risposto ${res.statusCode}');
       }
       final type = res.headers['content-type'] ?? '';
       if (type.contains('mpegurl') || type.contains('text/html')) {

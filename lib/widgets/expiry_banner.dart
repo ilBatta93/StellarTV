@@ -21,10 +21,10 @@ class ExpiryBanner extends StatelessWidget {
         final t = svc.activeThreshold!;
         final left = svc.expiry!.difference(DateTime.now());
         final text = left.isNegative
-            ? 'Il tuo abbonamento è scaduto.'
+            ? 'Il tuo accesso è scaduto.'
             : left.inHours < 24
-                ? 'Il tuo abbonamento scade oggi.'
-                : 'Il tuo abbonamento scade tra ${(left.inHours / 24).ceil()} giorni.';
+                ? 'Il tuo accesso scade oggi.'
+                : 'Il tuo accesso scade tra ${(left.inHours / 24).ceil()} giorni.';
         final tv = DeviceTypeService.isTv;
         Widget button(String label, VoidCallback onTap) => tv
             ? TvFocusable(

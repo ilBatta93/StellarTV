@@ -301,7 +301,7 @@ class ExpiryReminderService extends ChangeNotifier {
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
         'xtream_expiry',
-        'Scadenza abbonamento',
+        'Scadenza accesso',
         channelDescription: 'Promemoria prima della scadenza della playlist',
         importance: Importance.high,
         priority: Priority.high,
@@ -310,12 +310,12 @@ class ExpiryReminderService extends ChangeNotifier {
     );
     for (final e in plan.entries) {
       final body = e.key == 1
-          ? 'Il tuo abbonamento scade domani.'
-          : 'Il tuo abbonamento scade tra ${e.key} giorni.';
+          ? 'Il tuo accesso scade domani.'
+          : 'Il tuo accesso scade tra ${e.key} giorni.';
       try {
         await _plugin.zonedSchedule(
           _baseId + e.key,
-          'StellarTV · Abbonamento in scadenza',
+          'StellarTV · Accesso in scadenza',
           body,
           tz.TZDateTime.from(e.value.toUtc(), tz.UTC),
           details,

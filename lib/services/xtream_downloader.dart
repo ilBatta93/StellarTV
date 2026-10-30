@@ -282,7 +282,7 @@ Future<bool> _streamList({
       if (status == 401 || status == 403) {
         throw _Fatal(
           'Il server ha rifiutato l\'accesso (HTTP $status). '
-          'Controlla che l\'abbonamento sia attivo.',
+          'Controlla che l\'accesso sia attivo.',
         );
       }
       throw HttpException('HTTP $status');
@@ -461,7 +461,7 @@ class _JsonArrayStreamer {
       if (value is Map) {
         final info = value['user_info'];
         if (info is Map && '${info['auth']}' == '0') {
-          throw const _Fatal('Credenziali non valide o abbonamento scaduto.');
+          throw const _Fatal('Credenziali non valide o accesso scaduto.');
         }
         for (final v in value.values) {
           if (v is Map) count = onElement(v.cast<String, dynamic>());

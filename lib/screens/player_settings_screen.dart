@@ -744,7 +744,7 @@ class _UserAgentDialogState extends State<_UserAgentDialog> {
           for (final (label, value) in const [
             ('Predefinito (VLC)', ''),
             ('Android (okhttp)', 'okhttp/4.12.0'),
-            ('IPTV Smarters', 'IPTVSmartersPro'),
+            ('Compatibilità estesa', 'IPTVSmartersPro'),
           ])
             TextButton(
               autofocus: value.isEmpty,

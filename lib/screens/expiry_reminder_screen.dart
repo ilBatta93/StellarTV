@@ -30,7 +30,7 @@ class ExpiryReminderScreen extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 32),
             children: [
               SettingsSection(
-                title: 'Abbonamento',
+                title: 'Accesso',
                 children: [
                   SettingsValueTile(
                     icon: Icons.event_outlined,
@@ -38,13 +38,13 @@ class ExpiryReminderScreen extends StatelessWidget {
                     value: exp != null
                         ? _date(exp)
                         : svc.providerHasNoDate
-                        ? 'Data non fornita dal provider'
+                        ? 'Data non fornita dalla sorgente'
                         : 'Non ancora verificata',
                   ),
                   SettingsValueTile(
                     icon: Icons.refresh_rounded,
                     title: 'Verifica ora',
-                    subtitle: 'Chiede di nuovo la data al provider',
+                    subtitle: 'Chiede di nuovo la data alla sorgente',
                     onTap: () => svc.check(
                       context.read<AppProvider>().xtreamCredentials,
                       force: true,

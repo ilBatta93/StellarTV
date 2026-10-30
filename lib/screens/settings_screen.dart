@@ -572,7 +572,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SettingsValueTile(
                   icon: Icons.badge_outlined,
                   title: 'Connessione locale',
-                  subtitle: 'Scadenza, stato, connessioni e dati del provider',
+                  subtitle: 'Scadenza, stato, connessioni e dati della sorgente',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => const XtreamAccountScreen(),
@@ -583,7 +583,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SettingsValueTile(
                   icon: Icons.notifications_active_outlined,
                   title: 'Promemoria scadenza',
-                  subtitle: 'Avvisi prima della scadenza dell\'abbonamento',
+                  subtitle: 'Avvisi prima della scadenza dell\'accesso',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => const ExpiryReminderScreen(),
