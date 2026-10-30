@@ -1229,11 +1229,12 @@ class _CatalogPageState extends State<CatalogPage> {
     }
     if (!_sorting) {
       _sorting = true;
-      final order = _sort;
+      final order = _sort!;
+      final app = context.read<AppProvider>();
       unawaited(() async {
         List<CatalogEntry>? result;
         try {
-          result = await sortCatalogBackground(entries, order, const {});
+          result = await _sortEntries(app, entries, order);
         } catch (error, stack) {
           result = entries;
           FlutterError.reportError(
@@ -1265,6 +1266,32 @@ class _CatalogPageState extends State<CatalogPage> {
         : entries;
   }
 
+  /// Shelf titles are sorted by slot: the entries hold the shelf, whose open
+  /// files cannot be sent to an isolate, so sending them failed every sort.
+  static Future<List<CatalogEntry>> _sortEntries(
+    AppProvider app,
+    List<CatalogEntry> entries,
+    CatalogSort order,
+  ) async {
+    final bySlot = <int, CatalogEntry>{};
+    for (final entry in entries) {
+      final slot = entry.shelfSlot;
+      if (slot == null) {
+        return sortCatalogBackground(
+          [
+            for (final e in entries)
+              CatalogEntry(primary: e.primary, variants: e.variants),
+          ],
+          order,
+          const {},
+        );
+      }
+      bySlot.putIfAbsent(slot, () => entry);
+    }
+    final sorted = await app.sortSlots(bySlot.keys.toList(), order);
+    return [for (final slot in sorted) bySlot[slot]!];
+  }
+
   /// Applies the id list already in memory. No isolate and no remote wait.
   List<CatalogEntry> _orderedByRating(List<CatalogEntry> entries) {
     final key = _ratingOrderKey();
@@ -1280,7 +1307,16 @@ class _CatalogPageState extends State<CatalogPage> {
     _sortedOrder = CatalogSort.rating;
     _ratingKey = key;
     if (saved == null) return _sortedEntries = entries;
-    return _sortedEntries = applyCatalogOrder(entries, saved);
+    final app = context.read<AppProvider>();
+    // Shelf ids come from the index: reading each title froze the TV.
+    return _sortedEntries = applyCatalogOrder(
+      entries,
+      saved,
+      idOf: (entry) {
+        final slot = entry.shelfSlot;
+        return slot == null ? entry.primary.id : app.idAt(slot);
+      },
+    );
   }
 
   Widget _gridItem(AppProvider app, CatalogEntry entry, int index) =>

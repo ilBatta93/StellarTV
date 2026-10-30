@@ -10,6 +10,7 @@ import '../models/custom_category.dart';
 import 'catalog_builder.dart';
 import 'catalog_index_builder.dart' show catalogEntryKey, catalogTitleKey;
 import 'catalog_preparation.dart';
+import 'catalog_sort.dart';
 import 'kids_content_service.dart';
 import 'kids_policy.dart';
 
@@ -607,6 +608,60 @@ List<String> readShelfDisplayNames(
     handle.closeSync();
   }
 }
+
+/// [slots] in [order], reading each title inside the isolate. The shelf
+/// itself keeps open files, which cannot be sent to another isolate.
+List<int> readShelfSortedSlots(
+  List<String> paths,
+  List<int> fileOf,
+  List<int> offsets,
+  List<int> lengths,
+  List<int> slots,
+  CatalogSort order,
+) {
+  final files = <int, RandomAccessFile>{};
+  try {
+    final rows = <(int, Channel)>[];
+    for (final slot in slots) {
+      final fileIndex = slot < fileOf.length ? fileOf[slot] : -1;
+      if (fileIndex < 0 || fileIndex >= paths.length) continue;
+      final handle = files[fileIndex] ??= File(paths[fileIndex]).openSync();
+      handle.setPositionSync(offsets[slot]);
+      final decoded = jsonDecode(utf8.decode(handle.readSync(lengths[slot])));
+      if (decoded is! Map) continue;
+      rows.add((slot, Channel.fromMap(decoded.cast<String, dynamic>())));
+    }
+    final sorted = [
+      for (final row in sortCatalog(rows, order, (r) => r.$2)) row.$1,
+    ];
+    // A row that could not be read keeps its place at the end.
+    if (sorted.length == slots.length) return sorted;
+    final seen = sorted.toSet();
+    return [
+      ...sorted,
+      for (final slot in slots)
+        if (!seen.contains(slot)) slot,
+    ];
+  } finally {
+    for (final file in files.values) {
+      try {
+        file.closeSync();
+      } catch (_) {}
+    }
+  }
+}
+
+// Top-level so the isolate closure captures only its arguments.
+Future<List<int>> _sortSlotsInIsolate(
+  List<String> paths,
+  List<int> fileOf,
+  List<int> offsets,
+  List<int> lengths,
+  List<int> slots,
+  CatalogSort order,
+) => Isolate.run(
+  () => readShelfSortedSlots(paths, fileOf, offsets, lengths, slots, order),
+);
 
 /// Nonzero [flags] of each slot's raw title name, keyed by slot.
 Map<int, int> readShelfNameFlags(
@@ -1378,6 +1433,23 @@ class CatalogShelf implements CatalogChannelSource {
 
   String idAt(int slot) => _image.ids[slot];
 
+  /// [slots] in [order], read and compared off the UI isolate.
+  Future<List<int>> sortSlots(List<int> slots, CatalogSort order) {
+    if (order == CatalogSort.provider ||
+        slots.length < 2 ||
+        _image.paths.isEmpty) {
+      return Future.value(List<int>.of(slots));
+    }
+    return _sortSlotsInIsolate(
+      _image.paths,
+      _image.fileOf,
+      _image.offsets,
+      _image.lengths,
+      List<int>.of(slots),
+      order,
+    );
+  }
+
   int? slotOfId(String id) => _slotOf(id);
 
   @override
@@ -1788,6 +1860,14 @@ class ShelfChannelList extends ListBase<Channel> {
   final CatalogVisibility? visibility;
   int _stamp = -1;
   List<int> _visible = const [];
+
+  /// The same titles in [order]. The list stays backed by the shelf, so
+  /// sorting never copies the shelf into the isolate.
+  Future<ShelfChannelList> sorted(CatalogSort order) async => ShelfChannelList(
+    shelf,
+    await shelf.sortSlots(_shown, order),
+    visibility: visibility,
+  );
 
   List<int> get _shown {
     final current = visibility;

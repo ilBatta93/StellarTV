@@ -118,9 +118,13 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       _sortOrder = _sort;
       _sortResult = null;
       final epoch = ++_sortEpoch;
-      final order = _sort;
+      final order = _sort!;
+      // A shelf list holds open files and cannot cross into the isolate.
+      final Future<List<Channel>> sorting = channels is ShelfChannelList
+          ? channels.sorted(order)
+          : sortLiveBackground(channels, order);
       unawaited(
-        sortLiveBackground(channels, order)
+        sorting
             .then((result) {
               if (!mounted || epoch != _sortEpoch) return;
               setState(() => _sortResult = result);

@@ -108,6 +108,8 @@ class LiveDiagnosticsLog {
             'midPlay',
             'httpStatus',
             'frameDelta',
+            'renderedFrames',
+            'frozenMs',
             ...probeKeys,
           }.contains(e.key) &&
           (e.value is bool ||
@@ -127,6 +129,8 @@ class LiveDiagnosticsLog {
                     'buffer_interrupted',
                     'suspected_stall',
                     'clock_pinned',
+                    'picture_frozen',
+                    'picture_resumed',
                     'open_ready',
                     'stream_probe',
                   }.contains(e.value)))
@@ -193,7 +197,7 @@ class LiveDiagnosticsLog {
         'device': _safeDevice(device),
         'events': events.map(_safeEvent).toList(),
         'privacy': 'No URLs, credentials, channel titles, account identifiers or raw error messages.',
-        'measurement': 'open_ready is player readiness; first_video_frame is renderer confirmation. clock_pinned means the TS live clock never moved beyond ~500 ms (not a stall, emitted once per attempt). suspected_stall is a media clock that moved and then froze; frameDelta (native frames since the freeze) is positive when the picture is still flowing and zero when both clock and picture are stuck. attempt_end.reason: left=user navigated away, replaced=channel switched, health=engine recovery, startup=no first frame, error=player error.',
+        'measurement': 'open_ready is player readiness; first_video_frame is renderer confirmation. clock_pinned means the TS live clock never moved beyond ~500 ms (not a stall, emitted once per attempt). suspected_stall is a media clock that moved and then froze; frameDelta (native frames since the freeze) is positive when the picture is still flowing and zero when both clock and picture are stuck. picture_frozen is a native frame count that stopped for 3 s while playing and not buffering (black or frozen picture), picture_resumed its end; renderedFrames is the native count, frozenMs a freeze still open when the attempt ended. attempt_end.reason: left=user navigated away, replaced=channel switched, health=engine recovery, startup=no first frame, error=player error.',
       });
 }
 

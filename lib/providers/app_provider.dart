@@ -27,6 +27,7 @@ import '../services/series_grouping.dart';
 import '../services/kids_content_service.dart';
 import '../services/catalog_cache_service.dart';
 import '../services/catalog_shelf.dart';
+import '../services/catalog_sort.dart' show CatalogSort;
 import '../services/catalog_publication.dart';
 import '../services/title_facet_index.dart';
 import '../services/frame_telemetry_service.dart';
@@ -257,6 +258,10 @@ class AppProvider extends ChangeNotifier {
   String idAt(int slot) => _shelf.idAt(slot);
 
   String groupAt(int slot) => _shelf.groupAt(slot);
+
+  /// Shelf [slots] in [order], read off the UI isolate.
+  Future<List<int>> sortSlots(List<int> slots, CatalogSort order) =>
+      _shelf.sortSlots(slots, order);
 
   /// Name flags of every [type] title, read off the UI isolate. Keyed by
   /// slot, so callers drop the result when [catalogIndexRevision] changes.

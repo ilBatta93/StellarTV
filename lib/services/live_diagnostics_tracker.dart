@@ -20,6 +20,13 @@ class LiveDiagnosticsTracker {
   // stays at or below ~500 ms for the whole session (TS live clock pinned).
   bool _clockPinnedEmitted = false;
 
+  // Native frame count, read every sample. A count that stops while the
+  // player says it is playing is a frozen or black picture.
+  int? _frames;
+  Duration _framesMovedAt = Duration.zero;
+  Duration? _frozenAt;
+  static const _frozenAfter = Duration(seconds: 3);
+
   void begin(
     String url,
     String engine,
@@ -40,6 +47,9 @@ class LiveDiagnosticsTracker {
     bufferingAt = null;
     firstFrame = false;
     _clockPinnedEmitted = false;
+    _frames = null;
+    _framesMovedAt = Duration.zero;
+    _frozenAt = null;
     service.record(
       observed ? 'observation_started_midstream' : 'attempt_start',
       session: session,
@@ -83,7 +93,10 @@ class LiveDiagnosticsTracker {
         'first_video_frame',
         data: {if (!observed) 'startupMs': clock.elapsedMilliseconds},
       );
+      // Baseline, so the first suspected_stall already carries frameDelta.
+      probe.snapshotFrameCount(engine.renderedFrameCount);
     }
+    _samplePicture(engine, playing: active && v.isPlaying && !v.isBuffering);
     if (active && v.isBuffering && bufferingAt == null) {
       bufferingAt = clock.elapsed;
       event('buffer_start');
@@ -104,7 +117,10 @@ class LiveDiagnosticsTracker {
       final posMs = v.position.inMilliseconds;
       if (posMs <= 500 && clock.elapsedMilliseconds >= 3000) {
         _clockPinnedEmitted = true;
-        event('clock_pinned', data: {'positionMs': posMs});
+        event(
+          'clock_pinned',
+          data: {'positionMs': posMs, 'renderedFrames': ?_frames},
+        );
         // Not a stall — do not also emit suspected_stall for a pinned clock.
         return;
       }
@@ -136,6 +152,35 @@ class LiveDiagnosticsTracker {
     }
   }
 
+  void _samplePicture(PlaybackEngine engine, {required bool playing}) {
+    final count = engine.renderedFrameCount;
+    if (count == null || !firstFrame) return;
+    final moved = _frames == null || count != _frames;
+    _frames = count;
+    if (moved || !playing) {
+      _framesMovedAt = clock.elapsed;
+      final since = _frozenAt;
+      if (moved && since != null) {
+        _frozenAt = null;
+        event(
+          'picture_resumed',
+          data: {'durationMs': (clock.elapsed - since).inMilliseconds},
+        );
+      }
+      return;
+    }
+    if (_frozenAt == null && clock.elapsed - _framesMovedAt >= _frozenAfter) {
+      _frozenAt = _framesMovedAt;
+      event(
+        'picture_frozen',
+        data: {
+          'positionMs': engine.value.position.inMilliseconds,
+          'renderedFrames': count,
+        },
+      );
+    }
+  }
+
   /// [reason] must be one of: left, replaced, health, startup, error.
   void end({String reason = 'left'}) {
     if (!running) return;
@@ -148,7 +193,15 @@ class LiveDiagnosticsTracker {
       );
     }
     bufferingAt = null;
-    event('attempt_end', data: {'reason': reason});
+    final frozen = _frozenAt;
+    event(
+      'attempt_end',
+      data: {
+        'reason': reason,
+        'renderedFrames': ?_frames,
+        if (frozen != null) 'frozenMs': (clock.elapsed - frozen).inMilliseconds,
+      },
+    );
     clock.stop();
   }
 }

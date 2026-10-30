@@ -14,6 +14,7 @@ import 'package:stellar_tv/services/catalog_cache_service.dart';
 import 'package:stellar_tv/screens/catalog_page.dart';
 import 'package:stellar_tv/screens/live_page.dart';
 import 'package:stellar_tv/services/catalog_shelf.dart';
+import 'package:stellar_tv/services/catalog_sort.dart';
 import 'package:stellar_tv/services/xtream_service.dart';
 import 'package:stellar_tv/widgets/catalog_status_indicator.dart';
 
@@ -501,6 +502,25 @@ void main() {
         (name) => name == 'Dramma' ? catalogName4k : 0,
       );
       expect(flags.keys.map(app.idAt), ['drama']);
+      expect(CatalogShelf.diskReads, 0);
+    } finally {
+      CatalogShelf.forbidDiskReads = false;
+    }
+    // Sorting a shelf list: the shelf keeps open files, which cannot cross
+    // into an isolate, so the order is read there by slot.
+    CatalogShelf.diskReads = 0;
+    CatalogShelf.forbidDiskReads = true;
+    try {
+      final zToA = await movies.sorted(CatalogSort.nameDesc);
+      expect(zToA.slots.map(app.idAt).where((id) => id != 'adult'), [
+        'kids',
+        'drama',
+      ]);
+      final aToZ = await app.sortSlots(zToA.slots, CatalogSort.nameAsc);
+      expect(aToZ.map(app.idAt).where((id) => id != 'adult'), [
+        'drama',
+        'kids',
+      ]);
       expect(CatalogShelf.diskReads, 0);
     } finally {
       CatalogShelf.forbidDiskReads = false;

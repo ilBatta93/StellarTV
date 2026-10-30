@@ -101,6 +101,18 @@ void main() {
       'ghost',
     ]);
     expect(ids(applied.map((e) => e.primary)), ['new', 'missing', 'old']);
+    // Shelf entries pass their id from the index: no title is read.
+    final reads = <String>[];
+    final byIndex = applyCatalogOrder(
+      entriesOf(source),
+      const ['old', 'new'],
+      idOf: (e) {
+        reads.add(e.primary.id);
+        return e.primary.id;
+      },
+    );
+    expect(ids(byIndex.map((e) => e.primary)), ['old', 'new', 'missing']);
+    expect(reads, hasLength(source.length));
   });
 
   test(

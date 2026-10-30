@@ -169,21 +169,24 @@ List<int> indicesByRating(List<double> scores, List<String> names) {
 /// their incoming order at the end, so a new title never disappears.
 List<CatalogEntry> applyCatalogOrder(
   List<CatalogEntry> entries,
-  List<String> ids,
-) {
+  List<String> ids, {
+  String Function(CatalogEntry)? idOf,
+}) {
+  final id = idOf ?? (CatalogEntry entry) => entry.primary.id;
+  final idsOf = [for (final entry in entries) id(entry)];
   final byId = <String, CatalogEntry>{};
-  for (final entry in entries) {
-    byId.putIfAbsent(entry.primary.id, () => entry);
+  for (var i = 0; i < entries.length; i++) {
+    byId.putIfAbsent(idsOf[i], () => entries[i]);
   }
   final used = <String>{};
   final ordered = <CatalogEntry>[];
-  for (final id in ids) {
-    final entry = byId[id];
-    if (entry != null && used.add(id)) ordered.add(entry);
+  for (final wanted in ids) {
+    final entry = byId[wanted];
+    if (entry != null && used.add(wanted)) ordered.add(entry);
   }
   if (ordered.length == entries.length) return ordered;
-  for (final entry in entries) {
-    if (used.add(entry.primary.id)) ordered.add(entry);
+  for (var i = 0; i < entries.length; i++) {
+    if (used.add(idsOf[i])) ordered.add(entries[i]);
   }
   return ordered;
 }
