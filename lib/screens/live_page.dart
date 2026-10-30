@@ -24,6 +24,7 @@ import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/epg_provider.dart';
 import '../services/device_type_service.dart';
+import '../services/frame_telemetry_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
@@ -1026,6 +1027,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    FrameTelemetryService.instance.countBuild('diretta');
     final app = context.watch<AppProvider>();
     final epg = context.watch<EpgProvider>();
 

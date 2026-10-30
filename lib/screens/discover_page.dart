@@ -33,6 +33,7 @@ import '../providers/reactions_provider.dart';
 import '../providers/history_provider.dart';
 import '../providers/profile_provider.dart';
 import '../services/device_type_service.dart';
+import '../services/frame_telemetry_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
@@ -160,6 +161,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       HomePresentation(child: Builder(builder: _buildHome));
 
   Widget _buildHome(BuildContext context) {
+    FrameTelemetryService.instance.countBuild('home');
     final ui = context.watch<UiSettings>();
     final app = context.watch<AppProvider>();
     final discover = context.watch<DiscoverProvider>();

@@ -16,6 +16,7 @@ import '../providers/history_provider.dart';
 import '../providers/ui_settings.dart';
 import '../services/catalog_builder.dart';
 import '../services/device_type_service.dart';
+import '../services/frame_telemetry_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/channel_card.dart';
 import '../widgets/catalog_layouts.dart';
@@ -510,6 +511,7 @@ class _CatalogPageState extends State<CatalogPage> {
 
   @override
   Widget build(BuildContext context) {
+    FrameTelemetryService.instance.countBuild('catalogo ${widget.type.name}');
     final app = context.watch<AppProvider>();
 
     if (app.catalogState(widget.type).isPending &&

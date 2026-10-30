@@ -80,6 +80,7 @@ class _PerformanceDiagnosticsScreenState
     animation: service,
     builder: (context, _) {
       final s = service.stats;
+      final r = service.responsiveness;
       return ApplePageScaffold(
         title: 'Prestazioni e fluidità',
         body: ListView(
@@ -93,7 +94,7 @@ class _PerformanceDiagnosticsScreenState
                   title: 'Misura fluidità',
                   value: service.recording,
                   onChanged: (v) => v ? service.start() : service.stop(),
-                  subtitle: 'Attivala, muoviti nell\'app con il telecomando e torna qui. Si ferma da sola dopo 10 minuti. Solo su questo dispositivo.',
+                  subtitle: 'Attivala, muoviti nell\'app con il telecomando (anche in diretta) e torna qui. Misura fotogrammi, risposta ai tasti e comandi del player. Si ferma da sola dopo 10 minuti. Solo su questo dispositivo.',
                 ),
                 SettingsSwitchTile(
                   icon: Icons.rocket_launch_outlined,
@@ -149,6 +150,44 @@ class _PerformanceDiagnosticsScreenState
                   ),
                   trailing: Text(_ms(s.peakUs / 1000)),
                 ),
+              ],
+            ),
+            SettingsSection(
+              title: 'Reattività',
+              children: [
+                _InfoRow(
+                  title: const Text('Tasti premuti'),
+                  subtitle: Text(
+                    'Lenti (oltre ${ResponsivenessStats.slowKeyMs} ms): ${r.slowKeys}',
+                  ),
+                  trailing: Text('${r.keys}'),
+                ),
+                _InfoRow(
+                  title: const Text('Risposta ai tasti'),
+                  subtitle: Text(
+                    'Media ${_ms(r.avgKeyFrameMs)} · peggiore ${r.maxKeyFrameMs} ms',
+                  ),
+                ),
+                if (r.dispatchSamples > 0)
+                  _InfoRow(
+                    title: const Text('Attesa prima di gestire il tasto'),
+                    subtitle: Text(
+                      'Media ${_ms(r.avgDispatchMs)} · peggiore ${r.maxDispatchMs} ms',
+                    ),
+                  ),
+                _InfoRow(
+                  title: const Text('App bloccata oltre 250 ms'),
+                  subtitle: Text('Blocco più lungo: ${r.maxLagMs} ms'),
+                  trailing: Text('${r.stallsOver250}'),
+                ),
+                if (r.slowestCommand case final command?)
+                  _InfoRow(
+                    title: const Text('Comando del player più lento'),
+                    subtitle: Text(
+                      '${command.key} · media ${_ms(command.value.avgMs)} · ${command.value.count} volte',
+                    ),
+                    trailing: Text('${command.value.maxMs} ms'),
+                  ),
               ],
             ),
             SettingsSection(

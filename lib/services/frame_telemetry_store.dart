@@ -25,7 +25,7 @@ class FrameTelemetryStore {
             final value = jsonDecode(await file.readAsString());
             if (value is! Map ||
                 value['kind'] != 'performance' ||
-                value['v'] != 2) {
+                (value['v'] != 2 && value['v'] != 3)) {
               return null;
             }
             return Map<String, Object?>.from(value);

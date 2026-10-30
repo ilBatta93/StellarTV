@@ -11,3 +11,13 @@ Website: Il mio account → Log errori → select report → Copia or Scarica JS
 Tests: live_diagnostics_test.dart and live_diagnostics_remote_test.dart cover default off, disabling, bounded retention, private stream/error data, stall exclusions and TV activation/focus. They passed with a locally adapted SDK dependency copy; original SDK and native platform/share-sheet behavior require CI/device validation.
 
 Next investigation: reproduce the same failing channel on each affected device and export immediately; compare first-frame vs open-ready times, TS vs HLS, engine changes and connection-limit errors. Try Wi-Fi vs Ethernet and a single stream before MultiView. Add native decoder/codec and dropped-frame telemetry if these reports indicate decode stalls; do not add more universal tuning guesses without this evidence.
+
+## Performance report (Prestazioni e fluidità), format v3
+
+Frame timings alone miss an unresponsive app: a busy main isolate or a slow native player delays remote keys without producing slow frames. Since v3 the report adds `responsiveness`:
+- `loopLag`: a 50 ms timer firing late measures how long the main isolate was busy. `histogram` buckets, `slowest` stalls with the visible section (`at`). The per-second `timeline` carries the worst lag as `lag` and keeps seconds with no frames when a stall happened.
+- `keys`: each key down, from Dart receipt to the end of the next frame (`avgToFrameMs`, `maxToFrameMs`). `dispatchMs` is the wait between the Android key timestamp and Dart receipt; dropped when the timestamp is not plausible (`dispatchSamples` counts the valid ones).
+- `commands`: player transport latency per engine (`exo.pausa`, `mpv.play`, `exo.timeshift`, `exo.seek`) and `exo.stato`, the once-per-second native poll that probes the Android main thread every player command also uses.
+- `builds`: screen builds per visible section, e.g. `diretta@player diretta` is the live page rebuilding while hidden under the player.
+
+Sections: home tabs set `home`, `live`, `movies`, `series`, `preferiti`; the player sets `player diretta` or `player` while open. Reading order for "remote feels slow": high `dispatchMs` or `loopLag` → main isolate busy (look at `builds` and `slowest` contexts); high `commands` with low lag → native player/thread; high `avgToFrameMs` with low lag → build or raster cost (frame stats).

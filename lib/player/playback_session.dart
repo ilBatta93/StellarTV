@@ -7,6 +7,7 @@ import '../models/player_settings.dart';
 import 'decoder_memory.dart';
 import '../services/playback_work_policy.dart';
 import '../services/stream_probe.dart';
+import '../services/frame_telemetry_service.dart';
 import '../services/live_diagnostics_service.dart';
 import '../services/live_diagnostics_tracker.dart';
 import '../services/live_diagnostics_log.dart';
@@ -1213,7 +1214,7 @@ class PlaybackSession extends ChangeNotifier {
       var position = engine.value.position + offset;
       if (position.isNegative) position = Duration.zero;
       if (position > engine.value.duration) position = engine.value.duration;
-      await engine.seekTo(position);
+      await _timed(engine, 'timeshift', () => engine.seekTo(position));
       _notify();
       return;
     }
@@ -1227,7 +1228,7 @@ class PlaybackSession extends ChangeNotifier {
     if (!engine.value.isPlaying) _pausedAt = DateTime.now();
     var pos = engine.value.position + move;
     if (pos.isNegative) pos = Duration.zero;
-    await engine.seekTo(pos);
+    await _timed(engine, 'timeshift', () => engine.seekTo(pos));
     _notify();
   }
 
@@ -1309,14 +1310,14 @@ class PlaybackSession extends ChangeNotifier {
     if (isLive && canTimeshift) {
       _liveStartedAt ??= DateTime.now();
       if (engine.value.isPlaying) {
-        await engine.pause();
+        await _timed(engine, 'pausa', engine.pause);
         _cloudPaused = true;
         PlaybackWorkPolicy.instance.update(this, cloudBlocked: false);
         _pausedAt = DateTime.now();
       } else {
         _foldPause();
         if (_shift > _maxRewind) _shift = _maxRewind;
-        await engine.play();
+        await _timed(engine, 'play', engine.play);
       }
       _notify();
       return;
@@ -1327,13 +1328,31 @@ class PlaybackSession extends ChangeNotifier {
       _vod?.markSeek();
       await engine.play();
     } else if (engine.value.isPlaying) {
-      await engine.pause();
+      await _timed(engine, 'pausa', engine.pause);
       _cloudPaused = true;
       PlaybackWorkPolicy.instance.update(this, cloudBlocked: false);
     } else {
-      await engine.play();
+      await _timed(engine, 'play', engine.play);
     }
     _notify();
+  }
+
+  /// Measures a transport command for the performance report, so a slow
+  /// native player is told apart from a slow interface.
+  static Future<void> _timed(
+    PlaybackEngine engine,
+    String command,
+    Future<void> Function() run,
+  ) async {
+    final clock = Stopwatch()..start();
+    try {
+      await run();
+    } finally {
+      FrameTelemetryService.instance.recordCommand(
+        '${engine.type.name}.$command',
+        clock.elapsedMilliseconds,
+      );
+    }
   }
 
   int _seekRevision = 0;
@@ -1344,7 +1363,7 @@ class PlaybackSession extends ChangeNotifier {
     final max = engine.value.duration;
     var target = position < Duration.zero ? Duration.zero : position;
     if (max > Duration.zero && target > max) target = max;
-    await engine.seekTo(target);
+    await _timed(engine, 'seek', () => engine.seekTo(target));
     if (_engine != engine || revision != _seekRevision) return;
     await onPositionCommitted?.call(target);
     // The viewer moved the position: the next sample is not a stutter.

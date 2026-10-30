@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/player_settings.dart';
+import '../services/frame_telemetry_service.dart';
 import 'playback_engine.dart';
 
 class ExoEngine extends PlaybackEngine {
@@ -93,9 +94,16 @@ class ExoEngine extends PlaybackEngine {
       return;
     }
     _polling = true;
+    final clock = Stopwatch()..start();
     try {
       final window = await _liveChannel.invokeMapMethod<Object?, Object?>(
         'getLiveWindow',
+      );
+      // Polled every second: a steady probe of the Android main thread,
+      // which also runs every remote command sent to the player.
+      FrameTelemetryService.instance.recordCommand(
+        'exo.stato',
+        clock.elapsedMilliseconds,
       );
       if (_disposed) return;
       _window = window ?? const {};

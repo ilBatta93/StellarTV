@@ -45,4 +45,55 @@ void main() {
     expect(s.slowest.first['ms'], 440.0);
     expect(s.peakContext, 'home');
   });
+
+  test('event-loop stalls are bucketed and the worst ones kept', () {
+    final r = ResponsivenessStats();
+    r.addLag(3, 0, 'home');
+    r.addLag(80, 10, 'home');
+    r.addLag(300, 20, 'player diretta');
+    r.addLag(1500, 30, 'player diretta');
+    expect(r.lagHistogram, [1, 1, 0, 1, 1]);
+    expect(r.stallsOver250, 2);
+    expect(r.maxLagMs, 1500);
+    expect(r.slowestLags.first['at'], 'player diretta');
+    expect(r.slowestLags.length, 2);
+  });
+
+  test('slow keys add dispatch wait to time to frame', () {
+    final r = ResponsivenessStats();
+    r.addKey(key: 'Arrow Up', frameMs: 20, dispatchMs: 10);
+    r.addKey(key: 'Select', frameMs: 90, dispatchMs: 400, context: 'player');
+    r.addKey(key: 'Arrow Down', frameMs: 200);
+    expect(r.keys, 3);
+    expect(r.slowKeys, 2);
+    expect(r.dispatchSamples, 2);
+    expect(r.maxDispatchMs, 400);
+    expect(r.avgKeyFrameMs, closeTo(103.3, 0.1));
+    expect(r.slowestKeys.first['key'], 'Select');
+    expect(r.slowestKeys.first['ms'], 490);
+    expect(r.slowestKeys.last.containsKey('dispatchMs'), isFalse);
+  });
+
+  test('commands and builds stay bounded in the report', () {
+    final r = ResponsivenessStats();
+    r.addCommand('exo.pausa', 40);
+    r.addCommand('exo.pausa', 600, 5);
+    r.addCommand('exo.stato', 20);
+    for (var i = 0; i < 50; i++) {
+      r.addBuild('screen$i@home');
+    }
+    r.addBuild('diretta@player diretta');
+    r.addBuild('diretta@player diretta');
+    expect(r.slowestCommand?.key, 'exo.pausa');
+    final json = r.toJson();
+    final pause = (json['commands'] as Map)['exo.pausa'] as Map;
+    expect(pause['over250'], 1);
+    expect(pause['maxAt'], 5);
+    final builds = json['builds'] as Map;
+    expect(builds.length, 40);
+    expect(builds.keys.first, 'diretta@player diretta');
+    r.reset();
+    expect(r.commands, isEmpty);
+    expect(r.keys, 0);
+  });
 }

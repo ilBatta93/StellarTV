@@ -12,6 +12,7 @@ import '../providers/profile_provider.dart';
 import '../providers/ui_settings.dart';
 import '../services/profile_service.dart';
 import '../services/device_type_service.dart';
+import '../services/frame_telemetry_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/tv_catalog_toolbar.dart';
 import '../widgets/brand_logo.dart';
@@ -96,6 +97,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildContent(BuildContext context) {
     _syncLayout(context.watch<UiSettings>());
+    // Names slow frames and stalls after the visible tab.
+    FrameTelemetryService.instance.setSection(
+      _currentSection?.name ?? 'preferiti',
+    );
     if (DeviceTypeService.isTv) return _buildTv(context);
     return Scaffold(
       extendBody: true,

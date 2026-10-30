@@ -32,6 +32,7 @@ import '../services/player_settings_service.dart';
 import '../services/movie_hash.dart';
 import '../services/subtitles_service.dart';
 import '../services/device_type_service.dart';
+import '../services/frame_telemetry_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/episode_still_overlay.dart';
 import '../widgets/player/live_channel_picker.dart';
@@ -171,12 +172,16 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// created: it must not force portrait while a player is still visible.
   static int _activePlayers = 0;
   late final AppProvider _app;
+  late final Object _telemetrySection;
 
   @override
   void initState() {
     super.initState();
     _activePlayers++;
     _app = context.read<AppProvider>()..setPlaybackActive(true);
+    _telemetrySection = FrameTelemetryService.instance.enterSection(
+      _isLive ? 'player diretta' : 'player',
+    );
     WidgetsBinding.instance.addObserver(this);
     _history = context.read<HistoryProvider>();
     // Imposta UI immersive sticky per fullscreen immediato su TV.
@@ -1795,6 +1800,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   @override
   void dispose() {
+    FrameTelemetryService.instance.leaveSection(_telemetrySection);
     WidgetsBinding.instance.removeObserver(this);
     _resumeTimer?.cancel();
     _saveResume();
@@ -1844,6 +1850,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   @override
   Widget build(BuildContext context) {
+    FrameTelemetryService.instance.countBuild('player');
     final session = _session;
     final settings = _settings;
     final body = session == null || settings == null
@@ -1878,6 +1885,18 @@ class _PlayerScreenState extends State<PlayerScreen>
             : body,
       ),
     );
+  }
+
+  /// Current programme for live channels. Selects only the title: the guide
+  /// notifies on every refresh step, and watching all of it rebuilt the
+  /// whole player while on air.
+  String _liveSubtitle() {
+    if (!_isLive) return _channel.group;
+    final channel = _channel;
+    return context.select<EpgProvider, String?>(
+          (epg) => epg.nowFor(channel)?.title,
+        ) ??
+        channel.group;
   }
 
   String _episodeInfoTitle() {
@@ -1942,10 +1961,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                   selectedRow: _tvRow,
                   selectedColumn: _tvCol,
                   title: _channel.name,
-                  subtitle: _isLive
-                      ? (context.watch<EpgProvider>().nowFor(_channel)?.title ??
-                            _channel.group)
-                      : _channel.group,
+                  subtitle: _liveSubtitle(),
                   isLive: _isLive,
                   locked: _locked,
                   position: session.value.position,
@@ -1972,10 +1988,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 session: session,
                 playFocusNode: null,
                 title: _channel.name,
-                subtitle: _isLive
-                    ? (context.watch<EpgProvider>().nowFor(_channel)?.title ??
-                          _channel.group)
-                    : _channel.group,
+                subtitle: _liveSubtitle(),
                 locked: _locked,
                 pipSupported: _pipSupported,
                 seekStepSeconds: settings.seekStepSeconds,
