@@ -308,7 +308,7 @@ class _CatalogPageState extends State<CatalogPage> {
     });
   }
 
-  CatalogSort? _sort = CatalogSort.dateDesc;
+  CatalogSort? _sort = CatalogSort.provider;
   bool _sorting = false;
   List<CatalogEntry>? _requestedSortSource;
   List<CatalogEntry>? _recentSnapshot;
@@ -1132,6 +1132,7 @@ class _CatalogPageState extends State<CatalogPage> {
   List<CatalogEntry> _ordered(List<CatalogEntry> entries) {
     if (!DeviceTypeService.isTv || _sort == null) return entries;
     if (_sort == CatalogSort.rating) return _orderedByRating(entries);
+    if (_sort == CatalogSort.provider) return entries;
     _requestedSortSource = entries;
     if (identical(entries, _sortedSource) && _sort == _sortedOrder) {
       return _sortedEntries ?? entries;

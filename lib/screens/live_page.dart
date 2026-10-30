@@ -112,20 +112,23 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     if (identical(channels, _sortSource) && _sortOrder == _sort) {
       return _sortResult ?? channels;
     }
-    _sortSource = channels;
-    _sortOrder = _sort;
-    _sortResult = null;
-    final epoch = ++_sortEpoch;
-    final order = _sort;
-    unawaited(
-      sortLiveBackground(channels, order)
-          .then((result) {
-            if (!mounted || epoch != _sortEpoch) return;
-            setState(() => _sortResult = result);
-          })
-          .catchError((_) {}),
-    );
-    return channels;
+    // Only re-sort if the list actually changed or sort order changed
+    if (!identical(channels, _sortSource) || _sortOrder != _sort) {
+      _sortSource = channels;
+      _sortOrder = _sort;
+      _sortResult = null;
+      final epoch = ++_sortEpoch;
+      final order = _sort;
+      unawaited(
+        sortLiveBackground(channels, order)
+            .then((result) {
+              if (!mounted || epoch != _sortEpoch) return;
+              setState(() => _sortResult = result);
+            })
+            .catchError((_) {}),
+      );
+    }
+    return _sortResult ?? channels;
   }
 
   CatalogSort? _sort = CatalogSort.provider;

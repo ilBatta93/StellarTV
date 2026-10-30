@@ -17,6 +17,9 @@ class TvRemoteKeys {
 
   static bool _installed = false;
   static bool? _lastEditing;
+  static bool _pendingEditing = false;
+  static Timer? _editingDebounceTimer;
+
   static const _device = MethodChannel('stellartv/device');
 
   static void install() {
@@ -37,9 +40,16 @@ class TvRemoteKeys {
   /// connects the on-screen keyboard to the app (needed on many Google TV
   /// devices, otherwise the D-Pad closes the keyboard instead of moving in it).
   static void reportEditing(bool editing) {
-    if (!DeviceTypeService.isTv || _lastEditing == editing) return;
-    _lastEditing = editing;
-    _device.invokeMethod<void>('setTextEditing', editing).catchError((_) {});
+    if (!DeviceTypeService.isTv) return;
+    _pendingEditing = editing;
+    _editingDebounceTimer?.cancel();
+    _editingDebounceTimer = Timer(const Duration(milliseconds: 50), () {
+      if (!DeviceTypeService.isTv) return;
+      final current = _lastEditing;
+      if (_pendingEditing == current) return;
+      _lastEditing = _pendingEditing;
+      _device.invokeMethod<void>('setTextEditing', _pendingEditing).catchError((_) {});
+    });
   }
 
   /// Re-checks after a focus change settles (field A -> field B).
