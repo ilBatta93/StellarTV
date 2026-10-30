@@ -195,7 +195,7 @@ class SyncService {
     try {
       await _client.auth.resetPasswordForEmail(
         email.trim(),
-        redirectTo: 'https://stellartv.lovable.app/reset-password',
+        redirectTo: 'https://stellartv.vercel.app/reset-password',
       );
       return null;
     } on AuthException catch (e) {

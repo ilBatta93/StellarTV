@@ -44,7 +44,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
         onNavigationRequest: (r) => r.url.contains('youtube') ||
                 r.url.contains('ytimg') ||
                 r.url.startsWith('about:') ||
-                r.url.startsWith('https://stellartv.lovable.app')
+                r.url.startsWith('https://stellartv.vercel.app')
             ? NavigationDecision.navigate
             : NavigationDecision.prevent,
       ));
@@ -54,7 +54,7 @@ class _TrailerScreenState extends State<TrailerScreen> {
       // inside the page: allow the API to start the video.
       platform.setMediaPlaybackRequiresUserGesture(false);
     }
-    _web.loadHtmlString(trailerHtml(key, subtitles: widget.trailer.italianSubtitles), baseUrl: 'https://stellartv.lovable.app');
+    _web.loadHtmlString(trailerHtml(key, subtitles: widget.trailer.italianSubtitles), baseUrl: 'https://stellartv.vercel.app');
     _scheduleHide();
   }
 

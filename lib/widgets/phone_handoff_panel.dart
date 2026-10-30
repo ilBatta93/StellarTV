@@ -116,7 +116,7 @@ class _PhoneHandoffPanelState extends State<PhoneHandoffPanel> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Inquadra il QR o apri stellartv.lovable.app/chiave',
+                  'Inquadra il QR o apri stellartv.vercel.app/chiave',
                   style: TextStyle(fontSize: 14),
                 ),
                 const SizedBox(height: 4),

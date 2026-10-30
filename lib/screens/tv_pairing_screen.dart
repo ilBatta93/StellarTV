@@ -426,7 +426,7 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
                           ),
                           const SizedBox(height: 22),
                           const Text(
-                            'stellartv.lovable.app/collega',
+                            'stellartv.vercel.app/collega',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,

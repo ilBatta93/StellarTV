@@ -15,7 +15,7 @@ class DemoPair extends TvPairingService {
   Future<TvPairing> create({String deviceName = 'TV'}) async => const TvPairing(
     code: 'ABC123',
     secret: 'demo',
-    url: 'https://stellartv.lovable.app/collega?code=ABC123',
+    url: 'https://stellartv.vercel.app/collega?code=ABC123',
     expiresIn: 600,
   );
   @override

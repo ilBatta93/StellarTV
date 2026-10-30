@@ -26,7 +26,7 @@ class PairingOffline implements Exception {
 }
 
 /// One-shot TV pairing: the TV shows a code/QR, the user approves it from the
-/// website (stellartv.lovable.app/collega) and this device receives a
+/// website (stellartv.vercel.app/collega) and this device receives a
 /// magic-link token that signs it in. No password ever travels to the TV.
 class TvPairingService {
   TvPairingService(this._client);
@@ -67,7 +67,7 @@ class TvPairingService {
     return TvPairing(
       code: code,
       secret: secret,
-      url: json['url'] as String? ?? 'https://stellartv.lovable.app/collega',
+      url: json['url'] as String? ?? 'https://stellartv.vercel.app/collega',
       expiresIn: (json['expires_in'] as num?)?.toInt() ?? 600,
     );
   }

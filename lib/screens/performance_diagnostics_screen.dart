@@ -69,7 +69,7 @@ class _PerformanceDiagnosticsScreenState
           'report': previous ? service.previousReport : _report(),
         });
       },
-      'Rapporto inviato. Lo trovi su stellartv.lovable.app → Il mio account → Log errori.',
+      'Rapporto inviato. Lo trovi su stellartv.vercel.app → Il mio account → Log errori.',
     );
   }
 

@@ -13,7 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// is deleted as soon as it is read (or after ten minutes).
 class KeyHandoff {
   static const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  static const siteUrl = 'https://stellartv.lovable.app/chiave';
+  static const siteUrl = 'https://stellartv.vercel.app/chiave';
   static final _x = X25519();
   static final _aes = AesGcm.with256bits();
 
