@@ -93,3 +93,5 @@ android/key.properties
 *.keystore
 # File di ripresa delle sessioni di lavoro: restano in locale
 docs/handoff/
+# Indice locale di CodeGraph
+.codegraph/

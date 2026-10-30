@@ -52,6 +52,8 @@ python -m unittest discover -s scripts -p "*_test.py"
 ```
 Sono gli stessi controlli di `verify.yml`: falli passare per le aree toccate prima di dire «fatto».
 
+Per capire o trovare codice usa prima CodeGraph, poi grep o la lettura dei file: `codegraph explore "<simboli o domanda>"` restituisce il sorgente dei simboli, chi li chiama e i test collegati. L'indice sta in `.codegraph/` (non versionato) e si aggiorna da solo; se manca, `codegraph init` lo ricrea. Claude lo usa anche come strumento MCP.
+
 ## 5. «fai build android»
 Solo su questa frase esplicita, una build alla volta:
 1. Allinea `main` al remoto; working tree pulito e spinto.
