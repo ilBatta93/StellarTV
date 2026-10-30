@@ -84,6 +84,7 @@
       "PowerShell(vercel project ls *)"
     ],
     "ask": [
+      "mcp__plugin_dart-flutter_dart-mcp-server__pub",
       "Bash(gh workflow run *)",
       "Bash(flutter build *)",
       "Bash(git push --force *)",
