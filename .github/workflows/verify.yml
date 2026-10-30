@@ -1,0 +1,106 @@
+name: StellarTV Verifica (senza rilascio)
+
+# Solo controlli: analisi, formattazione, script di policy e test.
+# Non compila APK e non pubblica nulla.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Analisi e test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Flutter packages
+        run: |
+          set -e
+          rm -f android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+          rm -f ios/Runner/GeneratedPluginRegistrant.h ios/Runner/GeneratedPluginRegistrant.m
+          flutter --version
+          flutter pub get
+
+      - name: Analisi statica
+        id: analyze
+        continue-on-error: true
+        run: flutter analyze --no-fatal-infos 2>&1 | tee analyze.txt
+
+      - name: Formattazione
+        id: format
+        continue-on-error: true
+        run: dart format --output=none --set-exit-if-changed lib test 2>&1 | tee format.txt
+
+      - name: Script di policy (tutti e 9)
+        id: checks
+        continue-on-error: true
+        run: |
+          FAIL=0
+          for f in test/*_check.dart; do
+            if dart run "$f" > /tmp/check.log 2>&1; then
+              echo "OK    $f" | tee -a checks.txt
+            else
+              echo "FAIL  $f" | tee -a checks.txt
+              tail -20 /tmp/check.log | tee -a checks.txt
+              FAIL=1
+            fi
+          done
+          exit $FAIL
+
+      - name: Test Dart
+        id: tests
+        continue-on-error: true
+        run: flutter test --reporter expanded 2>&1 | tee tests.txt
+
+      - name: Riepilogo
+        if: always()
+        run: |
+          {
+            echo "## Esito verifica"
+            echo "| Controllo | Esito |"
+            echo "|---|---|"
+            echo "| Analisi statica | ${{ steps.analyze.outcome }} |"
+            echo "| Formattazione | ${{ steps.format.outcome }} |"
+            echo "| Script di policy | ${{ steps.checks.outcome }} |"
+            echo "| Test Dart | ${{ steps.tests.outcome }} |"
+            echo
+            echo "### Analisi (ultime righe)"
+            echo '```'
+            tail -40 analyze.txt 2>/dev/null
+            echo '```'
+            echo "### Script di policy"
+            echo '```'
+            cat checks.txt 2>/dev/null
+            echo '```'
+            echo "### Test (ultime righe)"
+            echo '```'
+            tail -15 tests.txt 2>/dev/null
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Carica rapporti
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verifica-rapporti
+          path: |
+            analyze.txt
+            format.txt
+            checks.txt
+            tests.txt
+          retention-days: 7
