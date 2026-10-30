@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:stellar_tv/services/title_display.dart';
+import 'package:stellar_tv/services/title_matching.dart';
 import 'package:stellar_tv/services/playback_progress_writer.dart';
 import 'package:stellar_tv/services/tmdb_service.dart';
 import 'package:stellar_tv/models/history_entry.dart';
