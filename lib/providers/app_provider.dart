@@ -11,6 +11,7 @@ import '../models/history_entry.dart';
 import '../models/catalog_load_state.dart';
 import '../models/series_details.dart';
 import '../models/tmdb_item.dart';
+import '../services/catalog_rating_service.dart';
 import '../services/catalog_builder.dart';
 import '../services/catalog_preparation.dart';
 import '../services/catalog_index_builder.dart';
@@ -703,6 +704,7 @@ class AppProvider extends ChangeNotifier {
         if (_disposed || epoch != _shelfEpoch) return;
         unawaited(TitleFacetIndex.instance.rank(type, ids, names));
         _kids.requestIndexed(_shelf.kidsIndexPairs(ids, names));
+        unawaited(CatalogRatingService.instance.warmTitles(type, ids, names));
       });
     } catch (_) {}
   }

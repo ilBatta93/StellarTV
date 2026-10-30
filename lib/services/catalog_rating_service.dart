@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../config/supabase_config.dart';
+import 'device_type_service.dart';
 import 'tmdb_service.dart';
 import 'title_matching.dart';
 import 'imdb_rating_service.dart';
@@ -144,6 +145,47 @@ class CatalogRatingService extends ChangeNotifier {
     unawaited(request(list));
   }
 
+  /// Queues every title of a published catalog that has no recent score.
+  /// Cards only ask for what is on screen, so sorting by score left titles
+  /// never scrolled to without a score, at the end of the list.
+  /// [names] are display names: their keys are parsed off the UI isolate.
+  Future<void> warmTitles(
+    ContentType type,
+    List<String> ids,
+    List<String> names,
+  ) async {
+    // Only the TV sorts by score; tests never reach the network.
+    if (!DeviceTypeService.isTv || TitleMetadataStore.disabled) return;
+    if (type != ContentType.movie &&
+        type != ContentType.series &&
+        type != ContentType.anime) {
+      return;
+    }
+    await ensureLoaded();
+    final typeName = type.name;
+    final keys = await Isolate.run(
+      () => [for (final name in names) parseTitle(name).key(typeName)],
+    );
+    final missing = <Channel>[];
+    final seen = <String>{};
+    for (var i = 0; i < keys.length && i < ids.length; i++) {
+      final key = keys[i];
+      if (names[i].isEmpty || !seen.add(key)) continue;
+      if (TitleFacetIndex.instance.tmdbFresh(key)) continue;
+      final stub = Channel(
+        id: ids[i],
+        name: names[i],
+        url: '',
+        logo: '',
+        group: '',
+        type: type,
+      );
+      _keys[stub] = key;
+      missing.add(stub);
+    }
+    if (missing.isNotEmpty) warm(missing);
+  }
+
   final Expando<String> _keys = Expando('tvRating');
 
   String _key(Channel c) =>
@@ -241,7 +283,7 @@ class CatalogRatingService extends ChangeNotifier {
         continue;
       }
       if (priority) _queue.remove(key);
-      if (_queue.length < 5000 || _queue.containsKey(key)) _queue[key] = c;
+      if (_queue.length < 60000 || _queue.containsKey(key)) _queue[key] = c;
     }
     _drain(priority: priority);
   }
@@ -337,34 +379,42 @@ class CatalogRatingService extends ChangeNotifier {
           (ids != null && ids.length != entries.length)) {
         throw const FormatException('Misaligned rating response');
       }
-      for (var i = 0; i < entries.length && i < list.length; i++) {
-        final v = list[i];
-        if (v is num) {
-          _ratings[entries[i].key] = v.toDouble();
-          TitleFacetIndex.instance.putTmdb(entries[i].key, v.toDouble());
-          final identity = ids != null && i < ids.length ? ids[i] : null;
-          if (identity is Map && identity['id'] is num) {
-            final c = entries[i].value;
-            remember(
-              c,
-              TmdbItem(
-                id: (identity['id'] as num).toInt(),
-                mediaType: c.type == ContentType.movie ? 'movie' : 'tv',
-                title: c.displaySeriesName,
-                overview: c.plot ?? '',
-                posterPath: identity['poster'] is String
-                    ? identity['poster'] as String
-                    : null,
-                backdropPath: null,
-                voteAverage: v.toDouble(),
-                popularity: 0,
-                releaseDate: '',
-              ),
-            );
+      // One rank and one save for the whole group, not one per title.
+      TitleFacetIndex.instance.beginBulk();
+      try {
+        for (var i = 0; i < entries.length && i < list.length; i++) {
+          final v = list[i];
+          if (v is num) {
+            _ratings[entries[i].key] = v.toDouble();
+            TitleFacetIndex.instance.putTmdb(entries[i].key, v.toDouble());
+            final identity = ids != null && i < ids.length ? ids[i] : null;
+            if (identity is Map && identity['id'] is num) {
+              final c = entries[i].value;
+              remember(
+                c,
+                TmdbItem(
+                  id: (identity['id'] as num).toInt(),
+                  mediaType: c.type == ContentType.movie ? 'movie' : 'tv',
+                  title: c.displaySeriesName,
+                  overview: c.plot ?? '',
+                  posterPath: identity['poster'] is String
+                      ? identity['poster'] as String
+                      : null,
+                  backdropPath: null,
+                  voteAverage: v.toDouble(),
+                  popularity: 0,
+                  releaseDate: '',
+                ),
+              );
+            }
+          } else {
+            _failed[entries[i].key] = DateTime.now();
+            // No score known: the next catalog warm-up does not ask again.
+            TitleFacetIndex.instance.putTmdb(entries[i].key, 0, quiet: true);
           }
-        } else {
-          _failed[entries[i].key] = DateTime.now();
         }
+      } finally {
+        TitleFacetIndex.instance.endBulk();
       }
       FrameTelemetryService.instance.recordWork('voti.gruppo', clock);
       _scheduleNotify();

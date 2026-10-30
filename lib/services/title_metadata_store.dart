@@ -25,6 +25,11 @@ class TitleMetadataStore<T> extends ChangeNotifier {
   final Map<String, (T, int)> _values = {};
   Future<void>? _loading;
   Timer? _saveTimer;
+  bool _saving = false;
+
+  /// Keys put since the last save. Encoding every value on each save held
+  /// the TV's UI thread while a catalog was being scored.
+  final Set<String> _changed = {};
 
   /// Widget tests never touch files or the network.
   static final bool disabled = Platform.environment.containsKey('FLUTTER_TEST');
@@ -62,7 +67,10 @@ class TitleMetadataStore<T> extends ChangeNotifier {
         raw.forEach((k, v) {
           if (v is List && v.length == 2 && v[1] is int) {
             final value = decode(v[0]);
-            if (value != null) _values['$k'] = (value, v[1] as int);
+            // A value put while the file was loading is newer.
+            if (value != null && !_changed.contains('$k')) {
+              _values['$k'] = (value, v[1] as int);
+            }
           }
         });
         if (_values.isNotEmpty) notifyListeners();
@@ -74,23 +82,66 @@ class TitleMetadataStore<T> extends ChangeNotifier {
     _values[key] = (value, DateTime.now().millisecondsSinceEpoch);
     notifyListeners();
     if (disabled) return;
+    _changed.add(key);
+    _scheduleSave();
+  }
+
+  void _scheduleSave() {
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(seconds: 3), _save);
   }
 
+  /// Writes only the changed keys: the isolate merges them into the file.
   Future<void> _save() async {
+    if (_saving) {
+      _scheduleSave();
+      return;
+    }
+    if (_changed.isEmpty) return;
+    _saving = true;
+    final keys = _changed.toList(growable: false);
+    _changed.clear();
     try {
-      final file = await _file();
-      final data = {
-        for (final e in _values.entries)
-          e.key: [encode(e.value.$1), e.value.$2],
+      final path = (await _file()).path;
+      final delta = <String, Object?>{
+        for (final key in keys)
+          if (_values[key] case final entry?) key: [encode(entry.$1), entry.$2],
       };
-      final path = file.path;
-      await Isolate.run(() {
-        final tmp = File('$path.tmp');
-        tmp.writeAsStringSync(jsonEncode(data), flush: true);
-        tmp.renameSync(path);
-      });
-    } catch (_) {}
+      // An unreadable file was replaced by the delta alone: the next save
+      // writes every key again.
+      if (!await Isolate.run(() => mergeJsonMapFile(path, delta))) {
+        _changed.addAll(_values.keys);
+      }
+    } catch (_) {
+      _changed.addAll(keys);
+    } finally {
+      _saving = false;
+    }
+    if (_changed.isNotEmpty) _scheduleSave();
   }
+}
+
+/// Merges [delta] into the JSON object saved at [path]. False when the
+/// existing file could not be read, so it now holds [delta] only.
+bool mergeJsonMapFile(String path, Map<String, Object?> delta) {
+  var readable = true;
+  Map<String, Object?> data = {};
+  final file = File(path);
+  if (file.existsSync()) {
+    try {
+      final raw = jsonDecode(file.readAsStringSync());
+      if (raw is Map<String, Object?>) {
+        data = raw;
+      } else {
+        readable = false;
+      }
+    } catch (_) {
+      readable = false;
+    }
+  }
+  data.addAll(delta);
+  final tmp = File('$path.tmp');
+  tmp.writeAsStringSync(jsonEncode(data), flush: true);
+  tmp.renameSync(path);
+  return readable;
 }

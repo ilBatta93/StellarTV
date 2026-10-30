@@ -69,10 +69,18 @@ class TitleFacetIndex extends ChangeNotifier {
   bool _rankPending = false;
   int _bulk = 0;
   bool _dirty = false;
+  bool _saving = false;
+
+  /// Rows changed since the last save. Encoding and copying every row to the
+  /// writer isolate held the TV's UI thread for 600-800 ms at each save.
+  final Set<String> _changed = {};
 
   int _now() => DateTime.now().millisecondsSinceEpoch;
 
-  _Facet _row(String key) => _rows.putIfAbsent(key, _Facet.new);
+  _Facet _row(String key) {
+    _changed.add(key);
+    return _rows.putIfAbsent(key, _Facet.new);
+  }
 
   /// IMDb score for `movie:{id}` or `tv:{id}`. Null while unknown.
   /// Zero means a finished lookup found no IMDb score.
@@ -231,8 +239,14 @@ class TitleFacetIndex extends ChangeNotifier {
       final path = (await _file()).path;
       final raw = await Isolate.run(() => _readFacetFile(path));
       if (raw == null) return;
+      // Rows read from the file are already saved: only rows changed while
+      // the file was loading still need writing.
+      final pending = Set<String>.of(_changed);
       beginBulk();
       _mergeDecoded(raw);
+      _changed
+        ..clear()
+        ..addAll(pending);
       endBulk();
     } catch (_) {}
   }
@@ -373,7 +387,9 @@ class TitleFacetIndex extends ChangeNotifier {
 
   void _scheduleRank() {
     _rankPending = true;
-    _rankTimer ??= Timer(const Duration(milliseconds: 300), () {
+    // Each join copies every catalog name to an isolate: while a whole
+    // catalog is being scored, one join every two seconds is enough.
+    _rankTimer ??= Timer(const Duration(seconds: 2), () {
       _rankTimer = null;
       if (!_rankPending) return;
       _rankPending = false;
@@ -423,29 +439,45 @@ class TitleFacetIndex extends ChangeNotifier {
   void _scheduleSave() {
     if (TitleMetadataStore.disabled) return;
     _dirty = true;
-    _saveTimer ??= Timer(const Duration(seconds: 3), () {
+    _saveTimer ??= Timer(const Duration(seconds: 10), () {
       _saveTimer = null;
       unawaited(_save());
     });
   }
 
+  /// Writes only the changed rows: the isolate merges them into the file.
   Future<void> _save() async {
-    if (!_dirty || TitleMetadataStore.disabled) return;
+    if (TitleMetadataStore.disabled) return;
+    if (_saving) {
+      _scheduleSave();
+      return;
+    }
     _dirty = false;
+    if (_changed.isEmpty) return;
+    _saving = true;
+    final keys = _changed.toList(growable: false);
+    _changed.clear();
     try {
       final path = (await _file()).path;
       final clock = Stopwatch()..start();
-      final data = <String, Map<String, Object?>>{};
-      for (final entry in _rows.entries) {
-        final encoded = _encode(entry.value);
-        if (encoded.isNotEmpty) data[entry.key] = encoded;
+      final delta = <String, Map<String, Object?>>{};
+      for (final key in keys) {
+        final row = _rows[key];
+        if (row == null) continue;
+        final encoded = _encode(row);
+        if (encoded.isNotEmpty) delta[key] = encoded;
       }
-      final pending = Isolate.run(() => _writeFacetFile(path, data));
+      final pending = Isolate.run(() => mergeJsonMapFile(path, delta));
       FrameTelemetryService.instance.recordWork('indice.salvataggio', clock);
-      await pending;
+      // An unreadable file was replaced by the delta alone: the next save
+      // writes every row again.
+      if (!await pending) _changed.addAll(_rows.keys);
     } catch (_) {
-      _dirty = true;
+      _changed.addAll(keys);
+    } finally {
+      _saving = false;
     }
+    if (_changed.isNotEmpty) _scheduleSave();
   }
 
   void _mergeDecoded(Map<String, Map<String, Object?>> raw) {
@@ -581,10 +613,4 @@ Map<String, Map<String, Object?>>? _readFacetFile(String path) {
     }
   });
   return out;
-}
-
-void _writeFacetFile(String path, Map<String, Map<String, Object?>> data) {
-  final tmp = File('$path.tmp');
-  tmp.writeAsStringSync(jsonEncode(data), flush: true);
-  tmp.renameSync(path);
 }
