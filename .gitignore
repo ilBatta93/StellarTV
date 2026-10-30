@@ -91,3 +91,5 @@ assets/config.local.json
 android/key.properties
 *.jks
 *.keystore
+# File di ripresa delle sessioni di lavoro: restano in locale
+docs/handoff/
