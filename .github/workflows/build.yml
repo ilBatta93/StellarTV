@@ -8,6 +8,12 @@ permissions:
   contents: write
   actions: write
 
+# Una sola build alla volta su tutti i branch: la successiva aspetta in coda,
+# quella in corso non viene interrotta a metà rilascio.
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
 jobs:
   build-and-release:
     name: Build & Release Android APK
