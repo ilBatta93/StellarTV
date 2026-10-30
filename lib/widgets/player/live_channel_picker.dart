@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/channel.dart';
+import '../../services/catalog_shelf.dart';
 import '../../theme/app_theme.dart';
 import '../poster_card.dart';
 import '../tv_focusable.dart';
@@ -13,17 +14,25 @@ class LiveChannelGroup {
   final List<Channel> channels;
 }
 
+/// Position of [id] in [channels]. A shelf list answers from its index:
+/// scanning it would read every title from disk.
+int _indexOfChannel(List<Channel> channels, String id) =>
+    channels is ShelfChannelList
+    ? channels.indexOfId(id)
+    : channels.indexWhere((c) => c.id == id);
+
 /// Category to open first: the one of the playing channel when it is
 /// listed there, otherwise the first category that contains it.
 @visibleForTesting
 int initialLiveGroup(List<LiveChannelGroup> groups, Channel current) {
   final own = groups.indexWhere(
     (g) =>
-        g.label == current.group && g.channels.any((c) => c.id == current.id),
+        g.label == current.group &&
+        _indexOfChannel(g.channels, current.id) >= 0,
   );
   if (own >= 0) return own;
   final any = groups.indexWhere(
-    (g) => g.channels.any((c) => c.id == current.id),
+    (g) => _indexOfChannel(g.channels, current.id) >= 0,
   );
   return any >= 0 ? any : 0;
 }
@@ -69,9 +78,7 @@ class _LiveChannelPickerState extends State<LiveChannelPicker> {
 
   int _anchorIndex(int group) {
     if (!_initialChannels || widget.groups.isEmpty) return 0;
-    final i = widget.groups[group].channels.indexWhere(
-      (c) => c.id == widget.current.id,
-    );
+    final i = _indexOfChannel(widget.groups[group].channels, widget.current.id);
     return i < 0 ? 0 : i;
   }
 

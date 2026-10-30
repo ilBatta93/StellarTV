@@ -1761,6 +1761,25 @@ class ShelfChannelList extends ListBase<Channel> {
     return -1;
   }
 
+  /// Title [offset] steps from [id] within its group, or within the whole
+  /// list when the group holds only that title. Walks the index only: the
+  /// player asks on every rebuild and reading each title froze it for seconds.
+  Channel? adjacentInGroup(String id, int offset) {
+    final current = shelf.slotOfId(id);
+    if (current == null) return null;
+    final shown = _shown;
+    final group = shelf.groupAt(current);
+    final sameGroup = [
+      for (final slot in shown)
+        if (shelf.groupAt(slot) == group) slot,
+    ];
+    final pool = sameGroup.length > 1 ? sameGroup : shown;
+    final index = pool.indexOf(current);
+    final target = index + offset;
+    if (index < 0 || target < 0 || target >= pool.length) return null;
+    return shelf.readSlot(pool[target]);
+  }
+
   ShelfChannelList whereIds(Set<String> wanted) {
     return ShelfChannelList(shelf, [
       for (final slot in _shown)

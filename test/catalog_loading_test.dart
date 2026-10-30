@@ -480,6 +480,17 @@ void main() {
     } finally {
       CatalogShelf.forbidDiskReads = false;
     }
+    // The live player asks for the next channel on every rebuild: only the
+    // answer may be read, never the whole section.
+    app.setKidsMode(false);
+    final movies = app.channelsOf(ContentType.movie) as ShelfChannelList;
+    expect(movies.length, greaterThan(1));
+    final firstId = movies[0].id;
+    final secondId = movies[1].id;
+    CatalogShelf.diskReads = 0;
+    expect(movies.adjacentInGroup(firstId, 1)?.id, secondId);
+    expect(movies.adjacentInGroup(firstId, -1), isNull);
+    expect(CatalogShelf.diskReads, 1);
     await loading;
   });
 

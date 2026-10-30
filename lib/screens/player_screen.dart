@@ -31,6 +31,8 @@ import '../services/native_player_bridge.dart';
 import '../services/player_settings_service.dart';
 import '../services/movie_hash.dart';
 import '../services/subtitles_service.dart';
+import '../services/catalog_builder.dart';
+import '../services/catalog_shelf.dart';
 import '../services/device_type_service.dart';
 import '../services/frame_telemetry_service.dart';
 import '../theme/app_theme.dart';
@@ -1339,21 +1341,55 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  List<Channel> get _liveChannels {
-    if (!_isLive) return const [];
-    final all = context.read<AppProvider>().channelsOf(ContentType.live);
+  /// Neighbours of the tuned channel, kept until the channel or the catalog
+  /// changes: the TV controls rebuild every second of live playback.
+  ({String id, List<Channel> list, Channel? previous, Channel? next})?
+  _neighbours;
+
+  Channel? _adjacentLiveChannel(int offset) {
+    if (!_isLive) return null;
+    final all = _app.channelsOf(ContentType.live);
+    final id = _channel.id;
+    var cached = _neighbours;
+    if (cached == null || cached.id != id || !identical(cached.list, all)) {
+      cached = _neighbours = (
+        id: id,
+        list: all,
+        previous: _scanNeighbour(all, -1),
+        next: _scanNeighbour(all, 1),
+      );
+    }
+    return switch (offset) {
+      -1 => cached.previous,
+      1 => cached.next,
+      _ => _scanNeighbour(all, offset),
+    };
+  }
+
+  Channel? _scanNeighbour(List<Channel> all, int offset) {
+    // The shelf answers from its index; a plain list (tests) is scanned.
+    if (all is ShelfChannelList) {
+      return all.adjacentInGroup(_channel.id, offset);
+    }
     final sameGroup = all
         .where((channel) => channel.group == _channel.group)
         .toList(growable: false);
-    return sameGroup.length > 1 ? sameGroup : all;
-  }
-
-  Channel? _adjacentLiveChannel(int offset) {
-    final channels = _liveChannels;
+    final channels = sameGroup.length > 1 ? sameGroup : all;
     final index = channels.indexWhere((channel) => channel.id == _channel.id);
     final target = index + offset;
     if (index < 0 || target < 0 || target >= channels.length) return null;
     return channels[target];
+  }
+
+  /// Channels of [entries] read only when the list shows them. Reading
+  /// every title up front stalled the player for seconds on large playlists.
+  static List<Channel> _lazyChannels(
+    AppProvider app,
+    List<CatalogEntry> entries,
+  ) {
+    final slots = [for (final entry in entries) ?entry.shelfSlot];
+    if (slots.length == entries.length) return app.bindChannels(slots);
+    return [for (final entry in entries) entry.primary];
   }
 
   /// Transparent channel list over the playing live picture: playback
@@ -1363,10 +1399,8 @@ class _PlayerScreenState extends State<PlayerScreen>
     _hideTimer?.cancel();
     final app = _app;
     final epg = context.read<EpgProvider>();
-    final all = [
-      for (final g in app.groupedCatalog(ContentType.live))
-        for (final e in g.entries) e.primary,
-    ];
+    final catalog = app.groupedCatalog(ContentType.live);
+    final all = _lazyChannels(app, [for (final g in catalog) ...g.entries]);
     final recent = [
       for (final id in RecentLiveChannels.instance.ids)
         if (app.channelById(id) case final c?)
@@ -1380,8 +1414,8 @@ class _PlayerScreenState extends State<PlayerScreen>
       LiveChannelGroup('Tutti', all),
       if (favorites.isNotEmpty) LiveChannelGroup('Preferiti', favorites),
       if (recent.isNotEmpty) LiveChannelGroup('Visti di recente', recent),
-      for (final g in app.groupedCatalog(ContentType.live))
-        LiveChannelGroup(g.label, [for (final e in g.entries) e.primary]),
+      for (final g in catalog)
+        LiveChannelGroup(g.label, _lazyChannels(app, g.entries)),
     ];
     final selected = await showGeneralDialog<Channel>(
       context: context,

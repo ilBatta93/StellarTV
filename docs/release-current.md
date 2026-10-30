@@ -5,3 +5,4 @@
 - Manutenzione interna e pulizia del codice, senza cambiamenti nelle funzioni.
 - Durante la diretta il player non si ridisegna più a ogni aggiornamento della guida TV.
 - Prestazioni e fluidità misura anche la risposta ai tasti del telecomando, i blocchi dell'app e i tempi dei comandi del player.
+- In diretta il telecomando risponde subito: tolti i blocchi di alcuni secondi durante la visione e all'apertura dell'elenco canali.
