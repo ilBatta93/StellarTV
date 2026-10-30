@@ -148,3 +148,21 @@ jobs:
             checks.txt
             tests.txt
           retention-days: 7
+
+      # I controlli sopra continuano anche se falliscono, per raccogliere tutti i
+      # rapporti: questo step rende rossa la run se almeno uno è fallito.
+      - name: Esito finale
+        if: always()
+        run: |
+          FAIL=0
+          for pair in \
+            "Analisi statica=${{ steps.analyze.outcome }}" \
+            "Formattazione=${{ steps.format.outcome }}" \
+            "Script di policy=${{ steps.checks.outcome }}" \
+            "Test Dart=${{ steps.tests.outcome }}"; do
+            if [ "${pair#*=}" != "success" ]; then
+              echo "::error title=${pair%%=*}::esito ${pair#*=}"
+              FAIL=1
+            fi
+          done
+          exit $FAIL
