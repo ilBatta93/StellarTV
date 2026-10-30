@@ -403,6 +403,14 @@ const exoLoadControlHeader = 'X-StellarTV-LoadControl';
 /// tiles do not each keep a film-sized buffer. Live keeps its back buffer only
 /// when the native window is seekable.
 class ExoLoadProfile {
+  final int minBufferMs;
+  final int maxBufferMs;
+  final int bufferForPlaybackMs;
+  final int bufferForPlaybackAfterRebufferMs;
+  final int backBufferMs;
+  final bool backBufferRequiresSeekable;
+  final int targetBufferBytes;
+
   const ExoLoadProfile({
     required this.minBufferMs,
     required this.maxBufferMs,
@@ -415,52 +423,6 @@ class ExoLoadProfile {
 
   static const previewTargetBytes = 8 * 1024 * 1024;
 
-    final back = backBufferMs < 0 ? 0 : backBufferMs;
-    if (preview) {
-      return const ExoLoadProfile(
-        minBufferMs: 1500,
-        maxBufferMs: 4000,
-        bufferForPlaybackMs: 500,
-        bufferForPlaybackAfterRebufferMs: 1000,
-        backBufferMs: 0,
-        backBufferRequiresSeekable: false,
-        targetBufferBytes: previewTargetBytes,
-      );
-    }
-    if (live) {
-      // Stay near the live edge. A multi-second floor paused the picture
-      // for the whole rebuffer wait whenever the buffer dipped.
-      // maxBuffer 12 s absorbs provider jitter; rebuffer threshold 2 s is
-      // enough to catch a keyframe without raising first-frame latency.
-      return ExoLoadProfile(
-        minBufferMs: 800,
-        maxBufferMs: 12000,
-        bufferForPlaybackMs: 400,
-        bufferForPlaybackAfterRebufferMs: 2000,
-        backBufferMs: back,
-        backBufferRequiresSeekable: true,
-        targetBufferBytes: 0,
-      );
-    }
-    return ExoLoadProfile(
-      minBufferMs: 15000,
-      maxBufferMs: 50000,
-      bufferForPlaybackMs: 2500,
-      bufferForPlaybackAfterRebufferMs: 5000,
-      backBufferMs: back,
-      backBufferRequiresSeekable: false,
-      targetBufferBytes: 0,
-    );
-  }
-
-  final int minBufferMs;
-  final int maxBufferMs;
-  final int bufferForPlaybackMs;
-  final int bufferForPlaybackAfterRebufferMs;
-  final int backBufferMs;
-  final bool backBufferRequiresSeekable;
-  final int targetBufferBytes;
-
   String get wire =>
       '$minBufferMs,$maxBufferMs,$bufferForPlaybackMs,$bufferForPlaybackAfterRebufferMs,$backBufferMs,${backBufferRequiresSeekable ? 1 : 0},$targetBufferBytes';
 
@@ -469,7 +431,6 @@ class ExoLoadProfile {
     required bool live,
     required int backBufferMs,
   }) {
-    final previewTargetBytes = 8 * 1024 * 1024;
     if (preview) {
       return ExoLoadProfile(
         minBufferMs: 1500,
