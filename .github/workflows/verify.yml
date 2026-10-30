@@ -27,6 +27,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Chiave di firma (solo controllo, non firma nulla)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+          for v in KEYSTORE_B64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!v}" ]; then echo "::error title=Firma::Secret mancante: $v"; exit 1; fi
+          done
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/k.jks"
+          FP=$(keytool -list -v -keystore "$RUNNER_TEMP/k.jks" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" | grep 'SHA256:' | awk '{print $2}')
+          rm -f "$RUNNER_TEMP/k.jks"
+          echo "::notice title=Firma::Chiave valida, impronta SHA-256 ${FP}"
+
       - name: Setup Flutter (stable)
         uses: subosito/flutter-action@v2
         with:
