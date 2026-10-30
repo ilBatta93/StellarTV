@@ -463,4 +463,43 @@ class ExoLoadProfile {
 
   String get wire =>
       '$minBufferMs,$maxBufferMs,$bufferForPlaybackMs,$bufferForPlaybackAfterRebufferMs,$backBufferMs,${backBufferRequiresSeekable ? 1 : 0},$targetBufferBytes';
+
+  static ExoLoadProfile forPlayback({
+    required bool preview,
+    required bool live,
+    required int backBufferMs,
+  }) {
+    final previewTargetBytes = 8 * 1024 * 1024;
+    if (preview) {
+      return ExoLoadProfile(
+        minBufferMs: 1500,
+        maxBufferMs: 4000,
+        bufferForPlaybackMs: 500,
+        bufferForPlaybackAfterRebufferMs: 1000,
+        backBufferMs: 0,
+        backBufferRequiresSeekable: false,
+        targetBufferBytes: previewTargetBytes,
+      );
+    }
+    if (live) {
+      return ExoLoadProfile(
+        minBufferMs: 800,
+        maxBufferMs: 12000,
+        bufferForPlaybackMs: 400,
+        bufferForPlaybackAfterRebufferMs: 2000,
+        backBufferMs: backBufferMs,
+        backBufferRequiresSeekable: true,
+        targetBufferBytes: 0,
+      );
+    }
+    return ExoLoadProfile(
+      minBufferMs: 15000,
+      maxBufferMs: 50000,
+      bufferForPlaybackMs: 2500,
+      bufferForPlaybackAfterRebufferMs: 5000,
+      backBufferMs: backBufferMs,
+      backBufferRequiresSeekable: false,
+      targetBufferBytes: 0,
+    );
+  }
 }
