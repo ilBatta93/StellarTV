@@ -12,8 +12,6 @@
 - **Aggiornamento note di rilascio:** Le note vanno sempre aggiornate **prima di avviare il workflow** di rilascio.
 - **Regola D-Pad TV:** Qualsiasi UI deve essere progettata primariamente per la navigazione da telecomando TV (focus visibile, gestione fluida del D-Pad, tasto Back coerente).
 
-## 3. Ottimizzazione Token e Prevenzione Timeout (OpenRouter)
-- **Risposte Mirate:** Concentrati esclusivamente sul file o sulla funzione richiesta. Non riscrivere interi file se non strettamente necessario.
-- **Diff e Patch:** Fornisci solo i blocchi di codice modificati o i diff puliti, evitando di ripetere codice esistente per risparmiare token ed evitare timeout.
+## 3. Ottimizzazione
 - **Spiegazioni Brevi:** Mantieni le spiegazioni tecniche concise (massimo 2-3 frasi), a meno che non venga richiesto un approfondimento architetturale.
 - **Lingua:** Comunica sempre in italiano. Riassumi brevemente le modifiche effettuate alla fine di ogni operazione.
