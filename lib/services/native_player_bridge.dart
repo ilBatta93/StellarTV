@@ -14,6 +14,20 @@ class DeviceMediaCapabilities {
   static const unknown = DeviceMediaCapabilities(hdrFormats: [], decoders: {});
 }
 
+/// Refresh rates the display offers at its current resolution.
+class DisplayRefresh {
+  final double? current;
+  final List<double> rates;
+
+  /// Android 12+ system choice for content frame rate: 'never', 'seamless'
+  /// or 'always'. Null when the system does not say.
+  final String? systemMatch;
+
+  const DisplayRefresh({this.current, this.rates = const [], this.systemMatch});
+
+  static const unknown = DisplayRefresh();
+}
+
 /// Android-only features (PiP, brightness, keep-awake). On other platforms
 /// every call degrades to a no-op.
 class NativePlayerBridge {
@@ -26,6 +40,9 @@ class NativePlayerBridge {
       } else if (call.method == 'screenOff') {
         _displayController.add(false);
         _screenOffController.add(null);
+      } else if (call.method == 'refreshRateChanged') {
+        final rate = call.arguments;
+        if (rate is num) _refreshController.add(rate.toDouble());
       }
     });
   }
@@ -44,6 +61,11 @@ class NativePlayerBridge {
   /// Android: the display turned off, the device went to sleep or the HDMI
   /// output was unplugged/turned off (TV switched off with the remote).
   Stream<void> get screenOff => _screenOffController.stream;
+
+  final _refreshController = StreamController<double>.broadcast();
+
+  /// Android: the display refresh rate after any mode change.
+  Stream<double> get refreshRateChanges => _refreshController.stream;
 
   Future<T?> _call<T>(String method, [Map<String, Object?>? args]) async {
     try {
@@ -92,6 +114,29 @@ class NativePlayerBridge {
       _call<void>('setBrightness', {'value': value});
 
   Future<void> resetBrightness() => setBrightness(-1);
+
+  Future<DisplayRefresh> getDisplayRefresh() async {
+    final raw = await _call<Map<Object?, Object?>>('getDisplayRefresh');
+    if (raw == null) return DisplayRefresh.unknown;
+    final current = raw['current'];
+    final rates = raw['rates'];
+    final match = raw['systemMatch'];
+    return DisplayRefresh(
+      current: current is num ? current.toDouble() : null,
+      rates: rates is List
+          ? [
+              for (final r in rates)
+                if (r is num) r.toDouble(),
+            ]
+          : const [],
+      systemMatch: match is String ? match : null,
+    );
+  }
+
+  /// Asks the display for [rate] Hz at the current resolution; null gives
+  /// the choice back to the system. False when no mode matches.
+  Future<bool> setPreferredRefreshRate(double? rate) async =>
+      await _call<bool>('setPreferredRefreshRate', {'rate': rate}) ?? false;
 
   Future<DeviceMediaCapabilities> getCapabilities() async {
     final raw = await _call<Map<Object?, Object?>>('getCapabilities');

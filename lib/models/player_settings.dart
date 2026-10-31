@@ -168,6 +168,9 @@ class PlayerSettings {
   bool backgroundAudio;
   bool showStats;
 
+  /// Android TV: switch the display to the video's frame rate.
+  bool matchFrameRate;
+
   PlayerSettings({
     this.primaryEngine = PlayerEngineType.mediakit,
     this.autoFallback = true,
@@ -205,6 +208,7 @@ class PlayerSettings {
     this.keepScreenOn = true,
     this.backgroundAudio = false,
     this.showStats = false,
+    this.matchFrameRate = false,
   });
 
   static const int cacheMib = 1024 * 1024;
@@ -336,6 +340,7 @@ class PlayerSettings {
       keepScreenOn: b('keepScreenOn', d.keepScreenOn),
       backgroundAudio: b('backgroundAudio', d.backgroundAudio),
       showStats: b('showStats', d.showStats),
+      matchFrameRate: b('matchFrameRate', d.matchFrameRate),
     );
   }
 
@@ -379,6 +384,7 @@ class PlayerSettings {
     'keepScreenOn': keepScreenOn,
     'backgroundAudio': backgroundAudio,
     'showStats': showStats,
+    'matchFrameRate': matchFrameRate,
   };
 }
 

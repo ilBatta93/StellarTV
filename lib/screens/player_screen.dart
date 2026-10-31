@@ -18,6 +18,7 @@ import 'multiview_screen.dart';
 import '../providers/epg_provider.dart';
 import '../player/playback_session.dart';
 import '../player/playback_engine.dart';
+import '../player/frame_rate_matcher.dart';
 import '../player/tv_playback_shortcuts.dart';
 import '../providers/history_provider.dart';
 import '../services/imdb_resolver.dart';
@@ -35,7 +36,9 @@ import '../services/catalog_builder.dart';
 import '../services/catalog_shelf.dart';
 import '../widgets/player/tv_live_banner.dart';
 import '../services/device_type_service.dart';
+import '../services/display_refresh_service.dart';
 import '../services/frame_telemetry_service.dart';
+import '../models/frame_rate_policy.dart';
 import '../theme/app_theme.dart';
 import '../widgets/episode_still_overlay.dart';
 import '../widgets/player/live_channel_picker.dart';
@@ -139,6 +142,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   bool _inPip = false;
   bool _pipSupported = false;
   bool _statsVisible = false;
+  FrameRateMatcher? _frameRate;
   bool _orientationApplied = false;
   Size _pipSize = Size.zero;
 
@@ -1572,6 +1576,12 @@ class _PlayerScreenState extends State<PlayerScreen>
     _applyOrientation(settings);
     if (settings.keepScreenOn) _bridge.setKeepScreenOn(true);
     if (pipSupported) _bridge.setAutoPip(settings.autoPip);
+    if (DeviceTypeService.isTv) {
+      unawaited(DisplayRefreshService.instance.ensureLoaded());
+    }
+    _frameRate = FrameRateMatcher(
+      enabled: DeviceTypeService.isTv && settings.matchFrameRate,
+    );
 
     final session = PlaybackSession(
       url: _channel.url,
@@ -1640,6 +1650,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     final settings = _settings;
     if (session == null || settings == null || !mounted) return;
     final v = session.value;
+    _frameRate?.update(session, _channel.url);
     unawaited(_readLocalChapters(session));
     final introActive = _visibleSkip(session) != null;
     if (introActive && !_introWasActive) {
@@ -1936,6 +1947,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _backgroundStop?.cancel();
     _session?.removeListener(_onSessionChanged);
     _session?.dispose();
+    _frameRate?.dispose();
     _bridge.setAutoPip(false);
     _bridge.setKeepScreenOn(false);
     _bridge.resetBrightness();
@@ -2014,6 +2026,21 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// Current programme for live channels. Selects only the title: the guide
   /// notifies on every refresh step, and watching all of it rebuilt the
   /// whole player while on air.
+  Listenable get _videoRateListenable =>
+      Listenable.merge([?_frameRate, DisplayRefreshService.instance.current]);
+
+  /// "1080p · 25 fps · 50 Hz" for the TV controls; parts still unknown are
+  /// left out.
+  String _videoRateInfo(PlaybackSession session) {
+    final fps = _frameRate?.fps;
+    final hz = DisplayRefreshService.instance.current.value;
+    return [
+      ?liveQualityLabel(session.value.size),
+      if (fps != null) formatFrameRate(fps),
+      if (hz != null) formatRefreshRate(hz),
+    ].join(' · ');
+  }
+
   String _liveSubtitle() {
     if (!_isLive) return _channel.group;
     final channel = _channel;
@@ -2110,6 +2137,18 @@ class _PlayerScreenState extends State<PlayerScreen>
                   selectedColumn: _tvCol,
                   title: _channel.name,
                   subtitle: _liveSubtitle(),
+                  videoInfo: ListenableBuilder(
+                    listenable: _videoRateListenable,
+                    builder: (context, _) => Text(
+                      _videoRateInfo(session),
+                      maxLines: 1,
+                      style: const TextStyle(
+                        color: AppColors.onOverlaySecondary,
+                        fontSize: 14,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
                   isLive: _isLive,
                   locked: _locked,
                   position: session.value.position,
@@ -2236,7 +2275,16 @@ class _PlayerScreenState extends State<PlayerScreen>
         Positioned(
           top: 72,
           right: 16,
-          child: SafeArea(child: PlayerStats(session: session)),
+          child: SafeArea(
+            child: ListenableBuilder(
+              listenable: _videoRateListenable,
+              builder: (context, _) => PlayerStats(
+                session: session,
+                frameRate: _frameRate?.fps,
+                refreshRate: DisplayRefreshService.instance.current.value,
+              ),
+            ),
+          ),
         ),
       if (session.notice != null)
         Positioned(

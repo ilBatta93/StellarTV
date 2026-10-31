@@ -384,6 +384,25 @@ class ExoEngine extends PlaybackEngine {
   }
 
   @override
+  Future<double?> videoFrameRate() async {
+    if (_disposed) return null;
+    try {
+      final tracks = await _controller.getVideoTracks();
+      for (final t in tracks) {
+        if (t.isSelected && (t.frameRate ?? 0) > 0) return t.frameRate;
+      }
+      // Adaptive streams before a selection: all renditions share the rate.
+      final rates = {
+        for (final t in tracks)
+          if ((t.frameRate ?? 0) > 0) t.frameRate!,
+      };
+      return rates.length == 1 ? rates.first : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
   Future<void> selectQualityTrack(MediaTrack? track) => _controller
       .selectVideoTrack(track == null ? null : _videoTracks[track.id]);
 

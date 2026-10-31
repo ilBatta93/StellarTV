@@ -77,6 +77,9 @@ abstract class PlaybackEngine extends ChangeNotifier {
   /// clock drift). No addresses, no titles, no player messages.
   Future<Map<String, Object?>> metrics() async => const {};
 
+  /// Frames per second of the playing video, null while unknown.
+  Future<double?> videoFrameRate() async => null;
+
   /// Optional local container chapters; unsupported engines return empty.
   Future<List<Map<String, Object?>>> chapters() async => const [];
 

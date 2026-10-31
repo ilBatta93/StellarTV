@@ -15,3 +15,4 @@
 - Nel player della TV il pulsante selezionato mostra il suo nome.
 - Le card senza locandina mostrano il titolo.
 - Al primo avvio dopo un aggiornamento il catalogo mostra «Preparazione del catalogo…» invece di sembrare vuoto.
+- Sulla TV il player può portare lo schermo alla frequenza del video (ad esempio 50 Hz per i canali a 25 fotogrammi) per un movimento senza scatti: attivalo con «Adatta frequenza schermo» nelle impostazioni del player. I comandi del player mostrano risoluzione, fotogrammi e frequenza dello schermo.

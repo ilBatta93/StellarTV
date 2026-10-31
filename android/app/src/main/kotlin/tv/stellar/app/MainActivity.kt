@@ -152,12 +152,22 @@ class MainActivity : FlutterActivity() {
             }
             screenReceiverRegistered = true
         } catch (_: Exception) {}
+        try {
+            val dm = getSystemService(Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager
+            dm.registerDisplayListener(displayListener, null)
+            displayListenerRegistered = true
+        } catch (_: Exception) {}
     }
 
     override fun onDestroy() {
         if (screenReceiverRegistered) {
             try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
             screenReceiverRegistered = false
+        }
+        if (displayListenerRegistered) {
+            val dm = getSystemService(Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager
+            try { dm.unregisterDisplayListener(displayListener) } catch (_: Exception) {}
+            displayListenerRegistered = false
         }
         super.onDestroy()
     }
@@ -359,6 +369,10 @@ class MainActivity : FlutterActivity() {
                     )
                 }
                 "getCapabilities" -> result.success(capabilities())
+                "getDisplayRefresh" -> result.success(displayRefresh())
+                "setPreferredRefreshRate" -> {
+                    result.success(setPreferredRefreshRate(call.argument<Double>("rate")))
+                }
                 else -> result.notImplemented()
             }
         }
@@ -433,16 +447,76 @@ class MainActivity : FlutterActivity() {
         channel?.invokeMethod("pipChanged", isInPictureInPictureMode)
     }
 
+    private fun currentDisplay(): Display? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            this.display
+        } else {
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay
+        }
+
+    // Auto frame rate: the video is drawn into a Flutter texture, so
+    // Surface.setFrameRate on the decoder output never reaches the display.
+    // The window's preferred mode does, on every Android TV and Fire TV.
+    private fun displayRefresh(): Map<String, Any?> {
+        val display = currentDisplay()
+        val out = mutableMapOf<String, Any?>(
+            "current" to display?.refreshRate?.toDouble(),
+            "rates" to emptyList<Double>(),
+        )
+        if (display == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return out
+        val active = display.mode
+        out["rates"] = display.supportedModes
+            .filter { it.physicalWidth == active.physicalWidth && it.physicalHeight == active.physicalHeight }
+            .map { it.refreshRate.toDouble() }
+            .distinct()
+            .sorted()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val dm = getSystemService(Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager
+            out["systemMatch"] = when (dm.matchContentFrameRateUserPreference) {
+                android.hardware.display.DisplayManager.MATCH_CONTENT_FRAMERATE_NEVER -> "never"
+                android.hardware.display.DisplayManager.MATCH_CONTENT_FRAMERATE_SEAMLESSS_ONLY -> "seamless"
+                android.hardware.display.DisplayManager.MATCH_CONTENT_FRAMERATE_ALWAYS -> "always"
+                else -> null
+            }
+        }
+        return out
+    }
+
+    /** Null (or no matching mode) gives the display back to the system. */
+    private fun setPreferredRefreshRate(rate: Double?): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false
+        val display = currentDisplay() ?: return false
+        val active = display.mode
+        val mode = rate?.let { r ->
+            display.supportedModes
+                .filter { it.physicalWidth == active.physicalWidth && it.physicalHeight == active.physicalHeight }
+                .minByOrNull { Math.abs(it.refreshRate - r) }
+                ?.takeIf { Math.abs(it.refreshRate - r) < 0.01 }
+        }
+        val lp = window.attributes
+        val id = mode?.modeId ?: 0
+        if (lp.preferredDisplayModeId != id) {
+            lp.preferredDisplayModeId = id
+            window.attributes = lp
+        }
+        return mode != null || rate == null
+    }
+
+    private var displayListenerRegistered = false
+    private val displayListener = object : android.hardware.display.DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) {}
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId != Display.DEFAULT_DISPLAY) return
+            channel?.invokeMethod("refreshRateChanged", currentDisplay()?.refreshRate?.toDouble())
+        }
+    }
+
     private fun capabilities(): Map<String, Any> {
         val hdr = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            val display: Display? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                this.display
-            } else {
-                @Suppress("DEPRECATION")
-                windowManager.defaultDisplay
-            }
-            display?.hdrCapabilities?.supportedHdrTypes?.forEach { type ->
+            currentDisplay()?.hdrCapabilities?.supportedHdrTypes?.forEach { type ->
                 when (type) {
                     Display.HdrCapabilities.HDR_TYPE_HDR10 -> hdr.add("HDR10")
                     Display.HdrCapabilities.HDR_TYPE_HLG -> hdr.add("HLG")

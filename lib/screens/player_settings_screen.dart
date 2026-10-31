@@ -5,6 +5,7 @@ import '../widgets/apple_page_scaffold.dart';
 import '../models/player_settings.dart';
 import '../services/native_player_bridge.dart';
 import '../services/device_type_service.dart';
+import '../services/display_refresh_service.dart';
 import '../services/player_settings_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/player/player_format.dart';
@@ -44,6 +45,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     if (DeviceTypeService.isTv && widget.scope == null) return;
     final settings = await _service.load(scope: _scope);
     final caps = await NativePlayerBridge.instance.getCapabilities();
+    await DisplayRefreshService.instance.ensureLoaded();
     if (!mounted) return;
     setState(() {
       _s = settings;
@@ -567,6 +569,20 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           value: s.showStats,
           onChanged: (v) => _update((s) => s.showStats = v),
         ),
+        if (DeviceTypeService.isTv)
+          SettingsSwitchTile(
+            icon: Icons.slow_motion_video_rounded,
+            title: 'Adatta frequenza schermo',
+            subtitle: DisplayRefreshService.instance.systemMatchOff
+                ? 'Porta lo schermo alla frequenza del video (25 fps a 50 Hz). '
+                      'Il TV potrebbe ignorarla: in Impostazioni di sistema, '
+                      'Display e audio, «Adatta frequenza fotogrammi» è su «Mai»'
+                : 'Porta lo schermo alla frequenza del video (25 fps a 50 Hz) '
+                      'per un movimento senza scatti. Al cambio lo schermo '
+                      'resta nero per un istante',
+            value: s.matchFrameRate,
+            onChanged: (v) => _update((s) => s.matchFrameRate = v),
+          ),
       ],
     ),
   ];

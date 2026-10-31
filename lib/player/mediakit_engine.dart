@@ -72,6 +72,8 @@ class MediaKitEngine extends PlaybackEngine {
     });
     _player.stream.duration.listen((_) => _sync());
     _player.stream.track.listen((_) => _sync());
+    _player.stream.width.listen((_) => _sync());
+    _player.stream.height.listen((_) => _sync());
     _sync();
   }
 
@@ -450,11 +452,16 @@ class MediaKitEngine extends PlaybackEngine {
     if (_disposed) return;
     final p = _player.state;
     Size size = _value.size;
-    final videoTracks = p.tracks.video;
-    if (videoTracks.isNotEmpty) {
-      final t = videoTracks.first;
-      if (t.w != null && t.h != null) {
-        size = Size(t.w!.toDouble(), t.h!.toDouble());
+    // The decoded picture first: on live streams the track list starts with
+    // the "auto" entry, which has no dimensions.
+    if ((p.width ?? 0) > 0 && (p.height ?? 0) > 0) {
+      size = Size(p.width!.toDouble(), p.height!.toDouble());
+    } else {
+      for (final t in p.tracks.video) {
+        if ((t.w ?? 0) > 0 && (t.h ?? 0) > 0) {
+          size = Size(t.w!.toDouble(), t.h!.toDouble());
+          break;
+        }
       }
     }
     _value = PlaybackSnapshot(
@@ -598,6 +605,25 @@ class MediaKitEngine extends PlaybackEngine {
       read('video-codec', 'videoCodec'),
     ]);
     return out;
+  }
+
+  /// The container rate comes first: mpv's estimate needs a few seconds of
+  /// pictures and jitters on live streams.
+  @override
+  Future<double?> videoFrameRate() async {
+    final platform = _player.platform;
+    if (_disposed || platform is! NativePlayer) return null;
+    for (final property in const ['container-fps', 'estimated-vf-fps']) {
+      try {
+        final value = double.tryParse(
+          await platform
+              .getProperty(property)
+              .timeout(const Duration(milliseconds: 400)),
+        );
+        if (value != null && value > 0) return value;
+      } catch (_) {}
+    }
+    return null;
   }
 
   @override

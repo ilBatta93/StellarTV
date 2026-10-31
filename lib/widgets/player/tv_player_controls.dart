@@ -60,6 +60,9 @@ class TvPlayerControls extends StatelessWidget {
   /// Live timeshift: how far behind the live point (null = at LIVE).
   final Duration? liveDelay;
 
+  /// Picture details beside the title (resolution, frame rate, display Hz).
+  final Widget? videoInfo;
+
   const TvPlayerControls({
     super.key,
     required this.rows,
@@ -74,6 +77,7 @@ class TvPlayerControls extends StatelessWidget {
     required this.buffered,
     this.pendingSeek,
     this.liveDelay,
+    this.videoInfo,
   });
 
   TvPlayerRow? _row(TvPlayerRowKind kind) {
@@ -131,15 +135,25 @@ class TvPlayerControls extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.onOverlay,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.onOverlay,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (videoInfo != null) ...[
+                        const SizedBox(width: 16),
+                        videoInfo!,
+                      ],
+                    ],
                   ),
                   if (subtitle.isNotEmpty)
                     Text(

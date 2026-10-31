@@ -1,13 +1,21 @@
 import 'package:flutter/material.dart';
 
+import '../../models/frame_rate_policy.dart';
 import '../../player/playback_session.dart';
 import '../../services/device_type_service.dart';
 import 'player_format.dart';
 
 class PlayerStats extends StatelessWidget {
   final PlaybackSession session;
+  final double? frameRate;
+  final double? refreshRate;
 
-  const PlayerStats({super.key, required this.session});
+  const PlayerStats({
+    super.key,
+    required this.session,
+    this.frameRate,
+    this.refreshRate,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +32,8 @@ class PlayerStats extends StatelessWidget {
             : '-',
       ),
       ('Proporzioni', v.hasVideoSize ? v.aspectRatio.toStringAsFixed(2) : '-'),
+      if (frameRate case final fps?) ('Fotogrammi', formatFrameRate(fps)),
+      if (refreshRate case final hz?) ('Schermo', formatRefreshRate(hz)),
       (
         'Stato',
         v.isBuffering
