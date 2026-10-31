@@ -260,6 +260,11 @@ class _TvRatedPoster extends StatefulWidget {
 
 class _TvRatedPosterState extends State<_TvRatedPoster> {
   double? _rating;
+
+  /// The TMDB poster often arrives after the rating (already known from the
+  /// cloud): comparing the rating alone left those cards grey until they
+  /// were rebuilt, e.g. by opening the title and coming back.
+  String? _poster;
   @override
   void initState() {
     super.initState();
@@ -274,13 +279,21 @@ class _TvRatedPosterState extends State<_TvRatedPoster> {
   }
 
   void _request() {
-    _rating = CatalogRatingService.instance.ratingOf(widget.channel);
-    CatalogRatingService.instance.request([widget.channel], priority: true);
+    final service = CatalogRatingService.instance;
+    _rating = service.ratingOf(widget.channel);
+    _poster = service.itemOf(widget.channel)?.posterUrl;
+    service.request([widget.channel], priority: true);
   }
 
   void _changed() {
-    final value = CatalogRatingService.instance.ratingOf(widget.channel);
-    if (mounted && value != _rating) setState(() => _rating = value);
+    final service = CatalogRatingService.instance;
+    final rating = service.ratingOf(widget.channel);
+    final poster = service.itemOf(widget.channel)?.posterUrl;
+    if (!mounted || (rating == _rating && poster == _poster)) return;
+    setState(() {
+      _rating = rating;
+      _poster = poster;
+    });
   }
 
   @override

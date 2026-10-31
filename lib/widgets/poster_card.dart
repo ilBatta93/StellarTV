@@ -1,5 +1,6 @@
 import '../models/home_layout_preferences.dart';
 import 'home_presentation.dart';
+import '../services/disk_image_provider.dart';
 import '../services/image_cache_service.dart';
 import '../services/image_warmup_service.dart';
 
@@ -83,6 +84,35 @@ class PosterImage extends StatelessWidget {
           cacheWidth = ((px / 64).ceil() * 64).clamp(64, decodeLimit);
           if (rememberWidth) PosterMemoryWarmup.noteWidth(cacheWidth);
         }
+        Widget onError() => fallbackUrls.isEmpty
+            ? fallback
+            : PosterImage(
+                url: fallbackUrls.first,
+                fallbackUrls: fallbackUrls.skip(1).toList(),
+                fit: fit,
+                fallbackIcon: fallbackIcon,
+                maxDecodeWidth: maxDecodeWidth,
+                audiobookCover: audiobookCover,
+              );
+        if (DeviceTypeService.isTv) {
+          // Decoded from the cached file: the bytes skip the Dart heap.
+          return Image(
+            image: ResizeImage.resizeIfNeeded(
+              cacheWidth,
+              null,
+              DiskCachedImage(
+                tmdbSizedUrl(url!, cacheWidth),
+                cacheManager: AppImageCache.manager,
+              ),
+            ),
+            fit: fit,
+            filterQuality: FilterQuality.low,
+            frameBuilder: (_, child, frame, sync) => sync || frame != null
+                ? child
+                : Container(color: AppColors.card),
+            errorBuilder: (_, _, _) => onError(),
+          );
+        }
         return CachedNetworkImage(
           cacheManager: AppImageCache.manager,
           imageUrl: tmdbSizedUrl(url!, cacheWidth),
@@ -95,16 +125,7 @@ class PosterImage extends StatelessWidget {
               ? Duration.zero
               : const Duration(milliseconds: 200),
           placeholder: (_, _) => Container(color: AppColors.card),
-          errorWidget: (_, _, _) => fallbackUrls.isEmpty
-              ? fallback
-              : PosterImage(
-                  url: fallbackUrls.first,
-                  fallbackUrls: fallbackUrls.skip(1).toList(),
-                  fit: fit,
-                  fallbackIcon: fallbackIcon,
-                  maxDecodeWidth: maxDecodeWidth,
-                  audiobookCover: audiobookCover,
-                ),
+          errorWidget: (_, _, _) => onError(),
         );
       },
     );

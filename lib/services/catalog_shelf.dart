@@ -1009,7 +1009,9 @@ _ShelfImage _mergePieces(List<_ShelfImage> pieces, String token) {
   );
 }
 
-const _indexVersion = 1;
+// 2: title keys drop bracketed tags and trailing separators before the
+// year, so copies of one film share a key.
+const _indexVersion = 2;
 
 String catalogSectionIndexPath(String sectionPath) => '$sectionPath.idx';
 

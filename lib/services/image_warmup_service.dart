@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'image_cache_service.dart';
 import 'device_type_service.dart';
+import 'disk_image_provider.dart';
 import 'playback_work_policy.dart';
 import 'tv_render_policy.dart';
 
@@ -200,9 +201,10 @@ class PosterMemoryWarmup {
               ModalRoute.of(context)?.isCurrent == false) {
             return;
           }
+          // Same provider and key as the TV poster card.
           await precacheImage(
             ResizeImage(
-              CachedNetworkImageProvider(
+              DiskCachedImage(
                 tmdbSizedUrl(u, w),
                 cacheManager: AppImageCache.manager,
               ),

@@ -20,6 +20,18 @@ void main() {
   test('title keys match the Home lookup normalization', () {
     expect(catalogTitleKey('IT: Inception (2010) [4K]'), 'inception');
     expect(catalogTitleKey('Il Padrino 1972 FHD'), 'il padrino');
+    // A 4K copy named "Title - 2026 - 4K" is the same title.
+    expect(
+      catalogTitleKey('Stormen - 2026 - 4K'),
+      catalogTitleKey('Stormen (2026)'),
+    );
+    // An extended cut tagged after the year is the same title.
+    expect(
+      catalogTitleKey(
+        'Il Signore degli Anelli - Il ritorno del re 2003 [V E ]',
+      ),
+      catalogTitleKey('Il Signore degli Anelli - Il ritorno del re'),
+    );
   });
 
   test(

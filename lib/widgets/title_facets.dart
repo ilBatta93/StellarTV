@@ -217,28 +217,83 @@ class ImdbRatingBadge extends StatelessWidget {
     this.framed = false,
   });
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
+  Widget build(BuildContext context) => _SelectedRating(
     listenable: Listenable.merge([
       ImdbRatingService.instance.store,
       TitleFacetIndex.instance,
     ]),
-    builder: (_, _) {
+    read: () {
       if (priority) {
         ImdbRatingService.instance.ratingOf(item, priority: true);
       } else if (reveal) {
         ImdbRatingService.instance.reveal(item);
       }
       final key = ImdbRatingService.keyOf(item);
-      return RatingValue(
-        imdb:
-            TitleFacetIndex.instance.imdbOfMedia(key) ??
+      return (
+        TitleFacetIndex.instance.imdbOfMedia(key) ??
             ImdbRatingService.instance.peek(item),
-        fallback: item.voteAverage,
-        height: height,
-        framed: framed,
+        item.voteAverage,
       );
     },
+    builder: (value) => RatingValue(
+      imdb: value.$1,
+      fallback: value.$2,
+      height: height,
+      framed: framed,
+    ),
   );
+}
+
+/// Rebuilds the badge only when its own value changes. The stores it
+/// listens to notify for every title: rebuilding every visible badge on
+/// each of those kept the TV grid drawing about 15 frames a second while
+/// idle, and it competed with remote scrolling.
+class _SelectedRating extends StatefulWidget {
+  const _SelectedRating({
+    required this.listenable,
+    required this.read,
+    required this.builder,
+  });
+
+  final Listenable listenable;
+  final (double?, double) Function() read;
+  final Widget Function((double?, double) value) builder;
+
+  @override
+  State<_SelectedRating> createState() => _SelectedRatingState();
+}
+
+class _SelectedRatingState extends State<_SelectedRating> {
+  late (double?, double) _value = widget.read();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.listenable.addListener(_changed);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SelectedRating oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    oldWidget.listenable.removeListener(_changed);
+    widget.listenable.addListener(_changed);
+    _value = widget.read();
+  }
+
+  void _changed() {
+    final value = widget.read();
+    if (!mounted || value == _value) return;
+    setState(() => _value = value);
+  }
+
+  @override
+  void dispose() {
+    widget.listenable.removeListener(_changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(_value);
 }
 
 /// All catalog layouts resolve the same identity and update only this badge.
@@ -278,14 +333,14 @@ class _ChannelRatingBadgeState extends State<ChannelRatingBadge> {
   @override
   Widget build(BuildContext context) {
     final service = CatalogRatingService.instance;
-    return ListenableBuilder(
+    return _SelectedRating(
       listenable: Listenable.merge([
         service,
         service.identities,
         ImdbRatingService.instance.store,
         TitleFacetIndex.instance,
       ]),
-      builder: (_, _) {
+      read: () {
         final item = service.itemOf(widget.channel);
         // Posters read the device cache only. A full lookup is reserved for
         // the open title, so scrolling cannot delay that page.
@@ -296,13 +351,17 @@ class _ChannelRatingBadgeState extends State<ChannelRatingBadge> {
                     ImdbRatingService.keyOf(item),
                   ) ??
                   ImdbRatingService.instance.peek(item);
-        return RatingValue(
-          imdb: imdb,
-          fallback: service.ratingOf(widget.channel) ?? item?.voteAverage ?? 0,
-          height: widget.height,
-          framed: widget.framed,
+        return (
+          imdb,
+          service.ratingOf(widget.channel) ?? item?.voteAverage ?? 0,
         );
       },
+      builder: (value) => RatingValue(
+        imdb: value.$1,
+        fallback: value.$2,
+        height: widget.height,
+        framed: widget.framed,
+      ),
     );
   }
 }

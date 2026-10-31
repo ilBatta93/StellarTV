@@ -90,6 +90,7 @@ class CatalogRatingService extends ChangeNotifier {
   void remember(Channel c, TmdbItem item) {
     final key = _key(c);
     identities.put(key, item);
+    _unprimed.add(item);
     TitleFacetIndex.instance.link(
       titleKey: key,
       mediaKey: ImdbRatingService.keyOf(item),
@@ -135,15 +136,24 @@ class CatalogRatingService extends ChangeNotifier {
   }
 
   /// Shared-cache IMDb scores for identities that are due, never during playback.
+  /// Identities stored since the last prime. `prime` never asks a title
+  /// twice in a session, so after the first full pass only these need it:
+  /// rescanning tens of thousands of identities every 2.5 s took about a
+  /// tenth of the TV's UI thread.
+  final List<TmdbItem> _unprimed = [];
+  bool _primedAll = false;
+
   void _primeImdb() {
     if (PlaybackWorkPolicy.instance.blocksGuide) return;
+    final source = _primedAll ? _unprimed : identities.values;
     final items = <TmdbItem>[];
-    // No copy of the whole identity table every 2.5 s.
-    for (final item in identities.values) {
+    for (final item in source) {
       if (!TitleFacetIndex.instance.imdbFresh(ImdbRatingService.keyOf(item))) {
         items.add(item);
       }
     }
+    _primedAll = true;
+    _unprimed.clear();
     if (items.isNotEmpty) ImdbRatingService.instance.prime(items);
   }
 
@@ -291,6 +301,8 @@ class CatalogRatingService extends ChangeNotifier {
       }
       version++;
       notifyListeners();
+      // Stored identities are now in memory: one full pass covers them.
+      _primedAll = false;
       _primeImdb();
     } catch (_) {}
   }

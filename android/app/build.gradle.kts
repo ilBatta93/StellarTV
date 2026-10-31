@@ -52,6 +52,12 @@ android {
                 "proguard-rules.pro",
             )
         }
+        // Local DevTools profiling: a separate package installs next to the
+        // release app, so its data and signature are left untouched.
+        maybeCreate("profile").apply {
+            applicationIdSuffix = ".profile"
+            versionNameSuffix = "-profile"
+        }
     }
 }
 

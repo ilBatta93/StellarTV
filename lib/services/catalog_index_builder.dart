@@ -74,10 +74,17 @@ CatalogIndexData buildCatalogIndex(
 final _langPrefix = RegExp(r'^\s*[a-z]{2,3}\s*[:|\-]\s*');
 final _brackets = RegExp(r'\[[^\]]*\]|\([^)]*\)');
 final _nonWord = RegExp(r'[^a-z0-9à-ÿ]+');
+final _trailingSeparators = RegExp(r'[\s\-–:|]+$');
 
 /// Title key shared by the playlist index and the TMDB lookups.
+/// Bracketed tags, quality tags and trailing separators go first: in
+/// "Title 2003 [V E ]" and "Title - 2026 - 4K" they hid the year from the
+/// parser, so the same film became a second catalog entry.
 String catalogTitleKey(String raw) =>
-    TmdbService.cleanTitle(raw)
+    TmdbService.cleanTitle(
+          CatalogBuilder.stripQuality(raw.replaceAll(_brackets, ' '))
+              .replaceAll(_trailingSeparators, ''),
+        )
         .toLowerCase()
         .replaceAll(_langPrefix, '')
         .replaceAll(_brackets, ' ')
