@@ -156,7 +156,6 @@ jobs:
           token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: "v${{ env.VERSION }}"
           name: "StellarTV v${{ env.VERSION }}"
-          target_commitish: ${{ github.sha }}
           body_path: RELEASE_NOTES.md
           files: dist/*.ipa
           draft: false
