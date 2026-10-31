@@ -519,6 +519,9 @@ class _CatalogPageState extends State<CatalogPage> {
   @override
   void dispose() {
     _ratingDebounce?.cancel();
+    if (_sort == CatalogSort.rating) {
+      TitleFacetIndex.instance.watchRank(widget.type, false);
+    }
     TitleFacetIndex.instance.removeListener(_onFacetRank);
     CatalogOrderStore.instance.removeListener(_savedOrderLoaded);
     PlatformCatalogService.instance.removeListener(_platformsChanged);
@@ -657,6 +660,12 @@ class _CatalogPageState extends State<CatalogPage> {
               onSort: (value) {
                 if (_sort == value) return;
                 _ratingDebounce?.cancel();
+                if (_sort == CatalogSort.rating) {
+                  TitleFacetIndex.instance.watchRank(widget.type, false);
+                }
+                if (value == CatalogSort.rating) {
+                  TitleFacetIndex.instance.watchRank(widget.type, true);
+                }
                 setState(() {
                   _sort = value;
                   if (value == CatalogSort.rating) _publishRatingIds();

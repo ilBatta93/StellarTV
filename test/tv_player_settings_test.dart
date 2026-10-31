@@ -112,6 +112,9 @@ void main() {
       ),
       isTrue,
     );
+    // Live H.264 in FFmpeg buffered every few seconds on a four-core TV.
+    expect(MediaKitEngine.hardwareCodecs.split(','), contains('h264'));
+    expect(MediaKitEngine.hardwareCodecs, isNot(contains('mpeg2')));
     expect(MediaKitEngine.decoderThreads(tv: true, live: true), '2');
     expect(MediaKitEngine.decoderThreads(tv: true, live: false), '4');
     expect(

@@ -106,15 +106,23 @@ class MediaKitEngine extends PlaybackEngine {
         'reconnect_delay_max=5';
   }
 
-  /// Live TV decodes broadcast H.264 in FFmpeg while the hardware allowlist
-  /// is only the progressive codecs. That path needs the cheap decoder
-  /// before a black-picture retry sets [softwareDecode].
+  /// Live TV still decodes MPEG-2 and VC-1 in FFmpeg, so that path keeps
+  /// the cheap decoder even before a black-picture retry sets
+  /// [softwareDecode]. Hardware-decoded codecs ignore these options.
   @visibleForTesting
   static bool useCheapLiveDecode({
     required bool tv,
     required bool live,
     required bool softwareDecode,
   }) => softwareDecode || (tv && live);
+
+  /// Codecs handed to MediaCodec. Live H.264 decoded in FFmpeg could not
+  /// keep 1080p25 on a four-core TV stick (buffering every few seconds), so
+  /// it goes to hardware too. MPEG-2 and VC-1 stay in FFmpeg; an H.264 1080i
+  /// channel that draws black is caught by the black-picture retry, which
+  /// sets [softwareDecode] and is remembered by DecoderMemory.
+  @visibleForTesting
+  static const hardwareCodecs = 'h264,hevc,vp9,av1';
 
   /// Four threads on a four-core stick leave nothing for the picture.
   @visibleForTesting
@@ -178,14 +186,7 @@ class MediaKitEngine extends PlaybackEngine {
       // A deeper audio buffer absorbs Android audio-driver hiccups, so
       // mpv no longer repeats/skips frames to chase the audio clock.
       'audio-buffer': '0.5',
-      // Broadcast H.264 1080i, MPEG-2 and VC-1 channels gave audio with a
-      // black picture through MediaCodec on Fire TV / Google TV /
-      // Chromecast (no hardware deinterlacing towards the texture). Live:
-      // hardware only for the progressive 4K codecs those chips really draw
-      // (HEVC/VP9/AV1, always worked); FFmpeg decodes and deinterlaces the
-      // rest. Film/series (progressive H.264) keep hardware H.264.
-      if (!softwareDecode)
-        'hwdec-codecs': isLive ? 'hevc,vp9,av1' : 'h264,hevc,vp9,av1',
+      if (!softwareDecode) 'hwdec-codecs': hardwareCodecs,
       if (isLive && !softwareDecode) 'deinterlace': 'auto',
       'cache-pause-initial': 'no',
       // Film/series: let mpv queue frames ahead of the Android surface so a

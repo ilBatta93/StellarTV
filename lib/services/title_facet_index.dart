@@ -40,10 +40,11 @@ class _Facet {
 }
 
 class _Subject {
-  const _Subject(this.ids, this.names, this.typeName);
+  const _Subject(this.ids, this.keys);
   final List<String> ids;
-  final List<String> names;
-  final String typeName;
+
+  /// Index key of each title, in the same (alphabetical) order as [ids].
+  final List<String> keys;
 }
 
 /// Local index of per-title metadata. The UI reads this, never the network.
@@ -63,6 +64,12 @@ class TitleFacetIndex extends ChangeNotifier {
   final Map<ContentType, List<String>> _ranked = {};
   final Map<ContentType, int> _generations = {};
   final Map<ContentType, int> _jobs = {};
+
+  /// Catalog pages sorting by rating. Only these types are joined: ranking
+  /// every catalog every two seconds while scores arrived filled the shared
+  /// isolate heap and the GC paused the TV's UI for seconds.
+  final Map<ContentType, int> _watchers = {};
+  final Set<ContentType> _stale = {};
   Future<void>? _loading;
   Timer? _saveTimer;
   Timer? _notifyTimer;
@@ -383,45 +390,46 @@ class TitleFacetIndex extends ChangeNotifier {
     if (changed) _scheduleSave();
   }
 
-  /// Joins the published catalog to the scores already in memory.
-  /// Only ids and names cross the isolate.
+  /// Registers the published catalog. Title keys are parsed once here;
+  /// the join itself runs only while a page sorts [type] by rating.
   Future<void> rank(
     ContentType type,
     List<String> ids,
     List<String> names,
   ) async {
-    _subjects[type] = _Subject(
-      List<String>.from(ids),
-      List<String>.from(names),
-      type.name,
-    );
-    await _runRank(type);
+    final typeName = type.name;
+    final copy = List<String>.from(names);
+    final keys = await Isolate.run(() => titleKeysOf(copy, typeName));
+    _subjects[type] = _Subject(List<String>.from(ids), keys);
+    _stale.add(type);
+    if (_watchers.containsKey(type)) await _runRank(type);
   }
 
-  Map<String, double> _titleScores() {
-    final scores = <String, double>{};
-    for (final entry in _rows.entries) {
-      final row = entry.value;
-      final score = row.imdbKnown && row.imdb > 0
-          ? row.imdb
-          : row.tmdbKnown && row.tmdb > 0
-          ? row.tmdb
-          : 0.0;
-      if (score > 0) scores[entry.key] = score;
+  /// A catalog page sorting by rating calls this with true, and with false
+  /// when it stops. The first watcher gets a fresh join right away.
+  void watchRank(ContentType type, bool watching) {
+    final count = (_watchers[type] ?? 0) + (watching ? 1 : -1);
+    if (count > 0) {
+      _watchers[type] = count;
+      if (watching && count == 1 && _stale.contains(type)) {
+        unawaited(_runRank(type));
+      }
+    } else {
+      _watchers.remove(type);
     }
-    return scores;
   }
 
   void _scheduleRank() {
     _rankPending = true;
-    // Each join copies every catalog name to an isolate: while a whole
-    // catalog is being scored, one join every two seconds is enough.
+    // While a whole catalog is being scored, one join every two seconds
+    // is enough.
     _rankTimer ??= Timer(const Duration(seconds: 2), () {
       _rankTimer = null;
       if (!_rankPending) return;
       _rankPending = false;
+      _stale.addAll(_subjects.keys);
       for (final type in _subjects.keys) {
-        unawaited(_runRank(type));
+        if (_watchers.containsKey(type)) unawaited(_runRank(type));
       }
     });
   }
@@ -431,18 +439,22 @@ class TitleFacetIndex extends ChangeNotifier {
     if (subject == null) return;
     final job = (_jobs[type] ?? 0) + 1;
     _jobs[type] = job;
-    final ids = subject.ids;
-    final names = subject.names;
-    final typeName = subject.typeName;
-    final clock = Stopwatch()..start();
-    final scores = _titleScores();
-    final pending = Isolate.run(
-      () => rankKnownTitleIds(ids, names, typeName, scores),
-    );
-    FrameTelemetryService.instance.recordWork('indice.classifica', clock);
-    final ranked = await pending;
+    _stale.remove(type);
+    final keys = subject.keys;
+    final scores = Float64List(keys.length);
+    final slice = WorkSlicer();
+    for (var i = 0; i < keys.length; i++) {
+      await slice.pause();
+      scores[i] = scoreOfTitle(keys[i]);
+    }
     if (_jobs[type] != job) return;
-    _ranked[type] = ranked;
+    final clock = Stopwatch()..start();
+    final pending = Isolate.run(() => rankedPositions(scores));
+    FrameTelemetryService.instance.recordWork('indice.classifica', clock);
+    final order = await pending;
+    if (_jobs[type] != job || !identical(_subjects[type], subject)) return;
+    final ids = subject.ids;
+    _ranked[type] = [for (final i in order) ids[i]];
     _generations[type] = (_generations[type] ?? 0) + 1;
     notifyListeners();
   }

@@ -1,4 +1,5 @@
 import 'dart:isolate';
+import 'dart:typed_data';
 
 import '../models/channel.dart';
 import 'catalog_builder.dart';
@@ -14,7 +15,7 @@ enum CatalogSort {
   dateDesc('Ultimo aggiunto'),
   releaseDesc('Uscita più recente'),
   releaseAsc('Uscita meno recente'),
-  rating('Voto IMDb');
+  rating('Voto');
 
   const CatalogSort(this.label);
   final String label;
@@ -135,21 +136,33 @@ List<String> rankKnownTitleIds(
   String typeName,
   Map<String, double> scoresByTitle,
 ) {
-  final scores = List<double>.generate(ids.length, (i) {
-    if (i >= names.length) return 0;
-    return scoresByTitle[parseTitle(names[i]).key(typeName)] ?? 0;
-  }, growable: false);
-  final order = <int>[];
-  for (var i = 0; i < scores.length; i++) {
-    if (scores[i] > 0) order.add(i);
+  final keys = titleKeysOf(names, typeName);
+  final scores = Float64List(ids.length);
+  for (var i = 0; i < ids.length && i < keys.length; i++) {
+    scores[i] = scoresByTitle[keys[i]] ?? 0;
   }
+  return [for (final i in rankedPositions(scores)) ids[i]];
+}
+
+/// Index key of every name, computed once per published catalog: parsing
+/// every title at each join was the heaviest part of the rating sort.
+List<String> titleKeysOf(List<String> names, String typeName) => [
+  for (final name in names) parseTitle(name).key(typeName),
+];
+
+/// Positions with a positive score, highest first. Ties keep the incoming
+/// order, which is already alphabetical. Only typed lists cross the
+/// isolate: no strings to copy and no garbage for the shared heap.
+Int32List rankedPositions(Float64List scores) {
+  final order = <int>[
+    for (var i = 0; i < scores.length; i++)
+      if (scores[i] > 0) i,
+  ];
   order.sort((a, b) {
     final byScore = scores[b].compareTo(scores[a]);
-    if (byScore != 0) return byScore;
-    final byName = names[a].toLowerCase().compareTo(names[b].toLowerCase());
-    return byName != 0 ? byName : ids[a].compareTo(ids[b]);
+    return byScore != 0 ? byScore : a.compareTo(b);
   });
-  return [for (final i in order) ids[i]];
+  return Int32List.fromList(order);
 }
 
 /// Highest score first. Equal scores keep alphabetical order. A missing

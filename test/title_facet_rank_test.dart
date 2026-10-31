@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:stellar_tv/services/catalog_sort.dart';
@@ -17,5 +19,10 @@ void main() {
       scores,
     );
     expect(ranked, ['high', 'low']);
+  });
+
+  test('equal scores keep the incoming alphabetical order', () {
+    final order = rankedPositions(Float64List.fromList([7, 0, 9, 7]));
+    expect(order, [2, 0, 3]);
   });
 }

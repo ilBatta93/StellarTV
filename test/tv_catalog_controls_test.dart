@@ -110,7 +110,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.select, platform: 'android');
     await tester.pumpAndSettle();
     expect(find.text('Ordina'), findsOneWidget);
-    expect(find.text('Voto IMDb'), findsNothing);
+    expect(find.text('Voto'), findsNothing);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.select, platform: 'android');
     await tester.pumpAndSettle();
