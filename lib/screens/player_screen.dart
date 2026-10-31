@@ -39,6 +39,8 @@ import '../services/frame_telemetry_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/episode_still_overlay.dart';
 import '../widgets/player/live_channel_picker.dart';
+import '../widgets/version_picker.dart';
+import '../services/live_variants.dart';
 import '../services/recent_live_channels.dart';
 import '../services/stream_slot_policy.dart';
 import '../widgets/player/player_controls.dart';
@@ -193,6 +195,12 @@ class _PlayerScreenState extends State<PlayerScreen>
     _history = context.read<HistoryProvider>();
     if (_isLive && DeviceTypeService.isTv) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _showLiveBanner());
+      unawaited(
+        LiveVariants.instance.bind(
+          _app.catalogIndexRevision,
+          _app.liveIdentities,
+        ),
+      );
     }
     // Imposta UI immersive sticky per fullscreen immediato su TV.
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -658,6 +666,26 @@ class _PlayerScreenState extends State<PlayerScreen>
     Navigator.of(context).pop();
   }
 
+  /// Other quality versions of the live channel; the one picked is
+  /// remembered for this channel.
+  Future<void> _pickLiveVersion() async {
+    final versions = [
+      for (final id in LiveVariants.instance.idsOf(_channel.id))
+        ?_app.channelById(id),
+    ];
+    if (versions.length < 2) return;
+    final picked = await showVersionPicker(
+      context,
+      versions: versions,
+      currentId: _channel.id,
+      labelOf: (v) => LiveVariants.instance.labelOf(v.id),
+    );
+    if (picked == null) return;
+    await LiveVariants.instance.choose(picked.id);
+    if (!mounted) return;
+    await _playLiveChannel(picked);
+  }
+
   void _openTvSheet(Future<void> Function() open) {
     _hideTimer?.cancel();
     open().whenComplete(() {
@@ -752,6 +780,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     final engine = session.engine;
     final previousLive = _adjacentLiveChannel(-1);
     final nextLive = _adjacentLiveChannel(1);
+    final versionLabel = _isLive
+        ? LiveVariants.instance.labelOf(_channel.id)
+        : null;
     return [
       TvPlayerRow(TvPlayerRowKind.top, [
         TvPlayerAction(
@@ -787,6 +818,13 @@ class _PlayerScreenState extends State<PlayerScreen>
             icon: Icons.grid_view_rounded,
             label: 'MultiView',
             onPressed: _openMultiView,
+          ),
+        if (versionLabel != null)
+          TvPlayerAction(
+            id: 'version',
+            icon: Icons.high_quality_rounded,
+            label: 'Versione: $versionLabel',
+            onPressed: () => _openTvSheet(_pickLiveVersion),
           ),
         if (engine != null)
           TvPlayerAction(

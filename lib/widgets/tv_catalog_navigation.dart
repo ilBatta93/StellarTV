@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/device_type_service.dart';
+import 'tv_focusable.dart';
 
 /// The menu owns its nodes; catalog sections only request a return to it.
 class TvCatalogMenu extends InheritedWidget {
@@ -84,9 +85,7 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
   }
 
   void _search() {
-    final nodes = _tools.traversalDescendants.where(
-      (n) => n.debugLabel == 'catalogSearch',
-    );
+    final nodes = _tools.traversalDescendants.whereType<TvSearchFocusNode>();
     if (nodes.isNotEmpty) {
       nodes.first.requestFocus();
     } else {
@@ -118,9 +117,7 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
     final up = event.logicalKey == LogicalKeyboardKey.arrowUp;
     final down = event.logicalKey == LogicalKeyboardKey.arrowDown;
     if (!up && !down) return false;
-    final panel = primary.ancestors
-        .where((n) => n.debugLabel == 'catalog panel')
-        .firstOrNull;
+    final panel = primary.ancestors.whereType<TvPanelScopeNode>().firstOrNull;
     if (panel != null) return false;
     if (primary.ancestors.contains(_tools)) {
       if (up) {
@@ -130,9 +127,7 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
           return false;
         }
       } else {
-        final panels = _tools.descendants.whereType<FocusScopeNode>().where(
-          (n) => n.debugLabel == 'catalog panel',
-        );
+        final panels = _tools.descendants.whereType<TvPanelScopeNode>();
         if (panels.isNotEmpty) {
           _first(panels.first);
         } else {

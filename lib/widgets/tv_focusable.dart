@@ -12,6 +12,26 @@ class EpisodePlaybackFocusNode extends FocusNode {
   EpisodePlaybackFocusNode(String id) : super(debugLabel: 'episode-play:$id');
 }
 
+// Focus roles are recognised by node type: debug labels are empty in
+// release and profile builds, so comparing them never matches on a TV.
+
+/// First stop when the focus enters a page from the top menu (e.g.
+/// "Riprendi" in Diretta).
+class TvEntryFocusNode extends FocusNode {
+  TvEntryFocusNode(String label) : super(debugLabel: label);
+}
+
+/// Search button of a catalog toolbar.
+class TvSearchFocusNode extends FocusNode {
+  TvSearchFocusNode() : super(debugLabel: 'catalogSearch');
+}
+
+/// Filter or platform panel opened under a catalog toolbar: arrows stay
+/// inside it.
+class TvPanelScopeNode extends FocusScopeNode {
+  TvPanelScopeNode() : super(debugLabel: 'catalog panel');
+}
+
 class TvHomeSelectorNode extends FocusNode {
   TvHomeSelectorNode(String label) : super(debugLabel: label);
   bool selected = false;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../widgets/ui_scale.dart';
 import '../services/image_cache_service.dart';
 import '../services/catalog_rating_service.dart';
@@ -30,9 +32,11 @@ import '../widgets/reaction_buttons.dart';
 import '../widgets/trailer_button.dart';
 import '../services/download_service.dart';
 import '../services/title_matching.dart';
+import '../services/title_versions.dart';
 import '../widgets/tv_wrap_navigation.dart';
 import '../widgets/category_assign_button.dart';
 import '../widgets/title_facets.dart';
+import '../widgets/version_picker.dart';
 
 double _phoneBackdropHeight(BuildContext context) {
   final height = MediaQuery.sizeOf(context).height * 0.32;
@@ -59,9 +63,14 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
   bool _loading = true;
   String? _error;
 
+  /// Version picked on this page; otherwise [TitleVersions] decides.
+  String? _versionId;
+
   @override
   void initState() {
     super.initState();
+    TitleVersions.instance.addListener(_versionsChanged);
+    unawaited(TitleVersions.instance.load());
     final channel = widget.channel;
     _item =
         widget.item ??
@@ -133,17 +142,59 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
     }
   }
 
+  void _versionsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    TitleVersions.instance.removeListener(_versionsChanged);
+    super.dispose();
+  }
+
+  Channel _version(List<Channel> versions, HistoryProvider history) {
+    if (versions.length == 1) return versions.first;
+    final picked = versions.where((c) => c.id == _versionId).firstOrNull;
+    if (picked != null) return picked;
+    final started = versions
+        .where((c) => history.entryFor(c.id)?.startedRemainingMinutes != null)
+        .firstOrNull;
+    return TitleVersions.instance.pick(versions, startedId: started?.id);
+  }
+
+  Future<void> _pickVersion(List<Channel> versions, Channel current) async {
+    final picked = await showVersionPicker(
+      context,
+      versions: versions,
+      currentId: current.id,
+      title: _item?.title,
+      labelOf: TitleVersions.labelOf,
+    );
+    if (picked != null) _selectVersion(picked);
+  }
+
+  void _selectVersion(Channel version) {
+    setState(() => _versionId = version.id);
+    unawaited(TitleVersions.instance.choose(version));
+  }
+
   @override
   Widget build(BuildContext context) => UiScale(builder: _buildContent);
 
   Widget _buildContent(BuildContext context) {
     final app = context.watch<AppProvider>();
     final item = _item;
-    // A title opened from the playlist always plays that exact item; the
-    // TMDB lookup only adds poster, plot and cast.
-    final playable =
+    // A title opened from the playlist plays that item or another copy of
+    // the same film (quality versions); the TMDB lookup only adds poster,
+    // plot and cast.
+    final opened =
         widget.channel ?? (item == null ? null : app.findChannelFor(item));
-    final variants = playable == null ? const <Channel>[] : [playable];
+    final variants = opened == null
+        ? const <Channel>[]
+        : app.movieVersions(opened);
+    final playable = opened == null
+        ? null
+        : _version(variants, context.watch<HistoryProvider>());
     final title = item?.title ?? widget.channel!.name;
     final image = item?.backdropUrl ?? widget.channel?.logo;
 
@@ -231,10 +282,19 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                         : Theme.of(context).textTheme.titleLarge,
                   ),
                 const SizedBox(height: 8),
-                _Meta(item: item, channel: widget.channel),
+                _Meta(
+                  item: item,
+                  channel: widget.channel == null ? null : playable,
+                ),
                 TitleFacetsRow(item: item, channel: widget.channel ?? playable),
                 const SizedBox(height: 16),
-                _Actions(item: item, playable: playable, variants: variants),
+                _Actions(
+                  item: item,
+                  playable: playable,
+                  variants: variants,
+                  onVersion: _selectVersion,
+                  onPickVersion: () => _pickVersion(variants, playable!),
+                ),
                 if (item != null && item.overview.isNotEmpty) ...[
                   const SizedBox(height: 24),
                   Text('Trama', style: Theme.of(context).textTheme.titleMedium),
@@ -468,11 +528,15 @@ class _Actions extends StatelessWidget {
   final TmdbItem? item;
   final Channel? playable;
   final List<Channel> variants;
+  final ValueChanged<Channel> onVersion;
+  final VoidCallback onPickVersion;
 
   const _Actions({
     required this.item,
     required this.playable,
     required this.variants,
+    required this.onVersion,
+    required this.onPickVersion,
   });
 
   @override
@@ -593,13 +657,15 @@ class _Actions extends StatelessWidget {
               runSpacing: 8,
               children: [
                 for (final v in variants)
-                  ActionChip(
+                  ChoiceChip(
                     label: Text(
-                      CatalogBuilder.qualityLabel(v.name) ??
-                          (v.group != playable!.group ? v.group : 'STD'),
+                      v.group != playable!.group
+                          ? '${TitleVersions.labelOf(v)} · ${v.group}'
+                          : TitleVersions.labelOf(v),
                       style: const TextStyle(fontSize: 12),
                     ),
-                    onPressed: () => openChannel(context, v),
+                    selected: v.id == playable!.id,
+                    onSelected: (_) => onVersion(v),
                   ),
               ],
             ),
@@ -699,6 +765,15 @@ class _Actions extends StatelessWidget {
                 ),
               ),
             ),
+            if (variants.length > 1)
+              TvFocusable(
+                onPressed: onPickVersion,
+                child: OutlinedButton.icon(
+                  onPressed: onPickVersion,
+                  icon: const Icon(Icons.high_quality_rounded),
+                  label: Text('Versione: ${TitleVersions.labelOf(channel)}'),
+                ),
+              ),
             if (DownloadService.canDownload(channel))
               DownloadButton(channel: channel, expanded: true),
           ],

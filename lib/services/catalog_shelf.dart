@@ -9,6 +9,7 @@ import '../models/content_type.dart';
 import '../models/custom_category.dart';
 import 'catalog_builder.dart';
 import 'catalog_index_builder.dart' show catalogEntryKey, catalogTitleKey;
+import 'live_variants.dart';
 import 'catalog_preparation.dart';
 import 'catalog_sort.dart';
 import 'kids_content_service.dart';
@@ -1934,8 +1935,23 @@ class ShelfChannelList extends ListBase<Channel> {
       for (final slot in shown)
         if (shelf.groupAt(slot) == group) slot,
     ];
-    return sameGroup.length > 1 ? sameGroup : shown;
+    final pool = sameGroup.length > 1 ? sameGroup : shown;
+    // Quality copies of one channel count once, as in the TV guide.
+    final variants = LiveVariants.instance;
+    if (!variants.hasGroups) return pool;
+    final ids = [for (final slot in pool) shelf.idAt(slot)];
+    final kept = variants.collapse(ids, keep: shelf.idAt(current));
+    if (identical(kept, ids)) return pool;
+    return [for (final id in kept) ?shelf.slotOfId(id)];
   }
+
+  /// Ids of the shown titles, in order. Does not open a title.
+  List<String> get shownIds => [for (final slot in _shown) shelf.idAt(slot)];
+
+  /// The shown titles with [ids], in that order.
+  ShelfChannelList withIds(List<String> ids) => ShelfChannelList(shelf, [
+    for (final id in ids) ?shelf.slotOfId(id),
+  ], visibility: visibility);
 
   ShelfChannelList whereIds(Set<String> wanted) {
     return ShelfChannelList(shelf, [

@@ -17,6 +17,7 @@ import '../theme/app_theme.dart';
 import '../widgets/tv_catalog_toolbar.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/tv_catalog_navigation.dart';
+import '../widgets/tv_focusable.dart';
 import '../widgets/catalog_status_indicator.dart';
 import '../widgets/catalog_section_status.dart';
 import 'catalog_page.dart';
@@ -255,9 +256,17 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Moves focus from the top menu to the first item of the visible tab.
   void _focusContent() {
     if (_currentSection != AppSection.home && _currentSection != null) {
-      final searches = _tvContentScope.traversalDescendants.where(
-        (n) => n.debugLabel == 'catalogSearch' && n.canRequestFocus,
-      );
+      final entry = _tvContentScope.traversalDescendants
+          .whereType<TvEntryFocusNode>()
+          .where((n) => n.canRequestFocus && n.context != null)
+          .firstOrNull;
+      if (entry != null) {
+        entry.requestFocus();
+        return;
+      }
+      final searches = _tvContentScope.traversalDescendants
+          .whereType<TvSearchFocusNode>()
+          .where((n) => n.canRequestFocus);
       if (searches.isNotEmpty) {
         searches.first.requestFocus();
         return;

@@ -53,6 +53,12 @@ class RecentLiveChannels extends ChangeNotifier {
     await prefs.remove(_key);
   }
 
+  @visibleForTesting
+  void reset() {
+    _ids = const [];
+    _loading = null;
+  }
+
   /// Pure list update, newest first and bounded to [max] entries.
   @visibleForTesting
   static List<String> push(List<String> ids, String id, {int max = limit}) =>

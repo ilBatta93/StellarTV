@@ -256,6 +256,7 @@ class AppProvider extends ChangeNotifier {
     _genreCountJobs.clear();
     _favoritesCache = null;
     _matchCache.clear();
+    _versionCache.clear();
     _watchedMemos.clear();
   }
 
@@ -1332,6 +1333,32 @@ class AppProvider extends ChangeNotifier {
   static final _yearPattern = RegExp(r'\b(19|20)\d{2}\b');
   static String? _yearOf(String name) =>
       _yearPattern.firstMatch(name)?.group(0);
+
+  final Map<String, List<Channel>> _versionCache = {};
+
+  /// Copies of the film [channel] in other qualities (same title, same year
+  /// or none), [channel] included, in playlist order. The catalog shows one
+  /// of them; the detail page lets the viewer pick.
+  List<Channel> movieVersions(Channel channel) {
+    if (channel.type != ContentType.movie || !_shelfReady) return [channel];
+    final cached = _versionCache[channel.id];
+    if (cached != null) return cached;
+    final target = _titleKey(channel.name);
+    final year = _yearOf(channel.name);
+    final out = <Channel>[];
+    for (final slot
+        in target.isEmpty ? const <int>[] : _shelf.exactSlots(target)) {
+      if (slot >= _visibleMask.length || _visibleMask[slot] == 0) continue;
+      final other = _shelf.readSlot(slot);
+      if (other.type != ContentType.movie) continue;
+      final otherYear = _yearOf(other.name);
+      if (year != null && otherYear != null && otherYear != year) continue;
+      if (_kidsMode && !isKidsContent(other)) continue;
+      if (out.every((c) => c.id != other.id)) out.add(other);
+    }
+    if (out.every((c) => c.id != channel.id)) out.insert(0, channel);
+    return _versionCache[channel.id] = List.unmodifiable(out);
+  }
 
   /// Title key without language prefix, brackets, quality tags and year.
   static String _titleKey(String raw) => catalogTitleKey(raw);

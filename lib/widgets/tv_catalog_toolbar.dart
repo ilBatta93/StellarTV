@@ -149,9 +149,9 @@ class _TvCatalogToolbarState extends State<TvCatalogToolbar> {
   bool _backConsumedThisFrame = false;
   final _filterButton = FocusNode(debugLabel: 'catalogFilters');
   final _platformButton = FocusNode(debugLabel: 'catalogPlatforms');
-  final _panel = FocusScopeNode(debugLabel: 'catalog panel');
+  final _panel = TvPanelScopeNode();
   final _field = FocusNode();
-  final _search = FocusNode(debugLabel: 'catalogSearch');
+  final _search = TvSearchFocusNode();
   final _sort = FocusNode();
   final _view = FocusNode(debugLabel: 'catalogViewMode');
   @override

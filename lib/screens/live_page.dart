@@ -13,6 +13,7 @@ import '../services/player_settings_service.dart';
 import '../services/catalog_builder.dart';
 import '../services/catalog_shelf.dart';
 import '../services/catalog_sort.dart' show sortLiveBackground;
+import '../services/live_variants.dart';
 import '../services/recent_live_channels.dart';
 import '../services/xtream_service.dart';
 import '../services/xtream_catchup.dart';
@@ -34,6 +35,7 @@ import '../widgets/tv_text_field.dart';
 import '../widgets/tv_catalog_toolbar.dart';
 import '../widgets/tv_filter_panel.dart';
 import '../widgets/tv_catalog_navigation.dart';
+import '../widgets/version_picker.dart';
 import 'epg_settings_screen.dart';
 import 'multiview_screen.dart';
 
@@ -105,6 +107,54 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   int _indexOfChannel(List<Channel> channels, String id) {
     if (channels is ShelfChannelList) return channels.indexOfId(id);
     return channels.indexWhere((channel) => channel.id == id);
+  }
+
+  /// Position of [id] or of another version of the same channel.
+  int _indexOfVersion(List<Channel> channels, String id) {
+    for (final version in _variants.idsOf(id)) {
+      final index = _indexOfChannel(channels, version);
+      if (index >= 0) return index;
+    }
+    return -1;
+  }
+
+  /// One focus node and one row per channel, whichever version it shows.
+  String _rowKey(String id) => _variants.idsOf(id).first;
+
+  /// Keeps one version per channel (TV guide only).
+  List<Channel> _collapseVersions(List<Channel> channels) {
+    if (!_variants.hasGroups) return channels;
+    if (channels is ShelfChannelList) {
+      final ids = channels.shownIds;
+      final kept = _variants.collapse(ids);
+      return identical(kept, ids) ? channels : channels.withIds(kept);
+    }
+    final ids = [for (final c in channels) c.id];
+    final kept = _variants.collapse(ids);
+    if (identical(kept, ids)) return channels;
+    final byId = {for (final c in channels) c.id: c};
+    return [for (final id in kept) byId[id]!];
+  }
+
+  Future<void> _pickVersion(Channel c, {required bool recent}) async {
+    final versions = [
+      for (final id in _variants.idsOf(c.id)) ?_app.channelById(id),
+    ];
+    if (versions.length < 2) {
+      if (recent) await _confirmRemoveRecent(c);
+      return;
+    }
+    final picked = await showVersionPicker(
+      context,
+      versions: versions,
+      currentId: c.id,
+      labelOf: (v) => _variants.labelOf(v.id),
+      extraLabel: recent ? 'Rimuovi dai visti di recente' : null,
+      onExtra: recent ? () => _confirmRemoveRecent(c) : null,
+    );
+    if (picked == null) return;
+    await _variants.choose(picked.id);
+    if (mounted && widget.active) await _watch(picked);
   }
 
   List<Channel> _orderedLive(List<Channel> channels) {
@@ -598,7 +648,10 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     final selectedIndex = selectedId == null
         ? -1
         : _indexOfChannel(channels, selectedId);
-    final selected = selectedIndex < 0 ? null : channels[selectedIndex];
+    // Outside the list only while the "Riprendi" row has the focus.
+    final selected = selectedIndex < 0
+        ? _selectedChannel
+        : channels[selectedIndex];
     final program =
         _selectedProgram ?? (selected == null ? null : epg.nowFor(selected));
     return Padding(
@@ -645,13 +698,17 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                         itemCount: channels.length,
                         findChildIndexCallback: (key) {
                           if (key is! ValueKey<String>) return null;
-                          final index = _indexOfChannel(channels, key.value);
+                          // Only the row key of a channel moves with it:
+                          // other versions' old rows are dropped.
+                          if (_rowKey(key.value) != key.value) return null;
+                          final index = _indexOfVersion(channels, key.value);
                           return index < 0 ? null : index;
                         },
                         itemBuilder: (context, i) {
                           final c = channels[i];
+                          final quality = _variants.labelOf(c.id);
                           return Padding(
-                            key: ValueKey(c.id),
+                            key: ValueKey(_rowKey(c.id)),
                             padding: const EdgeInsets.only(bottom: 6),
                             child: TvCatalogItem(
                               index: i,
@@ -687,7 +744,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                             return KeyEventResult.ignored;
                                           }
                                           final node =
-                                              _channelFocus[channels[next].id];
+                                              _channelFocus[_rowKey(
+                                                channels[next].id,
+                                              )];
                                           if (node == null ||
                                               node.context == null) {
                                             return KeyEventResult.ignored;
@@ -696,7 +755,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                           return KeyEventResult.handled;
                                         },
                                         child: TvFocusable(
-                                          focusNode: _channelNode(c.id),
+                                          focusNode: _channelNode(
+                                            _rowKey(c.id),
+                                          ),
                                           onFocusChange: (focus) {
                                             if (!focus) return;
                                             if (_epgFocus != null) {
@@ -705,8 +766,12 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                             _select(c);
                                           },
                                           onPressed: () => _watch(c),
-                                          onLongPress: showWatched
-                                              ? () => _confirmRemoveRecent(c)
+                                          onLongPress:
+                                              showWatched || quality != null
+                                              ? () => _pickVersion(
+                                                  c,
+                                                  recent: showWatched,
+                                                )
                                               : null,
                                           child: GestureDetector(
                                             onTap: () => _watch(c),
@@ -734,8 +799,27 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                                     const SizedBox(width: 8),
                                                   ],
                                                   Expanded(
-                                                    child: TvPosterTitle(
-                                                      c.name,
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        TvPosterTitle(c.name),
+                                                        if (quality !=
+                                                            null) ...[
+                                                          const SizedBox(
+                                                            height: 3,
+                                                          ),
+                                                          QualityChip(
+                                                            quality,
+                                                            count: _variants
+                                                                .idsOf(c.id)
+                                                                .length,
+                                                          ),
+                                                        ],
+                                                      ],
                                                     ),
                                                   ),
                                                 ],
@@ -997,8 +1081,29 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   }
 
   final _recentLive = RecentLiveChannels.instance;
+  final _variants = LiveVariants.instance;
+  final _resumeFocus = TvEntryFocusNode('live-resume');
   void _recentChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// Grouping a channel's versions gives its row another key: the focus
+  /// follows it instead of being lost.
+  void _variantsChanged() {
+    if (!mounted) return;
+    final focused = _channelFocus.entries
+        .where((e) => e.value.hasPrimaryFocus)
+        .firstOrNull
+        ?.key;
+    setState(() {});
+    if (focused == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final node = _channelFocus[_rowKey(focused)];
+      if (node != null && node.context != null && !node.hasFocus) {
+        node.requestFocus();
+      }
+    });
   }
 
   @override
@@ -1009,6 +1114,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     _epg.addListener(_guideWorkChanged);
     _app.addListener(_guideWorkChanged);
     _recentLive.addListener(_recentChanged);
+    _variants.addListener(_variantsChanged);
     unawaited(_recentLive.load());
     WidgetsBinding.instance.addObserver(this);
     // TV switched off or screen off: the preview connection closes at once.
@@ -1033,6 +1139,8 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     _epg.removeListener(_guideWorkChanged);
     _app.removeListener(_guideWorkChanged);
     _recentLive.removeListener(_recentChanged);
+    _variants.removeListener(_variantsChanged);
+    _resumeFocus.dispose();
     _screenOffSub?.cancel();
     _tick?.cancel();
     WidgetsBinding.instance.removeObserver(this);
@@ -1050,6 +1158,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     if (app.catalogState(ContentType.live).isPending &&
         !app.catalogState(ContentType.live).hasContent) {
       return Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
+    if (DeviceTypeService.isTv) {
+      unawaited(_variants.bind(app.catalogIndexRevision, app.liveIdentities));
     }
     final groups = app.groupedCatalog(ContentType.live);
     final anyVisible = groups.any((group) => group.entries.isNotEmpty);
@@ -1082,7 +1193,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     final showWatched = _category == _watchedLabel;
     final selected = groups.where((g) => g.label == _category).firstOrNull;
     final listKey =
-        '$_category|$_query|${app.visibilityStamp}|${showWatched ? _recentLive.ids.join(',') : ''}';
+        '$_category|$_query|${app.visibilityStamp}|${_variants.revision}|${showWatched ? _recentLive.ids.join(',') : ''}';
     final reusable = identical(_listGroups, groups) && _listKey == listKey;
     final entries = showWatched
         ? watched
@@ -1097,6 +1208,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
         : slots.isEmpty
         ? [for (final entry in entries) entry.primary]
         : app.bindChannels(slots);
+    if (!reusable && DeviceTypeService.isTv) {
+      channels = _collapseVersions(channels);
+    }
     if (!reusable && _query.isNotEmpty) {
       channels = _channelsForQuery(channels, app, epg);
     }
@@ -1110,17 +1224,30 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       channels = _orderedLive(channels);
     }
 
-    if (_selectedChannel != null &&
-        _indexOfChannel(channels, _selectedChannel!.id) < 0) {
+    final resume = DeviceTypeService.isTv ? _resumeChannel(app) : null;
+    final current = _selectedChannel;
+    if (current != null &&
+        current.id != resume?.id &&
+        _indexOfChannel(channels, current.id) < 0) {
+      final version = _indexOfVersion(channels, current.id);
       _stopPreview();
       _selectedChannel = null;
       _selectedProgram = null;
+      if (version >= 0) {
+        // Another version of the same channel is shown now.
+        final shown = channels[version];
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && widget.active && _selectedChannel == null) {
+            _select(shown);
+          }
+        });
+      }
     }
     if (DeviceTypeService.isTv &&
         widget.active &&
         _selectedChannel == null &&
         channels.isNotEmpty) {
-      final first = channels.first;
+      final first = resume ?? channels.first;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && widget.active && _selectedChannel == null) {
           _select(first);
@@ -1262,6 +1389,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
               ],
             ),
           ),
+        if (resume != null) _resumeRow(resume, epg),
         if (!epg.hasListings && !epg.isLoading)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
@@ -1354,6 +1482,87 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
         onClose: () => _scaffoldKey.currentState?.closeDrawer(),
       ),
       body: content,
+    );
+  }
+
+  /// Last live channel watched on this device, when it is still available.
+  Channel? _resumeChannel(AppProvider app) {
+    final id = _recentLive.ids.firstOrNull;
+    if (id == null) return null;
+    final channel = app.channelById(id);
+    return channel?.type == ContentType.live ? channel : null;
+  }
+
+  /// "Riprendi" above the guide: the first stop when the focus enters the
+  /// page; OK goes back to the last channel full screen.
+  Widget _resumeRow(Channel channel, EpgProvider epg) {
+    final now = epg.nowFor(channel);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 4, 32, 6),
+      child: TvFocusable(
+        focusNode: _resumeFocus,
+        focusedScale: 1,
+        borderRadius: BorderRadius.circular(8),
+        onFocusChange: (focused) {
+          if (focused) _select(channel);
+        },
+        onPressed: () => _watch(channel),
+        child: GestureDetector(
+          onTap: () => _watch(channel),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.play_arrow_rounded, color: AppColors.primary),
+                const SizedBox(width: 6),
+                Text(
+                  'Riprendi',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                if (channel.logo.isNotEmpty) ...[
+                  _channelLogo(channel, size: 32),
+                  const SizedBox(width: 10),
+                ],
+                Flexible(
+                  flex: 2,
+                  child: Text(
+                    channel.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (now != null) ...[
+                  const SizedBox(width: 16),
+                  Flexible(
+                    flex: 3,
+                    child: Text(
+                      '${now.title} · ${_hm(now.startTime)}–${_hm(now.endTime)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppColors.textMuted),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  SizedBox(width: 120, child: _onAirStrip(_progressOf(now))),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
