@@ -124,6 +124,22 @@ class MediaKitEngine extends PlaybackEngine {
   @visibleForTesting
   static const hardwareCodecs = 'h264,hevc,vp9,av1';
 
+  /// mpv audio output. OpenSL cannot carry a bitstream, and on TV boxes it
+  /// does not report the HDMI/system output latency: Fire TV showed the
+  /// picture a constant beat ahead of the sound. AudioTrack reports the real
+  /// playback position; OpenSL stays as the fallback. Phones keep the output
+  /// media_kit already set.
+  @visibleForTesting
+  static String? audioOutput({
+    required bool passthrough,
+    required bool tv,
+    required bool android,
+  }) {
+    if (!android) return null;
+    if (passthrough) return 'audiotrack';
+    return tv ? 'audiotrack,opensles' : null;
+  }
+
   /// Four threads on a four-core stick leave nothing for the picture.
   @visibleForTesting
   static String decoderThreads({required bool tv, required bool live}) => !tv
@@ -674,9 +690,13 @@ class MediaKitEngine extends PlaybackEngine {
       'audio-spdif': _settings.audioPassthrough
           ? 'ac3,eac3,dts,dts-hd,truehd'
           : 'no',
-      // OpenSL cannot carry a bitstream. AudioTrack is opt-in with the
-      // switch; the default path stays on the output media_kit already set.
-      if (_settings.audioPassthrough && Platform.isAndroid) 'ao': 'audiotrack',
+      if (audioOutput(
+            passthrough: _settings.audioPassthrough,
+            tv: DeviceTypeService.isTv,
+            android: Platform.isAndroid,
+          )
+          case final ao?)
+        'ao': ao,
       if (dropLate || DeviceTypeService.isTv || isLive)
         'framedrop': dropLate ? 'vo' : 'no',
     };

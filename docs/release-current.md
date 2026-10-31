@@ -4,3 +4,4 @@
 - Sulla TV le locandine si caricano senza appesantire la memoria, con meno scatti durante lo scorrimento.
 - Le locandine che arrivano dopo il voto compaiono subito nella griglia, senza dover aprire la scheda del titolo.
 - Le versioni estese di un film non compaiono più come titoli doppi nel catalogo: sono raccolte nella stessa scheda.
+- In diretta sulla TV audio e video restano allineati anche con soundbar e TV che aggiungono ritardo all'audio.

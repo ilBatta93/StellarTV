@@ -112,6 +112,15 @@ void main() {
       ),
       isTrue,
     );
+    // OpenSL hid the TV's output latency: sound lagged the picture.
+    expect(
+      MediaKitEngine.audioOutput(passthrough: false, tv: true, android: true),
+      'audiotrack,opensles',
+    );
+    expect(
+      MediaKitEngine.audioOutput(passthrough: false, tv: false, android: true),
+      isNull,
+    );
     // Live H.264 in FFmpeg buffered every few seconds on a four-core TV.
     expect(MediaKitEngine.hardwareCodecs.split(','), contains('h264'));
     expect(MediaKitEngine.hardwareCodecs, isNot(contains('mpeg2')));
