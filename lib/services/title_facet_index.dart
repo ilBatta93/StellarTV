@@ -10,6 +10,7 @@ import '../models/content_type.dart';
 import 'catalog_sort.dart';
 import 'title_metadata_store.dart';
 import 'frame_telemetry_service.dart';
+import 'work_slicer.dart';
 
 /// One compact row of title metadata kept in memory.
 class _Facet {
@@ -243,11 +244,14 @@ class TitleFacetIndex extends ChangeNotifier {
       // the file was loading still need writing.
       final pending = Set<String>.of(_changed);
       beginBulk();
-      _mergeDecoded(raw);
-      _changed
-        ..clear()
-        ..addAll(pending);
-      endBulk();
+      try {
+        await _mergeDecoded(raw);
+      } finally {
+        _changed
+          ..clear()
+          ..addAll(pending);
+        endBulk();
+      }
     } catch (_) {}
   }
 
@@ -263,6 +267,29 @@ class TitleFacetIndex extends ChangeNotifier {
       putImdb(mediaKey: key, rating: value.$1, at: value.$2, quiet: true);
     });
   }
+
+  Future<void>? _imdbStoreMerge;
+
+  /// The device IMDb store joins the index once per run, in slices.
+  /// Discover and the catalog scores each merged all of it, in one go.
+  Future<void> mergeImdbStore(Map<String, (double, int)> Function() rows) =>
+      _imdbStoreMerge ??= () async {
+        final slice = WorkSlicer();
+        beginBulk();
+        try {
+          for (final entry in rows().entries) {
+            putImdb(
+              mediaKey: entry.key,
+              rating: entry.value.$1,
+              at: entry.value.$2,
+              quiet: true,
+            );
+            await slice.pause();
+          }
+        } finally {
+          endBulk();
+        }
+      }();
 
   void putImdb({
     required String mediaKey,
@@ -480,10 +507,18 @@ class TitleFacetIndex extends ChangeNotifier {
     if (_changed.isNotEmpty) _scheduleSave();
   }
 
-  void _mergeDecoded(Map<String, Map<String, Object?>> raw) {
-    raw.forEach((key, value) {
-      final incoming = _decode(value);
-      final row = _row(key);
+  /// Rows arrive decoded from the isolate. A key not yet in memory takes
+  /// the decoded row as is; the rest merge field by field, in slices.
+  Future<void> _mergeDecoded(Map<String, _Facet> raw) async {
+    final slice = WorkSlicer();
+    for (final MapEntry(:key, value: incoming) in raw.entries) {
+      await slice.pause();
+      final current = _rows[key];
+      if (current == null) {
+        _rows[key] = incoming;
+        continue;
+      }
+      final row = current;
       if (incoming.imdbKnown &&
           (!row.imdbKnown || incoming.imdbAt >= row.imdbAt)) {
         row.copyImdbFrom(incoming);
@@ -513,15 +548,16 @@ class TitleFacetIndex extends ChangeNotifier {
         row.logoUrl = incoming.logoUrl;
         row.logoExpires = incoming.logoExpires;
       }
-    });
-    _relink();
+    }
+    await _relink(slice);
     _dirty = true;
   }
 
-  void _relink() {
+  Future<void> _relink(WorkSlicer slice) async {
     final snapshot = Map<String, _Facet>.from(_rows);
-    _titleKeysByMedia.clear();
+    // Not cleared: links made between slices must stay readable.
     for (final entry in snapshot.entries) {
+      await slice.pause();
       final media = entry.value.mediaKey;
       final id = entry.value.tmdbId;
       if (media == null || id == null) continue;
@@ -601,15 +637,17 @@ _Facet _decode(Map<String, Object?> raw) {
   return row;
 }
 
-Map<String, Map<String, Object?>>? _readFacetFile(String path) {
+/// Decodes in the isolate: the rows come back ready, without a pass over
+/// every field on the UI thread.
+Map<String, _Facet>? _readFacetFile(String path) {
   final file = File(path);
   if (!file.existsSync()) return null;
   final raw = jsonDecode(file.readAsStringSync());
   if (raw is! Map) return null;
-  final out = <String, Map<String, Object?>>{};
+  final out = <String, _Facet>{};
   raw.forEach((key, value) {
     if (value is Map) {
-      out['$key'] = value.map((k, v) => MapEntry('$k', v));
+      out['$key'] = _decode(value.map((k, v) => MapEntry('$k', v)));
     }
   });
   return out;

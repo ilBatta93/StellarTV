@@ -760,8 +760,34 @@ class MediaKitEngine extends PlaybackEngine {
       if (!_disposed) _firstFrameRendered = true;
     } catch (_) {
       // The existing session deadline/recovery handles controller failure.
+      return;
     }
+    if (!liveCatchUp(
+      tv: DeviceTypeService.isTv,
+      live: isLive,
+      preview: previewMode,
+    )) {
+      return;
+    }
+    // Once the picture is steady, late frames may be dropped so the video
+    // catches up with the audio clock. Without it a Chromecast on 1080p
+    // HEVC through the copy decoder drifted 4 s behind the sound.
+    await Future<void>.delayed(const Duration(seconds: 5));
+    final platform = _player.platform;
+    if (_disposed || platform is! NativePlayer) return;
+    try {
+      await platform.setProperty('framedrop', 'vo');
+    } catch (_) {}
   }
+
+  /// Full-screen TV live only. Frame dropping stays off at start (a
+  /// jittery clock discarded every picture) and on previews.
+  @visibleForTesting
+  static bool liveCatchUp({
+    required bool tv,
+    required bool live,
+    required bool preview,
+  }) => tv && live && !preview;
 
   @override
   Widget buildView(double boxRatio) => Video(

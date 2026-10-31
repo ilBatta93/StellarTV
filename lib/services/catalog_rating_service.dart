@@ -19,6 +19,7 @@ import 'title_matching.dart';
 import 'imdb_rating_service.dart';
 import 'title_facet_index.dart';
 import 'title_metadata_store.dart';
+import 'work_slicer.dart';
 import '../models/tmdb_item.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -102,8 +103,18 @@ class CatalogRatingService extends ChangeNotifier {
   }
 
   final Map<String, double> _ratings = {};
-  final LinkedHashMap<String, Channel> _queue = LinkedHashMap();
+
+  /// Four lanes: titles on screen (newest first) before the catalog warm-up,
+  /// and the shared cloud cache apart from direct TMDB lookups. A single
+  /// queue let one group of 40 year-tagged titles, resolved two at a time,
+  /// hold the posters on screen for minutes.
+  final LinkedHashMap<String, Channel> _cloudFront = LinkedHashMap();
+  final LinkedHashMap<String, Channel> _cloudBack = LinkedHashMap();
+  final LinkedHashMap<String, Channel> _directFront = LinkedHashMap();
+  final LinkedHashMap<String, Channel> _directBack = LinkedHashMap();
   final Set<String> _active = {};
+  int _cloudGroups = 0;
+  int _directActive = 0;
   final Map<String, DateTime> _failed = {};
   Future<void>? _loading;
   Timer? _saveTimer;
@@ -127,7 +138,8 @@ class CatalogRatingService extends ChangeNotifier {
   void _primeImdb() {
     if (PlaybackWorkPolicy.instance.blocksGuide) return;
     final items = <TmdbItem>[];
-    for (final item in identities.snapshot().values) {
+    // No copy of the whole identity table every 2.5 s.
+    for (final item in identities.values) {
       if (!TitleFacetIndex.instance.imdbFresh(ImdbRatingService.keyOf(item))) {
         items.add(item);
       }
@@ -163,13 +175,20 @@ class CatalogRatingService extends ChangeNotifier {
     }
     await ensureLoaded();
     final typeName = type.name;
-    final keys = await Isolate.run(
-      () => [for (final name in names) parseTitle(name).key(typeName)],
+    // Key and lane are parsed in the isolate: parsing tens of thousands of
+    // names here held the TV's UI thread for seconds after every publish.
+    final parsed = await Isolate.run(
+      () => [
+        for (final name in names)
+          (parseTitle(name).key(typeName), needsDirectLookup(name)),
+      ],
     );
     final missing = <Channel>[];
     final seen = <String>{};
-    for (var i = 0; i < keys.length && i < ids.length; i++) {
-      final key = keys[i];
+    final slice = WorkSlicer();
+    for (var i = 0; i < parsed.length && i < ids.length; i++) {
+      await slice.pause();
+      final (key, direct) = parsed[i];
       if (names[i].isEmpty || !seen.add(key)) continue;
       if (TitleFacetIndex.instance.tmdbFresh(key)) continue;
       final stub = Channel(
@@ -181,12 +200,18 @@ class CatalogRatingService extends ChangeNotifier {
         type: type,
       );
       _keys[stub] = key;
+      _direct[stub] = direct;
       missing.add(stub);
     }
     if (missing.isNotEmpty) warm(missing);
   }
 
   final Expando<String> _keys = Expando('tvRating');
+  final Expando<bool> _direct = Expando('tvRatingLane');
+
+  /// Keys looked up during this run, found or not. A poster without a TMDB
+  /// match asked again at every rebuild.
+  final Set<String> _done = {};
 
   String _key(Channel c) =>
       _keys[c] ??= parseTitle(c.displaySeriesName).key(c.type.name);
@@ -239,21 +264,31 @@ class CatalogRatingService extends ChangeNotifier {
       _ratings.addAll(data);
       final index = TitleFacetIndex.instance;
       index.beginBulk();
-      index.mergeImdb(ImdbRatingService.instance.store.timedSnapshot());
-      data.forEach(
-        (key, value) => index.putTmdb(key, value, at: stamp, quiet: true),
-      );
-      for (final entry in identities.timedSnapshot().entries) {
-        index.link(
-          titleKey: entry.key,
-          mediaKey: ImdbRatingService.keyOf(entry.value.$1),
-          tmdbId: entry.value.$1.id,
-          tmdb: data[entry.key],
-          tmdbAt: data.containsKey(entry.key) ? stamp : null,
-          quiet: true,
+      // In slices with a frame between them: one pass over every saved
+      // score and identity held the TV's UI thread for seconds at start.
+      try {
+        await index.mergeImdbStore(
+          ImdbRatingService.instance.store.timedSnapshot,
         );
+        final slice = WorkSlicer();
+        for (final entry in data.entries) {
+          index.putTmdb(entry.key, entry.value, at: stamp, quiet: true);
+          await slice.pause();
+        }
+        for (final entry in identities.timedSnapshot().entries) {
+          index.link(
+            titleKey: entry.key,
+            mediaKey: ImdbRatingService.keyOf(entry.value.$1),
+            tmdbId: entry.value.$1.id,
+            tmdb: data[entry.key],
+            tmdbAt: data.containsKey(entry.key) ? stamp : null,
+            quiet: true,
+          );
+          await slice.pause();
+        }
+      } finally {
+        index.endBulk();
       }
-      index.endBulk();
       version++;
       notifyListeners();
       _primeImdb();
@@ -269,7 +304,9 @@ class CatalogRatingService extends ChangeNotifier {
   }) async {
     final snapshot = channels.toList(growable: false);
     await ensureLoaded();
+    final slice = WorkSlicer();
     for (final c in snapshot) {
+      await slice.pause();
       if (c.type != ContentType.movie &&
           c.type != ContentType.series &&
           c.type != ContentType.anime) {
@@ -278,14 +315,61 @@ class CatalogRatingService extends ChangeNotifier {
       final key = _key(c);
       final failed = _failed[key];
       if ((TitleFacetIndex.instance.tmdbFresh(key) && itemOf(c) != null) ||
+          _done.contains(key) ||
           _active.contains(key) ||
           (failed != null && DateTime.now().difference(failed).inMinutes < 5)) {
         continue;
       }
-      if (priority) _queue.remove(key);
-      if (_queue.length < 60000 || _queue.containsKey(key)) _queue[key] = c;
+      _enqueue(key, c, front: priority);
     }
-    _drain(priority: priority);
+    _drain();
+  }
+
+  /// Titles with a year skip the shared cache: its key drops the year, so
+  /// remakes would share one score.
+  @visibleForTesting
+  static bool needsDirectLookup(String name) {
+    final parsed = parseTitle(name);
+    return parsed.year != null || _leadingYear.hasMatch(parsed.title);
+  }
+
+  static final _leadingYear = RegExp(r'^(19|20)\d{2}');
+
+  void _enqueue(String key, Channel c, {required bool front}) {
+    final direct = _direct[c] ??= needsDirectLookup(c.displaySeriesName);
+    final head = direct ? _directFront : _cloudFront;
+    final tail = direct ? _directBack : _cloudBack;
+    if (front) {
+      tail.remove(key);
+      head.remove(key);
+      head[key] = c;
+      // Posters scrolled past long ago go back to the warm-up order.
+      while (head.length > _frontLimit) {
+        final old = head.keys.first;
+        tail[old] = head.remove(old)!;
+      }
+    } else if (!head.containsKey(key) &&
+        (tail.length < 60000 || tail.containsKey(key))) {
+      tail[key] = c;
+    }
+  }
+
+  static const _frontLimit = 240;
+
+  /// Newest on-screen titles first, then the warm-up in catalog order.
+  MapEntry<String, Channel>? _take(
+    LinkedHashMap<String, Channel> front,
+    LinkedHashMap<String, Channel> back,
+  ) {
+    if (front.isNotEmpty) {
+      final key = front.keys.last;
+      return MapEntry(key, front.remove(key)!);
+    }
+    if (back.isNotEmpty) {
+      final key = back.keys.first;
+      return MapEntry(key, back.remove(key)!);
+    }
+    return null;
   }
 
   String _bearer() {
@@ -301,56 +385,43 @@ class CatalogRatingService extends ChangeNotifier {
   bool _cloudDown = false;
   DateTime? _cloudDownAt;
 
-  /// Up to two requests in flight, each resolving a group of 40 titles from
-  /// the shared cloud cache (direct TMDB only if the cloud is unreachable).
-  void _drain({bool priority = false}) {
+  /// Two cloud groups of 40 titles and up to four direct TMDB lookups in
+  /// flight. The warm-up keeps two direct slots free for the screen.
+  void _drain() {
     if (PlaybackWorkPolicy.instance.blocksGuide) return;
     if (_cloudDown &&
         _cloudDownAt != null &&
         DateTime.now().difference(_cloudDownAt!).inMinutes >= 5) {
       _cloudDown = false;
     }
-    while (_active.length < (_cloudDown ? 2 : 2 * _batch) &&
-        _queue.isNotEmpty) {
-      if (_cloudDown) {
-        final key = priority ? _queue.keys.last : _queue.keys.first;
-        final channel = _queue.remove(key);
-        if (channel == null) continue;
-        _active.add(key);
-        unawaited(_fetch(key, channel));
-        continue;
-      }
-      final keys = (priority ? _queue.keys.toList().reversed : _queue.keys)
-          .take(_batch)
-          .toList();
+    while (!_cloudDown && _cloudGroups < 2) {
       final group = <String, Channel>{};
-      for (final k in keys) {
-        final c = _queue.remove(k);
-        if (c != null) group[k] = c;
+      while (group.length < _batch) {
+        final next = _take(_cloudFront, _cloudBack);
+        if (next == null) break;
+        group[next.key] = next.value;
       }
+      if (group.isEmpty) break;
+      _cloudGroups++;
       _active.addAll(group.keys);
       unawaited(_fetchGroup(group));
+    }
+    while (_directActive < 4) {
+      final onScreen =
+          _directFront.isNotEmpty || _cloudDown && _cloudFront.isNotEmpty;
+      if (!onScreen && _directActive >= 2) break;
+      final next =
+          _take(_directFront, _directBack) ??
+          (_cloudDown ? _take(_cloudFront, _cloudBack) : null);
+      if (next == null) break;
+      _directActive++;
+      _active.add(next.key);
+      unawaited(_fetch(next.key, next.value, direct: true));
     }
   }
 
   Future<void> _fetchGroup(Map<String, Channel> group) async {
     final entries = group.entries.toList();
-    final direct = entries.where((e) {
-      final parsed = parseTitle(e.value.displaySeriesName);
-      return parsed.year != null ||
-          RegExp(r'^(19|20)\d{2}').hasMatch(parsed.title);
-    }).toList();
-    if (direct.isNotEmpty) {
-      for (var i = 0; i < direct.length; i += 2) {
-        await Future.wait(
-          direct.skip(i).take(2).map((e) => _fetch(e.key, e.value)),
-        );
-      }
-      final remaining = Map<String, Channel>.from(group)
-        ..removeWhere((k, _) => direct.any((e) => e.key == k));
-      if (remaining.isNotEmpty) await _fetchGroup(remaining);
-      return;
-    }
     try {
       final res = await _foregroundHttp
           .post(
@@ -384,6 +455,7 @@ class CatalogRatingService extends ChangeNotifier {
       try {
         for (var i = 0; i < entries.length && i < list.length; i++) {
           final v = list[i];
+          _done.add(entries[i].key);
           if (v is num) {
             _ratings[entries[i].key] = v.toDouble();
             TitleFacetIndex.instance.putTmdb(entries[i].key, v.toDouble());
@@ -428,25 +500,29 @@ class CatalogRatingService extends ChangeNotifier {
         _cloudDown = true;
         _cloudDownAt = DateTime.now();
       }
+      _active.removeAll(group.keys);
       for (final e in entries) {
-        _queue[e.key] = e.value;
+        _enqueue(e.key, e.value, front: false);
       }
     } finally {
       _active.removeAll(group.keys);
+      _cloudGroups--;
       _drain();
     }
   }
 
-  Future<void> _fetch(String key, Channel c) async {
+  Future<void> _fetch(String key, Channel c, {bool direct = false}) async {
     try {
       final item = await _tmdb.findByTitle(
         c.displaySeriesName,
         isMovie: c.type == ContentType.movie,
       );
       if (item == null && PlaybackWorkPolicy.instance.blocksGuide) {
-        _queue[key] = c;
+        _active.remove(key);
+        _enqueue(key, c, front: false);
         return;
       }
+      _done.add(key);
       _ratings[key] = item?.voteAverage ?? 0;
       TitleFacetIndex.instance.putTmdb(key, item?.voteAverage ?? 0);
       if (item != null) remember(c, item);
@@ -457,12 +533,14 @@ class CatalogRatingService extends ChangeNotifier {
       });
     } catch (_) {
       if (PlaybackWorkPolicy.instance.blocksGuide) {
-        _queue[key] = c;
+        _active.remove(key);
+        _enqueue(key, c, front: false);
       } else {
         _failed[key] = DateTime.now();
       }
     } finally {
       _active.remove(key);
+      if (direct) _directActive--;
       _drain();
     }
   }

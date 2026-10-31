@@ -1210,7 +1210,10 @@ class _CatalogPageState extends State<CatalogPage> {
     _filterInfoVersion = app.titleInfoVersion;
     _filterVisibility = app.visibilityStamp;
     _filterNames = _nameFlagsFor(app);
-    return _filterResult = compute();
+    final clock = Stopwatch()..start();
+    final result = _filterResult = compute();
+    FrameTelemetryService.instance.recordWork('catalogo.filtro', clock);
+    return result;
   }
 
   /// One saved order per catalog view: category, genre and filters included,
@@ -1308,8 +1311,9 @@ class _CatalogPageState extends State<CatalogPage> {
     _ratingKey = key;
     if (saved == null) return _sortedEntries = entries;
     final app = context.read<AppProvider>();
+    final clock = Stopwatch()..start();
     // Shelf ids come from the index: reading each title froze the TV.
-    return _sortedEntries = applyCatalogOrder(
+    final ordered = _sortedEntries = applyCatalogOrder(
       entries,
       saved,
       idOf: (entry) {
@@ -1317,6 +1321,8 @@ class _CatalogPageState extends State<CatalogPage> {
         return slot == null ? entry.primary.id : app.idAt(slot);
       },
     );
+    FrameTelemetryService.instance.recordWork('catalogo.ordine', clock);
+    return ordered;
   }
 
   Widget _gridItem(AppProvider app, CatalogEntry entry, int index) =>

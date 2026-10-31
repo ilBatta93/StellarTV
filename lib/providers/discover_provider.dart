@@ -60,8 +60,8 @@ class DiscoverProvider extends ChangeNotifier {
       TitleFacetIndex.instance.load(),
     ]);
     final index = TitleFacetIndex.instance;
+    await index.mergeImdbStore(ImdbRatingService.instance.store.timedSnapshot);
     index.beginBulk();
-    index.mergeImdb(ImdbRatingService.instance.store.timedSnapshot());
     await TitleLogoCache.importResolved();
     index.endBulk();
     _primeVisible();

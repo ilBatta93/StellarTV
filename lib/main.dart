@@ -70,11 +70,12 @@ Future<void> main() async {
   AppImageCache.enforceBudget();
   if (DeviceTypeService.isTv) {
     // TV boxes have little RAM: cap decoded images to avoid being killed.
-    // Count limit ~300 for 40 MB, pressure guard drops to 80 / 24 MB.
-    // We set a modest base so the guard can reduce further under pressure.
+    // 30 MB was always full (diagnostics: 29 of 30 MB), so posters scrolled
+    // back into view were decoded again. The pressure guard still drops to
+    // 80 images / 24 MB when Android asks.
     PaintingBinding.instance.imageCache
-      ..maximumSize = 200
-      ..maximumSizeBytes = 30 << 20;
+      ..maximumSize = 400
+      ..maximumSizeBytes = 64 << 20;
     TvImageMemoryGuard.install();
     TvRemoteKeys.install();
   } else {

@@ -38,6 +38,9 @@ class TitleMetadataStore<T> extends ChangeNotifier {
 
   T? valueOf(String key) => _values[key]?.$1;
 
+  /// Live view, no copy. Do not put while iterating.
+  Iterable<T> get values => _values.values.map((entry) => entry.$1);
+
   /// Plain copy safe to send across an isolate boundary.
   Map<String, T> snapshot() => {
     for (final entry in _values.entries) entry.key: entry.value.$1,
@@ -58,29 +61,42 @@ class TitleMetadataStore<T> extends ChangeNotifier {
     if (disabled) return;
     try {
       final path = (await _file()).path;
-      final raw = await Isolate.run(() {
-        final f = File(path);
-        if (!f.existsSync()) return null;
-        return jsonDecode(f.readAsStringSync());
-      });
-      if (raw is Map) {
-        raw.forEach((k, v) {
-          if (v is List && v.length == 2 && v[1] is int) {
-            final value = decode(v[0]);
-            // A value put while the file was loading is newer.
-            if (value != null && !_changed.contains('$k')) {
-              _values['$k'] = (value, v[1] as int);
-            }
-          }
+      // Values are decoded in the isolate too: tens of thousands of title
+      // identities parsed on the UI thread froze the TV at start.
+      final decodeValue = decode;
+      Map<String, (T, int)>? decoded;
+      try {
+        decoded = await Isolate.run(() => _readStore(path, decodeValue));
+      } catch (_) {
+        // A decoder that cannot cross isolates still loads, on this thread.
+        decoded = _readStore(path, decodeValue);
+      }
+      if (decoded != null) {
+        decoded.forEach((key, value) {
+          // A value put while the file was loading is newer.
+          if (!_changed.contains(key)) _values[key] = value;
         });
         if (_values.isNotEmpty) notifyListeners();
       }
     } catch (_) {}
   }();
 
+  bool _notifyQueued = false;
+
+  /// One notification per burst: a group of 40 scores put one by one
+  /// rebuilt every badge on screen 40 times.
+  void _notifySoon() {
+    if (_notifyQueued) return;
+    _notifyQueued = true;
+    scheduleMicrotask(() {
+      _notifyQueued = false;
+      notifyListeners();
+    });
+  }
+
   void put(String key, T value) {
     _values[key] = (value, DateTime.now().millisecondsSinceEpoch);
-    notifyListeners();
+    _notifySoon();
     if (disabled) return;
     _changed.add(key);
     _scheduleSave();
@@ -119,6 +135,24 @@ class TitleMetadataStore<T> extends ChangeNotifier {
     }
     if (_changed.isNotEmpty) _scheduleSave();
   }
+}
+
+Map<String, (T, int)>? _readStore<T>(
+  String path,
+  T? Function(Object? raw) decode,
+) {
+  final file = File(path);
+  if (!file.existsSync()) return null;
+  final raw = jsonDecode(file.readAsStringSync());
+  if (raw is! Map) return null;
+  final out = <String, (T, int)>{};
+  raw.forEach((k, v) {
+    if (v is List && v.length == 2 && v[1] is int) {
+      final value = decode(v[0]);
+      if (value != null) out['$k'] = (value, v[1] as int);
+    }
+  });
+  return out;
 }
 
 /// Merges [delta] into the JSON object saved at [path]. False when the

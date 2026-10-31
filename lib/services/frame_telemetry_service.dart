@@ -243,8 +243,13 @@ class FrameTelemetryService extends ChangeNotifier with WidgetsBindingObserver {
   /// completion. A busy native thread shows here before it shows as jank.
   void recordCommand(String name, int ms) {
     if (!_recording) return;
+    _lastCommand = name;
+    _lastCommandAt = _loopClock.elapsedMilliseconds;
     responsiveness.addCommand(name, ms, sinceLaunch.elapsedMilliseconds);
   }
+
+  String? _lastCommand;
+  int _lastCommandAt = -1;
 
   /// Main-isolate time of a background job, listed with the commands as
   /// `lavoro.<name>`. A loop lag with no slow frame needs a name to be traced.
@@ -259,7 +264,17 @@ class FrameTelemetryService extends ChangeNotifier with WidgetsBindingObserver {
     _lastProbeMs = now;
     if (lag < 0) return;
     _second.addLag(lag);
-    responsiveness.addLag(lag, sinceLaunch.elapsedMilliseconds, _context);
+    // A measured job that ended inside the stall names it; none means the
+    // time went to work no probe covers (engine, plugins, GC).
+    final work = _lastCommandAt >= now - lag - _loopProbeMs
+        ? _lastCommand
+        : null;
+    responsiveness.addLag(
+      lag,
+      sinceLaunch.elapsedMilliseconds,
+      _context,
+      work: work,
+    );
   }
 
   bool _onKey(KeyEvent event) {
@@ -621,7 +636,7 @@ class ResponsivenessStats {
     builds.clear();
   }
 
-  void addLag(int ms, int atMs, String context) {
+  void addLag(int ms, int atMs, String context, {String? work}) {
     lagSamples++;
     var b = 0;
     while (b < _lagLimits.length && ms > _lagLimits[b]) {
@@ -630,7 +645,7 @@ class ResponsivenessStats {
     lagHistogram[b]++;
     if (ms > maxLagMs) maxLagMs = ms;
     if (ms >= 100) {
-      _keep(slowestLags, {'ms': ms, 't': atMs, 'at': context});
+      _keep(slowestLags, {'ms': ms, 't': atMs, 'at': context, 'work': ?work});
     }
   }
 
