@@ -690,13 +690,11 @@ class MediaKitEngine extends PlaybackEngine {
       'audio-spdif': _settings.audioPassthrough
           ? 'ac3,eac3,dts,dts-hd,truehd'
           : 'no',
-      if (audioOutput(
-            passthrough: _settings.audioPassthrough,
-            tv: DeviceTypeService.isTv,
-            android: Platform.isAndroid,
-          )
-          case final ao?)
-        'ao': ao,
+      'ao': ?audioOutput(
+        passthrough: _settings.audioPassthrough,
+        tv: DeviceTypeService.isTv,
+        android: Platform.isAndroid,
+      ),
       if (dropLate || DeviceTypeService.isTv || isLive)
         'framedrop': dropLate ? 'vo' : 'no',
     };

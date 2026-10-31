@@ -844,6 +844,22 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                                 child:
                                                     CircularProgressIndicator(),
                                               ),
+                                            // Sound without a picture track:
+                                            // not a black preview.
+                                            if (session.status ==
+                                                    SessionStatus.playing &&
+                                                session.engine?.audioOnly ==
+                                                    true)
+                                              const ColoredBox(
+                                                color: AppColors.surface,
+                                                child: Center(
+                                                  child: Text(
+                                                    'Solo audio: video non '
+                                                    'supportato',
+                                                    textAlign: TextAlign.center,
+                                                  ),
+                                                ),
+                                              ),
                                           ],
                                         );
                                       },

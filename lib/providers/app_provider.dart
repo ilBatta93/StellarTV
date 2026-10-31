@@ -189,6 +189,12 @@ class AppProvider extends ChangeNotifier {
   final Map<ContentType, Future<void>> _preparing = {};
 
   bool get _largeCatalog => _shelf.length > 512;
+
+  /// A saved section index is being rebuilt (first start after an update
+  /// changed its format): the catalog is coming, not empty.
+  bool get catalogIndexRebuilding => _indexRebuilding;
+  bool _indexRebuilding = false;
+
   bool catalogPreparing(ContentType type) =>
       _largeCatalog && !_allCache.containsKey(type);
 
@@ -565,6 +571,10 @@ class AppProvider extends ChangeNotifier {
   Future<void> _openSavedSection(CatalogShelf shelf, String path) async {
     final adopted = await shelf.adoptIndex(path, token: _settingsToken());
     if (adopted) return;
+    if (!_indexRebuilding) {
+      _indexRebuilding = true;
+      notifyListeners();
+    }
     await shelf.appendSection(
       path,
       hidden: _hiddenCategories,
@@ -595,6 +605,7 @@ class AppProvider extends ChangeNotifier {
     final previous = _shelf;
     _shelf = shelf;
     _shelfReady = true;
+    _indexRebuilding = false;
     _invalidateCaches();
     _rebuildMask();
     _publishShelf(notify: false);

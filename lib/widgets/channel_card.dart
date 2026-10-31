@@ -57,6 +57,7 @@ class ChannelCard extends StatelessWidget {
       fallbackUrls: [if (tmdb != null && channel.logo.isNotEmpty) tmdb],
       fallbackIcon: icon,
       audiobookCover: audiobook ? _audiobookCover : null,
+      fallbackLabel: DeviceTypeService.isTv ? _title : null,
     );
   }
 

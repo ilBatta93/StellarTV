@@ -33,6 +33,7 @@ import '../services/movie_hash.dart';
 import '../services/subtitles_service.dart';
 import '../services/catalog_builder.dart';
 import '../services/catalog_shelf.dart';
+import '../widgets/player/tv_live_banner.dart';
 import '../services/device_type_service.dart';
 import '../services/frame_telemetry_service.dart';
 import '../theme/app_theme.dart';
@@ -122,6 +123,14 @@ class _PlayerScreenState extends State<PlayerScreen>
   bool _tvQuickPanelOpen = false;
   bool _tvTogglePending = false;
   Timer? _tvInfoTimer;
+
+  /// Live: channel banner (now/next) shown after tuning and on Info.
+  bool _liveBannerVisible = false;
+  Timer? _liveBannerTimer;
+
+  /// Live: channel number being typed with the remote digits.
+  String _typedNumber = '';
+  Timer? _typedNumberTimer;
   bool _introWasActive = false;
   bool _wasPlaying = false;
   bool _locked = false;
@@ -182,6 +191,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
     WidgetsBinding.instance.addObserver(this);
     _history = context.read<HistoryProvider>();
+    if (_isLive && DeviceTypeService.isTv) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showLiveBanner());
+    }
     // Imposta UI immersive sticky per fullscreen immediato su TV.
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _screenOffSub = _bridge.screenOff.listen((_) {
@@ -348,8 +360,19 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
     if (key == LogicalKeyboardKey.contextMenu ||
         key == LogicalKeyboardKey.info) {
-      if (!_isLive) _showTvInfo();
+      if (_isLive) {
+        _showLiveBanner();
+      } else {
+        _showTvInfo();
+      }
       return;
+    }
+    if (_isLive && !repeat) {
+      final digit = remoteDigit(key);
+      if (digit != null) {
+        _typeChannelDigit(digit);
+        return;
+      }
     }
 
     final left = key == LogicalKeyboardKey.arrowLeft;
@@ -1438,6 +1461,37 @@ class _PlayerScreenState extends State<PlayerScreen>
     await _playLiveChannel(selected);
   }
 
+  void _showLiveBanner() {
+    if (!_isLive || !mounted) return;
+    _liveBannerTimer?.cancel();
+    setState(() => _liveBannerVisible = true);
+    _liveBannerTimer = Timer(const Duration(seconds: 6), () {
+      if (mounted) setState(() => _liveBannerVisible = false);
+    });
+  }
+
+  /// Digits typed within 1.5 s form one channel number, like a TV remote.
+  void _typeChannelDigit(int digit) {
+    if (_typedNumber.length >= 4) _typedNumber = '';
+    _typedNumber += '$digit';
+    _typedNumberTimer?.cancel();
+    _showLiveBanner();
+    _typedNumberTimer = Timer(const Duration(milliseconds: 1500), () {
+      final number = int.tryParse(_typedNumber);
+      _typedNumber = '';
+      if (!mounted) return;
+      setState(() {});
+      final all = _app.channelsOf(ContentType.live);
+      if (number == null || all is! ShelfChannelList) return;
+      _playLiveChannel(all.atNumberInGroup(_channel.id, number));
+    });
+  }
+
+  int? _liveNumber() {
+    final all = _app.channelsOf(ContentType.live);
+    return all is ShelfChannelList ? all.numberInGroup(_channel.id) : null;
+  }
+
   Future<void> _playLiveChannel(Channel? channel) async {
     if (channel == null || channel.id == _channel.id) return;
     final app = context.read<AppProvider>();
@@ -1446,6 +1500,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     final session = _session;
     if (session != null) {
       setState(() => _tunedChannel = channel);
+      _showLiveBanner();
       await session.retune(channel.url);
       return;
     }
@@ -1829,6 +1884,8 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   @override
   void dispose() {
+    _liveBannerTimer?.cancel();
+    _typedNumberTimer?.cancel();
     FrameTelemetryService.instance.leaveSection(_telemetrySection);
     WidgetsBinding.instance.removeObserver(this);
     _resumeTimer?.cancel();
@@ -1963,6 +2020,30 @@ class _PlayerScreenState extends State<PlayerScreen>
           onInteraction: _onInteraction,
         ),
       if (connecting) _ConnectingView(session: session),
+      // Sound but no picture track: the device cannot decode this video
+      // (e.g. HEVC range extensions on a Fire TV Stick) or the channel is
+      // radio. Say so instead of leaving a black screen.
+      if (_isLive &&
+          status == SessionStatus.playing &&
+          session.engine?.audioOnly == true)
+        const _AudioOnlyNotice(),
+      if (DeviceTypeService.isTv &&
+          _isLive &&
+          _liveBannerVisible &&
+          !_controlsVisible)
+        Builder(
+          builder: (context) {
+            final epg = context.watch<EpgProvider>();
+            final typed = _typedNumber;
+            return TvLiveBanner(
+              channelName: _channel.name,
+              number: typed.isNotEmpty ? int.tryParse(typed) : _liveNumber(),
+              now: epg.nowFor(_channel),
+              next: epg.nextFor(_channel),
+              qualityLabel: liveQualityLabel(session.value.size),
+            );
+          },
+        ),
       if (DeviceTypeService.isTv && _tvInfoVisible && !_controlsVisible)
         TvPlaybackInfo(
           title: _episodeInfoTitle(),
@@ -2798,4 +2879,52 @@ class _EpisodePickerState extends State<_EpisodePicker> {
 int tvScrubMultiplier(bool repeat, int repeats) {
   if (!repeat) return 1;
   return (3 + (repeats ~/ 10) * 3).clamp(3, 30);
+}
+
+class _AudioOnlyNotice extends StatelessWidget {
+  const _AudioOnlyNotice();
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 48),
+        padding: const EdgeInsets.all(24),
+        constraints: const BoxConstraints(maxWidth: 720),
+        decoration: BoxDecoration(
+          color: AppColors.glass,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.music_note_rounded,
+              color: AppColors.onOverlay,
+              size: 40,
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Solo audio',
+              style: TextStyle(
+                color: AppColors.onOverlay,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Il video di questo canale non è supportato da questo '
+              'dispositivo, oppure il canale trasmette solo audio.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.onOverlaySecondary,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

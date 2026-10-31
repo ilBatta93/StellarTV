@@ -492,6 +492,10 @@ void main() {
     expect(movies.adjacentInGroup(firstId, 1)?.id, secondId);
     expect(movies.adjacentInGroup(firstId, -1), isNull);
     expect(CatalogShelf.diskReads, 1);
+    // Remote digits: numbers follow the same list zapping walks through.
+    expect(movies.numberInGroup(secondId), 2);
+    expect(movies.atNumberInGroup(firstId, 2)?.id, secondId);
+    expect(movies.atNumberInGroup(firstId, 0), isNull);
     // "Solo 4K" and the platform filter check every title name: the names
     // are read in an isolate, never by the UI thread.
     CatalogShelf.diskReads = 0;

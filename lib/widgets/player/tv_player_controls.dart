@@ -279,7 +279,28 @@ class _TvPill extends StatelessWidget {
             width: AppTheme.focusRingWidth,
           ),
         ),
-        child: Icon(action.icon, size: secondary ? 20 : 22, color: fg),
+        // The selected control also shows its name: an icon alone did not
+        // say what it does from the sofa.
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(action.icon, size: secondary ? 20 : 22, color: fg),
+            if (selected) const SizedBox(width: 8),
+            if (selected)
+              Flexible(
+                child: Text(
+                  action.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: secondary ? 14 : 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

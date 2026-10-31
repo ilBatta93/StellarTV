@@ -4,6 +4,7 @@
 - Salta sigla e il riquadro automatico prossimo episodio conservano la priorità su OK.
 - Film/serie: Su mostra nome, trama già disponibile, tempo rimanente e fine stimata per sei secondi. Nessun recupero metadata aggiuntivo. Back chiude soltanto le informazioni.
 - Film/serie: Giù apre Audio/Sottotitoli e, sulle serie, Stagioni ed episodi. Riutilizza i selettori esistenti: nessuna duplicazione motori o logica di cambio episodio. Back chiude il selettore senza uscire dal player.
+- Diretta: i tasti numerici (riga superiore o tastierino) compongono il numero del canale nella categoria corrente; dopo 1,5 s si sintonizza. Info mostra la fascia con programma in corso e successivo, che compare da sola per 6 s a ogni sintonizzazione.
 - Diretta: Su canale precedente, Giù successivo. La pausa usa la gestione Diretta già esistente; la ripresa/timeshift effettiva resta dipendente dal flusso/provider.
 - A comandi visibili, frecce e OK navigano/attivano i comandi come prima. Mobile invariato. Ripetizioni OK ignorate; nessuna coda di pannelli o zapping da pressione prolungata.
 

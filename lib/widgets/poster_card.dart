@@ -33,6 +33,10 @@ class PosterImage extends StatelessWidget {
   /// Bundled cover shown instead of the neutral icon (audiobooks).
   final String? audiobookCover;
 
+  /// Title written on the neutral tile when there is no artwork, so a
+  /// grey card still says what it is.
+  final String? fallbackLabel;
+
   const PosterImage({
     super.key,
     required this.url,
@@ -42,6 +46,7 @@ class PosterImage extends StatelessWidget {
     this.maxDecodeWidth,
     this.fallbackUrls = const [],
     this.audiobookCover,
+    this.fallbackLabel,
   });
 
   @override
@@ -51,7 +56,27 @@ class PosterImage extends StatelessWidget {
         : Container(
             color: AppColors.card,
             alignment: Alignment.center,
-            child: Icon(fallbackIcon, color: AppColors.textMuted, size: 28),
+            padding: const EdgeInsets.all(12),
+            child: fallbackLabel == null
+                ? Icon(fallbackIcon, color: AppColors.textMuted, size: 28)
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(fallbackIcon, color: AppColors.textMuted, size: 28),
+                      const SizedBox(height: 10),
+                      Text(
+                        fallbackLabel!,
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
           );
     // The "Mostra anteprime" setting: when off, all poster images become a
     // neutral placeholder tile.
@@ -93,6 +118,7 @@ class PosterImage extends StatelessWidget {
                 fallbackIcon: fallbackIcon,
                 maxDecodeWidth: maxDecodeWidth,
                 audiobookCover: audiobookCover,
+                fallbackLabel: fallbackLabel,
               );
         if (DeviceTypeService.isTv) {
           // Decoded from the cached file: the bytes skip the Dart heap.

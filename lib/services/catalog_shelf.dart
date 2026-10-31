@@ -1903,17 +1903,38 @@ class ShelfChannelList extends ListBase<Channel> {
   Channel? adjacentInGroup(String id, int offset) {
     final current = shelf.slotOfId(id);
     if (current == null) return null;
+    final pool = _groupPool(current);
+    final index = pool.indexOf(current);
+    final target = index + offset;
+    if (index < 0 || target < 0 || target >= pool.length) return null;
+    return shelf.readSlot(pool[target]);
+  }
+
+  /// 1-based position of [id] among the channels zapping walks through
+  /// (its category, or the whole list): the number the remote digits use.
+  int? numberInGroup(String id) {
+    final current = shelf.slotOfId(id);
+    if (current == null) return null;
+    final index = _groupPool(current).indexOf(current);
+    return index < 0 ? null : index + 1;
+  }
+
+  /// Channel with [number] in the same list as [id].
+  Channel? atNumberInGroup(String id, int number) {
+    final current = shelf.slotOfId(id);
+    if (current == null || number < 1) return null;
+    final pool = _groupPool(current);
+    return number > pool.length ? null : shelf.readSlot(pool[number - 1]);
+  }
+
+  List<int> _groupPool(int current) {
     final shown = _shown;
     final group = shelf.groupAt(current);
     final sameGroup = [
       for (final slot in shown)
         if (shelf.groupAt(slot) == group) slot,
     ];
-    final pool = sameGroup.length > 1 ? sameGroup : shown;
-    final index = pool.indexOf(current);
-    final target = index + offset;
-    if (index < 0 || target < 0 || target >= pool.length) return null;
-    return shelf.readSlot(pool[target]);
+    return sameGroup.length > 1 ? sameGroup : shown;
   }
 
   ShelfChannelList whereIds(Set<String> wanted) {

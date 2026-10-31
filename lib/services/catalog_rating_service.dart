@@ -25,6 +25,7 @@ import '../models/tmdb_item.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'frame_telemetry_service.dart';
+import 'image_warmup_service.dart' show RemoteNavigation;
 
 final _foregroundHttp = ForegroundHttpClient();
 
@@ -378,6 +379,12 @@ class CatalogRatingService extends ChangeNotifier {
       return MapEntry(key, front.remove(key)!);
     }
     if (back.isNotEmpty) {
+      // Background warming waits while the remote moves: its requests and
+      // JSON parsing competed with the focus animation on TV boxes.
+      if (RemoteNavigation.moving) {
+        _resumeAfterRemote();
+        return null;
+      }
       final key = back.keys.first;
       return MapEntry(key, back.remove(key)!);
     }
@@ -399,6 +406,19 @@ class CatalogRatingService extends ChangeNotifier {
 
   /// Two cloud groups of 40 titles and up to four direct TMDB lookups in
   /// flight. The warm-up keeps two direct slots free for the screen.
+  bool _waitingRemote = false;
+
+  void _resumeAfterRemote() {
+    if (_waitingRemote) return;
+    _waitingRemote = true;
+    unawaited(
+      RemoteNavigation.idle().then((_) {
+        _waitingRemote = false;
+        _drain();
+      }),
+    );
+  }
+
   void _drain() {
     if (PlaybackWorkPolicy.instance.blocksGuide) return;
     if (_cloudDown &&

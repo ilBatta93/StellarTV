@@ -558,6 +558,21 @@ class _CatalogPageState extends State<CatalogPage> {
 
     final groups = app.groupedCatalog(widget.type);
     final anyVisible = groups.any((group) => group.entries.isNotEmpty);
+    if (!anyVisible && app.catalogIndexRebuilding) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: AppColors.primary),
+            const SizedBox(height: 16),
+            const Text(
+              'Preparazione del catalogo…',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
     if (!anyVisible && !app.catalogPreparing(widget.type)) {
       return EmptyState(
         icon: Icons.playlist_add_rounded,
