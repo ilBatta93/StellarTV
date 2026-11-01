@@ -32,6 +32,9 @@ public class VideoPlayerOptions {
   /** Byte cap for the forward buffer. Zero or null leaves Media3's own target. */
   @Nullable public Long targetBufferBytes;
 
+  /** App-owned audio session carrying the equalizer and night-mode effects. */
+  @Nullable public Integer audioSessionId;
+
   public VideoPlayerOptions() {}
 
   /** Copy constructor to ensure all options are reliably copied. */
@@ -44,5 +47,6 @@ public class VideoPlayerOptions {
     this.bufferForPlaybackAfterRebufferMs = other.bufferForPlaybackAfterRebufferMs;
     this.backBufferRequiresSeekable = other.backBufferRequiresSeekable;
     this.targetBufferBytes = other.targetBufferBytes;
+    this.audioSessionId = other.audioSessionId;
   }
 }

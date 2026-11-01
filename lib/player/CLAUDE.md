@@ -18,6 +18,7 @@ Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`
 - La diretta non entra nella cronologia di visione né nel cloud.
 - I bridge nativi e i nomi Dart cambiano insieme (vedi `packages/video_player_android/CLAUDE.md`).
 - Nessun indirizzo di flusso nei log inviati o nella diagnostica cloud.
+- Effetti audio (`services/audio_effects_service.dart`): solo il player a schermo intero suona sulla sessione Android degli effetti; anteprime e multivista no. La libmpv inclusa ha solo il filtro `equalizer` di FFmpeg, quindi compressione e dialoghi su Android passano da `android.media.audiofx` (`AudioEffectsController.kt`).
 
 ## Verifica
 - `dart run test/tv_playback_shortcuts_check.dart`, `dart run test/playback_work_policy_check.dart`, `dart run test/live_preview_policy_check.dart`.

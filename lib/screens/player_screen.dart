@@ -151,7 +151,6 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// lands, so a slow start never overwrites the saved position with 0.
   Duration? _pendingResume;
   bool _initialProgressSaved = false;
-  DateTime _openedAt = DateTime.now();
   List<Channel>? _queue;
   Channel? _next;
   bool _nextDismissed = false;
@@ -968,6 +967,13 @@ class _PlayerScreenState extends State<PlayerScreen>
           onPressed: () => _openTvSheet(() => showAudioSheet(context, session)),
         ),
         TvPlayerAction(
+          id: 'effects',
+          icon: Icons.graphic_eq_rounded,
+          label: 'Effetti audio',
+          onPressed: () =>
+              _openTvSheet(() => showAudioEffectsSheet(context, session)),
+        ),
+        TvPlayerAction(
           id: 'subtitles',
           icon: Icons.subtitles_rounded,
           label: _onlineCues != null ? 'ITA online' : 'Sottotitoli',
@@ -1584,7 +1590,6 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
     if (!mounted) return;
     if (startAt != null && startAt > Duration.zero) _pendingResume = startAt;
-    _openedAt = DateTime.now();
 
     _applyOrientation(settings);
     if (settings.keepScreenOn) _bridge.setKeepScreenOn(true);
@@ -1604,7 +1609,6 @@ class _PlayerScreenState extends State<PlayerScreen>
       engineFactory: widget.engineFactory,
       onPositionCommitted: (position) {
         _pendingResume = position;
-        _openedAt = DateTime.now();
         return _saveResume(position: position);
       },
     )..addListener(_onSessionChanged);
@@ -1871,9 +1875,10 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (pending != null && position == null) {
       final landed =
           (v.position - pending).abs() <= const Duration(seconds: 10);
-      final gaveUp =
-          DateTime.now().difference(_openedAt) > const Duration(seconds: 40);
-      if (!landed && !gaveUp) return;
+      // A resume seek that never landed leaves playback near the start:
+      // that is not the viewer's progress, so the saved point is kept until
+      // playback actually passes it.
+      if (!landed && v.position < pending) return;
       _pendingResume = null;
     }
     // Inside the known end credits the title is finished, even when the TV

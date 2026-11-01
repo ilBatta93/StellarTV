@@ -5,7 +5,9 @@ import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../models/audio_effects.dart';
 import '../models/player_settings.dart';
+import '../services/audio_effects_service.dart';
 import '../services/device_type_service.dart';
 import 'playback_engine.dart';
 
@@ -137,11 +139,34 @@ class MediaKitEngine extends PlaybackEngine {
     required bool passthrough,
     required bool tv,
     required bool android,
+    bool effects = false,
   }) {
     if (!android) return null;
     if (passthrough) return 'audiotrack';
-    return tv ? 'audiotrack,opensles' : null;
+    // Android audio effects attach only to an AudioTrack session.
+    return tv || effects ? 'audiotrack,opensles' : null;
   }
+
+  /// mpv's own equalizer, for players without an Android effects session.
+  /// The bundled FFmpeg has no other audio filter (no compressor), so night
+  /// mode there is limited to the Dolby decoder's compression.
+  @visibleForTesting
+  static String equalizerFilter(List<double> gains) {
+    final bands = <String>[
+      for (var i = 0; i < gains.length && i < kEqBandCenters.length; i++)
+        if (gains[i] != 0)
+          'equalizer=f=${kEqBandCenters[i].round()}:t=o:w=1.5:'
+              'g=${gains[i].toStringAsFixed(1)}',
+    ];
+    return bands.isEmpty ? '' : 'lavfi=[${bands.join(',')}]';
+  }
+
+  /// Downmix centre level: lifts dialogue when 5.1 becomes stereo.
+  @visibleForTesting
+  static String swresampleOptions(double? centerMixLevel) =>
+      centerMixLevel == null
+      ? ''
+      : 'center_mix_level=${centerMixLevel.toStringAsFixed(2)}';
 
   /// Four threads on a four-core stick leave nothing for the picture.
   @visibleForTesting
@@ -726,7 +751,9 @@ class MediaKitEngine extends PlaybackEngine {
         passthrough: _settings.audioPassthrough,
         tv: DeviceTypeService.isTv,
         android: Platform.isAndroid,
+        effects: _effectsOutput,
       ),
+      if (_audioSession != null) 'audiotrack-session-id': '${_audioSession!}',
       if (dropLate || DeviceTypeService.isTv || isLive)
         'framedrop': dropLate ? 'vo' : 'no',
     };
@@ -756,7 +783,18 @@ class MediaKitEngine extends PlaybackEngine {
       }
     }
     if (isLive && !previewMode) await _enableTimeshift();
+    if (!previewMode) {
+      // Before the first AudioTrack exists: mpv reads the session at init.
+      if (Platform.isAndroid) {
+        _audioSession = await AudioEffectsService.instance.loadSessionId();
+      } else {
+        await AudioEffectsService.instance.prepare();
+      }
+      _effectsOutput = AudioEffectsService.instance.settings.anyEnabled;
+      if (_disposed) throw const PlaybackException('Chiuso');
+    }
     await _applyDeclaredPreferences();
+    if (!previewMode) await _applyAudioEffects();
     if (_disposed) throw const PlaybackException('Chiuso');
     await _player.setVolume(initialVolume.clamp(0.0, 1.0) * 100);
     _playing = Completer<void>();
@@ -770,6 +808,11 @@ class MediaKitEngine extends PlaybackEngine {
       throw PlaybackException('$e');
     }
     if (_disposed) throw const PlaybackException('Chiuso');
+    if (!previewMode && !_effectsStarted) {
+      _effectsStarted = true;
+      AudioEffectsService.instance.addListener(_onAudioEffectsChanged);
+      unawaited(AudioEffectsService.instance.playerStarted());
+    }
     await _player.setRate(isLive ? 1.0 : _settings.defaultSpeed);
     unawaited(_observeFirstFrame());
     await _playing!.future.timeout(
@@ -955,10 +998,62 @@ class MediaKitEngine extends PlaybackEngine {
     } catch (_) {}
   }
 
+  int? _audioSession;
+  bool _effectsOutput = false;
+  bool _effectsStarted = false;
+  String? _ac3DrcDefault;
+
+  void _onAudioEffectsChanged() => unawaited(_applyAudioEffects());
+
+  /// The mpv side of the audio effects; the Android session effects are
+  /// driven by [AudioEffectsService]. Downmix and Dolby compression take
+  /// effect when the decoder next starts (track, channel or seek reload).
+  Future<void> _applyAudioEffects() async {
+    final platform = _player.platform;
+    if (_disposed || platform is! NativePlayer) return;
+    final plan = AudioEffectsService.instance.plan;
+    if (_audioSession != null &&
+        !DeviceTypeService.isTv &&
+        !_effectsOutput &&
+        !_settings.audioPassthrough &&
+        AudioEffectsService.instance.settings.anyEnabled) {
+      // A phone started on mpv's default output: move to AudioTrack so the
+      // session effects can attach.
+      _effectsOutput = true;
+      try {
+        await platform.setProperty('ao', 'audiotrack,opensles');
+        await platform.command(['ao-reload']);
+      } catch (_) {}
+    }
+    try {
+      _ac3DrcDefault ??= await platform.getProperty('ad-lavc-ac3drc');
+    } catch (_) {}
+    final options = <String, String>{
+      'audio-swresample-o': swresampleOptions(plan.centerMixLevel),
+      if (plan.compress)
+        'ad-lavc-ac3drc': '1'
+      else
+        'ad-lavc-ac3drc': ?_ac3DrcDefault,
+      // Passthrough sends a bitstream: no filter can touch it.
+      if (_audioSession == null && !_settings.audioPassthrough)
+        'af': equalizerFilter(plan.eqGains),
+    };
+    for (final entry in options.entries) {
+      try {
+        await platform.setProperty(entry.key, entry.value);
+      } catch (_) {}
+    }
+  }
+
   @override
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    if (_effectsStarted) {
+      _effectsStarted = false;
+      AudioEffectsService.instance.removeListener(_onAudioEffectsChanged);
+      unawaited(AudioEffectsService.instance.playerStopped());
+    }
     _errorConfirm?.cancel();
     if (_playing != null && !_playing!.isCompleted) {
       _playing!.completeError(const PlaybackException('Chiuso'));

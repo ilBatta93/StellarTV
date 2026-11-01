@@ -90,6 +90,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private var channel: MethodChannel? = null
+    private var audioEffects: AudioEffectsController? = null
     private var autoPip = false
     private var pipRatio = Rational(16, 9)
 
@@ -160,6 +161,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        audioEffects?.release()
         if (screenReceiverRegistered) {
             try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
             screenReceiverRegistered = false
@@ -315,6 +317,10 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        val effects = AudioEffectsController(applicationContext)
+        audioEffects = effects
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "stellartv/audio")
+            .setMethodCallHandler(effects)
         val ch = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "stellartv/player")
         ch.setMethodCallHandler { call, result ->
             when (call.method) {

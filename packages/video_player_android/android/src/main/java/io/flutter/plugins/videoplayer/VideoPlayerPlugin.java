@@ -138,7 +138,25 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
     playerOptions.backBufferRequiresSeekable =
         Boolean.TRUE.equals(options.getBackBufferRequiresSeekable());
     playerOptions.targetBufferBytes = options.getTargetBufferBytes();
+    playerOptions.audioSessionId = audioSessionFromHeaders(options.getHttpHeaders());
   }
+
+  /** Full-screen player only: the app's audio-effects session, never sent to the stream. */
+  private static @Nullable Integer audioSessionFromHeaders(@NonNull Map<String, String> headers) {
+    for (Map.Entry<String, String> entry : headers.entrySet()) {
+      if (AUDIO_SESSION_HEADER.equals(entry.getKey().toLowerCase(Locale.US))) {
+        try {
+          int id = Integer.parseInt(entry.getValue().trim());
+          return id > 0 ? id : null;
+        } catch (NumberFormatException e) {
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+
+  private static final String AUDIO_SESSION_HEADER = "x-stellartv-audiosession";
 
   private static @NonNull Map<String, String> headersWithoutLoadControl(
       @NonNull Map<String, String> headers) {
@@ -147,7 +165,8 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
     }
     Map<String, String> copy = new HashMap<>();
     for (Map.Entry<String, String> entry : headers.entrySet()) {
-      if (!"x-stellartv-loadcontrol".equals(entry.getKey().toLowerCase(Locale.US))) {
+      String key = entry.getKey().toLowerCase(Locale.US);
+      if (!"x-stellartv-loadcontrol".equals(key) && !AUDIO_SESSION_HEADER.equals(key)) {
         copy.put(entry.getKey(), entry.getValue());
       }
     }

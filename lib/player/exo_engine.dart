@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 
 import '../models/frame_rate_policy.dart';
 import '../models/player_settings.dart';
+import '../services/audio_effects_service.dart';
 import '../services/frame_telemetry_service.dart';
 import 'playback_engine.dart';
 
@@ -19,7 +20,8 @@ class ExoEngine extends PlaybackEngine {
     required PlayerSettings settings,
     bool shared = false,
     this.isLive = false,
-  }) : _mediaUrl = url,
+  }) : _shared = shared,
+       _mediaUrl = url,
        _controller = VideoPlayerController.networkUrl(
          Uri.parse(url),
          formatHint: _formatHint(url),
@@ -41,6 +43,8 @@ class ExoEngine extends PlaybackEngine {
        );
 
   final bool isLive;
+  final bool _shared;
+  bool _effectsStarted = false;
   String _mediaUrl;
   final VideoPlayerController _controller;
 
@@ -62,6 +66,9 @@ class ExoEngine extends PlaybackEngine {
             ? 0
             : (live ? 60000 : settings.backBufferSeconds * 1000),
       ).wire;
+      // Only the full-screen player carries the audio effects.
+      final session = shared ? null : AudioEffectsService.instance.sessionId;
+      if (session != null) headers[exoAudioSessionHeader] = '$session';
     }
     return headers;
   }
@@ -239,6 +246,10 @@ class ExoEngine extends PlaybackEngine {
       throw PlaybackException(_describeInitError(e));
     }
     if (_disposed) return;
+    if (!_shared) {
+      _effectsStarted = true;
+      unawaited(AudioEffectsService.instance.playerStarted());
+    }
     _sync();
     await _pollWindow();
     if (_disposed) return;
@@ -434,6 +445,10 @@ class ExoEngine extends PlaybackEngine {
     if (_disposed) return;
     _disposed = true;
     _livePoll?.cancel();
+    if (_effectsStarted) {
+      _effectsStarted = false;
+      unawaited(AudioEffectsService.instance.playerStopped());
+    }
     _controller.removeListener(_sync);
     try {
       await _controller.pause();
@@ -447,6 +462,9 @@ class ExoEngine extends PlaybackEngine {
 
 /// Same wire format as the Android player header parser.
 const exoLoadControlHeader = 'X-StellarTV-LoadControl';
+
+/// Audio-effects session for the Android player; removed before any request.
+const exoAudioSessionHeader = 'X-StellarTV-AudioSession';
 
 /// Forward buffer for one ExoPlayer. Preview and MultiView stay short so four
 /// tiles do not each keep a film-sized buffer. Live keeps its back buffer only

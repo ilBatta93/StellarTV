@@ -11,6 +11,7 @@ Il `pubspec.yaml` dell'app lo sostituisce al plugin ufficiale (`path: packages/v
 - Il rilascio del player nativo deve completarsi prima che `released` risponda.
 - Non aggiornare il fork alla versione upstream di propria iniziativa: le modifiche locali andrebbero perse.
 - Nessun indirizzo di flusso o header nei log.
+- L'header interno `X-StellarTV-AudioSession` porta la sessione degli effetti audio (`AudioEffectsService`) al player a schermo intero; il lato Java lo toglie prima di ogni richiesta, come `X-StellarTV-LoadControl`.
 
 ## Verifica
 - `flutter analyze` dell'app non copre il Java. Compila solo nella build Android, che richiede «fai build android».

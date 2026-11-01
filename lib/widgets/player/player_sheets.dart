@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../models/audio_effects.dart';
 import '../../models/player_settings.dart';
 import '../../player/playback_engine.dart';
 import '../../player/playback_session.dart';
 import '../../theme/app_theme.dart';
+import '../../services/audio_effects_service.dart';
 import '../../services/device_type_service.dart';
 import '../tv_focusable.dart';
 import '../tv_wrap_navigation.dart';
@@ -553,6 +555,190 @@ class _DelayControl extends StatelessWidget {
   }
 }
 
+/// Short state for menus: "Spenti", "Notte · Dialoghi forte", "Cinema"...
+String audioEffectsSummary(AudioEffectsSettings s) {
+  final parts = <String>[
+    if (s.night == NightMode.on) 'Notte',
+    if (s.night == NightMode.auto) 'Notte auto',
+    if (s.dialog != DialogBoost.off) 'Dialoghi ${s.dialog.label.toLowerCase()}',
+    if (s.eqGains.any((g) => g != 0)) s.preset.label,
+  ];
+  return parts.isEmpty ? 'Spenti' : parts.join(' · ');
+}
+
+Future<void> showAudioEffectsSheet(
+  BuildContext context,
+  PlaybackSession session,
+) {
+  final service = AudioEffectsService.instance;
+  return _showSheet(context, 'Effetti audio', (ctx) {
+    return ListenableBuilder(
+      listenable: service,
+      builder: (context, _) {
+        final s = service.settings;
+        void set(AudioEffectsSettings next) => service.update(next);
+        final notes = <String>[
+          if (session.settings.audioPassthrough &&
+              session.engine?.type == PlayerEngineType.mediakit)
+            'Con il passthrough attivo le tracce Dolby e DTS arrivano alla TV '
+                'o alla soundbar senza effetti.',
+          if (s.night != NightMode.off && !service.support.compresses)
+            service.sessionId == null
+                ? 'Su questo dispositivo la modalità notte riduce la dinamica '
+                      'solo delle tracce Dolby.'
+                : 'Questo dispositivo non ha il compressore audio: la modalità '
+                      'notte alza i passaggi deboli senza abbassare i picchi.',
+        ];
+        return ListView(
+          shrinkWrap: true,
+          children: [
+            for (final note in notes)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                child: Text(
+                  note,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            const _SectionLabel('Modalità notte'),
+            for (final mode in NightMode.values)
+              _Option(
+                label: mode.label,
+                detail: mode.description,
+                selected: s.night == mode,
+                onTap: () => set(s.copyWith(night: mode)),
+              ),
+            const _SectionLabel('Dialoghi più chiari'),
+            for (final level in DialogBoost.values)
+              _Option(
+                label: level.label,
+                detail: level.description,
+                selected: s.dialog == level,
+                onTap: () => set(s.copyWith(dialog: level)),
+              ),
+            const _SectionLabel('Equalizzatore'),
+            for (final preset in EqPreset.values)
+              if (preset != EqPreset.custom || s.preset == EqPreset.custom)
+                _Option(
+                  label: preset.label,
+                  selected: s.preset == preset,
+                  onTap: () => set(s.copyWith(preset: preset)),
+                ),
+            for (var i = 0; i < kEqBandCenters.length; i++)
+              _EqBandControl(
+                label: kEqBandLabels[i],
+                gain: s.eqGains[i],
+                onChanged: (g) => set(s.withBand(i, g)),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _sheetControl(
+                  TextButton(
+                    onPressed: () => set(const AudioEffectsSettings()),
+                    child: const Text('Ripristina audio originale'),
+                  ),
+                  () => set(const AudioEffectsSettings()),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  });
+}
+
+Widget _sheetControl(Widget child, VoidCallback action) =>
+    DeviceTypeService.isTv
+    ? TvFocusable(onPressed: action, child: child)
+    : child;
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(24, 16, 24, 4),
+    child: Text(
+      text,
+      style: TextStyle(
+        color: AppColors.primary,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
+}
+
+/// One equalizer band: − and + buttons, 1 dB per press, so the remote
+/// adjusts it with OK just like a finger.
+class _EqBandControl extends StatelessWidget {
+  final String label;
+  final int gain;
+  final ValueChanged<int> onChanged;
+
+  const _EqBandControl({
+    required this.label,
+    required this.gain,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget step(IconData icon, int delta, String tooltip) {
+      final enabled = (gain + delta).clamp(kEqMinDb, kEqMaxDb) != gain;
+      void action() {
+        if (enabled) onChanged(gain + delta);
+      }
+
+      return _sheetControl(
+        IconButton(
+          tooltip: tooltip,
+          icon: Icon(icon),
+          color: AppColors.textPrimary,
+          disabledColor: AppColors.textMuted,
+          onPressed: enabled ? action : null,
+        ),
+        action,
+      );
+    }
+
+    final sign = gain > 0 ? '+' : '';
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: AppColors.textPrimary),
+            ),
+          ),
+          step(Icons.remove_rounded, -1, 'Abbassa $label'),
+          SizedBox(
+            width: 64,
+            child: Text(
+              '$sign$gain dB',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: gain == 0 ? AppColors.textSecondary : AppColors.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          step(Icons.add_rounded, 1, 'Alza $label'),
+        ],
+      ),
+    );
+  }
+}
+
 Future<void> showPlayerMenu(
   BuildContext context,
   PlaybackSession session, {
@@ -609,6 +795,12 @@ Future<void> showPlayerMenu(
           showEngineSheet,
         ),
         item(Icons.audiotrack_rounded, 'Traccia audio', null, showAudioSheet),
+        item(
+          Icons.graphic_eq_rounded,
+          'Effetti audio',
+          audioEffectsSummary(AudioEffectsService.instance.settings),
+          showAudioEffectsSheet,
+        ),
         item(
           Icons.subtitles_rounded,
           'Sottotitoli',
