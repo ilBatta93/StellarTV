@@ -164,12 +164,16 @@ class Pressable extends StatefulWidget {
   final VoidCallback? onLongPress;
   final VoidCallback? onFocus;
 
+  /// TV focus ring corners.
+  final BorderRadius borderRadius;
+
   const Pressable({
     super.key,
     required this.child,
     required this.onTap,
     this.onLongPress,
     this.onFocus,
+    this.borderRadius = const BorderRadius.all(Radius.circular(10)),
   });
 
   @override
@@ -200,6 +204,7 @@ class _PressableState extends State<Pressable> {
     return TvFocusable(
       onPressed: widget.onTap,
       onLongPress: widget.onLongPress,
+      borderRadius: widget.borderRadius,
       revealOnFocus: widget.onFocus == null,
       onFocusChange: widget.onFocus == null
           ? null

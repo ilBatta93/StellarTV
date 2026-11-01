@@ -1694,6 +1694,7 @@ class _TvTopRowState extends State<_TvTopRow> {
         if (choices.isNotEmpty) widget.onFocusItem(choices.first);
       },
       borderRadius: BorderRadius.circular(22),
+      onAccent: selected,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
@@ -1802,6 +1803,8 @@ class _TvHeroBackdrop extends StatelessWidget {
 }
 
 class _TvHeroInfo extends StatelessWidget {
+  static const _metaBadgeHeight = 22.0;
+
   final TmdbItem? item;
   final String? note;
 
@@ -1831,13 +1834,18 @@ class _TvHeroInfo extends StatelessWidget {
         final scale = MediaQuery.textScalerOf(context);
         final overviewLineHeight = scale.scale(14) * 1.35;
         final metaHeight = scale.scale(14) * 1.25;
+        // The meta row also holds the 22 px platform logos: budget for
+        // them, or the last plot line ends up clipped.
+        final metaRowHeight = metaHeight > _metaBadgeHeight
+            ? metaHeight
+            : _metaBadgeHeight;
         final showOverview =
             context.watch<UiSettings>().homeOverview &&
             it.overview.trim().isNotEmpty;
         final overviewLines = bounds.maxHeight >= 250 ? 3 : 2;
         final textBlock =
             6 +
-            metaHeight +
+            metaRowHeight +
             (note != null ? 6 + metaHeight : 0) +
             (showOverview ? 8 + overviewLines * overviewLineHeight : 0);
         final logoH = (bounds.maxHeight - vPad * 2 - textBlock)
@@ -1887,7 +1895,7 @@ class _TvHeroInfo extends StatelessWidget {
                           ),
                           for (final p in facets.platforms.take(3)) ...[
                             const SizedBox(width: 8),
-                            PlatformBadge(p, height: 22),
+                            PlatformBadge(p, height: _metaBadgeHeight),
                           ],
                         ],
                       );

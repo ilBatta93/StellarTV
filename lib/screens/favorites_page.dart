@@ -36,6 +36,7 @@ class FavoritesPage extends StatelessWidget {
               AnimatedBuilder(
                 animation: DefaultTabController.of(context),
                 builder: (_, _) => TvFilterPanel(
+                  inline: true,
                   options: [
                     for (final (index, label) in [
                       'Diretta',

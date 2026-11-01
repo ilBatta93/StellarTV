@@ -81,6 +81,9 @@ class AppTheme {
       visualDensity: isTv
           ? const VisualDensity(horizontal: -1, vertical: -1)
           : VisualDensity.standard,
+      // TV: no touch target padding, so focus rings hug the visible
+      // capsule instead of floating around an invisible 48 px box.
+      materialTapTargetSize: isTv ? MaterialTapTargetSize.shrinkWrap : null,
       // Apple-inspired: SF on iPhone/iPad (system font), Manrope elsewhere.
       fontFamily: _isApple ? null : 'Manrope',
       // TV: pages change instantly. The animated zoom painted the old and the

@@ -6,7 +6,7 @@ import 'tv_focusable.dart';
 
 /// TV drawer shares selection semantics with touch but restores the exact
 /// remote target on dismissal, rather than re-entering the top navigation.
-class TvCategoryPanel extends StatelessWidget {
+class TvCategoryPanel extends StatefulWidget {
   final Map<String, int> categories;
   final String? selected;
   final ValueChanged<String> onSelected;
@@ -20,6 +20,27 @@ class TvCategoryPanel extends StatelessWidget {
   });
 
   @override
+  State<TvCategoryPanel> createState() => _TvCategoryPanelState();
+}
+
+class _TvCategoryPanelState extends State<TvCategoryPanel> {
+  // Approximate row height, enough to build the active row on open.
+  static const _rowExtent = 54.0;
+
+  late final int _activeIndex = widget.categories.keys.toList().indexOf(
+    widget.selected ?? '',
+  );
+  late final ScrollController _scroll = ScrollController(
+    initialScrollOffset: _activeIndex > 3 ? (_activeIndex - 3) * _rowExtent : 0,
+  );
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => Focus(
     canRequestFocus: false,
     onKeyEvent: (_, event) {
@@ -28,7 +49,7 @@ class TvCategoryPanel extends StatelessWidget {
               event.logicalKey == LogicalKeyboardKey.escape ||
               event.logicalKey == LogicalKeyboardKey.goBack ||
               event.logicalKey == LogicalKeyboardKey.browserBack)) {
-        onClose();
+        widget.onClose();
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;
@@ -46,11 +67,10 @@ class TvCategoryPanel extends StatelessWidget {
                 children: [
                   const Expanded(child: Text('Categorie')),
                   TvFocusable(
-                    autofocus: true,
-                    onPressed: onClose,
+                    onPressed: widget.onClose,
                     child: IconButton(
                       tooltip: 'Chiudi categorie',
-                      onPressed: onClose,
+                      onPressed: widget.onClose,
                       icon: const Icon(Icons.close_rounded),
                     ),
                   ),
@@ -59,22 +79,25 @@ class TvCategoryPanel extends StatelessWidget {
             ),
             Expanded(
               child: ListView.builder(
+                controller: _scroll,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 8,
                 ),
-                itemCount: categories.length,
+                itemCount: widget.categories.length,
                 itemBuilder: (context, index) {
-                  final category = categories.entries.elementAt(index);
-                  final active = selected == category.key;
+                  final category = widget.categories.entries.elementAt(index);
+                  final active = widget.selected == category.key;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: TvFocusable(
-                      autofocus: active || (selected == null && index == 0),
+                      // The remote starts on the current choice (or the
+                      // first one), never on Close.
+                      autofocus: active || (_activeIndex < 0 && index == 0),
                       focusedScale: 1,
                       onPressed: () {
-                        onSelected(category.key);
-                        onClose();
+                        widget.onSelected(category.key);
+                        widget.onClose();
                       },
                       child: ListTile(
                         dense: true,
@@ -86,8 +109,8 @@ class TvCategoryPanel extends StatelessWidget {
                         ),
                         trailing: Text('${category.value}'),
                         onTap: () {
-                          onSelected(category.key);
-                          onClose();
+                          widget.onSelected(category.key);
+                          widget.onClose();
                         },
                       ),
                     ),

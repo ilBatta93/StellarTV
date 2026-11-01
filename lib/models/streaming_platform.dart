@@ -14,7 +14,12 @@ class StreamingPlatform {
   /// Official wordmark image (name logo) shown in title badges.
   final String logoAsset;
 
+  /// The logo stacks the symbol over the name: badges show the symbol
+  /// beside the written name, or the name would be unreadably small.
+  final bool stackedLogo;
+
   const StreamingPlatform({
+    this.stackedLogo = false,
     required this.logoAsset,
     required this.name,
     required this.providerIds,
@@ -91,6 +96,7 @@ class StreamingPlatform {
     StreamingPlatform(
       name: 'Crunchyroll',
       logoAsset: 'assets/platforms/crunchyroll.png',
+      stackedLogo: true,
       providerIds: '283',
       region: 'IT',
       color: const Color(0xFFF47521),

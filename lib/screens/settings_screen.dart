@@ -51,6 +51,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _loadedRefreshMinutes = 0;
   DateTime? _lastRefresh;
   String? _lastRefreshLabel;
+  // TV: the settings pane, entered from the categories on its first row.
+  final FocusNode _detailNode = FocusNode(
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
+
+  /// Right enters the pane on its first setting (not the geometrically
+  /// nearest one); Left stays on the categories instead of jumping to Back.
+  KeyEventResult _onCategoryKey(FocusNode _, KeyEvent event) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey != LogicalKeyboardKey.arrowRight) {
+      return KeyEventResult.ignored;
+    }
+    final first = _detailNode.traversalDescendants
+        .where((node) => node.canRequestFocus && !node.skipTraversal)
+        .firstOrNull;
+    first?.requestFocus();
+    return KeyEventResult.handled;
+  }
+
   late final List<FocusNode> _categoryNodes = [
     for (var i = 0; i < _categories.length; i++) FocusNode(),
   ];
@@ -84,6 +107,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    _detailNode.dispose();
     for (final node in _categoryNodes) {
       node.dispose();
     }
@@ -851,20 +875,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             SizedBox(
               width: 320,
-              child: FocusTraversalGroup(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 12, 32),
-                  children: [
-                    for (var i = 0; i < _categories.length; i++)
-                      _categoryTile(i, tv: true),
-                  ],
+              child: Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onKeyEvent: _onCategoryKey,
+                child: FocusTraversalGroup(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 12, 32),
+                    children: [
+                      for (var i = 0; i < _categories.length; i++)
+                        _categoryTile(i, tv: true),
+                    ],
+                  ),
                 ),
               ),
             ),
             Expanded(
               child: Focus(
-                canRequestFocus: false,
-                skipTraversal: true,
+                focusNode: _detailNode,
                 onKeyEvent: (_, event) {
                   if (event is! KeyUpEvent &&
                       event.logicalKey == LogicalKeyboardKey.arrowLeft) {

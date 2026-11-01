@@ -6,14 +6,17 @@ import 'package:flutter/material.dart';
 import '../models/tmdb_person.dart';
 import '../screens/person_detail_screen.dart';
 import '../theme/app_theme.dart';
+import '../services/device_type_service.dart';
 import 'poster_card.dart';
 import 'section_row.dart';
 
-/// Horizontal list of cast members; tapping one opens the person page.
+/// Horizontal list of people (directors first, then cast); tapping one
+/// opens the person page with their titles.
 class CastRow extends StatelessWidget {
   final List<TmdbPerson> cast;
+  final String title;
 
-  const CastRow({super.key, required this.cast});
+  const CastRow({super.key, required this.cast, this.title = 'Cast'});
 
   @override
   Widget build(BuildContext context) {
@@ -21,24 +24,30 @@ class CastRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(
-          title: 'Cast',
-          subtitle: 'Tocca un attore per saperne di più',
+        SectionHeader(
+          title: title,
+          subtitle: DeviceTypeService.isTv
+              ? 'Seleziona una persona per vedere i suoi titoli'
+              : 'Tocca una persona per vedere i suoi titoli',
         ),
         HorizontalRow(
           height: 160,
           itemCount: cast.length,
           itemBuilder: (context, i) {
             final person = cast[i];
+            final tv = DeviceTypeService.isTv;
             return Pressable(
+              borderRadius: BorderRadius.circular(16),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => PersonDetailScreen(person: person),
                 ),
               ),
-              child: SizedBox(
+              // TV: inner margin keeps the focus ring off the photo and name.
+              child: Container(
                 width: 96,
+                padding: EdgeInsets.all(tv ? 6 : 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

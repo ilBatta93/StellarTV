@@ -17,3 +17,11 @@
 - Al primo avvio dopo un aggiornamento il catalogo mostra «Preparazione del catalogo…» invece di sembrare vuoto.
 - Sulla TV il player può portare lo schermo alla frequenza del video (ad esempio 50 Hz per i canali a 25 fotogrammi) per un movimento senza scatti: attivalo con «Adatta frequenza schermo» nelle impostazioni del player. I comandi del player mostrano risoluzione, fotogrammi e frequenza dello schermo.
 - Sulla Chromecast con Google TV la diretta con mpv è di nuovo fluida: il video non va più a scatti mentre l'audio resta regolare.
+- La scheda di un titolo mostra chi l'ha diretto o ideato, la durata e il titolo originale; la riga delle persone parte dalla regia.
+- La ricerca trova anche attori e registi: scrivi un nome e vedi i suoi titoli disponibili sul dispositivo, sia in «Cerca» sia nei cataloghi.
+- La pagina di una persona elenca anche i titoli che ha diretto o ideato, con prima quelli disponibili sul dispositivo.
+- Sulla TV la trama nella scheda resta sul lato scuro dello sfondo ed è più leggibile.
+- Sulla TV il bordo di selezione segue la forma dei pulsanti, senza spazi vuoti, ed è chiaro anche sui pulsanti arancioni.
+- Sulla TV i filtri per piattaforma e genere sono più ordinati: loghi delle piattaforme, segno di spunta sulla scelta attiva.
+- In Home la trama del titolo in evidenza non resta più tagliata a metà riga, e il logo Crunchyroll è leggibile.
+- Telecomando più coerente: in Cerca la selezione parte dal campo e Indietro chiude prima la tastiera; nei Preferiti si passa dalle schede al contenuto e ritorno; nelle Impostazioni Destra entra nella prima voce; il pannello Categorie parte dalla categoria attiva.

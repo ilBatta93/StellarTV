@@ -13,8 +13,17 @@ class TvFilterOption {
     this.selected,
     this.onSelected, {
     this.brandColor,
+    this.leading,
+    this.labelVisible = true,
   });
+
+  /// False when [leading] already names the option (a platform logo): the
+  /// label stays for accessibility only.
+  final bool labelVisible;
   final Color? brandColor;
+
+  /// Logo or icon before the label (platform wordmark, 4K badge).
+  final Widget? leading;
   final String label;
   final bool selected;
   final VoidCallback onSelected;
@@ -25,12 +34,16 @@ class TvFilterOption {
 /// below (which closed the panel). Up on the first row and Down on the last
 /// row stay inside; only Back closes the panel.
 class TvFilterPanel extends StatefulWidget {
-  const TvFilterPanel({super.key, required this.options});
+  const TvFilterPanel({super.key, required this.options, this.inline = false});
   final List<TvFilterOption> options;
+
+  /// Always-visible tab row (not a popup panel): Up and Down past its edges
+  /// move on to the page instead of staying inside.
+  final bool inline;
 
   /// Column count for a given width, shared with tests.
   static int columnsFor(double width) =>
-      (width / 210).floor().clamp(1, 6).toInt();
+      (width / 170).floor().clamp(1, 6).toInt();
 
   /// Target index for a vertical move, or null to stay put.
   static int? verticalTarget(int index, int count, int columns, bool down) {
@@ -60,9 +73,9 @@ class TvFilterPanel extends StatefulWidget {
 }
 
 class _TvFilterPanelState extends State<TvFilterPanel> {
-  static const _rowExtent = 68.0;
-  static const _spacing = 8.0;
-  static const _panelHeight = 220.0;
+  static const _rowExtent = 52.0;
+  static const _spacing = 10.0;
+  static const _panelHeight = 240.0;
 
   final Map<int, FocusNode> _nodes = {};
   final ScrollController _scroll = ScrollController();
@@ -139,8 +152,12 @@ class _TvFilterPanelState extends State<TvFilterPanel> {
     final target = (down || up)
         ? TvFilterPanel.verticalTarget(index, count, _columns, down)
         : TvFilterPanel.horizontalTarget(index, count, _columns, right);
-    if (target != null) _focusIndex(target);
-    // Always consumed: the focus never leaves the open panel vertically.
+    if (target != null) {
+      _focusIndex(target);
+      return KeyEventResult.handled;
+    }
+    if (widget.inline && (up || down)) return KeyEventResult.ignored;
+    // Popup panel: the focus never leaves it vertically.
     return KeyEventResult.handled;
   }
 
@@ -262,42 +279,61 @@ class _FilterTile extends StatelessWidget {
   final VoidCallback onFocused;
 
   @override
-  Widget build(BuildContext context) => TvFocusable(
-    focusNode: node,
-    onFocusChange: (focused) {
-      if (focused) onFocused();
-    },
-    focusedScale: 1,
-    borderRadius: BorderRadius.circular(8),
-    onPressed: option.onSelected,
-    child: InkWell(
-      onTap: option.onSelected,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: option.selected
-              ? (option.brandColor ?? AppColors.primary).withValues(alpha: 0.18)
-              : AppColors.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color:
-                option.brandColor ??
-                (option.selected ? AppColors.primary : AppColors.border),
+  Widget build(BuildContext context) {
+    final selected = option.selected;
+    final accent = AppColors.primary;
+    final leading = option.leading;
+    return TvFocusable(
+      focusNode: node,
+      onFocusChange: (focused) {
+        if (focused) onFocused();
+      },
+      focusedScale: 1.04,
+      borderRadius: BorderRadius.circular(14),
+      onPressed: option.onSelected,
+      child: InkWell(
+        onTap: option.onSelected,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: selected
+                ? accent.withValues(alpha: 0.22)
+                : AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? accent : AppColors.border,
+              width: selected ? 1.5 : 1,
+            ),
           ),
-        ),
-        child: Text(
-          option.label,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 14,
-            height: 1.3,
-            fontWeight: option.selected ? FontWeight.w700 : FontWeight.w500,
-            color: option.selected ? AppColors.primary : AppColors.textPrimary,
+          child: Row(
+            children: [
+              if (leading != null) ...[leading, const SizedBox(width: 10)],
+              Expanded(
+                child: option.labelVisible
+                    ? Text(
+                        option.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color: selected
+                              ? AppColors.textPrimary
+                              : AppColors.textSecondary,
+                        ),
+                      )
+                    : Semantics(label: option.label, child: const SizedBox()),
+              ),
+              if (selected)
+                Icon(Icons.check_circle_rounded, size: 18, color: accent),
+            ],
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

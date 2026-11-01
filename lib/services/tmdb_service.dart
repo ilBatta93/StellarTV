@@ -16,6 +16,7 @@ import 'title_matching.dart';
 import '../models/episode_metadata.dart';
 import '../models/title_trailer.dart';
 import '../models/tmdb_person.dart';
+import '../models/title_credits.dart';
 
 final _foregroundHttp = ForegroundHttpClient();
 
@@ -31,6 +32,12 @@ class PlatformTops {
   final List<TmdbItem> series;
   const PlatformTops({this.movies = const [], this.series = const []});
   bool get isEmpty => movies.isEmpty && series.isEmpty;
+}
+
+class TmdbSearchResults {
+  final List<TmdbItem> items;
+  final List<TmdbPerson> people;
+  const TmdbSearchResults({this.items = const [], this.people = const []});
 }
 
 class TmdbService {
@@ -410,24 +417,50 @@ class TmdbService {
     return _parseResults(similar, type: item.mediaType);
   }
 
-  Future<List<TmdbItem>> search(String query) async {
-    if (query.trim().isEmpty) return [];
+  /// Titles and people matching [query] in one request.
+  Future<TmdbSearchResults> search(String query) async {
+    if (query.trim().isEmpty) return const TmdbSearchResults();
     final body = await _get('search/multi', {'query': query.trim()});
-    return _parseResults(body);
+    final results = body['results'];
+    return TmdbSearchResults(
+      items: _parseResults(body),
+      people: [
+        if (results is List)
+          for (final raw in results.whereType<Map<String, dynamic>>())
+            if (raw['media_type'] == 'person') ?TmdbPerson.tryParse(raw),
+      ],
+    );
   }
 
-  Future<List<TmdbPerson>> cast(TmdbItem item) async {
+  Future<List<TmdbPerson>> cast(TmdbItem item) async =>
+      (await credits(item)).cast;
+
+  // Title pages and search share credits; failures are not cached.
+  final Map<String, Future<TitleCredits>> _credits = {};
+  Future<TitleCredits> credits(TmdbItem item) {
+    if (item.id <= 0) return Future.value(TitleCredits.empty);
+    if (_credits.length >= 160 && !_credits.containsKey(item.key)) {
+      _credits.remove(_credits.keys.first);
+    }
+    return _credits.putIfAbsent(item.key, () async {
+      try {
+        return TitleCredits.parse(
+          await _get('${item.mediaType}/${item.id}/credits'),
+        );
+      } catch (_) {
+        _credits.remove(item.key);
+        return TitleCredits.empty;
+      }
+    });
+  }
+
+  /// Runtime, tagline, original title and series creators.
+  Future<TitleInfo> details(TmdbItem item) async {
+    if (item.id <= 0) return TitleInfo.empty;
     try {
-      final body = await _get('${item.mediaType}/${item.id}/credits');
-      final cast = body['cast'];
-      if (cast is! List) return [];
-      return cast
-          .whereType<Map<String, dynamic>>()
-          .map(TmdbPerson.tryParse)
-          .whereType<TmdbPerson>()
-          .toList();
+      return TitleInfo.parse(await _get('${item.mediaType}/${item.id}'));
     } catch (_) {
-      return [];
+      return TitleInfo.empty;
     }
   }
 
@@ -450,15 +483,27 @@ class TmdbService {
     final body = await _get('person/$personId/combined_credits', {
       'language': language,
     });
-    final cast = body['cast'];
-    if (cast is! List) return [];
+    return parsePersonCredits(body);
+  }
+
+  /// Titles a person acted in, directed or created, most popular first.
+  static List<TmdbItem> parsePersonCredits(Map<String, dynamic> body) {
     final seen = <String>{};
     final items = <TmdbItem>[];
-    for (final raw in cast) {
-      if (raw is! Map<String, dynamic>) continue;
-      final item = TmdbItem.tryParse(raw);
-      if (item != null && seen.add(item.key)) items.add(item);
+    void add(Object? list, {bool crew = false}) {
+      if (list is! List) return;
+      for (final raw in list) {
+        if (raw is! Map<String, dynamic>) continue;
+        if (crew && raw['job'] != 'Director' && raw['job'] != 'Creator') {
+          continue;
+        }
+        final item = TmdbItem.tryParse(raw);
+        if (item != null && seen.add(item.key)) items.add(item);
+      }
     }
+
+    add(body['cast']);
+    add(body['crew'], crew: true);
     items.sort((a, b) => b.popularity.compareTo(a.popularity));
     return items;
   }

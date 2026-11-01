@@ -60,6 +60,14 @@ class TvFocusable extends StatefulWidget {
   final bool autofocus;
   final double focusedScale;
   final BorderRadius borderRadius;
+
+  /// Ring outline; by default it follows the wrapped button (capsule,
+  /// circle) and falls back to [borderRadius].
+  final OutlinedBorder? shape;
+
+  /// The child is filled with the accent colour (a selected chip): the
+  /// ring turns light so it stays visible.
+  final bool onAccent;
   final ValueChanged<bool>? onFocusChange;
   final bool revealOnFocus;
 
@@ -72,6 +80,8 @@ class TvFocusable extends StatefulWidget {
     this.autofocus = false,
     this.focusedScale = 1.06,
     this.borderRadius = const BorderRadius.all(Radius.circular(10)),
+    this.shape,
+    this.onAccent = false,
     this.onFocusChange,
     this.revealOnFocus = true,
   });
@@ -121,6 +131,46 @@ class _TvFocusableState extends State<TvFocusable> {
     return KeyEventResult.ignored;
   }
 
+  /// Same outline as the wrapped control, so the ring matches its shape.
+  OutlinedBorder _ringShape() {
+    if (widget.shape case final shape?) return shape;
+    final child = _control;
+    if (child is IconButton) return const CircleBorder();
+    if (child is ButtonStyleButton) {
+      final own = child.style?.shape?.resolve(const {});
+      return own ?? const StadiumBorder();
+    }
+    if (child is ChoiceChip) return const StadiumBorder();
+    return RoundedRectangleBorder(borderRadius: widget.borderRadius);
+  }
+
+  /// Accent-filled buttons get a light ring: an accent ring hugging an
+  /// accent capsule would vanish.
+  bool get _filled {
+    final child = _control;
+    return widget.onAccent ||
+        (child is ChoiceChip && child.selected) ||
+        child is ElevatedButton ||
+        child is FilledButton;
+  }
+
+  /// The wrapped control, looking through plain layout wrappers.
+  Widget get _control {
+    var child = widget.child;
+    for (var i = 0; i < 3; i++) {
+      final inner = switch (child) {
+        SizedBox(:final child?) => child,
+        Padding(:final child?) => child,
+        Align(:final child?) => child,
+        ConstrainedBox(:final child?) => child,
+        _ => null,
+      };
+      if (inner == null) break;
+      child = inner;
+    }
+    return child;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!DeviceTypeService.isTv) return widget.child;
@@ -162,13 +212,16 @@ class _TvFocusableState extends State<TvFocusable> {
           child: Transform.scale(
             scale: _focused && motion ? widget.focusedScale : 1,
             child: Container(
-              foregroundDecoration: BoxDecoration(
-                borderRadius: widget.borderRadius,
-                border: Border.all(
-                  color: _focused
-                      ? (glow ? AppColors.primary : AppColors.textPrimary)
-                      : AppColors.clear,
-                  width: 2.5,
+              foregroundDecoration: ShapeDecoration(
+                shape: _ringShape().copyWith(
+                  side: BorderSide(
+                    color: _focused
+                        ? (glow && !_filled
+                              ? AppColors.primary
+                              : AppColors.textPrimary)
+                        : AppColors.clear,
+                    width: 2.5,
+                  ),
                 ),
               ),
               child: widget.child,

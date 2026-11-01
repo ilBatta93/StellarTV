@@ -8,6 +8,8 @@ import '../models/channel.dart';
 import '../models/series_details.dart';
 import '../models/tmdb_item.dart';
 import '../models/tmdb_person.dart';
+import '../models/title_credits.dart';
+import '../widgets/title_credits_line.dart';
 import '../providers/discover_provider.dart';
 import '../providers/history_provider.dart';
 import '../widgets/cast_row.dart';
@@ -60,6 +62,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   int _selectedSeason = 0;
   TmdbItem? _item;
   List<TmdbPerson> _cast = [];
+  TitleInfo _info = TitleInfo.empty;
   List<TmdbItem> _similar = [];
   Future<void> _manageWatch() async {
     final details = _details;
@@ -186,13 +189,17 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       setState(() => _item = item);
       CatalogRatingService.instance.remember(widget.series, item);
       _prepareEpisodes();
-      final cast = await tmdb.cast(item);
+      final castFuture = tmdb.cast(item);
+      final infoFuture = tmdb.details(item);
       final recommendations = await tmdb.recommendations(item);
+      final cast = await castFuture;
+      final info = await infoFuture;
       if (!mounted) return;
       final app = context.read<AppProvider>();
       setState(() {
         _item = item;
         _cast = cast.take(20).toList();
+        _info = info;
         _similar = recommendations
             .where((candidate) => app.findChannelFor(candidate) != null)
             .take(20)
@@ -358,14 +365,28 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                   children: [
                     _Chip(label: 'Serie TV'),
                     if (seasons.isNotEmpty)
-                      _Chip(label: '${seasons.length} stagioni'),
+                      _Chip(
+                        label: seasons.length == 1
+                            ? '1 stagione'
+                            : '${seasons.length} stagioni',
+                      ),
                     if (series.episodeCount > 0)
-                      _Chip(label: '${series.episodeCount} episodi'),
+                      _Chip(
+                        label: series.episodeCount == 1
+                            ? '1 episodio'
+                            : '${series.episodeCount} episodi',
+                      ),
                     if (item != null && item.year.isNotEmpty)
                       _Chip(label: item.year),
                     if (item != null) ImdbRatingBadge(item, priority: true),
                     _Chip(label: series.group),
                   ],
+                ),
+                TitleCreditsLine(
+                  directors: const [],
+                  info: _info,
+                  movie: false,
+                  title: item?.title ?? series.displaySeriesName,
                 ),
                 TitleFacetsRow(item: item, channel: series),
                 const SizedBox(height: 16),
@@ -389,16 +410,23 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                 if (_item case final reactionItem?)
                   ReactionButtons(item: reactionItem),
                 if (plot.trim().isNotEmpty) ...[
-                  Text('Trama', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text(plot, style: Theme.of(context).textTheme.bodyMedium),
+                  TitlePlot(plot: plot, tagline: _info.tagline),
                   const SizedBox(height: 8),
                 ],
               ],
             ),
           ),
         ),
-        SliverToBoxAdapter(child: CastRow(cast: _cast)),
+        SliverToBoxAdapter(
+          child: CastRow(
+            title: _info.creators.isEmpty ? 'Cast' : 'Ideazione e cast',
+            cast: [
+              ..._info.creators,
+              for (final person in _cast)
+                if (!_info.creators.any((c) => c.id == person.id)) person,
+            ],
+          ),
+        ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),

@@ -119,21 +119,50 @@ class PlatformBadge extends StatelessWidget {
         color: AppColors.badgeLight,
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Image.asset(
-        platform.logoAsset,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.medium,
-        errorBuilder: (_, _, _) => Text(
-          platform.name,
-          style: TextStyle(
-            color: platform.color,
-            fontSize: height * 0.5,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
+      child: platform.stackedLogo ? _symbolAndName() : _logo(),
     ),
   );
+
+  Widget _logo() => Image.asset(
+    platform.logoAsset,
+    fit: BoxFit.contain,
+    filterQuality: FilterQuality.medium,
+    errorBuilder: (_, _, _) => _name(),
+  );
+
+  Widget _name() => Text(
+    platform.name,
+    maxLines: 1,
+    style: TextStyle(
+      color: platform.color,
+      fontSize: height * 0.5,
+      height: 1,
+      fontWeight: FontWeight.w800,
+    ),
+  );
+
+  /// Symbol (top of the stacked logo) followed by the written name.
+  Widget _symbolAndName() {
+    final inner = height * 0.72;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            heightFactor: 0.66,
+            child: Image.asset(
+              platform.logoAsset,
+              height: inner / 0.66,
+              filterQuality: FilterQuality.medium,
+            ),
+          ),
+        ),
+        SizedBox(width: height * 0.2),
+        _name(),
+      ],
+    );
+  }
 }
 
 /// Official IMDb badge with the IMDb rating; TMDB vote as fallback while

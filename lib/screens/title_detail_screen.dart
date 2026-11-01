@@ -1,11 +1,9 @@
 import 'dart:async';
 
 import '../widgets/ui_scale.dart';
-import '../services/image_cache_service.dart';
 import '../services/catalog_rating_service.dart';
 import '../services/segment_library.dart';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
@@ -14,13 +12,13 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/tmdb_item.dart';
 import '../models/tmdb_person.dart';
+import '../models/title_credits.dart';
 import '../navigation/app_routes.dart';
 import '../providers/app_provider.dart';
 import '../providers/discover_provider.dart';
 import '../providers/history_provider.dart';
 import '../services/catalog_builder.dart';
 import '../theme/app_theme.dart';
-import '../screens/person_detail_screen.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/home_art.dart';
 import '../widgets/section_row.dart';
@@ -37,6 +35,8 @@ import '../widgets/tv_wrap_navigation.dart';
 import '../widgets/category_assign_button.dart';
 import '../widgets/title_facets.dart';
 import '../widgets/version_picker.dart';
+import '../widgets/cast_row.dart';
+import '../widgets/title_credits_line.dart';
 
 double _phoneBackdropHeight(BuildContext context) {
   final height = MediaQuery.sizeOf(context).height * 0.32;
@@ -60,6 +60,8 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
   TmdbItem? _item;
   List<TmdbItem> _similar = [];
   List<TmdbPerson> _cast = [];
+  List<TmdbPerson> _directors = [];
+  TitleInfo _info = TitleInfo.empty;
   bool _loading = true;
   String? _error;
 
@@ -122,15 +124,23 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
           title: item.title,
         );
       }
-      final similar = item == null
-          ? <TmdbItem>[]
-          : await tmdb.recommendations(item);
-      final cast = item == null ? <TmdbPerson>[] : await tmdb.cast(item);
+      if (item == null) {
+        setState(() => _loading = false);
+        return;
+      }
+      // Independent lookups: run them together instead of one after another.
+      final creditsFuture = tmdb.credits(item);
+      final infoFuture = tmdb.details(item);
+      final similar = await tmdb.recommendations(item);
+      final credits = await creditsFuture;
+      final info = await infoFuture;
       if (!mounted) return;
       setState(() {
         _item = item;
         _similar = similar.take(20).toList();
-        _cast = cast.take(20).toList();
+        _cast = credits.cast.take(20).toList();
+        _directors = credits.directors;
+        _info = info;
         _loading = false;
       });
     } catch (e) {
@@ -286,6 +296,12 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                   item: item,
                   channel: widget.channel == null ? null : playable,
                 ),
+                TitleCreditsLine(
+                  directors: _directors,
+                  info: _info,
+                  movie: item?.isMovie ?? true,
+                  title: item?.title,
+                ),
                 TitleFacetsRow(item: item, channel: widget.channel ?? playable),
                 const SizedBox(height: 16),
                 _Actions(
@@ -297,12 +313,7 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                 ),
                 if (item != null && item.overview.isNotEmpty) ...[
                   const SizedBox(height: 24),
-                  Text('Trama', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text(
-                    item.overview,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                  TitlePlot(plot: item.overview, tagline: _info.tagline),
                 ],
               ],
             ),
@@ -315,7 +326,16 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
               child: ReactionButtons(item: item),
             ),
           ),
-        SliverToBoxAdapter(child: _buildCast()),
+        SliverToBoxAdapter(
+          child: CastRow(
+            title: _directors.isEmpty ? 'Cast' : 'Regia e cast',
+            cast: [
+              ..._directors,
+              for (final person in _cast)
+                if (!_directors.any((d) => d.id == person.id)) person,
+            ],
+          ),
+        ),
         SliverToBoxAdapter(child: _buildSimilar()),
         SliverToBoxAdapter(
           child: SizedBox(
@@ -333,94 +353,6 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
     }
     return Scaffold(body: scroll);
   }
-
-  Widget _buildCast() {
-    if (_cast.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionHeader(
-          title: 'Cast',
-          subtitle: 'Tocca un attore per saperne di più',
-        ),
-        HorizontalRow(
-          height: 160,
-          itemCount: _cast.length,
-          itemBuilder: (context, i) {
-            final person = _cast[i];
-            return Pressable(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => PersonDetailScreen(person: person),
-                ),
-              ),
-              child: SizedBox(
-                width: 96,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 1,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(48),
-                        child: person.profileUrl.isNotEmpty
-                            ? CachedNetworkImage(
-                                cacheManager: AppImageCache.manager,
-                                imageUrl: person.profileUrl,
-                                fadeInDuration: const Duration(
-                                  milliseconds: 150,
-                                ),
-                                fit: BoxFit.cover,
-                                memCacheWidth: 256,
-                                errorWidget: (_, _, _) => _castFallback(person),
-                              )
-                            : _castFallback(person),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      person.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (person.character != null)
-                      Text(
-                        person.character!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 11,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _castFallback(TmdbPerson person) => Container(
-    color: AppColors.card,
-    alignment: Alignment.center,
-    child: Text(
-      person.name.isNotEmpty ? person.name[0].toUpperCase() : '?',
-      style: const TextStyle(
-        color: AppColors.textMuted,
-        fontSize: 24,
-        fontWeight: FontWeight.w700,
-      ),
-    ),
-  );
 
   Widget _buildSimilar() {
     if (_loading) {
@@ -497,7 +429,16 @@ class _Meta extends StatelessWidget {
       if (item != null && item!.year.isNotEmpty) _Chip(label: item!.year),
       if (item != null) ImdbRatingBadge(item!, priority: true),
       if (quality != null) _Chip(label: quality),
-      if (channel != null) _Chip(label: channel!.group),
+      // TV: the facets row already lists every category of the title.
+      if (channel != null &&
+          !(DeviceTypeService.isTv &&
+              TitleFacets.of(
+                    context.read<AppProvider>(),
+                    item: item,
+                    channel: channel,
+                  ).categories.length >
+                  1))
+        _Chip(label: channel!.group),
     ];
     return Wrap(spacing: 8, runSpacing: 8, children: chips);
   }

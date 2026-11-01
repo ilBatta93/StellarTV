@@ -29,6 +29,7 @@ import '../services/title_facet_index.dart';
 import '../services/image_cache_service.dart';
 import '../services/image_warmup_service.dart';
 import '../services/platform_catalog_service.dart';
+import '../services/person_search.dart';
 import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
 import '../providers/discover_provider.dart';
@@ -357,6 +358,11 @@ class _CatalogPageState extends State<CatalogPage> {
   String? _ratingKey;
   Timer? _ratingDebounce;
   String _query = '';
+
+  // Actors and directors named by the query: their titles on the device
+  // join the title matches.
+  Timer? _personDebounce;
+  List<PersonTitles> _personMatches = const [];
   String? _selectedCategory;
   int? _genreId;
   StreamingPlatform? _platform;
@@ -373,6 +379,10 @@ class _CatalogPageState extends State<CatalogPage> {
   String get _allLabel =>
       widget.type == ContentType.movie ? 'Tutti i film' : 'Tutte le serie TV';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  String get _searchHint => widget.type == ContentType.live
+      ? 'Cerca tra $_noun'
+      : 'Cerca tra $_noun, attori e registi';
 
   String get _noun => switch (widget.type) {
     ContentType.live => 'canali',
@@ -475,21 +485,35 @@ class _CatalogPageState extends State<CatalogPage> {
         'Solo 4K',
         _only4k,
         () => setState(() => _only4k = !_only4k),
+        leading: const Icon(Icons.four_k_rounded, size: 22),
       ),
       TvFilterOption(
-        'Tutte le piattaforme',
+        'Tutte',
         _platform == null,
         () => _selectPlatform(null),
+        leading: const Icon(Icons.apps_rounded, size: 20),
       ),
       for (final p in StreamingPlatform.all)
-        TvFilterOption(
-          PlatformCatalogService.instance.isLoading(p, movies: _platformMovies)
-              ? '${p.name} · caricamento…'
-              : p.name,
-          _platform == p,
-          () => _selectPlatform(p),
-          brandColor: p.color,
-        ),
+        if (PlatformCatalogService.instance.isLoading(
+          p,
+          movies: _platformMovies,
+        ))
+          TvFilterOption(
+            'Caricamento…',
+            _platform == p,
+            () => _selectPlatform(p),
+            brandColor: p.color,
+            leading: PlatformBadge(p, height: 26),
+          )
+        else
+          TvFilterOption(
+            p.name,
+            _platform == p,
+            () => _selectPlatform(p),
+            brandColor: p.color,
+            leading: PlatformBadge(p, height: 26),
+            labelVisible: false,
+          ),
     ],
   );
 
@@ -518,6 +542,7 @@ class _CatalogPageState extends State<CatalogPage> {
 
   @override
   void dispose() {
+    _personDebounce?.cancel();
     _ratingDebounce?.cancel();
     if (_sort == CatalogSort.rating) {
       TitleFacetIndex.instance.watchRank(widget.type, false);
@@ -668,9 +693,9 @@ class _CatalogPageState extends State<CatalogPage> {
           if (DeviceTypeService.isTv)
             TvCatalogToolbar(
               controller: _searchController,
-              hint: 'Cerca tra $_noun',
+              hint: _searchHint,
               category: _selectedCategory ?? _recentLabel,
-              onChanged: (v) => setState(() => _query = v),
+              onChanged: _onQuery,
               sort: _sort,
               onSort: (value) {
                 if (_sort == value) return;
@@ -707,9 +732,9 @@ class _CatalogPageState extends State<CatalogPage> {
                   Expanded(
                     child: TvTextField(
                       controller: _searchController,
-                      onChanged: (v) => setState(() => _query = v),
+                      onChanged: _onQuery,
                       decoration: InputDecoration(
-                        hintText: 'Cerca tra $_noun',
+                        hintText: _searchHint,
                         prefixIcon: const Icon(Icons.search_rounded, size: 20),
                       ),
                     ),
@@ -855,6 +880,7 @@ class _CatalogPageState extends State<CatalogPage> {
           'Tutti i generi',
           _genreId == null,
           () => setState(() => _genreId = null),
+          leading: const Icon(Icons.apps_rounded, size: 20),
         ),
         for (final id in present)
           TvFilterOption(
@@ -1138,16 +1164,87 @@ class _CatalogPageState extends State<CatalogPage> {
     return _buildEntries(app, entries);
   }
 
+  void _onQuery(String value) {
+    setState(() => _query = value);
+    _personDebounce?.cancel();
+    final q = value.trim();
+    if (widget.type == ContentType.live || q.length < 4) {
+      if (_personMatches.isNotEmpty) {
+        setState(() => _personMatches = const []);
+      }
+      return;
+    }
+    _personDebounce = Timer(const Duration(milliseconds: 500), () async {
+      final tmdb = context.read<DiscoverProvider>().tmdb;
+      final found = await PersonSearch.instance.titlesFor(tmdb, q);
+      if (!mounted || _query.trim() != q) return;
+      setState(() => _personMatches = found);
+    });
+  }
+
+  /// Entries of this page made by the people the query names, minus
+  /// those already found by title.
+  List<CatalogEntry> _personEntries(
+    AppProvider app,
+    List<CatalogEntry> byTitle,
+    String? group,
+  ) {
+    if (_personMatches.isEmpty) return const [];
+    final movies = widget.type == ContentType.movie;
+    final seen = {for (final e in byTitle) e.primary.id};
+    final out = <CatalogEntry>[];
+    for (final match in _personMatches) {
+      for (final item in match.items) {
+        if (item.isMovie != movies || !app.isTmdbAllowed(item)) continue;
+        final channel = app.findChannelFor(item, wait: false);
+        if (channel == null || channel.type != widget.type) continue;
+        if (group != null && channel.group != group) continue;
+        if (!seen.add(channel.id)) continue;
+        final entry = CatalogEntry(
+          primary: channel,
+          variants: movies ? app.movieVersions(channel) : [channel],
+        );
+        if (_matchesGenre(app, entry)) out.add(entry);
+      }
+    }
+    return out;
+  }
+
+  Widget _withPeopleNote(Widget results, bool hasPeople) {
+    if (!hasPeople) return results;
+    final names = [for (final m in _personMatches) m.person.name].join(', ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Text(
+            'Inclusi i titoli di $names',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: DeviceTypeService.isTv ? 15 : 12,
+            ),
+          ),
+        ),
+        Expanded(child: results),
+      ],
+    );
+  }
+
   // Search results are cached per query/filters: focus moves and rating
   // batches rebuild the page but never rescan the whole catalog.
   String? _searchKey;
   List<CatalogEntry>? _searchResult;
+  bool _searchHasPeople = false;
 
   Widget _buildSearchResults(AppProvider app) {
     final q = _query.toLowerCase();
     final key =
         '${app.searchStamp}|$q|$_selectedCategory|$_genreId|'
-        '$_platform|$_only4k|${identityHashCode(_nameFlagsFor(app))}|${app.titleInfoVersion}|${app.catalogIndexRevision}|${PlatformCatalogService.instance.version}';
+        '$_platform|$_only4k|${identityHashCode(_nameFlagsFor(app))}|${app.titleInfoVersion}|${app.catalogIndexRevision}|${PlatformCatalogService.instance.version}|'
+        '${identityHashCode(_personMatches)}';
     if (_namesPending) {
       return Center(child: CircularProgressIndicator(color: AppColors.primary));
     }
@@ -1157,36 +1254,36 @@ class _CatalogPageState extends State<CatalogPage> {
           ? EmptyState(
               icon: Icons.search_off_rounded,
               title: 'Nessun risultato',
-              message: 'Prova con un altro titolo o categoria.',
+              message: 'Prova con un altro titolo, attore o regista.',
             )
-          : _buildEntries(app, cached);
+          : _withPeopleNote(_buildEntries(app, cached), _searchHasPeople);
     }
-    var matches = app.queryEntries(
-      widget.type,
-      q,
-      group:
-          DeviceTypeService.isTv &&
-              _selectedCategory != null &&
-              _selectedCategory != _allLabel &&
-              _selectedCategory != _watchedLabel
-          ? _selectedCategory
-          : null,
-    );
+    final group =
+        DeviceTypeService.isTv &&
+            _selectedCategory != null &&
+            _selectedCategory != _allLabel &&
+            _selectedCategory != _watchedLabel
+        ? _selectedCategory
+        : null;
+    var matches = app.queryEntries(widget.type, q, group: group);
     matches = [
       for (final entry in matches)
         if (_matchesGenre(app, entry)) entry,
     ];
+    final byPeople = _personEntries(app, matches, group);
+    matches = [...matches, ...byPeople];
     _searchKey = key;
     _searchResult = matches;
+    _searchHasPeople = byPeople.isNotEmpty;
     matches = _ordered(matches);
     if (matches.isEmpty) {
       return EmptyState(
         icon: Icons.search_off_rounded,
         title: 'Nessun risultato',
-        message: 'Prova con un altro titolo o categoria.',
+        message: 'Prova con un altro titolo, attore o regista.',
       );
     }
-    return _buildEntries(app, matches);
+    return _withPeopleNote(_buildEntries(app, matches), _searchHasPeople);
   }
 
   // Remembers the last filtered list so rebuilds (focus moves, rating

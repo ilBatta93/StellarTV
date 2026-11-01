@@ -1598,6 +1598,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       child: TvFocusable(
         onPressed: onTap,
         borderRadius: BorderRadius.circular(16),
+        onAccent: selected,
         child: GestureDetector(
           onTap: onTap,
           child: AnimatedContainer(

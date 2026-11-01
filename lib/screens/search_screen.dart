@@ -13,7 +13,9 @@ import '../providers/app_provider.dart';
 import '../providers/discover_provider.dart';
 import '../providers/epg_provider.dart';
 import '../services/device_type_service.dart';
+import '../services/person_search.dart';
 import '../theme/app_theme.dart';
+import '../widgets/cast_row.dart';
 import '../widgets/channel_card.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
@@ -56,9 +58,40 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final _controller = TextEditingController();
+
+  // TV: Back first closes the keyboard, then leaves the page. Android may
+  // close the keyboard and deliver the same Back to the page right after.
+  final _fieldNode = FocusNode(debugLabel: 'search field');
+  DateTime? _leftEditingAt;
+  bool _wasEditing = false;
+
+  void _fieldFocusChanged() {
+    if (_wasEditing && !_fieldNode.hasFocus) _leftEditingAt = DateTime.now();
+    _wasEditing = _fieldNode.hasFocus;
+  }
+
+  void _onBack(bool didPop, Object? _) {
+    if (didPop) return;
+    if (TvTextField.dismissKeyboard(_fieldNode)) return;
+    final left = _leftEditingAt;
+    if (left != null &&
+        DateTime.now().difference(left) < const Duration(milliseconds: 500)) {
+      _leftEditingAt = null;
+      return;
+    }
+    Navigator.of(context).pop();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fieldNode.addListener(_fieldFocusChanged);
+  }
+
   Timer? _debounce;
   String _query = '';
   List<TmdbItem> _tmdbResults = [];
+  List<PersonTitles> _people = [];
   bool _searchingTmdb = false;
   String? _tmdbError;
   int _requestId = 0;
@@ -77,6 +110,7 @@ class _SearchScreenState extends State<SearchScreen> {
     _debounce?.cancel();
     _localDebounce?.cancel();
     _controller.dispose();
+    _fieldNode.dispose();
     super.dispose();
   }
 
@@ -96,24 +130,36 @@ class _SearchScreenState extends State<SearchScreen> {
     if (query.length < 2) {
       setState(() {
         _tmdbResults = [];
+        _people = [];
         _tmdbError = null;
         _searchingTmdb = false;
       });
       return;
     }
     setState(() => _searchingTmdb = true);
+    final tmdb = context.read<DiscoverProvider>().tmdb;
     try {
-      final results = await context.read<DiscoverProvider>().tmdb.search(query);
+      final results = await tmdb.search(query);
       if (!mounted || id != _requestId) return;
       setState(() {
-        _tmdbResults = results;
+        _tmdbResults = results.items;
         _tmdbError = null;
         _searchingTmdb = false;
       });
+      // Actors and directors named by the query: their titles follow the
+      // title results, without delaying them.
+      final people = await PersonSearch.instance.titlesFor(
+        tmdb,
+        query,
+        people: results.people,
+      );
+      if (!mounted || id != _requestId) return;
+      setState(() => _people = people);
     } catch (_) {
       if (!mounted || id != _requestId) return;
       setState(() {
         _tmdbResults = [];
+        _people = [];
         _tmdbError = 'Catalogo non raggiungibile. Riprova tra poco.';
         _searchingTmdb = false;
       });
@@ -178,7 +224,7 @@ class _SearchScreenState extends State<SearchScreen> {
     }
     final tv = DeviceTypeService.isTv;
     final side = tv ? 32.0 : 16.0;
-    return Scaffold(
+    final page = Scaffold(
       appBar: AppBar(
         title: const Text('Cerca'),
         toolbarHeight: tv ? 64 : 60,
@@ -198,6 +244,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     child: ConstrainedBox(
                       constraints: BoxConstraints(maxWidth: tv ? 760 : 720),
                       child: _SearchField(
+                        focusNode: _fieldNode,
                         controller: _controller,
                         query: _query,
                         onChanged: _onChanged,
@@ -219,8 +266,8 @@ class _SearchScreenState extends State<SearchScreen> {
                   hasScrollBody: false,
                   child: EmptyState(
                     icon: Icons.search_rounded,
-                    title: 'Cerca film, serie TV e canali',
-                    message: 'Scrivi almeno due lettere: cerco nella tua lista e nel catalogo.',
+                    title: 'Cerca film, serie TV, canali e persone',
+                    message: 'Scrivi almeno due lettere: cerco titoli, attori e registi nella tua lista e nel catalogo.',
                   ),
                 )
               else
@@ -230,6 +277,12 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
       ),
+    );
+    if (!tv) return page;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: _onBack,
+      child: page,
     );
   }
 
@@ -264,14 +317,18 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
       );
     }
-    void catalog(String title, List<TmdbItem> items) {
+    void catalog(
+      String title,
+      List<TmdbItem> items, {
+      String subtitle = 'Dal catalogo',
+    }) {
       if (items.isEmpty) return;
       rows.add(
         SliverToBoxAdapter(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SectionHeader(title: title, subtitle: 'Dal catalogo'),
+              SectionHeader(title: title, subtitle: subtitle),
               HorizontalRow(
                 height: tmdbPosterRowHeight(context),
                 spacing: DeviceTypeService.isTv ? 20 : 12,
@@ -287,6 +344,43 @@ class _SearchScreenState extends State<SearchScreen> {
       );
     }
 
+    // Titles of the people named by the query that are on the device.
+    if (_filter != SearchFilter.live) {
+      for (final match in _people) {
+        final available = [
+          for (final item in match.items)
+            if ((item.isMovie
+                    ? _filter.showsCatalogMovies
+                    : _filter.showsCatalogSeries) &&
+                app.isTmdbAllowed(item) &&
+                app.findChannelFor(item) != null)
+              item,
+        ];
+        catalog(
+          match.label,
+          available,
+          subtitle: available.length == 1
+              ? '1 titolo nella tua lista'
+              : '${available.length} titoli nella tua lista',
+        );
+      }
+      if (_people.isNotEmpty) {
+        rows.add(
+          SliverToBoxAdapter(
+            child: CastRow(
+              title: 'Persone',
+              cast: [
+                for (final match in _people)
+                  if (match.person.roleLabel case final role?)
+                    match.person.withRole(role)
+                  else
+                    match.person,
+              ],
+            ),
+          ),
+        );
+      }
+    }
     if (_filter.showsCatalogMovies) catalog('Film', movies);
     if (_filter.showsCatalogSeries) catalog('Serie TV', series);
 
@@ -324,12 +418,14 @@ class _SearchScreenState extends State<SearchScreen> {
 
 class _SearchField extends StatelessWidget {
   const _SearchField({
+    required this.focusNode,
     required this.controller,
     required this.query,
     required this.onChanged,
     required this.onClear,
   });
 
+  final FocusNode focusNode;
   final TextEditingController controller;
   final String query;
   final ValueChanged<String> onChanged;
@@ -345,12 +441,14 @@ class _SearchField extends StatelessWidget {
     );
     return TvTextField(
       controller: controller,
+      focusNode: focusNode,
       clearable: tv,
-      autofocus: !tv,
+      // TV: first focus on the field (OK opens the keyboard), not nowhere.
+      autofocus: true,
       textInputAction: TextInputAction.search,
       onChanged: onChanged,
       decoration: InputDecoration(
-        hintText: 'Film, serie TV, canali…',
+        hintText: 'Titoli, canali, attori, registi…',
         filled: true,
         fillColor: AppColors.surface,
         isDense: !tv,

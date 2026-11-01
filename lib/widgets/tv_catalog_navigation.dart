@@ -155,6 +155,16 @@ class _TvCatalogNavigationState extends State<TvCatalogNavigation> {
         }
         return true;
       }
+      // Content outside the grid (an empty state's button): when nothing
+      // sits above it inside the items, go back up instead of staying put.
+      if (item == null && !primary.focusInDirection(TraversalDirection.up)) {
+        if (_filters.traversalDescendants.isEmpty) {
+          _search();
+        } else {
+          _first(_filters);
+        }
+      }
+      if (item == null) return true;
     }
     return false;
   }

@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:stellar_tv/models/channel.dart';
 import 'package:stellar_tv/models/content_type.dart';
 import 'package:stellar_tv/models/series_details.dart';
+import 'package:stellar_tv/models/title_credits.dart';
 import 'package:stellar_tv/models/tmdb_item.dart';
 import 'package:stellar_tv/models/tmdb_person.dart';
 import 'package:stellar_tv/models/title_trailer.dart';
@@ -70,6 +71,10 @@ class DetailTmdb extends f.FakeTmdb {
   Future<List<TmdbItem>> recommendations(TmdbItem item) async => [];
   @override
   Future<List<TmdbPerson>> cast(TmdbItem item) async => [];
+  @override
+  Future<TitleCredits> credits(TmdbItem item) async => TitleCredits.empty;
+  @override
+  Future<TitleInfo> details(TmdbItem item) async => TitleInfo.empty;
   @override
   Future<TitleTrailer?> trailer(TmdbItem item) async => null;
 }

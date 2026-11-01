@@ -66,7 +66,7 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'Impossibile caricare i contenuti di questo attore.';
+        _error = 'Impossibile caricare i titoli di questa persona.';
         _loading = false;
       });
     }
@@ -75,9 +75,13 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final person = _details ?? widget.person;
-    final credits = _credits
-        .where(context.watch<AppProvider>().isTmdbAllowed)
-        .toList();
+    final app = context.watch<AppProvider>();
+    // Titles available on the device first, the rest keep TMDB popularity.
+    final allowed = _credits.where(app.isTmdbAllowed).toList();
+    final credits = [
+      ...allowed.where(app.isAvailable),
+      ...allowed.where((item) => !app.isAvailable(item)),
+    ];
 
     if (DeviceTypeService.isTv) return _buildTv(person, credits);
     return Scaffold(
@@ -139,6 +143,7 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
+                      if (person.roleLabel case final role?) _Chip(label: role),
                       if (person.knownForCount > 0)
                         _Chip(label: '${person.knownForCount} contenuti'),
                       if (person.birthday != null &&
@@ -174,7 +179,8 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                     ),
                   ],
                   if (widget.person.character != null &&
-                      widget.person.character!.isNotEmpty) ...[
+                      widget.person.character!.isNotEmpty &&
+                      !widget.person.crewRole) ...[
                     const SizedBox(height: 8),
                     Text(
                       'Interpreta: ${widget.person.character}',
@@ -210,8 +216,8 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
           else ...[
             SliverToBoxAdapter(
               child: SectionHeader(
-                title: 'Contenuti con ${person.name}',
-                subtitle: 'Disponibili nel catalogo TMDB',
+                title: _creditsTitle(person),
+                subtitle: 'Prima quelli disponibili sul dispositivo',
               ),
             ),
             SliverPadding(
@@ -314,7 +320,9 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                _Chip(label: '${credits.length} contenuti'),
+                                if (person.roleLabel case final role?)
+                                  _Chip(label: role),
+                                _Chip(label: '${credits.length} titoli'),
                                 if (birthday != null && birthday.isNotEmpty)
                                   _Chip(
                                     label: 'Nato il ${_formatDate(birthday)}',
@@ -326,13 +334,19 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                             if (biography != null &&
                                 biography.trim().isNotEmpty) ...[
                               const SizedBox(height: 16),
-                              Text(
-                                biography,
-                                maxLines: _bioExpanded ? null : 4,
-                                overflow: _bioExpanded
-                                    ? TextOverflow.visible
-                                    : TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodyLarge,
+                              // Kept on the dark side of the backdrop.
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 560,
+                                ),
+                                child: Text(
+                                  biography,
+                                  maxLines: _bioExpanded ? null : 4,
+                                  overflow: _bioExpanded
+                                      ? TextOverflow.visible
+                                      : TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                ),
                               ),
                               TvFocusable(
                                 focusedScale: 1,
@@ -351,8 +365,8 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                                 ),
                               ),
                             ],
-                            if (widget.person.character?.isNotEmpty ==
-                                true) ...[
+                            if (widget.person.character?.isNotEmpty == true &&
+                                !widget.person.crewRole) ...[
                               const SizedBox(height: 8),
                               Text('Interpreta: ${widget.person.character}'),
                             ],
@@ -383,7 +397,7 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
                     child: Text(
-                      'Contenuti con ${person.name}',
+                      _creditsTitle(person),
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
@@ -429,6 +443,10 @@ class _PersonDetailScreenState extends State<PersonDetailScreen> {
       ),
     ),
   );
+
+  String _creditsTitle(TmdbPerson person) => person.isDirector
+      ? 'Titoli di ${person.name}'
+      : 'Titoli con ${person.name}';
 
   String _formatDate(String iso) {
     final parts = iso.split('-');
