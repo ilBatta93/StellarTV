@@ -30,8 +30,8 @@
 - L'ordine «Voto» tiene conto del numero di voti: i titoli con pochissimi voti non finiscono più in cima.
 - I voti dei titoli e degli episodi appena usciti si aggiornano entro pochi giorni invece che dopo un mese.
 - Loghi dei titoli più puliti: preferiti quelli trasparenti e orizzontali, anche da fanart.tv.
-- «Continua a guardare» non mostra più per qualche secondo, all'apertura della Home, serie già finite che poi sparivano.
+- «Continua a guardare» non mostra più per qualche secondo, all'apertura della Home, titoli già conclusi che poi sparivano.
 - Quando finisci un episodio, la scheda in «Continua a guardare» indica quale parte dopo («Prossimo · S1 · E5») e non mostra più «0%».
 - Se ti addormenti, l'avvio automatico si ferma dopo tre episodi di fila senza toccare il telecomando: alla ripresa trovi in Home l'episodio successivo pronto.
-- Un episodio o un film arrivato ai titoli di coda conta come visto anche se la TV si spegne prima dell'ultimo secondo.
+- Un episodio o un titolo arrivato ai titoli di coda conta come visto anche se la TV si spegne prima dell'ultimo secondo.
 - I consigliati non ripropongono titoli che hai già visto o iniziato e mettono prima quelli suggeriti da più titoli che hai guardato.
