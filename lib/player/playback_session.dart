@@ -750,11 +750,25 @@ class PlaybackSession extends ChangeNotifier {
       if (gen != _generation || _disposed || revision != _seekRevision) {
         return;
       }
-      final pos = engine.value.position;
-      if (pos >= target - const Duration(seconds: 10)) return;
+      if (!_atResume(engine, target)) continue;
+      // mpv reports the target as soon as a network seek starts; when the
+      // source refuses it, playback falls back near the start. Only a
+      // position that holds counts as landed.
+      await Future<void>.delayed(resumeSettle);
+      if (gen != _generation || _disposed || revision != _seekRevision) {
+        return;
+      }
+      if (_atResume(engine, target)) return;
     }
     debugPrint('Resume seek did not land');
   }
+
+  /// How long a resume seek must hold before it counts as landed.
+  @visibleForTesting
+  static const resumeSettle = Duration(seconds: 3);
+
+  static bool _atResume(PlaybackEngine engine, Duration target) =>
+      engine.value.position >= target - const Duration(seconds: 10);
 
   Future<void> _applyTrackPreferences(PlaybackEngine engine) async {
     try {

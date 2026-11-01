@@ -113,8 +113,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// One item per series: only the most recently watched episode counts.
   /// Older half-watched episodes of the same series are hidden, and when the
   /// latest episode was completed none of the older ones resurfaces.
+  /// A title opened and closed at once still counts as started: a minimum
+  /// position hid it, and a new episode opened that way hid its series.
   List<HistoryEntry> get continueWatching => onePerSeries(entries).where((e) {
-    if (e.isLive || e.position < const Duration(seconds: 5)) return false;
+    if (e.isLive) return false;
     if (e.duration <= Duration.zero) return true;
     // A finished episode keeps its series here: Home offers the next one
     // until the whole series is removed from the history.

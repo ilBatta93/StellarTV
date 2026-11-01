@@ -1874,13 +1874,14 @@ class _PlayerScreenState extends State<PlayerScreen>
     final actualPosition = position ?? v.position;
     final pending = _pendingResume;
     if (pending != null && position == null) {
-      final landed =
-          (v.position - pending).abs() <= const Duration(seconds: 10);
-      // A resume seek that never landed leaves playback near the start:
-      // that is not the viewer's progress, so the saved point is kept until
-      // playback actually passes it.
-      if (!landed && v.position < pending) return;
-      _pendingResume = null;
+      switch (resumeSample(v.position, pending)) {
+        case ResumeSample.skip:
+          return;
+        case ResumeSample.save:
+          break;
+        case ResumeSample.saveAndConfirm:
+          _pendingResume = null;
+      }
     }
     // Inside the known end credits the title is finished, even when the TV
     // switches off before the last second (a viewer who fell asleep).

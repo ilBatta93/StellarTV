@@ -840,6 +840,27 @@ void main() {
     await session.released;
   });
 
+  test('la ripresa non si fida di un seek che torna all\'inizio', () async {
+    // mpv reports the target at once, then a refused network seek falls
+    // back near the start: the resume point must be sought again.
+    final engine = _FallbackSeekEngine(
+      PlayerEngineType.mediakit,
+      fallBackTimes: 2,
+    );
+    final session = PlaybackSession(
+      url: 'https://example.invalid/video.mp4',
+      isLive: false,
+      startAt: const Duration(minutes: 22),
+      settings: PlayerSettings(primaryEngine: PlayerEngineType.mediakit),
+      engineFactory: (_) => engine,
+    );
+    await session.start();
+    expect(engine.value.position, const Duration(minutes: 22));
+    expect(engine.seeks, 3);
+    session.dispose();
+    await session.released;
+  });
+
   test('un seek dello spettatore ferma i tentativi di ripresa', () async {
     final engine = _BusySeekEngine(
       PlayerEngineType.mediakit,
@@ -893,6 +914,29 @@ class _BusySeekEngine extends _FakeEngine {
       position: position,
       duration: _value.duration,
     );
+  }
+}
+
+/// Video whose first [fallBackTimes] seeks look landed, then drop back to
+/// 1:05 a moment later.
+class _FallbackSeekEngine extends _BusySeekEngine {
+  _FallbackSeekEngine(super.type, {required this.fallBackTimes})
+    : super(refuseFor: Duration.zero);
+
+  final int fallBackTimes;
+
+  @override
+  Future<void> seekTo(Duration position) async {
+    await super.seekTo(position);
+    if (seeks > fallBackTimes) return;
+    Timer(const Duration(milliseconds: 1500), () {
+      _value = PlaybackSnapshot(
+        isReady: true,
+        isPlaying: true,
+        position: const Duration(minutes: 1, seconds: 5),
+        duration: _value.duration,
+      );
+    });
   }
 }
 
