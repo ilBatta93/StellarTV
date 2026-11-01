@@ -37,7 +37,30 @@ void main() {
         ios: false,
         android: true,
       ),
+      'mediacodec,mediacodec-copy',
+    );
+    // Fire TV live keeps the copy decoder it was tuned on.
+    expect(
+      MediaKitEngine.hardwareDecoder(
+        mode: HardwareDecoding.auto,
+        tv: true,
+        vod: false,
+        ios: false,
+        android: true,
+        fireTv: true,
+      ),
       'mediacodec-copy',
+    );
+    expect(
+      MediaKitEngine.hardwareDecoder(
+        mode: HardwareDecoding.auto,
+        tv: true,
+        vod: true,
+        ios: false,
+        android: true,
+        fireTv: true,
+      ),
+      'mediacodec,mediacodec-copy',
     );
     expect(
       MediaKitEngine.hardwareDecoder(

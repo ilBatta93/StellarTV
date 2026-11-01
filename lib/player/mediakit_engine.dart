@@ -53,6 +53,7 @@ class MediaKitEngine extends PlaybackEngine {
                 ios: Platform.isIOS || Platform.isMacOS,
                 android: Platform.isAndroid,
                 copy: hardwareCopy,
+                fireTv: DeviceTypeService.isFireTv,
               ),
         vo: null,
       ),
@@ -560,6 +561,7 @@ class MediaKitEngine extends PlaybackEngine {
     required bool ios,
     required bool android,
     bool copy = false,
+    bool fireTv = false,
   }) {
     if (mode == HardwareDecoding.disabled) return 'no';
     if (!tv) {
@@ -568,7 +570,11 @@ class MediaKitEngine extends PlaybackEngine {
     }
     if (ios) return 'videotoolbox-copy';
     if (android) {
-      return vod ? 'mediacodec,mediacodec-copy' : 'mediacodec-copy';
+      // Live copy asks the decoder for planar frames: the Amlogic decoder of
+      // the Chromecast with Google TV converts each 1080p picture in software
+      // and delivered about 8 of 25 per second. Zero-copy keeps 25 and the
+      // decoder deinterlaces itself. Fire TV keeps the copy it was tuned on.
+      return vod || !fireTv ? 'mediacodec,mediacodec-copy' : 'mediacodec-copy';
     }
     return 'auto-safe';
   }

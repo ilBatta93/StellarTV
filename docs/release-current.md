@@ -16,3 +16,4 @@
 - Le card senza locandina mostrano il titolo.
 - Al primo avvio dopo un aggiornamento il catalogo mostra «Preparazione del catalogo…» invece di sembrare vuoto.
 - Sulla TV il player può portare lo schermo alla frequenza del video (ad esempio 50 Hz per i canali a 25 fotogrammi) per un movimento senza scatti: attivalo con «Adatta frequenza schermo» nelle impostazioni del player. I comandi del player mostrano risoluzione, fotogrammi e frequenza dello schermo.
+- Sulla Chromecast con Google TV la diretta con mpv è di nuovo fluida: il video non va più a scatti mentre l'audio resta regolare.
