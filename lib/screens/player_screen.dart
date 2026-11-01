@@ -969,7 +969,8 @@ class _PlayerScreenState extends State<PlayerScreen>
         TvPlayerAction(
           id: 'effects',
           icon: Icons.graphic_eq_rounded,
-          label: 'Effetti audio',
+          // Short: the TV button shows its label on a fixed width.
+          label: 'Effetti',
           onPressed: () =>
               _openTvSheet(() => showAudioEffectsSheet(context, session)),
         ),
