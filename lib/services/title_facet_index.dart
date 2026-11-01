@@ -7,7 +7,9 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/content_type.dart';
+import '../models/rating_policy.dart';
 import 'catalog_sort.dart';
+import 'title_logo_cache.dart';
 import 'title_metadata_store.dart';
 import 'frame_telemetry_service.dart';
 import 'work_slicer.dart';
@@ -17,6 +19,8 @@ class _Facet {
   double imdb = 0;
   bool imdbKnown = false;
   int imdbAt = 0;
+  int imdbVotes = 0;
+  int imdbDays = 0;
   double tmdb = 0;
   bool tmdbKnown = false;
   int tmdbAt = 0;
@@ -35,6 +39,8 @@ class _Facet {
     imdb = other.imdb;
     imdbKnown = other.imdbKnown;
     imdbAt = other.imdbAt;
+    imdbVotes = other.imdbVotes;
+    imdbDays = other.imdbDays;
     if (other.imdbId != null) imdbId = other.imdbId;
   }
 }
@@ -101,8 +107,16 @@ class TitleFacetIndex extends ChangeNotifier {
   bool imdbFresh(String mediaKey) {
     final row = _rows[mediaKey];
     if (row == null || !row.imdbKnown || row.imdbAt == 0) return false;
-    return _now() - row.imdbAt < imdbTtl.inMilliseconds;
+    final days = row.imdbDays > 0
+        ? row.imdbDays
+        : row.imdb > 0
+        ? imdbTtl.inDays
+        : 3;
+    return _now() - row.imdbAt < Duration(days: days).inMilliseconds;
   }
+
+  /// IMDb vote count of a title, 0 while unknown.
+  int imdbVotesOf(String mediaKey) => _rows[mediaKey]?.imdbVotes ?? 0;
 
   /// IMDb id already resolved for this key, when the index has one.
   String? imdbIdOf(String key) {
@@ -187,7 +201,7 @@ class TitleFacetIndex extends ChangeNotifier {
     bool quiet = false,
   }) {
     if (mediaKey.split(':').length != 2) return;
-    if (url != null && !url.startsWith('https://image.tmdb.org/t/p/')) return;
+    if (url != null && !isTitleLogoUrl(url)) return;
     final row = _row(mediaKey);
     final expires =
         expiresAt ??
@@ -226,7 +240,9 @@ class TitleFacetIndex extends ChangeNotifier {
   double scoreOfTitle(String titleKey) {
     final row = _rows[titleKey];
     if (row == null) return 0;
-    if (row.imdbKnown && row.imdb > 0) return row.imdb;
+    if (row.imdbKnown && row.imdb > 0) {
+      return weightedImdb(row.imdb, row.imdbVotes);
+    }
     if (row.tmdbKnown && row.tmdb > 0) return row.tmdb;
     return 0;
   }
@@ -269,9 +285,9 @@ class TitleFacetIndex extends ChangeNotifier {
     if (_bulk == 0 && _dirty) _touch(rank: true);
   }
 
-  void mergeImdb(Map<String, (double, int)> rows) {
+  void mergeImdb(Map<String, (ImdbScore, int)> rows) {
     rows.forEach((key, value) {
-      putImdb(mediaKey: key, rating: value.$1, at: value.$2, quiet: true);
+      putImdb(mediaKey: key, score: value.$1, at: value.$2, quiet: true);
     });
   }
 
@@ -279,7 +295,7 @@ class TitleFacetIndex extends ChangeNotifier {
 
   /// The device IMDb store joins the index once per run, in slices.
   /// Discover and the catalog scores each merged all of it, in one go.
-  Future<void> mergeImdbStore(Map<String, (double, int)> Function() rows) =>
+  Future<void> mergeImdbStore(Map<String, (ImdbScore, int)> Function() rows) =>
       _imdbStoreMerge ??= () async {
         final slice = WorkSlicer();
         beginBulk();
@@ -287,7 +303,7 @@ class TitleFacetIndex extends ChangeNotifier {
           for (final entry in rows().entries) {
             putImdb(
               mediaKey: entry.key,
-              rating: entry.value.$1,
+              score: entry.value.$1,
               at: entry.value.$2,
               quiet: true,
             );
@@ -300,7 +316,7 @@ class TitleFacetIndex extends ChangeNotifier {
 
   void putImdb({
     required String mediaKey,
-    required double rating,
+    required ImdbScore score,
     String? imdbId,
     int? at,
     bool quiet = false,
@@ -309,9 +325,11 @@ class TitleFacetIndex extends ChangeNotifier {
     final row = _row(mediaKey);
     final stamp = at ?? _now();
     if (row.imdbKnown && row.imdbAt > stamp) return;
-    row.imdb = rating;
+    row.imdb = score.rating;
     row.imdbKnown = true;
     row.imdbAt = stamp;
+    row.imdbVotes = score.votes;
+    row.imdbDays = score.days;
     if (imdbId != null && RegExp(r'^tt\d+$').hasMatch(imdbId)) {
       row.imdbId = imdbId;
     }
@@ -591,6 +609,8 @@ class TitleFacetIndex extends ChangeNotifier {
 Map<String, Object?> _encode(_Facet row) => {
   if (row.imdbKnown) 'i': row.imdb,
   if (row.imdbAt != 0) 'ia': row.imdbAt,
+  if (row.imdbVotes != 0) 'iv': row.imdbVotes,
+  if (row.imdbDays != 0) 'il': row.imdbDays,
   if (row.tmdbKnown) 't': row.tmdb,
   if (row.tmdbAt != 0) 'ta': row.tmdbAt,
   if (row.tmdbId != null) 'id': row.tmdbId,
@@ -611,6 +631,8 @@ _Facet _decode(Map<String, Object?> raw) {
     row.imdbKnown = true;
   }
   if (raw['ia'] is num) row.imdbAt = (raw['ia'] as num).toInt();
+  if (raw['iv'] is num) row.imdbVotes = (raw['iv'] as num).toInt();
+  if (raw['il'] is num) row.imdbDays = (raw['il'] as num).toInt();
   if (raw['t'] is num) {
     row.tmdb = (raw['t'] as num).toDouble();
     row.tmdbKnown = true;
@@ -639,8 +661,7 @@ _Facet _decode(Map<String, Object?> raw) {
   if (raw['pa'] is num) row.platformsAt = (raw['pa'] as num).toInt();
   if (raw.containsKey('l')) {
     final url = raw['l'];
-    if (url == null ||
-        (url is String && url.startsWith('https://image.tmdb.org/t/p/'))) {
+    if (url == null || (url is String && isTitleLogoUrl(url))) {
       row.logoKnown = true;
       row.logoUrl = url as String?;
     }

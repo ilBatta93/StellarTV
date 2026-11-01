@@ -56,4 +56,28 @@ void main() {
     );
   });
   test('model cache and matching regressions', checks.main);
+  group('IMDb votes', () {
+    test('few enthusiastic votes do not outrank a classic', () {
+      expect(weightedImdb(9.6, 40), lessThan(weightedImdb(8.4, 1200000)));
+      expect(weightedImdb(8.4, 1200000), closeTo(8.4, 0.01));
+      // Scores saved before vote counts existed keep their value.
+      expect(weightedImdb(7.2, 0), 7.2);
+    });
+    test('short Italian vote labels', () {
+      expect(imdbVotesLabel(830), '830');
+      expect(imdbVotesLabel(48200), '48 mila');
+      expect(imdbVotesLabel(1200000), '1,2 Mln');
+      expect(imdbVotesLabel(2000000), '2 Mln');
+    });
+    test('saved scores: old bare numbers and the current form', () {
+      expect(ImdbScore.fromJson(8.1), const ImdbScore(8.1, days: 30));
+      // A missing rating is asked again within days, not a month.
+      expect(ImdbScore.fromJson(0)?.days, 3);
+      expect(
+        ImdbScore.fromJson([7.5, 9100, 3]),
+        const ImdbScore(7.5, votes: 9100, days: 3),
+      );
+      expect(ImdbScore.fromJson('x'), isNull);
+    });
+  });
 }

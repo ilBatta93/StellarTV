@@ -318,8 +318,12 @@ class TmdbService {
     if (row['tmdb_id'] is! int) return null;
     final path = row['logo_path'];
     if (path == null) return const TitleLogoEntry(null);
-    if (path is! String ||
-        !RegExp(r'^/[a-zA-Z0-9_.-]+\.(png|jpg|webp)$').hasMatch(path)) {
+    if (path is! String) return null;
+    // fanart.tv logos arrive as full addresses, TMDB ones as paths.
+    if (path.startsWith('https://')) {
+      return isTitleLogoUrl(path) ? TitleLogoEntry(path) : null;
+    }
+    if (!RegExp(r'^/[a-zA-Z0-9_.-]+\.(png|jpg|webp)$').hasMatch(path)) {
       return null;
     }
     return TitleLogoEntry('https://image.tmdb.org/t/p/w500$path');
@@ -349,13 +353,31 @@ class TmdbService {
       final language = priority(a['iso_639_1'])
           .compareTo(priority(b['iso_639_1']));
       if (language != 0) return language;
-      return ((b['vote_average'] as num?) ?? 0).compareTo(
-        (a['vote_average'] as num?) ?? 0,
-      );
+      return logoQuality(b).compareTo(logoQuality(a));
     });
     final preferred = logos.where((e) => priority(e['iso_639_1']) < 2);
     if (preferred.isEmpty) return null;
     return 'https://image.tmdb.org/t/p/w500${preferred.first['file_path']}';
+  }
+
+  /// Ranks logos of the same language. A JPEG has no transparency and
+  /// shows as a box over the backdrop; a wide wordmark sits on the hero
+  /// better than a stacked or square one. Votes break the remaining ties.
+  /// Same rule as the site's shared artwork cache (`pickLogo`).
+  static double logoQuality(Map<String, dynamic> logo) {
+    final path = logo['file_path'] as String? ?? '';
+    var score = ((logo['vote_average'] as num?) ?? 0).toDouble();
+    if (path.toLowerCase().endsWith('.jpg')) score -= 20;
+    final w = logo['width'], h = logo['height'];
+    if (w is num && h is num && h > 0) {
+      final ratio = w / h;
+      if (ratio >= 1.5 && ratio <= 8) {
+        score += 2;
+      } else if (ratio < 1) {
+        score -= 1;
+      }
+    }
+    return score;
   }
 
   final Map<String, Future<TitleTrailer?>> _trailers = {};

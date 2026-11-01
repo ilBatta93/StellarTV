@@ -25,3 +25,8 @@
 - Sulla TV i filtri per piattaforma e genere sono più ordinati: loghi delle piattaforme, segno di spunta sulla scelta attiva.
 - In Home la trama del titolo in evidenza non resta più tagliata a metà riga, e il logo Crunchyroll è leggibile.
 - Telecomando più coerente: in Cerca la selezione parte dal campo e Indietro chiude prima la tastiera; nei Preferiti si passa dalle schede al contenuto e ritorno; nelle Impostazioni Destra entra nella prima voce; il pannello Categorie parte dalla categoria attiva.
+- Sulla TV la barra in alto ha un nuovo aspetto: sezioni raccolte in una capsula traslucida al centro, preferiti, profilo e impostazioni in una seconda capsula, con la selezione che si ingrandisce. In Home l'immagine del titolo arriva fin sotto la barra.
+- Accanto al voto IMDb la scheda del titolo mostra quante persone l'hanno votato. Quando il voto viene da TMDB lo indica la sigla «TMDB».
+- L'ordine «Voto» tiene conto del numero di voti: i titoli con pochissimi voti non finiscono più in cima.
+- I voti dei titoli e degli episodi appena usciti si aggiornano entro pochi giorni invece che dopo un mese.
+- Loghi dei titoli più puliti: preferiti quelli trasparenti e orizzontali, anche da fanart.tv.

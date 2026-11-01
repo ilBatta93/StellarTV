@@ -7,6 +7,12 @@ class AppColors {
   static const surface = Color(0xFF1C1C1E);
   static const card = Color(0xFF2C2C2E);
   static const glass = Color(0xE61C1C1E);
+  // Translucent "glass" of the TV top bar: fill, hairline edge, the
+  // current section and the dimmed labels of the other sections.
+  static const glassFill = Color(0x1FFFFFFF);
+  static const glassStroke = Color(0x29FFFFFF);
+  static const glassSelected = Color(0x33FFFFFF);
+  static const glassText = Color(0xCCFFFFFF);
   static const overlay = Color(0x99000000);
   static const clear = Color(0x00000000);
   static const onOverlay = textPrimary;
@@ -25,6 +31,8 @@ class AppColors {
   static const primaryLight = Color(0xFFFF9A62);
   static const secondary = Color(0xFFFFB627);
   static const accent = Color(0xFF2EC4B6);
+  // TMDB brand blue: marks a TMDB vote shown in place of IMDb.
+  static const tmdb = Color(0xFF01B4E4);
   static const success = Color(0xFF30D158);
   static const warning = Color(0xFFFFD60A);
   static const error = Color(0xFFFF453A);

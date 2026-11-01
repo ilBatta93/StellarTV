@@ -9,6 +9,19 @@ class TitleLogoEntry {
   final String? url;
 }
 
+final RegExp _tmdbLogo = RegExp(
+  r'^https://image\.tmdb\.org/t/p/w500/[a-zA-Z0-9_.-]+\.(png|jpg|webp)$',
+);
+final RegExp _fanartLogo = RegExp(
+  r'^https://assets\.fanart\.tv/fanart/(movies|tv)/\d{1,10}/'
+  r'(hdmovielogo|movielogo|hdtvlogo|clearlogo)/[A-Za-z0-9._-]{1,120}\.png$',
+);
+
+/// Title logos come from TMDB or, through the site's shared cache, from
+/// fanart.tv. Nothing else is accepted as a logo address.
+bool isTitleLogoUrl(String url) =>
+    _tmdbLogo.hasMatch(url) || _fanartLogo.hasMatch(url);
+
 /// Versioned because older metadata allowed untagged foreign-language logos.
 class TitleLogoCache {
   static const storageKey = 'title_logo_cache_it_en_v1';
@@ -25,11 +38,7 @@ class TitleLogoCache {
   }
 
   static bool validUrl(Object? url) =>
-      url == null ||
-      (url is String &&
-          RegExp(
-            r'^https://image\.tmdb\.org/t/p/w500/[a-zA-Z0-9_.-]+\.(png|jpg|webp)$',
-          ).hasMatch(url));
+      url == null || (url is String && isTitleLogoUrl(url));
 
   /// Copies logos already saved into the memory index. Expired rows are skipped.
   static Future<void> importResolved() async {

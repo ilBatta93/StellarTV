@@ -37,4 +37,23 @@ void main() {
       expect(url, isNull);
     });
   });
+
+  group('selectTitleLogo quality', () {
+    test('a transparent logo beats a better-voted JPEG', () {
+      final url = TmdbService.selectTitleLogo({
+        'logos': [logo('/box.jpg', 'it', 9.0), logo('/clear.png', 'it', 4.0)],
+      });
+      expect(url, 'https://image.tmdb.org/t/p/w500/clear.png');
+    });
+
+    test('a wide wordmark beats a stacked one', () {
+      final url = TmdbService.selectTitleLogo({
+        'logos': [
+          {...logo('/stacked.png', 'en', 6.0), 'width': 500, 'height': 600},
+          {...logo('/wide.png', 'en', 5.0), 'width': 500, 'height': 120},
+        ],
+      });
+      expect(url, 'https://image.tmdb.org/t/p/w500/wide.png');
+    });
+  });
 }

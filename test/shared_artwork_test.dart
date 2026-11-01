@@ -35,4 +35,27 @@ void main() {
       isNull,
     );
   });
+  test('fanart.tv logos from the shared cache are kept as they are', () {
+    const url =
+        'https://assets.fanart.tv/fanart/movies/603/hdmovielogo/matrix.png';
+    expect(
+      TmdbService.parseSharedLogo({
+        'results': [
+          {'tmdb_id': 603, 'logo_path': url},
+        ],
+      })?.url,
+      url,
+    );
+    expect(
+      TmdbService.parseSharedLogo({
+        'results': [
+          {
+            'tmdb_id': 603,
+            'logo_path': 'https://assets.fanart.tv.invalid/fanart/x.png',
+          },
+        ],
+      }),
+      isNull,
+    );
+  });
 }

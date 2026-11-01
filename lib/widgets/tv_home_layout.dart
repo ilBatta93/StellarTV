@@ -1,5 +1,9 @@
 import 'package:flutter/widgets.dart';
 
+/// Height of the TV top bar. Pages start below it; the Home artwork extends
+/// under it so the translucent bar shows the picture through.
+const double kTvTopBarHeight = 60;
+
 /// Home-only dimensions; catalog and touch presentation keep their defaults.
 class TvHomeLayout extends InheritedWidget {
   const TvHomeLayout({

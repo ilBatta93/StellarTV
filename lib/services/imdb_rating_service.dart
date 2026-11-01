@@ -4,13 +4,15 @@ import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/supabase_config.dart';
+import '../models/rating_policy.dart';
 import '../models/tmdb_item.dart';
 import 'foreground_http_client.dart';
 import 'playback_work_policy.dart';
 import 'title_facet_index.dart';
 import 'title_metadata_store.dart';
 
-/// Official IMDb ratings, saved on the device (30 days) and requested in
+/// Official IMDb ratings, saved on the device (for as long as the server
+/// says: days for new releases and missing ratings, 30 otherwise) and requested in
 /// small batches only for titles actually shown. Null rating = unknown on
 /// IMDb, so the UI waits until that lookup completes before using TMDB.
 ///
@@ -20,10 +22,11 @@ class ImdbRatingService {
   ImdbRatingService._();
   static final instance = ImdbRatingService._();
 
-  final store = TitleMetadataStore<double>(
+  final store = TitleMetadataStore<ImdbScore>(
     fileName: 'stellartv_imdb_ratings_v1.json',
-    encode: (v) => v,
-    decode: (raw) => raw is num ? raw.toDouble() : null,
+    encode: (v) => v.toJson(),
+    decode: ImdbScore.fromJson,
+    ttlOf: (v) => Duration(days: v.days),
   );
   final _http = ForegroundHttpClient();
   final List<String> _titlePriority = [];
@@ -50,10 +53,16 @@ class ImdbRatingService {
   /// Stored value, or 0 once a lookup confirmed IMDb has none. No request.
   double? peek(TmdbItem item) => _value(keyOf(item));
 
-  Map<String, double> exportScores() => store.snapshot();
+  Map<String, double> exportScores() => {
+    for (final e in store.snapshot().entries) e.key: e.value.rating,
+  };
+
+  /// IMDb vote count for this title or episode key, 0 while unknown.
+  int votesOf(String key) =>
+      store.valueOf(key)?.votes ?? TitleFacetIndex.instance.imdbVotesOf(key);
 
   double? _value(String key) {
-    final v = store.valueOf(key);
+    final v = store.valueOf(key)?.rating;
     return v ?? (_settled.contains(key) ? 0 : null);
   }
 
@@ -290,11 +299,17 @@ class ImdbRatingService {
                   )
                 : '${r['type']}:${r['id']}';
             stored.add(key);
-            final score = rating is num ? rating.toDouble() : 0.0;
+            final votes = r['votes'];
+            final days = r['fresh_days'];
+            final score = ImdbScore(
+              rating is num ? rating.toDouble() : 0.0,
+              votes: votes is num ? votes.toInt() : 0,
+              days: days is num ? days.toInt().clamp(1, 30) : null,
+            );
             store.put(key, score);
             TitleFacetIndex.instance.putImdb(
               mediaKey: key,
-              rating: score,
+              score: score,
               imdbId: r['imdb_id'] is String ? r['imdb_id'] as String : null,
             );
           }

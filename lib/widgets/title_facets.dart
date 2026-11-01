@@ -172,12 +172,16 @@ class RatingValue extends StatelessWidget {
   final double fallback;
   final double height;
   final bool framed;
+
+  /// IMDb vote count shown after the rating (title pages); 0 hides it.
+  final int votes;
   const RatingValue({
     super.key,
     this.imdb,
     this.fallback = 0,
     this.height = 20,
     this.framed = false,
+    this.votes = 0,
   });
   @override
   Widget build(BuildContext context) {
@@ -185,8 +189,12 @@ class RatingValue extends StatelessWidget {
     final hasImdb = rating != null && rating > 0;
     final value = preferredRating(rating, fallback);
     if (value <= 0) return const SizedBox.shrink();
+    final showVotes = hasImdb && votes > 0;
     final badge = Semantics(
-      label: '${hasImdb ? 'IMDb' : 'TMDB'} ${value.toStringAsFixed(1)}',
+      label:
+          '${hasImdb ? 'IMDb' : 'TMDB'} ${value.toStringAsFixed(1)}'
+          '${showVotes ? ', ${imdbVotesLabel(votes)} voti' : ''}',
+      excludeSemantics: true,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -197,10 +205,25 @@ class RatingValue extends StatelessWidget {
               filterQuality: FilterQuality.medium,
             )
           else
-            Icon(
-              Icons.star_rounded,
-              color: AppColors.secondary,
-              size: height * 0.8,
+            // Names the source: a bare star read as an IMDb score.
+            Container(
+              height: height * 0.8,
+              padding: EdgeInsets.symmetric(horizontal: height * 0.18),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.tmdb,
+                borderRadius: BorderRadius.circular(height * 0.16),
+              ),
+              child: Text(
+                'TMDB',
+                style: TextStyle(
+                  color: AppColors.background,
+                  fontSize: height * 0.4,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.3,
+                ),
+              ),
             ),
           const SizedBox(width: 4),
           Text(
@@ -211,6 +234,17 @@ class RatingValue extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+          if (showVotes) ...[
+            SizedBox(width: height * 0.3),
+            Text(
+              '· ${imdbVotesLabel(votes)} voti',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: height * 0.55,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -269,6 +303,10 @@ class ImdbRatingBadge extends StatelessWidget {
       fallback: value.$2,
       height: height,
       framed: framed,
+      // Only the open title: posters stay compact.
+      votes: priority
+          ? ImdbRatingService.instance.votesOf(ImdbRatingService.keyOf(item))
+          : 0,
     ),
   );
 }

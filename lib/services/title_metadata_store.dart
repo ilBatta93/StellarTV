@@ -15,11 +15,15 @@ class TitleMetadataStore<T> extends ChangeNotifier {
   final Duration ttl;
   final Object? Function(T value) encode;
   final T? Function(Object? raw) decode;
+
+  /// Per-value lifetime, when values carry their own (falls back to [ttl]).
+  final Duration Function(T value)? ttlOf;
   TitleMetadataStore({
     required this.fileName,
     required this.encode,
     required this.decode,
     this.ttl = const Duration(days: 30),
+    this.ttlOf,
   });
 
   final Map<String, (T, int)> _values = {};
@@ -49,9 +53,11 @@ class TitleMetadataStore<T> extends ChangeNotifier {
   /// Values with the device timestamp, for the local facet index.
   Map<String, (T, int)> timedSnapshot() => Map<String, (T, int)>.from(_values);
   bool isFresh(String key) {
-    final at = _values[key]?.$2;
-    return at != null &&
-        DateTime.now().millisecondsSinceEpoch - at < ttl.inMilliseconds;
+    final entry = _values[key];
+    if (entry == null) return false;
+    final life = ttlOf?.call(entry.$1) ?? ttl;
+    return DateTime.now().millisecondsSinceEpoch - entry.$2 <
+        life.inMilliseconds;
   }
 
   Future<File> _file() async =>

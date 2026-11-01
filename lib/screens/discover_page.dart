@@ -1367,8 +1367,14 @@ class _TvDiscoverState extends State<_TvDiscover> {
           captionHeight: MediaQuery.textScalerOf(context).scale(15) * 1.2,
           showTitles: context.watch<UiSettings>().homeTitles,
           child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Positioned.fill(
+              // Up under the translucent top bar, like tvOS.
+              Positioned(
+                top: -kTvTopBarHeight,
+                left: 0,
+                right: 0,
+                bottom: 0,
                 child: ValueListenableBuilder<TmdbItem?>(
                   valueListenable: _hero,
                   builder: (_, item, _) => ValueListenableBuilder<bool>(

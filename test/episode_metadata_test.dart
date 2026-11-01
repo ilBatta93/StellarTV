@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stellar_tv/models/episode_metadata.dart';
+import 'package:stellar_tv/models/rating_policy.dart';
 import 'package:stellar_tv/models/tmdb_item.dart';
 import 'package:stellar_tv/services/imdb_rating_service.dart';
 
@@ -44,7 +45,7 @@ void main() {
   );
   test('Player reads a saved episode vote without queuing a request', () {
     final service = ImdbRatingService.instance;
-    service.store.put('tv:1396:1:2', 9.1);
+    service.store.put('tv:1396:1:2', const ImdbScore(9.1));
     expect(service.episodeRating(1396, 1, 2, request: false), 9.1);
     expect(service.episodeRating(1396, 1, 3, request: false), isNull);
     const title = TmdbItem(

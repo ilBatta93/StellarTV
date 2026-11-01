@@ -18,6 +18,7 @@ import '../widgets/tv_catalog_toolbar.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/tv_catalog_navigation.dart';
 import '../widgets/tv_focusable.dart';
+import '../widgets/tv_home_layout.dart';
 import '../widgets/catalog_status_indicator.dart';
 import '../widgets/catalog_section_status.dart';
 import 'catalog_page.dart';
@@ -387,6 +388,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildTv(BuildContext context) {
     final content = IndexedStack(
       index: _currentIndex,
+      // The Home artwork paints up under the translucent top bar.
+      clipBehavior: Clip.none,
       children: [
         for (var i = 0; i < _order.length + 1; i++)
           // Hidden tabs must never receive D-Pad focus.
@@ -455,7 +458,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _TvTopBar extends StatelessWidget {
-  static const double height = 60;
+  static const double height = kTvTopBarHeight;
 
   final int selectedIndex;
   final List<AppSection> sections;
@@ -494,72 +497,134 @@ class _TvTopBar extends StatelessWidget {
   }
 
   Widget _buildBar(BuildContext context, bool compact) {
-    final name = context.watch<ProfileProvider>().selected?.name.trim() ?? '';
+    final profile = context.watch<ProfileProvider>().selected;
+    final name = profile?.name.trim() ?? '';
+    final gap = compact ? 4.0 : 6.0;
     return Container(
       height: height,
       padding: EdgeInsets.symmetric(horizontal: compact ? 20 : 40),
-      // Solid enough to stay readable over bright artwork.
+      // Fades into the page so the floating capsules read as glass.
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            AppColors.background.withValues(alpha: 0.97),
-            AppColors.background.withValues(alpha: 0.85),
+            AppColors.background.withValues(alpha: 0.75),
+            AppColors.background.withValues(alpha: 0.35),
             AppColors.background.withValues(alpha: 0),
           ],
-          stops: const [0, 0.7, 1],
+          stops: const [0, 0.6, 1],
         ),
       ),
       child: Row(
         children: [
-          BrandLogo(size: compact ? 20 : 26),
-          SizedBox(width: compact ? 16 : 32),
-          _TvNavPill(
-            label: 'Cerca',
-            focusNode: searchNode,
-            icon: Icons.search_rounded,
-            compact: compact,
-            onPressed: onSearch,
-          ),
-          for (var i = 0; i < sections.length; i++)
-            _TvNavPill(
-              label: sections[i].label,
-              contentType: switch (sections[i]) {
-                AppSection.live => ContentType.live,
-                AppSection.movies => ContentType.movie,
-                AppSection.series => ContentType.series,
-                AppSection.home => null,
-              },
-              focusNode: tabNodes[i],
-              selected: selectedIndex == i,
-              autofocus: i == selectedIndex,
-              compact: compact,
-              onPressed: () => onSelected(i),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: BrandLogo(size: compact ? 20 : 26),
             ),
-          const Spacer(),
-          _TvNavPill(
-            icon: Icons.favorite_rounded,
-            focusNode: tabNodes[sections.length],
-            selected: selectedIndex == sections.length,
-            compact: compact,
-            onPressed: () => onSelected(sections.length),
           ),
-          _TvNavPill(
-            label: name.isEmpty ? '?' : name.characters.first.toUpperCase(),
-            focusNode: profileNode,
+          // Sections centred in one capsule, as on tvOS.
+          _GlassCapsule(
             compact: compact,
-            onPressed: onProfile,
+            children: [
+              _TvNavPill(
+                label: 'Cerca',
+                focusNode: searchNode,
+                icon: Icons.search_rounded,
+                compact: compact,
+                onPressed: onSearch,
+              ),
+              for (var i = 0; i < sections.length; i++)
+                _TvNavPill(
+                  label: sections[i].label,
+                  contentType: switch (sections[i]) {
+                    AppSection.live => ContentType.live,
+                    AppSection.movies => ContentType.movie,
+                    AppSection.series => ContentType.series,
+                    AppSection.home => null,
+                  },
+                  focusNode: tabNodes[i],
+                  selected: selectedIndex == i,
+                  autofocus: i == selectedIndex,
+                  compact: compact,
+                  onPressed: () => onSelected(i),
+                ),
+            ],
           ),
-          _TvNavPill(
-            icon: Icons.settings_rounded,
-            focusNode: settingsNode,
-            compact: compact,
-            onPressed: onSettings,
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _GlassCapsule(
+                  compact: compact,
+                  children: [
+                    _TvNavPill(
+                      icon: Icons.favorite_rounded,
+                      semanticLabel: 'Preferiti',
+                      focusNode: tabNodes[sections.length],
+                      selected: selectedIndex == sections.length,
+                      compact: compact,
+                      onPressed: () => onSelected(sections.length),
+                    ),
+                    SizedBox(width: gap),
+                    _TvNavPill(
+                      avatar: profile == null
+                          ? null
+                          : Color(
+                              ProfileAvatars.colors[profile.avatarColor] ??
+                                  ProfileAvatars.colors['arancio']!,
+                            ),
+                      label: name.isEmpty
+                          ? '?'
+                          : name.characters.first.toUpperCase(),
+                      semanticLabel: name.isEmpty ? 'Profilo' : 'Profilo $name',
+                      focusNode: profileNode,
+                      compact: compact,
+                      onPressed: onProfile,
+                    ),
+                    SizedBox(width: gap),
+                    _TvNavPill(
+                      icon: Icons.settings_rounded,
+                      semanticLabel: 'Impostazioni',
+                      focusNode: settingsNode,
+                      compact: compact,
+                      onPressed: onSettings,
+                    ),
+                  ],
+                ),
+                _TvClock(compact: compact),
+              ],
+            ),
           ),
-          _TvClock(compact: compact),
         ],
       ),
+    );
+  }
+}
+
+/// Translucent rounded group of top-bar buttons ("glass"). Painted without
+/// a live blur: re-blurring the page under the bar on every scroll frame is
+/// too costly for the Chromecast and Fire TV GPUs, and the bar sits on the
+/// dark page edge where a tint reads the same.
+class _GlassCapsule extends StatelessWidget {
+  final bool compact;
+  final List<Widget> children;
+  const _GlassCapsule({required this.compact, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(compact ? 3 : 4),
+      decoration: BoxDecoration(
+        color: AppColors.glassFill,
+        borderRadius: BorderRadius.circular(40),
+        border: Border.all(color: AppColors.glassStroke),
+        boxShadow: const [
+          BoxShadow(color: AppColors.overlay, blurRadius: 18, spreadRadius: -6),
+        ],
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: children),
     );
   }
 }
@@ -645,6 +710,12 @@ class _TvNavPill extends StatefulWidget {
   final String? label;
   final ContentType? contentType;
   final IconData? icon;
+
+  /// Profile colour: the label is drawn as a round avatar of this colour.
+  final Color? avatar;
+
+  /// Spoken name for icon-only and avatar buttons.
+  final String? semanticLabel;
   final bool selected;
   final bool autofocus;
   final bool compact;
@@ -655,6 +726,8 @@ class _TvNavPill extends StatefulWidget {
     this.label,
     this.contentType,
     this.icon,
+    this.avatar,
+    this.semanticLabel,
     this.selected = false,
     this.autofocus = false,
     this.compact = false,
@@ -690,76 +763,112 @@ class _TvNavPillState extends State<_TvNavPill> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = widget.compact;
+    final still = MediaQuery.disableAnimationsOf(context);
+    final duration = still ? Duration.zero : const Duration(milliseconds: 160);
+    // Focus: solid white with dark text. Current section: frosted fill.
+    // Others: dimmed white, as tvOS tab bars do.
     final fg = _focused
         ? AppColors.background
         : widget.selected
-        ? AppColors.primary
-        : AppColors.textPrimary;
-    const shadow = [Shadow(color: AppColors.overlay, blurRadius: 6)];
-    return Focus(
-      focusNode: widget.focusNode,
-      autofocus: widget.autofocus,
-      onKeyEvent: _onKey,
-      onFocusChange: (v) => setState(() {
-        _focused = v;
-        if (!v) _pressed = false;
-      }),
-      child: GestureDetector(
-        onTap: widget.onPressed,
-        child: AnimatedContainer(
-          duration: MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 120),
-          margin: EdgeInsets.symmetric(horizontal: widget.compact ? 2 : 4),
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.compact
-                ? (widget.label == null ? 8 : 12)
-                : (widget.label == null ? 12 : 20),
-            vertical: widget.compact ? 8 : 10,
+        ? AppColors.textPrimary
+        : AppColors.glassText;
+    final iconOnly = widget.label == null;
+    final Widget content;
+    if (widget.avatar case final color?) {
+      final size = compact ? 26.0 : 32.0;
+      content = Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: _focused ? 1 : 0.85),
+          shape: BoxShape.circle,
+        ),
+        child: Text(
+          widget.label ?? '',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: compact ? 13 : 16,
+            fontWeight: FontWeight.w700,
           ),
-          decoration: BoxDecoration(
-            color: _focused
-                ? AppColors.textPrimary
-                : widget.selected
-                ? AppColors.glass
-                : AppColors.clear,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(
-              color: widget.selected && !_focused
-                  ? AppColors.primary
-                  : AppColors.clear,
-              width: 2,
+        ),
+      );
+    } else {
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.icon != null)
+            Icon(widget.icon, color: fg, size: compact ? 19 : 23),
+          if (widget.icon != null && widget.label != null)
+            SizedBox(width: compact ? 6 : 8),
+          if (widget.label != null)
+            Text(
+              widget.label ?? '',
+              style: TextStyle(
+                color: fg,
+                fontSize: compact ? 15 : 18,
+                letterSpacing: -0.2,
+                fontWeight: widget.selected || _focused
+                    ? FontWeight.w600
+                    : FontWeight.w500,
+              ),
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.icon != null)
-                Icon(
-                  widget.icon,
-                  color: fg,
-                  size: widget.compact ? 20 : 24,
-                  shadows: _focused ? null : shadow,
-                ),
-              if (widget.icon != null && widget.label != null)
-                SizedBox(width: widget.compact ? 6 : 8),
-              if (widget.label != null)
-                Text(
-                  widget.label ?? '',
-                  style: TextStyle(
-                    color: fg,
-                    fontSize: widget.compact ? 16 : 19,
-                    shadows: _focused ? null : shadow,
-                    fontWeight: widget.selected || _focused
-                        ? FontWeight.w700
-                        : FontWeight.w500,
-                  ),
-                ),
-              if (widget.contentType case final type?) ...[
-                const SizedBox(width: 6),
-                CatalogStatusIndicator(type: type, foreground: fg),
-              ],
-            ],
+          if (widget.contentType case final type?) ...[
+            const SizedBox(width: 6),
+            CatalogStatusIndicator(type: type, foreground: fg),
+          ],
+        ],
+      );
+    }
+    return Semantics(
+      button: true,
+      selected: widget.selected,
+      label: widget.semanticLabel,
+      child: Focus(
+        focusNode: widget.focusNode,
+        autofocus: widget.autofocus,
+        onKeyEvent: _onKey,
+        onFocusChange: (v) => setState(() {
+          _focused = v;
+          if (!v) _pressed = false;
+        }),
+        child: GestureDetector(
+          onTap: widget.onPressed,
+          child: AnimatedScale(
+            scale: _focused ? 1.06 : 1,
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            child: AnimatedContainer(
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              padding: widget.avatar != null
+                  ? EdgeInsets.all(compact ? 3 : 4)
+                  : EdgeInsets.symmetric(
+                      horizontal: iconOnly
+                          ? (compact ? 8 : 11)
+                          : (compact ? 14 : 20),
+                      vertical: compact ? 7 : 9,
+                    ),
+              decoration: BoxDecoration(
+                color: _focused
+                    ? AppColors.textPrimary
+                    : widget.selected
+                    ? AppColors.glassSelected
+                    : AppColors.clear,
+                borderRadius: BorderRadius.circular(40),
+                boxShadow: _focused
+                    ? const [
+                        BoxShadow(
+                          color: AppColors.overlay,
+                          blurRadius: 14,
+                          offset: Offset(0, 4),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: content,
+            ),
           ),
         ),
       ),

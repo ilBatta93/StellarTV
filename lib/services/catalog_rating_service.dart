@@ -244,9 +244,9 @@ class CatalogRatingService extends ChangeNotifier {
     final item = itemOf(c);
     final imdb = item == null
         ? null
-        : ImdbRatingService.instance.store.valueOf(
-            ImdbRatingService.keyOf(item),
-          );
+        : ImdbRatingService.instance.store
+              .valueOf(ImdbRatingService.keyOf(item))
+              ?.rating;
     if (imdb != null && imdb > 0) return imdb;
     return _ratings[_key(c)] ?? 0;
   }
