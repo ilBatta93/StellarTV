@@ -34,6 +34,7 @@ import '../providers/history_provider.dart';
 import '../providers/profile_provider.dart';
 import '../services/device_type_service.dart';
 import '../services/frame_telemetry_service.dart';
+import '../services/next_episode_memory.dart';
 import '../theme/app_theme.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/section_row.dart';
@@ -65,6 +66,18 @@ ResumeItem? latestHistoryResume(List<HistoryEntry> entries, AppProvider app) {
     if (!app.kidsMode || app.isKidsContent(channel)) return (e, channel);
   }
   return null;
+}
+
+/// Finished episode in "Continua a guardare": the code of the one that
+/// follows ("Prossimo · S1 · E5"), from Home's last catalog check.
+String? nextEpisodeBadge(String? profileId, HistoryEntry entry) {
+  final hint =
+      NextEpisodeMemory.instance[NextEpisodeMemory.keyOf(profileId, entry)];
+  final season = hint?.season, number = hint?.number;
+  if (hint == null || !hint.exists || season == null || number == null) {
+    return null;
+  }
+  return 'S$season · E$number';
 }
 
 class DiscoverPage extends StatefulWidget {
@@ -133,7 +146,15 @@ class _DiscoverPageState extends State<DiscoverPage> {
           continue;
         }
         _hasNext[key] = next != null;
-        if (next == null) setState(() {});
+        NextEpisodeMemory.instance.put(
+          NextEpisodeMemory.keyOf(key.$1, entry),
+          NextEpisodeHint(
+            exists: next != null,
+            season: next?.season,
+            number: next?.number,
+          ),
+        );
+        setState(() {});
       } catch (_) {
         if (!mounted) break;
         if (generation != _nextGeneration || !_activeReplayKeys.contains(key)) {
@@ -174,7 +195,23 @@ class _DiscoverPageState extends State<DiscoverPage> {
     _hasNext.removeWhere((key, _) => !_activeReplayKeys.contains(key));
     // Episodes may not be indexed after a restart: rebuild them from the
     // history entry so watched series still feed "Serie consigliate".
-    final entries = history.entries;
+    // Newest first: the latest views seed the recommendations.
+    final entries = history.entries
+      ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
+    // Titles already in the history are not recommended again.
+    final historyIds = {
+      for (final e in entries) ...[
+        e.contentId,
+        if (e.seriesKey.isNotEmpty) e.seriesKey,
+      ],
+    };
+    bool inHistory(TmdbItem item) {
+      final c = app.findChannelFor(item, wait: false);
+      return c != null &&
+          (historyIds.contains(c.id) ||
+              (c.seriesKey != null && historyIds.contains(c.seriesKey)));
+    }
+
     final watched = entries
         .map(
           (e) =>
@@ -224,7 +261,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
           if ((!app.kidsMode || app.isKidsContent(c)) &&
               // Partial replays stay visible; only the actual final episode ends the sequence.
               (!replayEpisodeComplete(e) ||
-                  _hasNext[seriesReplayKey(history.profileId, e)] != false))
+                  (_hasNext[seriesReplayKey(history.profileId, e)] ??
+                      NextEpisodeMemory
+                          .instance[NextEpisodeMemory.keyOf(
+                            history.profileId,
+                            e,
+                          )]
+                          ?.exists ??
+                      true)))
             (e, c),
     ];
     for (final (e, c) in started) {
@@ -302,6 +346,20 @@ class _DiscoverPageState extends State<DiscoverPage> {
     final topSeries = available(discover.topSeries);
     final banner = [...topMovies.take(6), ...topSeries.take(4)];
 
+    // Recommendations the playlist can play, not yet seen, not disliked.
+    List<TmdbItem> recommended(List<TmdbItem> items) => items
+        .where(
+          (item) =>
+              app.isAvailable(item) &&
+              app.isTmdbAllowed(item) &&
+              !reactions.disliked.contains(item.key) &&
+              !inHistory(item),
+        )
+        .take(20)
+        .toList();
+    final forYou = recommended(discover.forYou);
+    final forYouSeries = recommended(discover.forYouSeries);
+
     if (DeviceTypeService.isTv) {
       // Same sections as the phone Home (Top 10 with Film / Serie TV switch,
       // per-platform Top 10, recommendations), laid out for the remote.
@@ -311,23 +369,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
         initialHistory: latestHistoryResume(entries, app),
         startedMovies: startedMovies,
         startedSeries: startedSeries,
-        forYou: discover.forYou
-            .where(
-              (item) =>
-                  app.isAvailable(item) &&
-                  app.isTmdbAllowed(item) &&
-                  !reactions.disliked.contains(item.key),
-            )
-            .toList(),
+        forYou: forYou,
         forYouSource: discover.forYouSource,
-        forYouSeries: discover.forYouSeries
-            .where(
-              (item) =>
-                  app.isAvailable(item) &&
-                  app.isTmdbAllowed(item) &&
-                  !reactions.disliked.contains(item.key),
-            )
-            .toList(),
+        forYouSeries: forYouSeries,
         forYouSeriesSource: discover.forYouSeriesSource,
         tops: [
           (
@@ -379,14 +423,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             ),
             _HistoryRow(items: startedSeries),
           ],
-          if (discover.forYou
-              .where(
-                (item) =>
-                    app.isAvailable(item) &&
-                    app.isTmdbAllowed(item) &&
-                    !reactions.disliked.contains(item.key),
-              )
-              .isNotEmpty) ...[
+          if (forYou.isNotEmpty) ...[
             SectionHeader(
               title: 'Film consigliati per te',
               subtitle: 'Perché hai guardato ${discover.forYouSource}',
@@ -396,25 +433,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 size: 20,
               ),
             ),
-            _PosterRow(
-              items: discover.forYou
-                  .where(
-                    (item) =>
-                        app.isAvailable(item) &&
-                        app.isTmdbAllowed(item) &&
-                        !reactions.disliked.contains(item.key),
-                  )
-                  .toList(),
-            ),
+            _PosterRow(items: forYou),
           ],
-          if (discover.forYouSeries
-              .where(
-                (item) =>
-                    app.isAvailable(item) &&
-                    app.isTmdbAllowed(item) &&
-                    !reactions.disliked.contains(item.key),
-              )
-              .isNotEmpty) ...[
+          if (forYouSeries.isNotEmpty) ...[
             SectionHeader(
               title: 'Serie consigliate per te',
               subtitle: 'Perché hai guardato ${discover.forYouSeriesSource}',
@@ -424,16 +445,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 size: 20,
               ),
             ),
-            _PosterRow(
-              items: discover.forYouSeries
-                  .where(
-                    (item) =>
-                        app.isAvailable(item) &&
-                        app.isTmdbAllowed(item) &&
-                        !reactions.disliked.contains(item.key),
-                  )
-                  .toList(),
-            ),
+            _PosterRow(items: forYouSeries),
           ],
           _TopSection(
             title: 'Top 10 della settimana',
@@ -865,8 +877,11 @@ class _HistoryCard extends StatelessWidget {
     );
     final minutesLeft = entry.remainingMovieMinutes;
     final finished = isEpisode && replayEpisodeComplete(entry);
+    final nextCode = finished
+        ? nextEpisodeBadge(context.read<HistoryProvider>().profileId, entry)
+        : null;
     final trailing = finished
-        ? 'Prossimo'
+        ? (nextCode == null ? 'Prossimo' : 'Prossimo · $nextCode')
         : isEpisode
         ? code
         : minutesLeft == null
@@ -887,7 +902,8 @@ class _HistoryCard extends StatelessWidget {
       builder: (image) => HomeLandscapeCard(
         title: title,
         image: image,
-        progress: finished ? 0.0 : progress,
+        // A finished episode is not progress on the next one.
+        progress: finished ? null : progress,
         trailing: trailing,
         onFocus: onFocus,
         onTap: () => finished
@@ -1215,8 +1231,15 @@ class _TvDiscoverState extends State<_TvDiscover> {
   }
 
   /// Episode coordinates or minutes left, plus progress, for the hero banner.
-  static String? _historyNote(ResumeItem resume) {
+  String? _historyNote(ResumeItem resume) {
     final (entry, channel) = resume;
+    if (entry.type != ContentType.movie && replayEpisodeComplete(entry)) {
+      final next = nextEpisodeBadge(
+        context.read<HistoryProvider>().profileId,
+        entry,
+      );
+      return next == null ? 'Prossimo episodio' : 'Prossimo episodio · $next';
+    }
     final parts = <String>[];
     if (entry.type == ContentType.movie) {
       final left = entry.remainingMovieMinutes;

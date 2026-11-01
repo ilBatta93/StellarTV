@@ -352,16 +352,44 @@ class DiscoverProvider extends ChangeNotifier {
           (m) => tmdb.recommendations(m).catchError((_) => <TmdbItem>[]),
         ),
       );
-      final seen = {...disliked, ...found.map((e) => e.key)};
-      final merged = <TmdbItem>[];
-      for (var i = 0; i < 20; i++) {
-        for (final list in recs) {
-          if (i < list.length && seen.add(list[i].key)) merged.add(list[i]);
-        }
-      }
-      return (merged.take(20).toList(), found.first.title);
+      return (
+        rankRecommendations(recs, {...disliked, ...found.map((e) => e.key)}),
+        found.first.title,
+      );
     } catch (_) {
       return null;
     }
   }
+}
+
+/// Merges the recommendation lists of several seed titles. A title suggested
+/// by more seeds ranks first, then by its best position in any list; the
+/// result is long enough to survive the playlist availability filter.
+List<TmdbItem> rankRecommendations(
+  List<List<TmdbItem>> lists,
+  Set<String> exclude, {
+  int limit = 40,
+}) {
+  final hits = <String, int>{};
+  final best = <String, int>{};
+  final items = <String, TmdbItem>{};
+  for (final list in lists) {
+    final inList = <String>{};
+    for (var i = 0; i < list.length; i++) {
+      final item = list[i];
+      if (exclude.contains(item.key) || !inList.add(item.key)) continue;
+      items.putIfAbsent(item.key, () => item);
+      hits[item.key] = (hits[item.key] ?? 0) + 1;
+      if (i < (best[item.key] ?? 1 << 30)) best[item.key] = i;
+    }
+  }
+  final order = {for (final (i, k) in items.keys.indexed) k: i};
+  final keys = items.keys.toList()
+    ..sort((a, b) {
+      final byHits = hits[b]!.compareTo(hits[a]!);
+      if (byHits != 0) return byHits;
+      final byPlace = best[a]!.compareTo(best[b]!);
+      return byPlace != 0 ? byPlace : order[a]!.compareTo(order[b]!);
+    });
+  return [for (final k in keys.take(limit)) items[k]!];
 }

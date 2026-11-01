@@ -46,6 +46,7 @@ import '../widgets/version_picker.dart';
 import '../services/live_variants.dart';
 import '../services/recent_live_channels.dart';
 import '../services/stream_slot_policy.dart';
+import '../services/unattended_playback.dart';
 import '../widgets/player/player_controls.dart';
 import '../widgets/player/player_format.dart';
 import '../widgets/player/player_gestures.dart';
@@ -191,6 +192,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   void initState() {
     super.initState();
     _activePlayers++;
+    UnattendedPlayback.playerOpened();
     _app = context.read<AppProvider>()..setPlaybackActive(true);
     _telemetrySection = FrameTelemetryService.instance.enterSection(
       _isLive ? 'player diretta' : 'player',
@@ -277,6 +279,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   /// is the visible page (option panels opened above it get their keys).
   KeyEventResult _onEarlyKey(KeyEvent event) {
     if (!mounted || !DeviceTypeService.isTv) return KeyEventResult.ignored;
+    UnattendedPlayback.userActed();
     final route = _route;
     if (route != null && !route.isCurrent) return KeyEventResult.ignored;
     final key = event.logicalKey;
@@ -1332,9 +1335,9 @@ class _PlayerScreenState extends State<PlayerScreen>
       _outroActive = true;
       _outroCountdown = 5;
       _outroTimer?.cancel();
-      if (_settings?.autoNextEpisode == true && _outroVerified) {
+      if (_autoNext && _outroVerified) {
         _outroTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-          if (!mounted || _settings?.autoNextEpisode != true) return t.cancel();
+          if (!mounted || !_autoNext) return t.cancel();
           final current = _session;
           if (current == null ||
               !current.value.isPlaying ||
@@ -1344,7 +1347,7 @@ class _PlayerScreenState extends State<PlayerScreen>
           }
           if (_outroCountdown <= 1) {
             t.cancel();
-            playNextEpisode();
+            _playNext(completeCurrent: _outroVerified, automatic: true);
           } else {
             setState(() => _outroCountdown--);
           }
@@ -1368,9 +1371,18 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void playNextEpisode() => _playNext(completeCurrent: _outroVerified);
 
-  Future<void> _playNext({bool completeCurrent = false}) async {
+  /// Autoplay is on and has not yet run [UnattendedPlayback.maxAutoAdvances]
+  /// episodes in a row without the viewer.
+  bool get _autoNext =>
+      _settings?.autoNextEpisode == true && UnattendedPlayback.mayAdvance;
+
+  Future<void> _playNext({
+    bool completeCurrent = false,
+    bool automatic = false,
+  }) async {
     final next = _next;
     if (next == null || _advancing) return;
+    if (!automatic) UnattendedPlayback.userActed();
     _advancing = true;
     _outroTimer?.cancel();
     _resumeTimer?.cancel();
@@ -1393,6 +1405,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
     if (!mounted) return;
     final entry = _history.entryFor(next.id);
+    if (automatic) UnattendedPlayback.autoAdvanced();
     playChannel(
       context,
       next,
@@ -1700,7 +1713,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     // Netflix-style: at the end of an episode go straight to the next one.
     if (!_isLive &&
-        settings.autoNextEpisode &&
+        _autoNext &&
         v.isEnded &&
         _next != null &&
         !_nextDismissed &&
@@ -1710,11 +1723,11 @@ class _PlayerScreenState extends State<PlayerScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted &&
             !_nextDismissed &&
-            _settings?.autoNextEpisode == true &&
+            _autoNext &&
             _session?.value.isEnded == true &&
             ForegroundPolicy.instance.active &&
             _route?.isCurrent == true) {
-          _playNext();
+          _playNext(automatic: true);
         }
       });
     }
@@ -1863,25 +1876,33 @@ class _PlayerScreenState extends State<PlayerScreen>
       if (!landed && !gaveUp) return;
       _pendingResume = null;
     }
+    // Inside the known end credits the title is finished, even when the TV
+    // switches off before the last second (a viewer who fell asleep).
+    final outro = _effectiveSegments.outro;
+    final saved =
+        outro != null &&
+            outro.start * 2 >= v.duration &&
+            actualPosition >= outro.start
+        ? v.duration
+        : actualPosition;
     await _progressWriter.save(() async {
       final playingSample = periodic && v.isPlaying;
       final wroteHistory = await _history.updatePosition(
         _channel.id,
-        actualPosition,
+        saved,
         v.duration,
         periodic: playingSample,
       );
       if (_settings?.resumePlayback != true) return;
       if (playingSample && !wroteHistory) return;
-      final remaining = v.duration - actualPosition;
+      final remaining = v.duration - saved;
       final keep =
-          actualPosition > Duration.zero &&
-          remaining > const Duration(minutes: 1);
-      final stored = keep ? actualPosition.inMilliseconds : null;
+          saved > Duration.zero && remaining > const Duration(minutes: 1);
+      final stored = keep ? saved.inMilliseconds : null;
       if (_resumePrefsSynced && stored == _resumePrefsMs) return;
       await _settingsService.saveResumePosition(
         _channel.url,
-        keep ? actualPosition : null,
+        keep ? saved : null,
       );
       _resumePrefsSynced = true;
       _resumePrefsMs = stored;
@@ -1909,6 +1930,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   void _onInteraction() {
+    UnattendedPlayback.userActed();
     if (!_controlsVisible) setState(() => _controlsVisible = true);
     _scheduleHide();
   }
@@ -2352,7 +2374,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _settings?.autoNextEpisode == true && _outroVerified
+                    _autoNext && _outroVerified
                         ? 'Prossimo episodio tra $_outroCountdown...'
                         : 'Prossimo episodio disponibile',
                     style: TextStyle(
@@ -2373,7 +2395,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                     ),
                   ),
                   const SizedBox(height: 10),
-                  if (_settings?.autoNextEpisode == true && _outroVerified)
+                  if (_autoNext && _outroVerified)
                     LinearProgressIndicator(
                       value: (5 - _outroCountdown) / 5,
                       color: AppColors.primary,

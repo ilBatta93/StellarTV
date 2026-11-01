@@ -7,6 +7,7 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/history_entry.dart';
 import '../models/watch_completion_policy.dart';
+import '../services/next_episode_memory.dart';
 import '../services/player_settings_service.dart';
 import 'app_provider.dart';
 import 'sync_provider.dart';
@@ -350,6 +351,13 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _loadLocal() async {
     final local = await _sync.loadLocalHistory(profileId: _profileId);
+    // Ready before the first Home build: finished titles must not flash in
+    // "Continua a guardare" while settings and catalog checks catch up.
+    await NextEpisodeMemory.instance.load();
+    final prefs = await SharedPreferences.getInstance();
+    _watchedPercent = WatchCompletionPolicy.normalize(
+      prefs.get(WatchCompletionPolicy.key),
+    );
     final entries = <HistoryEntry>[];
     _deleted.clear();
     _watchEvents.clear();
