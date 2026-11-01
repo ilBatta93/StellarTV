@@ -98,6 +98,7 @@ class PosterImage extends StatelessWidget {
               TvRenderPolicy.imagePixelRatio(
                 isTv: DeviceTypeService.isTv,
                 devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                memoryPressure: TvImageMemoryGuard.reducedRendering.value,
               );
           final limit = maxDecodeWidth;
           final decodeLimit = limit != null && limit > 0

@@ -1752,26 +1752,31 @@ class _TvRowTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The subtitle shares the title line: TvHomeLayout reserves one line for
+    // the heading, and a second one pushed the focused poster off screen.
     return Padding(
       padding: const EdgeInsets.fromLTRB(32, 14, 32, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
         children: [
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: 'Sora',
-              color: AppColors.textPrimary,
-              fontSize: 26,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
+          Flexible(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Sora',
+                color: AppColors.textPrimary,
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
             ),
           ),
-          if (subtitle != null && subtitle!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
+          if (subtitle != null && subtitle!.isNotEmpty) ...[
+            const SizedBox(width: 18),
+            Flexible(
               child: Text(
                 subtitle!,
                 maxLines: 1,
@@ -1779,11 +1784,12 @@ class _TvRowTitle extends StatelessWidget {
                 style: TextStyle(
                   fontFamily: 'Sora',
                   color: AppColors.textSecondary.withValues(alpha: 0.85),
-                  fontSize: 12.5,
+                  fontSize: 15,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ),
+          ],
         ],
       ),
     );

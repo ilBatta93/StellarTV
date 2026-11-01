@@ -21,6 +21,27 @@ void main() {
     'Touch unchanged',
   );
   check(
+    TvRenderPolicy.imagePixelRatio(isTv: true, devicePixelRatio: 2) == 2,
+    'TV decodes at physical pixels',
+  );
+  check(
+    TvRenderPolicy.imagePixelRatio(isTv: true, devicePixelRatio: 3) == 2,
+    'TV pixel ratio capped',
+  );
+  check(
+    TvRenderPolicy.imagePixelRatio(
+          isTv: true,
+          devicePixelRatio: 2,
+          memoryPressure: true,
+        ) ==
+        1,
+    'TV pressure decodes at logical pixels',
+  );
+  check(
+    TvRenderPolicy.imagePixelRatio(isTv: false, devicePixelRatio: 3) == 3,
+    'Touch pixel ratio unchanged',
+  );
+  check(
     TvRenderPolicy.rowCacheFraction(memoryPressure: true) == 0,
     'Pressure neighbour dropped',
   );

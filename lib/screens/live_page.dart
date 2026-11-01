@@ -239,8 +239,12 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     if (!widget.active) {
       _stopPreview();
     } else if (!oldWidget.active) {
-      final channel = _selectedChannel;
-      if (channel != null) _select(channel, _selectedProgram);
+      // TV: opening the tab always previews the "Riprendi" channel.
+      final resume = DeviceTypeService.isTv ? _resumeChannel(_app) : null;
+      final channel = resume ?? _selectedChannel;
+      if (channel != null) {
+        _select(channel, resume == null ? _selectedProgram : null);
+      }
     }
   }
 
@@ -327,6 +331,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   }
 
   void _select(Channel channel, [EpgProgram? program]) {
+    _firstChannelStandIn = false;
     final same = _selectedChannel?.id == channel.id;
     if (!same) context.read<EpgProvider>().reopenShort(channel);
     setState(() {
@@ -1083,8 +1088,22 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   final _recentLive = RecentLiveChannels.instance;
   final _variants = LiveVariants.instance;
   final _resumeFocus = TvEntryFocusNode('live-resume');
+
+  /// The first channel previewed only because the recent list was not
+  /// loaded yet: the "Riprendi" channel replaces it once known.
+  bool _firstChannelStandIn = false;
+
   void _recentChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final resume = DeviceTypeService.isTv ? _resumeChannel(_app) : null;
+    if (_firstChannelStandIn &&
+        widget.active &&
+        resume != null &&
+        resume.id != _selectedChannel?.id) {
+      _select(resume);
+      return;
+    }
+    setState(() {});
   }
 
   /// Grouping a channel's versions gives its row another key: the focus
@@ -1251,6 +1270,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && widget.active && _selectedChannel == null) {
           _select(first);
+          _firstChannelStandIn = resume == null;
         }
       });
     }

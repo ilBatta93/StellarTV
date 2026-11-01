@@ -32,11 +32,7 @@ class TvDetailBackdrop extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final pixelRatio = TvRenderPolicy.imagePixelRatio(
-      isTv: true,
-      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-    );
-    final physical = (width * pixelRatio).round();
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
@@ -53,6 +49,14 @@ class TvDetailBackdrop extends StatelessWidget {
                     final cap = TvRenderPolicy.backdropDecodeLimit(
                       memoryPressure: pressure,
                     );
+                    final physical =
+                        (width *
+                                TvRenderPolicy.imagePixelRatio(
+                                  isTv: true,
+                                  devicePixelRatio: devicePixelRatio,
+                                  memoryPressure: pressure,
+                                ))
+                            .round();
                     final decodeWidth = physical > 0 && physical < cap
                         ? physical
                         : cap;

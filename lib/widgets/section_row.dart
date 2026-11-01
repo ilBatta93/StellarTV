@@ -135,8 +135,12 @@ class HorizontalRow extends StatelessWidget {
                       final cardBox = target;
                       final pageBox =
                           outer.context.findRenderObject()! as RenderBox;
+                      // The focused card grows by TvFocusable's 1.06 scale:
+                      // reveal the grown frame, not the layout box.
+                      final grow = cardBox.size.height * 0.03 + 6;
                       final cardRect =
-                          cardBox.localToGlobal(Offset.zero) & cardBox.size;
+                          (cardBox.localToGlobal(Offset.zero) & cardBox.size)
+                              .inflate(grow);
                       final pageRect =
                           pageBox.localToGlobal(Offset.zero) & pageBox.size;
                       var delta = 0.0;

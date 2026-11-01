@@ -9,7 +9,7 @@
 - In diretta sulla TV audio e video restano allineati anche con soundbar e TV che aggiungono ritardo all'audio.
 - In diretta sulla TV, quando apri o cambi canale, una fascia mostra il programma in corso con orari e avanzamento e quello successivo; il tasto Info la richiama.
 - In diretta puoi scegliere il canale con i tasti numerici del telecomando.
-- Sulla TV la Diretta si apre con la riga «Riprendi», che riporta all'ultimo canale guardato.
+- Sulla TV la Diretta si apre con la riga «Riprendi», che riporta all'ultimo canale guardato, e l'anteprima parte sempre da quel canale.
 - Le copie dello stesso canale in qualità diverse occupano una sola riga della guida: parte la versione Full HD o quella scelta l'ultima volta. Tieni premuto OK sulla riga, o usa «Versione» nel player, per cambiarla.
 - Se un canale manda solo l'audio o un video che il dispositivo non supporta, lo schermo lo spiega invece di restare nero, anche nell'anteprima della guida.
 - Nel player della TV il pulsante selezionato mostra il suo nome.
@@ -36,3 +36,5 @@
 - Un episodio o un titolo arrivato ai titoli di coda conta come visto anche se la TV si spegne prima dell'ultimo secondo.
 - I consigliati non ripropongono titoli che hai già visto o iniziato e mettono prima quelli suggeriti da più titoli che hai guardato.
 - Durante la riproduzione i comandi del player rispondono più rapidi: le pagine sotto il player non si ridisegnano più ogni pochi secondi.
+- Sulla TV locandine e sfondi sono più nitidi, soprattutto sugli schermi Full HD e 4K.
+- Sulla TV la locandina selezionata nei consigliati della Home e in «Titoli simili» resta tutta sullo schermo.
