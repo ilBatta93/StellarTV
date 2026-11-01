@@ -3,3 +3,6 @@
 - I pannelli del player mostrano una sola maniglia in cima e sulla TV il pulsante «Effetti» mostra il nome per intero.
 - Nuova voce «Righe della Home» in Impostazioni: scegli quali righe vedere in Home e in che ordine, anche col telecomando.
 - Diretta e cataloghi ricordano l'ordinamento scelto; la Diretta riparte dall'ultima categoria aperta.
+- Impostazioni della Diretta: numeri dei canali nella guida e anteprima video che si può spegnere.
+- Ogni catalogo on demand può avere la sua disposizione; il cuore sulle locandine si può limitare ai preferiti.
+- Uno schizzo nelle impostazioni mostra subito forma e quantità delle locandine della Home; la soglia «visto» è passata in Riproduzione.

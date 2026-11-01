@@ -44,6 +44,11 @@ void main() {
       'ui_home_row_order',
       'ui_home_hidden_rows',
       'ui_scale',
+      'ui_show_favorite_heart',
+      'ui_live_numbers',
+      'ui_live_preview',
+      'ui_catalog_view_movie',
+      'ui_catalog_view_series',
     ]) {
       expect(SyncService.isSyncedKey(key), isTrue, reason: key);
     }

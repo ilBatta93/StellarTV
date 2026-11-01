@@ -723,9 +723,10 @@ class _CatalogPageState extends State<CatalogPage> {
               onChanged: _onQuery,
               sort: _sort,
               onSort: _setSort,
-              viewMode: context.watch<UiSettings>().viewMode,
-              onViewMode: (mode) =>
-                  context.read<UiSettings>().setCatalogViewMode(mode),
+              viewMode: context.watch<UiSettings>().viewModeFor(widget.type),
+              onViewMode: (mode) => context
+                  .read<UiSettings>()
+                  .setCatalogViewMode(mode, type: widget.type),
               scaffoldKey: _scaffoldKey,
               genresOnly: true,
               filters: (_) => _buildTvFilters(app, groups),
@@ -756,19 +757,23 @@ class _CatalogPageState extends State<CatalogPage> {
                     builder: (context) {
                       final ui = context.watch<UiSettings>();
                       return IconButton(
-                        tooltip: 'Disposizione: ${ui.viewMode.label}',
-                        icon: Icon(ui.viewMode.icon),
+                        tooltip:
+                            'Disposizione: ${ui.viewModeFor(widget.type).label}',
+                        icon: Icon(ui.viewModeFor(widget.type).icon),
                         onPressed: () async {
                           final chosen = await pickOption<CatalogViewMode>(
                             context,
                             title: 'Disposizione',
                             options: CatalogViewMode.values,
-                            current: ui.viewMode,
+                            current: ui.viewModeFor(widget.type),
                             label: (m) => m.label,
                             detail: (m) => m.description,
                           );
                           if (chosen != null) {
-                            await ui.setCatalogViewMode(chosen);
+                            await ui.setCatalogViewMode(
+                              chosen,
+                              type: widget.type,
+                            );
                           }
                         },
                       );
@@ -1011,10 +1016,10 @@ class _CatalogPageState extends State<CatalogPage> {
   }
 
   /// Grid (normal or compact) or list, following the layout picker in the
-  /// toolbar. The choice is shared by every catalog and remembered.
+  /// toolbar. Film and Serie TV may each keep their own choice.
   Widget _buildEntries(AppProvider app, List<CatalogEntry> entries) {
     final ui = context.watch<UiSettings>();
-    if (ui.viewMode == CatalogViewMode.list) {
+    if (ui.viewModeFor(widget.type) == CatalogViewMode.list) {
       return ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         itemCount: entries.length,
@@ -1038,7 +1043,7 @@ class _CatalogPageState extends State<CatalogPage> {
         },
       );
     }
-    if (ui.viewMode == CatalogViewMode.landscape) {
+    if (ui.viewModeFor(widget.type) == CatalogViewMode.landscape) {
       final tv = DeviceTypeService.isTv;
       final delegate = SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: (tv ? 380 : 340) * (ui.gridMaxExtent / 140),
@@ -1075,11 +1080,11 @@ class _CatalogPageState extends State<CatalogPage> {
     }
     final dense =
         ui.compact ||
-        ui.viewMode == CatalogViewMode.compact ||
-        ui.viewMode == CatalogViewMode.spotlight;
+        ui.viewModeFor(widget.type) == CatalogViewMode.compact ||
+        ui.viewModeFor(widget.type) == CatalogViewMode.spotlight;
     final delegate = channelGridDelegate(
       widget.type,
-      maxExtent: ui.viewMode == CatalogViewMode.compact
+      maxExtent: ui.viewModeFor(widget.type) == CatalogViewMode.compact
           ? ui.gridMaxExtent * 0.82
           : ui.gridMaxExtent,
       compact: dense,
@@ -1091,7 +1096,9 @@ class _CatalogPageState extends State<CatalogPage> {
       itemCount: entries.length,
       itemBuilder: (context, i) {
         final item = _gridItem(app, entries[i], i);
-        if (ui.viewMode != CatalogViewMode.spotlight) return item;
+        if (ui.viewModeFor(widget.type) != CatalogViewMode.spotlight) {
+          return item;
+        }
         // The header follows whichever poster has the remote focus.
         return Focus(
           canRequestFocus: false,
@@ -1105,7 +1112,7 @@ class _CatalogPageState extends State<CatalogPage> {
         );
       },
     );
-    if (ui.viewMode != CatalogViewMode.spotlight) return grid;
+    if (ui.viewModeFor(widget.type) != CatalogViewMode.spotlight) return grid;
     final current = _spotlight.value;
     if (current == null ||
         !entries.any(

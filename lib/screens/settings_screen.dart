@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +11,7 @@ import '../widgets/catalog_section_status.dart';
 
 import '../providers/app_provider.dart';
 import '../providers/ui_settings.dart';
+import '../models/content_type.dart';
 import '../models/home_layout_preferences.dart';
 import '../models/watch_completion_policy.dart';
 import '../services/playlist_refresh_service.dart';
@@ -181,6 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SettingsSection(
           title: 'Home',
           children: [
+            _HomePosterPreview(ui: ui),
             SettingsValueTile(
               icon: Icons.view_day_outlined,
               title: 'Righe della Home',
@@ -189,18 +193,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => Navigator.of(
                 context,
               ).push(MaterialPageRoute(builder: (_) => const HomeRowsScreen())),
-            ),
-            SettingsValueTile(
-              icon: Icons.check_circle_outline_rounded,
-              title: 'Soglia contenuto visto',
-              value: '${ui.watchedPercent}%',
-              onTap: () => pick<int>(
-                'Soglia contenuto visto',
-                WatchCompletionPolicy.options,
-                ui.watchedPercent,
-                (v) => '$v%',
-                ui.setWatchedPercent,
-              ),
             ),
             SettingsValueTile(
               icon: Icons.crop_portrait_rounded,
@@ -336,20 +328,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: 'Cataloghi',
           description: 'Aspetto dei contenuti.',
           children: [
-            SettingsValueTile(
-              icon: ui.viewMode.icon,
-              title: 'Disposizione delle schede',
-              subtitle: ui.viewMode.description,
-              value: ui.viewMode.label,
-              onTap: () => pick<CatalogViewMode>(
-                'Disposizione delle schede',
-                CatalogViewMode.values,
-                ui.viewMode,
-                (m) => m.label,
-                ui.setCatalogViewMode,
-                detail: (m) => m.description,
+            for (final (type, title) in const [
+              (ContentType.movie, 'Disposizione Film'),
+              (ContentType.series, 'Disposizione Serie TV'),
+            ])
+              SettingsValueTile(
+                icon: ui.viewModeFor(type).icon,
+                title: title,
+                subtitle: ui.viewModeFor(type).description,
+                value: ui.viewModeFor(type).label,
+                onTap: () => pick<CatalogViewMode>(
+                  title,
+                  CatalogViewMode.values,
+                  ui.viewModeFor(type),
+                  (m) => m.label,
+                  (m) => ui.setCatalogViewMode(m, type: type),
+                  detail: (m) => m.description,
+                ),
               ),
-            ),
             SettingsValueTile(
               icon: Icons.photo_size_select_large_rounded,
               title: 'Dimensione dei poster',
@@ -383,6 +379,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: ui.setShowQuality,
             ),
             SettingsSwitchTile(
+              icon: Icons.favorite_border_rounded,
+              title: 'Cuore su tutte le locandine',
+              subtitle: 'Spento, resta solo sui titoli già nei preferiti',
+              value: ui.favoriteHeart,
+              onChanged: ui.setFavoriteHeart,
+            ),
+            SettingsSwitchTile(
               icon: Icons.image_outlined,
               title: 'Mostra anteprime',
               subtitle: 'Locandine e loghi nei cataloghi',
@@ -395,6 +398,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: 'Righe più fitte per vedere più contenuti',
               value: ui.compact,
               onChanged: ui.setCompact,
+            ),
+          ],
+        ),
+        SettingsSection(
+          title: 'Diretta',
+          description: 'Guida dei canali sulla TV.',
+          children: [
+            SettingsSwitchTile(
+              icon: Icons.pin_outlined,
+              title: 'Numeri dei canali',
+              subtitle: "Gli stessi dei tasti numerici, nell'ordine predefinito di una categoria",
+              value: ui.liveNumbers,
+              onChanged: ui.setLiveNumbers,
+            ),
+            SettingsSwitchTile(
+              icon: Icons.smart_display_outlined,
+              title: 'Anteprima video',
+              subtitle:
+                  'Il canale selezionato parte accanto alla guida. Spenta, '
+                  'non usa connessioni finché non premi OK',
+              value: ui.livePreview,
+              onChanged: ui.setLivePreview,
             ),
           ],
         ),
@@ -677,6 +702,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const PlayerSettingsScreen()),
             ),
+          ),
+          SettingsValueTile(
+            icon: Icons.check_circle_outline_rounded,
+            title: 'Soglia contenuto visto',
+            subtitle: 'Da quale percentuale un titolo conta come visto',
+            value: '${context.watch<UiSettings>().watchedPercent}%',
+            onTap: () async {
+              final ui = context.read<UiSettings>();
+              final chosen = await pickOption<int>(
+                context,
+                title: 'Soglia contenuto visto',
+                options: WatchCompletionPolicy.options,
+                current: ui.watchedPercent,
+                label: (v) => '$v%',
+              );
+              if (chosen != null) await ui.setWatchedPercent(chosen);
+            },
           ),
           SettingsValueTile(
             icon: Icons.history_rounded,
@@ -1009,6 +1051,142 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 /// Row of colour dots: pick the accent directly with the remote.
+/// Sketch of the two Home rows with the current shape, density and titles:
+/// the effect of each choice shows at once, without loading any image.
+class _HomePosterPreview extends StatelessWidget {
+  const _HomePosterPreview({required this.ui});
+
+  final UiSettings ui;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _strip(
+            'Consigliati e Top',
+            ui.homePosterShape,
+            ui.homePosterDensity,
+            ui.homeTitles,
+            progress: false,
+          ),
+          const SizedBox(height: 12),
+          _strip(
+            'Viste di recente',
+            ui.homeRecentShape,
+            ui.homeRecentDensity,
+            ui.homeRecentTitles,
+            progress: true,
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _strip(
+    String label,
+    HomePosterShape shape,
+    HomeDensity density,
+    bool titles, {
+    required bool progress,
+  }) {
+    final tv = DeviceTypeService.isTv;
+    final visible = density.visibleCards(tv);
+    final count = visible == 0 ? (tv ? 5.0 : 2.5) : visible;
+    const gap = 8.0;
+    const maxHeight = 72.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+        ),
+        const SizedBox(height: 6),
+        LayoutBuilder(
+          builder: (context, box) {
+            final width = math.min(
+              (box.maxWidth - gap * (count - 1)) / count,
+              maxHeight * shape.aspectRatio,
+            );
+            final cards = math.max(1, (box.maxWidth / (width + gap)).ceil());
+            return ClipRect(
+              child: SizedBox(
+                height: width / shape.aspectRatio + (titles ? 14 : 0),
+                child: OverflowBox(
+                  alignment: Alignment.centerLeft,
+                  maxWidth: double.infinity,
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < cards; i++) ...[
+                        if (i > 0) const SizedBox(width: gap),
+                        _card(width, shape, titles, progress, i),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _card(
+    double width,
+    HomePosterShape shape,
+    bool titles,
+    bool progress,
+    int index,
+  ) => SizedBox(
+    width: width,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: width,
+          height: width / shape.aspectRatio,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.primary.withValues(
+                  alpha: (0.35 - index * 0.04).clamp(0.08, 0.35),
+                ),
+                AppColors.card,
+              ],
+            ),
+          ),
+          alignment: Alignment.bottomLeft,
+          padding: const EdgeInsets.all(4),
+          child: progress
+              ? FractionallySizedBox(
+                  widthFactor: 0.25 + (index % 3) * 0.2,
+                  child: Container(height: 3, color: AppColors.primary),
+                )
+              : null,
+        ),
+        if (titles) ...[
+          const SizedBox(height: 6),
+          Container(
+            width: width * 0.7,
+            height: 6,
+            decoration: BoxDecoration(
+              color: AppColors.textMuted.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
 class _AccentPalette extends StatelessWidget {
   const _AccentPalette({
     required this.current,

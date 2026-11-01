@@ -210,8 +210,11 @@ void main() {
           await tester.pump();
           await tester.pumpWidget(mount(const SettingsScreen()));
           await tester.pump(const Duration(seconds: 1));
-          await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-          await tester.pump(const Duration(milliseconds: 500));
+          // The threshold lives in "Riproduzione", next to the history.
+          for (var i = 0; i < 2; i++) {
+            await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+            await tester.pump(const Duration(milliseconds: 500));
+          }
           final threshold = find.text('Soglia contenuto visto');
           final pane = find.byType(ListView).last;
           for (var i = 0; i < 6 && !tester.any(threshold); i++) {

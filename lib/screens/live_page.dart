@@ -14,6 +14,7 @@ import '../services/catalog_builder.dart';
 import '../services/catalog_shelf.dart';
 import '../services/catalog_sort.dart' show sortLiveBackground;
 import '../services/catalog_view_memory.dart';
+import '../providers/ui_settings.dart';
 import '../services/live_variants.dart';
 import '../services/recent_live_channels.dart';
 import '../services/xtream_service.dart';
@@ -349,6 +350,12 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
       _selectedProgram = program;
     });
     if (same && _preview != null) return;
+    // Preview turned off: the pane shows the channel logo, no connection.
+    if (!context.read<UiSettings>().livePreview) {
+      _previewWaiting = false;
+      _stopPreview();
+      return;
+    }
     if (_previewMustWait) {
       _previewWaiting = true;
       _stopPreview();
@@ -669,6 +676,14 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
         : channels[selectedIndex];
     final program =
         _selectedProgram ?? (selected == null ? null : epg.nowFor(selected));
+    // Numbers match the remote digits in the player, which count inside the
+    // channel's own category in source order: shown only for that list.
+    final numbered =
+        context.watch<UiSettings>().liveNumbers &&
+        _category != null &&
+        !showWatched &&
+        (_sort == null || _sort == CatalogSort.provider) &&
+        _query.isEmpty;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
       child: LayoutBuilder(
@@ -809,6 +824,23 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                                               ),
                                               child: Row(
                                                 children: [
+                                                  if (numbered) ...[
+                                                    SizedBox(
+                                                      width: 30,
+                                                      child: Text(
+                                                        '${i + 1}',
+                                                        textAlign:
+                                                            TextAlign.right,
+                                                        style: const TextStyle(
+                                                          color: AppColors
+                                                              .textMuted,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                  ],
                                                   if (c.logo.isNotEmpty) ...[
                                                     _channelLogo(c, size: 28),
                                                     const SizedBox(width: 8),
@@ -901,13 +933,20 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: _preview == null
-                                  ? const ColoredBox(
+                                  ? ColoredBox(
                                       color: AppColors.surface,
                                       child: Center(
-                                        child: Icon(
-                                          Icons.live_tv_rounded,
-                                          size: 42,
-                                        ),
+                                        child:
+                                            selected != null &&
+                                                selected.logo.isNotEmpty &&
+                                                !context
+                                                    .read<UiSettings>()
+                                                    .livePreview
+                                            ? _channelLogo(selected, size: 96)
+                                            : const Icon(
+                                                Icons.live_tv_rounded,
+                                                size: 42,
+                                              ),
                                       ),
                                     )
                                   : ListenableBuilder(

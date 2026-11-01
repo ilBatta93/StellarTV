@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme/app_theme.dart';
+import '../models/content_type.dart';
 import '../models/multiview_layout.dart';
 import '../models/home_layout_preferences.dart';
 import '../models/watch_completion_policy.dart';
@@ -61,6 +62,8 @@ class UiSettings extends ChangeNotifier {
   static const _animationsKey = 'ui_animations';
   static const _compactKey = 'ui_compact';
   static const _viewModeKey = 'ui_catalog_view';
+  static const _viewModeMovieKey = 'ui_catalog_view_movie';
+  static const _viewModeSeriesKey = 'ui_catalog_view_series';
   static const sectionOrderKey = 'ui_section_order';
   static const startSectionKey = 'ui_start_section';
   static const multiViewLayoutKey = 'ui_multiview_layout';
@@ -69,6 +72,9 @@ class UiSettings extends ChangeNotifier {
   static const _qualityKey = 'ui_show_quality';
   static const _titlesKey = 'ui_show_titles';
   static const _focusGlowKey = 'ui_focus_glow';
+  static const _favoriteHeartKey = 'ui_show_favorite_heart';
+  static const _liveNumbersKey = 'ui_live_numbers';
+  static const _livePreviewKey = 'ui_live_preview';
 
   static const homeKeys = {
     'ui_home_shape',
@@ -266,11 +272,16 @@ class UiSettings extends ChangeNotifier {
   bool _animations = true;
   bool _compact = false;
   CatalogViewMode _viewMode = CatalogViewMode.grid;
+  CatalogViewMode? _viewModeMovie;
+  CatalogViewMode? _viewModeSeries;
   String _textScale = 'normale';
   bool _showRatings = true;
   bool _showQuality = true;
   bool _showTitles = true;
   bool _focusGlow = true;
+  bool _favoriteHeart = true;
+  bool _liveNumbers = false;
+  bool _livePreview = true;
   bool _loaded = false;
   List<AppSection> _sectionOrder = List.of(AppSection.values);
   AppSection _startSection = AppSection.home;
@@ -282,6 +293,14 @@ class UiSettings extends ChangeNotifier {
   bool get animations => _animations;
   bool get compact => _compact;
   CatalogViewMode get viewMode => _viewMode;
+
+  /// Film and Serie TV may keep their own layout (picked from the catalog
+  /// toolbar); otherwise they follow the common one.
+  CatalogViewMode viewModeFor(ContentType type) => switch (type) {
+    ContentType.movie => _viewModeMovie ?? _viewMode,
+    ContentType.series || ContentType.anime => _viewModeSeries ?? _viewMode,
+    ContentType.live => _viewMode,
+  };
   bool get loaded => _loaded;
   String get textScale => _textScale;
   double get textScaleFactor => textScales[_textScale] ?? 1.0;
@@ -289,6 +308,15 @@ class UiSettings extends ChangeNotifier {
   bool get showQuality => _showQuality;
   bool get showTitles => _showTitles;
   bool get focusGlow => _focusGlow;
+
+  /// Off: the heart shows only on titles already in the favorites.
+  bool get favoriteHeart => _favoriteHeart;
+
+  /// Diretta guide: channel numbers as typed with the remote digits.
+  bool get liveNumbers => _liveNumbers;
+
+  /// Diretta: the selected channel plays muted beside the guide.
+  bool get livePreview => _livePreview;
 
   /// Changes whenever any saved look-and-feel preference changes: used to
   /// push the new values to the cloud at once.
@@ -300,6 +328,8 @@ class UiSettings extends ChangeNotifier {
     _animations,
     _compact,
     _viewMode.name,
+    _viewModeMovie?.name,
+    _viewModeSeries?.name,
     _sectionOrder.map((e) => e.id).join(','),
     _startSection.id,
     _multiViewLayout.name,
@@ -308,6 +338,9 @@ class UiSettings extends ChangeNotifier {
     _showQuality,
     _showTitles,
     _focusGlow,
+    _favoriteHeart,
+    _liveNumbers,
+    _livePreview,
     homePosterShape.name,
     homeRecentShape.name,
     homePosterDensity.name,
@@ -338,6 +371,10 @@ class UiSettings extends ChangeNotifier {
     _viewMode =
         CatalogViewMode.values.asNameMap()[prefs.getString(_viewModeKey)] ??
         CatalogViewMode.grid;
+    _viewModeMovie = CatalogViewMode.values
+        .asNameMap()[prefs.get(_viewModeMovieKey)];
+    _viewModeSeries = CatalogViewMode.values
+        .asNameMap()[prefs.get(_viewModeSeriesKey)];
     _sectionOrder = _parseSectionOrder(prefs.getStringList(sectionOrderKey));
     _startSection =
         _parseSection(prefs.getString(startSectionKey)) ?? AppSection.home;
@@ -350,6 +387,9 @@ class UiSettings extends ChangeNotifier {
     _showQuality = prefs.getBool(_qualityKey) ?? true;
     _showTitles = prefs.getBool(_titlesKey) ?? true;
     _focusGlow = prefs.getBool(_focusGlowKey) ?? true;
+    _favoriteHeart = prefs.getBool(_favoriteHeartKey) ?? true;
+    _liveNumbers = prefs.getBool(_liveNumbersKey) ?? false;
+    _livePreview = prefs.getBool(_livePreviewKey) ?? true;
     homePosterShape =
         HomePosterShape.values.asNameMap()[prefs.get('ui_home_shape')] ??
         HomePosterShape.portrait;
@@ -499,10 +539,34 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setCatalogViewMode(CatalogViewMode value) async {
-    if (value == _viewMode) return;
-    _viewMode = value;
-    await _save(_viewModeKey, value.name);
+  /// Without [type] the layout becomes the common one for every catalog
+  /// and the Film / Serie TV choices are cleared.
+  Future<void> setCatalogViewMode(
+    CatalogViewMode value, {
+    ContentType? type,
+  }) async {
+    switch (type) {
+      case ContentType.movie:
+        if (_viewModeMovie == value) return;
+        _viewModeMovie = value;
+        await _save(_viewModeMovieKey, value.name);
+      case ContentType.series || ContentType.anime:
+        if (_viewModeSeries == value) return;
+        _viewModeSeries = value;
+        await _save(_viewModeSeriesKey, value.name);
+      case ContentType.live || null:
+        if (value == _viewMode &&
+            _viewModeMovie == null &&
+            _viewModeSeries == null) {
+          return;
+        }
+        _viewMode = value;
+        _viewModeMovie = _viewModeSeries = null;
+        await _save(_viewModeKey, value.name);
+        // A value (not a removed key) also clears the cloud copy.
+        await _save(_viewModeMovieKey, 'common');
+        await _save(_viewModeSeriesKey, 'common');
+    }
     notifyListeners();
   }
 
@@ -531,6 +595,24 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setFavoriteHeart(bool value) async {
+    _favoriteHeart = value;
+    await _save(_favoriteHeartKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setLiveNumbers(bool value) async {
+    _liveNumbers = value;
+    await _save(_liveNumbersKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setLivePreview(bool value) async {
+    _livePreview = value;
+    await _save(_livePreviewKey, value);
+    notifyListeners();
+  }
+
   Future<void> setFocusGlow(bool value) async {
     _focusGlow = value;
     await _save(_focusGlowKey, value);
@@ -547,11 +629,16 @@ class UiSettings extends ChangeNotifier {
       _animationsKey,
       _compactKey,
       _viewModeKey,
+      _viewModeMovieKey,
+      _viewModeSeriesKey,
       _textScaleKey,
       _ratingsKey,
       _qualityKey,
       _titlesKey,
       _focusGlowKey,
+      _favoriteHeartKey,
+      _liveNumbersKey,
+      _livePreviewKey,
     ]) {
       await prefs.remove(key);
     }

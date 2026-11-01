@@ -65,7 +65,9 @@ class ChannelCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // Subscribes to the poster preferences; [_card] reads them.
     context.select<UiSettings, String>(
-      (ui) => '${ui.showRatings}${ui.showTitles}${ui.showQuality}',
+      (ui) =>
+          '${ui.showRatings}${ui.showTitles}${ui.showQuality}'
+          '${ui.favoriteHeart}',
     );
     if (DeviceTypeService.isTv && !_isLive) {
       return _TvRatedPoster(
@@ -109,14 +111,15 @@ class ChannelCard extends StatelessWidget {
                       )
                     else
                       _artwork(),
-                    Positioned(
-                      top: 6,
-                      right: 6,
-                      child: _FavoriteButton(
-                        isFavorite: isFavorite,
-                        onTap: onFavoriteTap,
+                    if (isFavorite || context.read<UiSettings>().favoriteHeart)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: _FavoriteButton(
+                          isFavorite: isFavorite,
+                          onTap: onFavoriteTap,
+                        ),
                       ),
-                    ),
                     if (!_isLive && context.read<UiSettings>().showRatings)
                       Positioned(
                         left: 6,
