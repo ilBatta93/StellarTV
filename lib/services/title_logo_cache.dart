@@ -13,8 +13,9 @@ final RegExp _tmdbLogo = RegExp(
   r'^https://image\.tmdb\.org/t/p/w500/[a-zA-Z0-9_.-]+\.(png|jpg|webp)$',
 );
 final RegExp _fanartLogo = RegExp(
-  r'^https://assets\.fanart\.tv/fanart/(movies|tv)/\d{1,10}/'
-  r'(hdmovielogo|movielogo|hdtvlogo|clearlogo)/[A-Za-z0-9._-]{1,120}\.png$',
+  // Older addresses carry the set folder, newer ones are flat files.
+  r'^https://assets\.fanart\.tv/fanart/((movies|tv)/\d{1,10}/'
+  r'(hdmovielogo|movielogo|hdtvlogo|clearlogo)/)?[A-Za-z0-9._%-]{1,160}\.png$',
 );
 
 /// Title logos come from TMDB or, through the site's shared cache, from

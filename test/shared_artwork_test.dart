@@ -46,6 +46,16 @@ void main() {
       })?.url,
       url,
     );
+    // Current fanart.tv addresses are flat files.
+    const flat = 'https://assets.fanart.tv/fanart/mona-lisa-55fd6bdbf137c.png';
+    expect(
+      TmdbService.parseSharedLogo({
+        'results': [
+          {'tmdb_id': 603, 'logo_path': flat},
+        ],
+      })?.url,
+      flat,
+    );
     expect(
       TmdbService.parseSharedLogo({
         'results': [
