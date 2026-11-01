@@ -1,42 +1,7 @@
 # Release Notes — Novità
 
-- Sulla TV le griglie dei cataloghi non si ridisegnano più di continuo mentre arrivano i voti: scorrimento più fluido e meno lavoro quando l'app è ferma.
-- Sulla TV le locandine si caricano senza appesantire la memoria, con meno scatti durante lo scorrimento.
-- Le locandine che arrivano dopo il voto compaiono subito nella griglia, senza dover aprire la scheda del titolo.
-- Se un titolo c'è in più qualità, la scheda parte dalla versione Full HD (o da quella già iniziata o scelta l'ultima volta) e permette di cambiarla con «Versione».
-- Sulla TV la ricerca e i pannelli dei filtri ricevono il telecomando come previsto anche nell'app installata: Su e Giù restano dentro il pannello aperto.
-- Le versioni estese di un titolo non compaiono più come titoli doppi nel catalogo: sono raccolte nella stessa scheda.
-- In diretta sulla TV audio e video restano allineati anche con soundbar e TV che aggiungono ritardo all'audio.
-- In diretta sulla TV, quando apri o cambi canale, una fascia mostra il programma in corso con orari e avanzamento e quello successivo; il tasto Info la richiama.
-- In diretta puoi scegliere il canale con i tasti numerici del telecomando.
-- Sulla TV la Diretta si apre con la riga «Riprendi», che riporta all'ultimo canale guardato, e l'anteprima parte sempre da quel canale.
-- Le copie dello stesso canale in qualità diverse occupano una sola riga della guida: parte la versione Full HD o quella scelta l'ultima volta. Tieni premuto OK sulla riga, o usa «Versione» nel player, per cambiarla.
-- Se un canale manda solo l'audio o un video che il dispositivo non supporta, lo schermo lo spiega invece di restare nero, anche nell'anteprima della guida.
-- Nel player della TV il pulsante selezionato mostra il suo nome.
-- Le card senza locandina mostrano il titolo.
-- Al primo avvio dopo un aggiornamento il catalogo mostra «Preparazione del catalogo…» invece di sembrare vuoto.
-- Sulla TV il player può portare lo schermo alla frequenza del video (ad esempio 50 Hz per i canali a 25 fotogrammi) per un movimento senza scatti: attivalo con «Adatta frequenza schermo» nelle impostazioni del player. I comandi del player mostrano risoluzione, fotogrammi e frequenza dello schermo.
-- Sulla Chromecast con Google TV la diretta con mpv è di nuovo fluida: il video non va più a scatti mentre l'audio resta regolare.
-- La scheda di un titolo mostra chi l'ha diretto o ideato, la durata e il titolo originale; la riga delle persone parte dalla regia.
-- La ricerca trova anche attori e registi: scrivi un nome e vedi i suoi titoli disponibili sul dispositivo, sia in «Cerca» sia nei cataloghi.
-- La pagina di una persona elenca anche i titoli che ha diretto o ideato, con prima quelli disponibili sul dispositivo.
-- Sulla TV la trama nella scheda resta sul lato scuro dello sfondo ed è più leggibile.
-- Sulla TV il bordo di selezione segue la forma dei pulsanti, senza spazi vuoti, ed è chiaro anche sui pulsanti arancioni.
-- Sulla TV i filtri per piattaforma e genere sono più ordinati: loghi delle piattaforme, segno di spunta sulla scelta attiva.
-- In Home la trama del titolo in evidenza non resta più tagliata a metà riga, e il logo Crunchyroll è leggibile.
-- Telecomando più coerente: in Cerca la selezione parte dal campo e Indietro chiude prima la tastiera; nei Preferiti si passa dalle schede al contenuto e ritorno; nelle Impostazioni Destra entra nella prima voce; il pannello Categorie parte dalla categoria attiva.
-- Sulla TV la barra in alto ha un nuovo aspetto: sezioni raccolte in una capsula traslucida al centro, preferiti, profilo e impostazioni in una seconda capsula, con la selezione che si ingrandisce. In Home l'immagine del titolo arriva fin sotto la barra.
-- Accanto al voto IMDb la scheda del titolo mostra quante persone l'hanno votato. Quando il voto viene da TMDB lo indica la sigla «TMDB».
-- L'ordine «Voto» tiene conto del numero di voti: i titoli con pochissimi voti non finiscono più in cima.
-- I voti dei titoli e degli episodi appena usciti si aggiornano entro pochi giorni invece che dopo un mese.
-- Loghi dei titoli più puliti: preferiti quelli trasparenti e orizzontali, anche da fanart.tv.
-- «Continua a guardare» non mostra più per qualche secondo, all'apertura della Home, titoli già conclusi che poi sparivano.
-- Quando finisci un episodio, la scheda in «Continua a guardare» indica quale parte dopo («Prossimo · S1 · E5») e non mostra più «0%».
-- Se ti addormenti, l'avvio automatico si ferma dopo tre episodi di fila senza toccare il telecomando: alla ripresa trovi in Home l'episodio successivo pronto.
-- Un episodio o un titolo arrivato ai titoli di coda conta come visto anche se la TV si spegne prima dell'ultimo secondo.
-- I consigliati non ripropongono titoli che hai già visto o iniziato e mettono prima quelli suggeriti da più titoli che hai guardato.
-- Durante la riproduzione i comandi del player rispondono più rapidi: le pagine sotto il player non si ridisegnano più ogni pochi secondi.
 - Sulla TV locandine e sfondi sono più nitidi, soprattutto sugli schermi Full HD e 4K.
 - Sulla TV la locandina selezionata nei consigliati della Home e in «Titoli simili» resta tutta sullo schermo.
-- Un titolo riaperto subito dopo averlo chiuso riprende dal punto in cui eri rimasto invece di ripartire dall'inizio, e il punto salvato non viene più perso se la ripresa non riesce.
-- Nel player arriva «Effetti audio»: equalizzatore con preset (Cinema, Musica, Bassi potenti, Alti brillanti) e bande regolabili, «Dialoghi più chiari» per sentire meglio le voci e la «Modalità notte», che abbassa esplosioni e musica e alza le voci, sempre attiva o automatica dalle 22 alle 7. La scelta resta salvata sul dispositivo e si regola anche col telecomando.
+- Sulla TV l'anteprima della Diretta parte sempre dal canale di «Riprendi».
+- Un titolo riaperto subito dopo averlo chiuso riprende da dove eri rimasto, senza perdere il punto salvato.
+- Nel player arriva «Effetti audio»: equalizzatore con preset, «Dialoghi più chiari» e «Modalità notte», anche automatica dalle 22 alle 7.
