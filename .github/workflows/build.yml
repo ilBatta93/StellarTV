@@ -42,9 +42,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          # Dalla build 169 si passa alla serie 3.9 (3.9.0, 3.9.1, ...)
-          PATCH=$(( ${{ github.run_number }} - 169 ))
-          VERSION="3.9.${PATCH}"
+          # Dalla build 179 si passa alla serie 4.0 (4.0.0, 4.0.1, ...)
+          PATCH=$(( ${{ github.run_number }} - 179 ))
+          VERSION="4.0.${PATCH}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           python3 -m unittest discover -s scripts -p '*_test.py'
           python3 scripts/release_notes.py "$VERSION"

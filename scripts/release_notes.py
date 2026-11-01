@@ -57,8 +57,8 @@ def render(version, lines):
 def git(*args):
     return subprocess.check_output(['git', *args], text=True).strip()
 
-# (first run, series): run 110 publishes 3.8.0, run 169 publishes 3.9.0.
-SERIES = [(169, '3.9'), (110, '3.8')]
+# (first run, series): run 110 publishes 3.8.0, run 169 3.9.0, run 179 4.0.0.
+SERIES = [(179, '4.0'), (169, '3.9'), (110, '3.8')]
 
 def series_version(version, run_number):
     """Series version from the run number; older runs keep their version."""
@@ -110,8 +110,8 @@ def main():
     runs = successful_runs()
     baseline = previous_build_sha(runs or [], os.environ.get('GITHUB_RUN_ID'))
     if not baseline:
-        # Fallback: latest production tag (v3.8.X), regardless of branch.
-        tags = git('tag', '--list', 'v3.*', '--sort=-v:refname').splitlines()
+        # Fallback: latest production tag, regardless of branch.
+        tags = git('tag', '--list', 'v[34].*', '--sort=-v:refname').splitlines()
         previous = next((t for t in tags if t != 'v' + version), None)
         if previous:
             baseline = git('rev-parse', previous + '^{commit}')
