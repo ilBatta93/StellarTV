@@ -35,3 +35,4 @@
 - Se ti addormenti, l'avvio automatico si ferma dopo tre episodi di fila senza toccare il telecomando: alla ripresa trovi in Home l'episodio successivo pronto.
 - Un episodio o un titolo arrivato ai titoli di coda conta come visto anche se la TV si spegne prima dell'ultimo secondo.
 - I consigliati non ripropongono titoli che hai già visto o iniziato e mettono prima quelli suggeriti da più titoli che hai guardato.
+- Durante la riproduzione i comandi del player rispondono più rapidi: le pagine sotto il player non si ridisegnano più ogni pochi secondi.

@@ -1960,7 +1960,8 @@ class _PlayerScreenState extends State<PlayerScreen>
     FrameTelemetryService.instance.leaveSection(_telemetrySection);
     WidgetsBinding.instance.removeObserver(this);
     _resumeTimer?.cancel();
-    _saveResume();
+    // Pages under the player see the progress kept quiet during playback.
+    _saveResume().whenComplete(_history.flushQuietProgress);
     _hideTimer?.cancel();
     _tvInfoTimer?.cancel();
     _noticeTimer?.cancel();

@@ -89,7 +89,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _pushDebounce;
 
   int _watchedPercent = WatchCompletionPolicy.defaultPercent;
+  bool _percentFromSettings = false;
   void setWatchedPercent(int value) {
+    _percentFromSettings = true;
     final next = WatchCompletionPolicy.normalize(value);
     if (next == _watchedPercent) return;
     _watchedPercent = next;
@@ -354,10 +356,12 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     // Ready before the first Home build: finished titles must not flash in
     // "Continua a guardare" while settings and catalog checks catch up.
     await NextEpisodeMemory.instance.load();
-    final prefs = await SharedPreferences.getInstance();
-    _watchedPercent = WatchCompletionPolicy.normalize(
-      prefs.get(WatchCompletionPolicy.key),
-    );
+    if (!_percentFromSettings) {
+      final prefs = await SharedPreferences.getInstance();
+      _watchedPercent = WatchCompletionPolicy.normalize(
+        prefs.get(WatchCompletionPolicy.key),
+      );
+    }
     final entries = <HistoryEntry>[];
     _deleted.clear();
     _watchEvents.clear();
@@ -699,8 +703,18 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
         );
       _progressGeneration++;
       _progressDirty = true;
+      // Samples taken while a title plays stay quiet: Home, catalogs and
+      // detail pages sit under the player and rebuilt every 10 s, slowing
+      // the player controls. Pause, seek and exit save without [periodic].
+      if (periodic) {
+        _quietProgress = true;
+      } else {
+        _notify();
+      }
+    } else if (!periodic && _quietProgress) {
       _notify();
     }
+    if (!periodic) _quietProgress = false;
     final due =
         !periodic ||
         DateTime.now().difference(_lastProgressPush) >= progressCloudInterval;
@@ -710,6 +724,17 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   static const progressCloudInterval = Duration(seconds: 60);
+
+  /// A playing sample changed the history without telling listeners yet.
+  bool _quietProgress = false;
+
+  /// Tells listeners about playing samples kept quiet (the player closed).
+  void flushQuietProgress() {
+    if (!_quietProgress) return;
+    _quietProgress = false;
+    _notify();
+  }
+
   DateTime _lastProgressPush = DateTime(2000);
 
   /// Removes a title from the history together with everything tied to it:

@@ -25,7 +25,7 @@ class NextEpisodeMemory {
   static const _max = 300;
 
   final Map<String, NextEpisodeHint> _hints = {};
-  Future<void>? _loading;
+  bool _loaded = false;
 
   /// Same identity as `seriesReplayKey`: a newer view is a new question.
   static String keyOf(String? profileId, HistoryEntry e) =>
@@ -33,7 +33,13 @@ class NextEpisodeMemory {
       '${e.lastWatchedAt.millisecondsSinceEpoch}|'
       '${e.position.inSeconds}|${e.duration.inSeconds}|${e.watchedPercent}';
 
-  Future<void> load() => _loading ??= _read();
+  /// Not memoised as a future: a read that never finished (an app or test
+  /// torn down mid-start) must not leave every later caller waiting.
+  Future<void> load() async {
+    if (_loaded) return;
+    await _read();
+    _loaded = true;
+  }
 
   Future<void> _read() async {
     try {

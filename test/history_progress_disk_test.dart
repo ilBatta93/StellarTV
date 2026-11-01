@@ -70,6 +70,48 @@ void main() {
     await client.dispose();
   });
 
+  test('playing samples do not rebuild the pages under the player', () async {
+    final client = SupabaseClient(
+      'https://example.invalid',
+      'test',
+      authOptions: const AuthClientOptions(autoRefreshToken: false),
+    );
+    final history = HistoryProvider(SyncService(client));
+    await history.recordStart(episode());
+    const runtime = Duration(minutes: 20);
+    var notices = 0;
+    history.addListener(() => notices++);
+
+    for (final s in [10, 20, 30]) {
+      await history.updatePosition(
+        'ep',
+        Duration(seconds: s),
+        runtime,
+        periodic: true,
+      );
+    }
+    expect(notices, 0);
+    expect(history.entryFor('ep')?.position, const Duration(seconds: 30));
+
+    // Exit at the position of the last sample still tells the listeners.
+    await history.updatePosition('ep', const Duration(seconds: 30), runtime);
+    expect(notices, 1);
+
+    await history.updatePosition(
+      'ep',
+      const Duration(seconds: 40),
+      runtime,
+      periodic: true,
+    );
+    history.flushQuietProgress();
+    expect(notices, 2);
+    history.flushQuietProgress();
+    expect(notices, 2);
+
+    history.dispose();
+    await client.dispose();
+  });
+
   test(
     'a burst keeps both partial snapshots in one preferences write',
     () async {
