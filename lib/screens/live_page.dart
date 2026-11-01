@@ -13,6 +13,7 @@ import '../services/player_settings_service.dart';
 import '../services/catalog_builder.dart';
 import '../services/catalog_shelf.dart';
 import '../services/catalog_sort.dart' show sortLiveBackground;
+import '../services/catalog_view_memory.dart';
 import '../services/live_variants.dart';
 import '../services/recent_live_channels.dart';
 import '../services/xtream_service.dart';
@@ -187,7 +188,16 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
 
   CatalogSort? _sort = CatalogSort.provider;
   String _query = '';
-  String? _category;
+  String? _categoryValue;
+  String? get _category => _categoryValue;
+  // Every pick is remembered on the device for the next opening.
+  set _category(String? value) {
+    _categoryValue = value;
+    if (_defaultApplied) unawaited(CatalogViewMemory.saveLiveCategory(value));
+  }
+
+  /// Last category picked, read once; null while still loading.
+  ({bool saved, String? label})? _rememberedCategory;
   static const _watchedLabel = 'Visti di recente';
   bool _defaultApplied = false;
   Timer? _tick;
@@ -1125,6 +1135,17 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _loadViewMemory() async {
+    final sort = await CatalogViewMemory.sort(ContentType.live);
+    final category = await CatalogViewMemory.liveCategory();
+    if (!mounted) return;
+    setState(() {
+      // A sort picked before the memory arrived wins.
+      if (sort != null && _sort == CatalogSort.provider) _sort = sort;
+      _rememberedCategory = category;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1135,6 +1156,7 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
     _recentLive.addListener(_recentChanged);
     _variants.addListener(_variantsChanged);
     unawaited(_recentLive.load());
+    unawaited(_loadViewMemory());
     WidgetsBinding.instance.addObserver(this);
     // TV switched off or screen off: the preview connection closes at once.
     _screenOffSub = NativePlayerBridge.instance.screenOff.listen(
@@ -1190,18 +1212,29 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
         message: 'Nessun contenuto in diretta disponibile.',
       );
     }
-    // Default category: "TV Sat" (when the playlist has it).
-    if (!_defaultApplied && groups.isNotEmpty) {
-      _defaultApplied = true;
+    // Default category: the last one picked on this device, else "TV Sat"
+    // (when the playlist has it).
+    final remembered = _rememberedCategory;
+    if (!_defaultApplied && groups.isNotEmpty && remembered != null) {
+      final label = remembered.label;
       String n(String s) =>
           s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-      _category = groups
-          .map((g) => g.label)
-          .where((l) => n(l) == 'tvsat')
-          .followedBy(
-            groups.map((g) => g.label).where((l) => n(l).contains('tvsat')),
-          )
-          .firstOrNull;
+      _categoryValue =
+          remembered.saved &&
+              (label == null ||
+                  label == _watchedLabel ||
+                  groups.any((g) => g.label == label))
+          ? label
+          : groups
+                .map((g) => g.label)
+                .where((l) => n(l) == 'tvsat')
+                .followedBy(
+                  groups
+                      .map((g) => g.label)
+                      .where((l) => n(l).contains('tvsat')),
+                )
+                .firstOrNull;
+      _defaultApplied = true;
     }
     final watched = [
       for (final id in _recentLive.ids)
@@ -1311,7 +1344,10 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
                     ),
               ],
             ),
-            onSort: (value) => setState(() => _sort = value),
+            onSort: (value) {
+              setState(() => _sort = value);
+              unawaited(CatalogViewMemory.saveSort(ContentType.live, value));
+            },
             scaffoldKey: _scaffoldKey,
             trailing: Row(
               mainAxisSize: MainAxisSize.min,

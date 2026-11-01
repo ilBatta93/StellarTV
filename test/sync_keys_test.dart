@@ -41,6 +41,8 @@ void main() {
       'ui_home_overview',
       'ui_home_titles',
       'ui_home_recent_titles',
+      'ui_home_row_order',
+      'ui_home_hidden_rows',
       'ui_scale',
     ]) {
       expect(SyncService.isSyncedKey(key), isTrue, reason: key);
@@ -52,5 +54,9 @@ void main() {
     expect(SyncService.isSyncedKey('offline_downloads_v1'), isFalse);
     expect(SyncService.isSyncedKey('stellar_guest_mode'), isFalse);
     expect(SyncService.isSyncedKey('local_watch_history__abc'), isFalse);
+    // Sort orders and the last Diretta category (a source label) stay local.
+    expect(SyncService.isSyncedKey('catalog_sort_live'), isFalse);
+    expect(SyncService.isSyncedKey('catalog_sort_movie'), isFalse);
+    expect(SyncService.isSyncedKey('live_last_category'), isFalse);
   });
 }

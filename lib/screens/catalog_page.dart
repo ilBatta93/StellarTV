@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../services/catalog_sort.dart';
+import '../services/catalog_view_memory.dart';
 import '../services/catalog_order_store.dart';
 
 import 'package:flutter/material.dart';
@@ -398,6 +399,30 @@ class _CatalogPageState extends State<CatalogPage> {
     CatalogOrderStore.instance.addListener(_savedOrderLoaded);
     TitleFacetIndex.instance.addListener(_onFacetRank);
     unawaited(CatalogOrderStore.instance.load());
+    unawaited(_restoreSort());
+  }
+
+  /// The sort picked last time on this device, unless one was picked since.
+  Future<void> _restoreSort() async {
+    final saved = await CatalogViewMemory.sort(widget.type);
+    if (!mounted || saved == null || _sort != CatalogSort.provider) return;
+    _setSort(saved, remember: false);
+  }
+
+  void _setSort(CatalogSort? value, {bool remember = true}) {
+    if (_sort == value) return;
+    _ratingDebounce?.cancel();
+    if (_sort == CatalogSort.rating) {
+      TitleFacetIndex.instance.watchRank(widget.type, false);
+    }
+    if (value == CatalogSort.rating) {
+      TitleFacetIndex.instance.watchRank(widget.type, true);
+    }
+    setState(() {
+      _sort = value;
+      if (value == CatalogSort.rating) _publishRatingIds();
+    });
+    if (remember) unawaited(CatalogViewMemory.saveSort(widget.type, value));
   }
 
   /// A newer score list waits until the remote is still, so the grid does
@@ -697,20 +722,7 @@ class _CatalogPageState extends State<CatalogPage> {
               category: _selectedCategory ?? _recentLabel,
               onChanged: _onQuery,
               sort: _sort,
-              onSort: (value) {
-                if (_sort == value) return;
-                _ratingDebounce?.cancel();
-                if (_sort == CatalogSort.rating) {
-                  TitleFacetIndex.instance.watchRank(widget.type, false);
-                }
-                if (value == CatalogSort.rating) {
-                  TitleFacetIndex.instance.watchRank(widget.type, true);
-                }
-                setState(() {
-                  _sort = value;
-                  if (value == CatalogSort.rating) _publishRatingIds();
-                });
-              },
+              onSort: _setSort,
               viewMode: context.watch<UiSettings>().viewMode,
               onViewMode: (mode) =>
                   context.read<UiSettings>().setCatalogViewMode(mode),

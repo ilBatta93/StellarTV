@@ -82,7 +82,11 @@ class UiSettings extends ChangeNotifier {
     'ui_home_titles',
     'ui_home_recent_titles',
     'ui_scale',
+    homeRowOrderKey,
+    homeHiddenRowsKey,
   };
+  static const homeRowOrderKey = 'ui_home_row_order';
+  static const homeHiddenRowsKey = 'ui_home_hidden_rows';
   HomePosterShape homePosterShape = HomePosterShape.portrait;
   HomePosterShape homeRecentShape = HomePosterShape.portrait;
   HomeDensity homePosterDensity = HomeDensity.automatic;
@@ -94,6 +98,10 @@ class UiSettings extends ChangeNotifier {
   bool homeTitles = false;
   bool homeRecentTitles = false;
   int uiScalePercent = 100;
+
+  /// Saved Home row order (ids from [HomeRows]); empty means the default.
+  List<String> homeRowOrder = const [];
+  Set<String> homeHiddenRows = const {};
   int watchedPercent = WatchCompletionPolicy.defaultPercent;
 
   Future<void> setWatchedPercent(int value) async {
@@ -168,6 +176,28 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setHomeRowOrder(List<String> value) async {
+    homeRowOrder = List.unmodifiable(value);
+    await _save(homeRowOrderKey, homeRowOrder);
+    notifyListeners();
+  }
+
+  Future<void> setHomeRowVisible(String id, bool visible) async {
+    final next = {...homeHiddenRows};
+    visible ? next.remove(id) : next.add(id);
+    homeHiddenRows = Set.unmodifiable(next);
+    await _save(homeHiddenRowsKey, homeHiddenRows.toList());
+    notifyListeners();
+  }
+
+  Future<void> resetHomeRows() async {
+    homeRowOrder = const [];
+    homeHiddenRows = const {};
+    await _save(homeRowOrderKey, <String>[]);
+    await _save(homeHiddenRowsKey, <String>[]);
+    notifyListeners();
+  }
+
   Future<void> resetHomeLayout() async {
     // Write defaults (not remove keys): defaults must replace remote settings.
     homePosterShape = HomePosterShape.portrait;
@@ -179,6 +209,8 @@ class UiSettings extends ChangeNotifier {
     homeOverview = true;
     homeTitles = homeRecentTitles = false;
     uiScalePercent = 100;
+    homeRowOrder = const [];
+    homeHiddenRows = const {};
     for (final e in <String, Object>{
       'ui_home_shape': homePosterShape.name,
       'ui_home_recent_shape': homeRecentShape.name,
@@ -191,6 +223,8 @@ class UiSettings extends ChangeNotifier {
       'ui_home_titles': homeTitles,
       'ui_home_recent_titles': homeRecentTitles,
       'ui_scale': uiScalePercent,
+      homeRowOrderKey: <String>[],
+      homeHiddenRowsKey: <String>[],
     }.entries) {
       await _save(e.key, e.value);
     }
@@ -285,6 +319,8 @@ class UiSettings extends ChangeNotifier {
     homeTitles,
     homeRecentTitles,
     uiScalePercent,
+    homeRowOrder.join(','),
+    (homeHiddenRows.toList()..sort()).join(','),
   ].join('|');
   List<AppSection> get sectionOrder => List.unmodifiable(_sectionOrder);
   AppSection get startSection => _startSection;
@@ -346,6 +382,10 @@ class UiSettings extends ChangeNotifier {
         ? prefs.get('ui_home_overview') as bool
         : true;
     uiScalePercent = HomeLayoutPolicy.uiScale(prefs.get('ui_scale'));
+    homeRowOrder = List.unmodifiable(_stringList(prefs.get(homeRowOrderKey)));
+    homeHiddenRows = Set.unmodifiable(
+      _stringList(prefs.get(homeHiddenRowsKey)),
+    );
     watchedPercent = WatchCompletionPolicy.normalize(
       prefs.get(WatchCompletionPolicy.key),
     );
@@ -354,8 +394,12 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  static List<String> _stringList(Object? value) =>
+      value is List ? value.whereType<String>().toList() : const [];
+
   Future<void> _save(String key, Object value) async {
     final prefs = await SharedPreferences.getInstance();
+    if (value is List<String>) await prefs.setStringList(key, value);
     if (value is String) await prefs.setString(key, value);
     if (value is bool) await prefs.setBool(key, value);
     if (value is int) await prefs.setInt(key, value);

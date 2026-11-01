@@ -94,4 +94,84 @@ void main() {
       expect(prefs.getString('player_settings_v1'), 'local');
     },
   );
+  test('home rows keep the saved order and place unknown rows by default', () {
+    final defaults = HomeRows.defaults(
+      tv: true,
+      platforms: ['Netflix', 'Disney+'],
+    );
+    expect(defaults, [
+      HomeRows.recentSeries,
+      HomeRows.recentMovies,
+      HomeRows.forYouMovies,
+      HomeRows.forYouSeries,
+      HomeRows.topWeek,
+      'top_netflix',
+      'top_disney',
+    ]);
+    expect(HomeRows.defaults(tv: false, platforms: const []).take(2), [
+      HomeRows.recentMovies,
+      HomeRows.recentSeries,
+    ]);
+    expect(HomeRows.arrange(defaults, const []), defaults);
+    // An older save without the Disney+ row, plus a row that no longer exists.
+    expect(
+      HomeRows.arrange(defaults, [
+        'top_netflix',
+        'gone',
+        HomeRows.topWeek,
+        HomeRows.recentSeries,
+        HomeRows.recentMovies,
+        HomeRows.forYouMovies,
+        HomeRows.forYouSeries,
+        'top_netflix',
+      ]),
+      [
+        'top_netflix',
+        'top_disney',
+        HomeRows.topWeek,
+        HomeRows.recentSeries,
+        HomeRows.recentMovies,
+        HomeRows.forYouMovies,
+        HomeRows.forYouSeries,
+      ],
+    );
+    expect(HomeRows.visible(defaults, {HomeRows.topWeek, 'top_disney'}), [
+      HomeRows.recentSeries,
+      HomeRows.recentMovies,
+      HomeRows.forYouMovies,
+      HomeRows.forYouSeries,
+      'top_netflix',
+    ]);
+  });
+  test(
+    'home rows persist, sync from the cloud and reset to defaults',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final ui = UiSettings();
+      await ui.load();
+      final signature = ui.signature;
+      await ui.setHomeRowOrder([HomeRows.topWeek, HomeRows.recentSeries]);
+      await ui.setHomeRowVisible('top_netflix', false);
+      expect(ui.signature, isNot(signature));
+      final reloaded = UiSettings();
+      await reloaded.load();
+      expect(reloaded.homeRowOrder, [HomeRows.topWeek, HomeRows.recentSeries]);
+      expect(reloaded.homeHiddenRows, {'top_netflix'});
+      final sync = SyncService(
+        SupabaseClient('https://example.invalid', 'test'),
+      );
+      await sync.applySnapshotSettings({
+        'ui_home_row_order': [HomeRows.forYouMovies],
+        'ui_home_hidden_rows': [HomeRows.topWeek],
+      }, overwrite: true);
+      await reloaded.load();
+      expect(reloaded.homeRowOrder, [HomeRows.forYouMovies]);
+      expect(reloaded.homeHiddenRows, {HomeRows.topWeek});
+      await reloaded.resetHomeLayout();
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getStringList('ui_home_row_order'), isEmpty);
+      expect(prefs.getStringList('ui_home_hidden_rows'), isEmpty);
+      expect(reloaded.homeHiddenRows, isEmpty);
+    },
+  );
 }

@@ -30,6 +30,7 @@ import 'sync_settings_screen.dart';
 import 'expiry_reminder_screen.dart';
 import 'xtream_account_screen.dart';
 import 'section_layout_screen.dart';
+import 'home_rows_screen.dart';
 import 'downloads_screen.dart';
 import 'multiview_settings_screen.dart';
 import 'live_diagnostics_screen.dart';
@@ -180,6 +181,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SettingsSection(
           title: 'Home',
           children: [
+            SettingsValueTile(
+              icon: Icons.view_day_outlined,
+              title: 'Righe della Home',
+              subtitle: 'Scegli quali righe vedere e in che ordine',
+              value: homeRowsSummary(ui),
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const HomeRowsScreen())),
+            ),
             SettingsValueTile(
               icon: Icons.check_circle_outline_rounded,
               title: 'Soglia contenuto visto',

@@ -359,6 +359,17 @@ class _DiscoverPageState extends State<DiscoverPage> {
         .toList();
     final forYou = recommended(discover.forYou);
     final forYouSeries = recommended(discover.forYouSeries);
+    // Rows in the order the user chose, without the hidden ones.
+    final rowOrder = HomeRows.visible(
+      HomeRows.arrange(
+        HomeRows.defaults(
+          tv: DeviceTypeService.isTv,
+          platforms: StreamingPlatform.all.map((p) => p.name),
+        ),
+        ui.homeRowOrder,
+      ),
+      ui.homeHiddenRows,
+    );
 
     if (DeviceTypeService.isTv) {
       // Same sections as the phone Home (Top 10 with Film / Serie TV switch,
@@ -373,8 +384,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
         forYouSource: discover.forYouSource,
         forYouSeries: forYouSeries,
         forYouSeriesSource: discover.forYouSeriesSource,
-        tops: [
-          (
+        rowOrder: rowOrder,
+        tops: {
+          HomeRows.topWeek: (
             'Top 10 della settimana',
             'In tendenza e disponibili sul dispositivo',
             AppColors.primary,
@@ -382,15 +394,100 @@ class _DiscoverPageState extends State<DiscoverPage> {
             topSeries,
           ),
           for (final p in StreamingPlatform.all)
-            (
+            HomeRows.top(p.name): (
               'Top 10 su ${p.name}',
               null,
               p.color,
               available(discover.platformTop(p).movies),
               available(discover.platformTop(p).series),
             ),
-        ],
+        },
       );
+    }
+
+    List<Widget> phoneRow(String id) {
+      switch (id) {
+        case HomeRows.recentMovies:
+          return [
+            if (startedMovies.isNotEmpty) ...[
+              SectionHeader(
+                title: 'Film che stai guardando',
+                leading: Icon(
+                  Icons.movie_outlined,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ),
+              _HistoryRow(items: startedMovies),
+            ],
+          ];
+        case HomeRows.recentSeries:
+          return [
+            if (startedSeries.isNotEmpty) ...[
+              const SectionHeader(
+                title: 'Serie TV che stai guardando',
+                leading: Icon(
+                  Icons.video_library_outlined,
+                  color: AppColors.secondary,
+                  size: 20,
+                ),
+              ),
+              _HistoryRow(items: startedSeries),
+            ],
+          ];
+        case HomeRows.forYouMovies:
+          return [
+            if (forYou.isNotEmpty) ...[
+              SectionHeader(
+                title: 'Film consigliati per te',
+                subtitle: 'Perché hai guardato ${discover.forYouSource}',
+                leading: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: AppColors.secondary,
+                  size: 20,
+                ),
+              ),
+              _PosterRow(items: forYou),
+            ],
+          ];
+        case HomeRows.forYouSeries:
+          return [
+            if (forYouSeries.isNotEmpty) ...[
+              SectionHeader(
+                title: 'Serie consigliate per te',
+                subtitle: 'Perché hai guardato ${discover.forYouSeriesSource}',
+                leading: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: AppColors.secondary,
+                  size: 20,
+                ),
+              ),
+              _PosterRow(items: forYouSeries),
+            ],
+          ];
+        case HomeRows.topWeek:
+          return [
+            _TopSection(
+              title: 'Top 10 della settimana',
+              subtitle: 'In tendenza e disponibili sul dispositivo',
+              color: AppColors.primary,
+              movies: topMovies,
+              series: topSeries,
+            ),
+          ];
+      }
+      for (final p in StreamingPlatform.all) {
+        if (HomeRows.top(p.name) != id) continue;
+        return [
+          _TopSection(
+            title: 'Top 10 su ${p.name}',
+            color: p.color,
+            movies: available(discover.platformTop(p).movies),
+            series: available(discover.platformTop(p).series),
+          ),
+        ];
+      }
+      return const [];
     }
 
     return RefreshIndicator(
@@ -401,66 +498,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
         children: [
           const ExpiryBanner(),
           if (banner.isNotEmpty) _Top10Banner(items: banner),
-          if (startedMovies.isNotEmpty) ...[
-            SectionHeader(
-              title: 'Film che stai guardando',
-              leading: Icon(
-                Icons.movie_outlined,
-                color: AppColors.primary,
-                size: 20,
-              ),
-            ),
-            _HistoryRow(items: startedMovies),
-          ],
-          if (startedSeries.isNotEmpty) ...[
-            const SectionHeader(
-              title: 'Serie TV che stai guardando',
-              leading: Icon(
-                Icons.video_library_outlined,
-                color: AppColors.secondary,
-                size: 20,
-              ),
-            ),
-            _HistoryRow(items: startedSeries),
-          ],
-          if (forYou.isNotEmpty) ...[
-            SectionHeader(
-              title: 'Film consigliati per te',
-              subtitle: 'Perché hai guardato ${discover.forYouSource}',
-              leading: const Icon(
-                Icons.auto_awesome_rounded,
-                color: AppColors.secondary,
-                size: 20,
-              ),
-            ),
-            _PosterRow(items: forYou),
-          ],
-          if (forYouSeries.isNotEmpty) ...[
-            SectionHeader(
-              title: 'Serie consigliate per te',
-              subtitle: 'Perché hai guardato ${discover.forYouSeriesSource}',
-              leading: const Icon(
-                Icons.auto_awesome_rounded,
-                color: AppColors.secondary,
-                size: 20,
-              ),
-            ),
-            _PosterRow(items: forYouSeries),
-          ],
-          _TopSection(
-            title: 'Top 10 della settimana',
-            subtitle: 'In tendenza e disponibili sul dispositivo',
-            color: AppColors.primary,
-            movies: topMovies,
-            series: topSeries,
-          ),
-          for (final p in StreamingPlatform.all)
-            _TopSection(
-              title: 'Top 10 su ${p.name}',
-              color: p.color,
-              movies: available(discover.platformTop(p).movies),
-              series: available(discover.platformTop(p).series),
-            ),
+          for (final id in rowOrder) ...phoneRow(id),
           if (discover.isLoading)
             Padding(
               padding: EdgeInsets.all(24),
@@ -1089,7 +1127,10 @@ class _TvDiscover extends StatefulWidget {
   final String? forYouSource;
   final List<TmdbItem> forYouSeries;
   final String? forYouSeriesSource;
-  final List<TvTopSpec> tops;
+
+  /// Visible row ids ([HomeRows]) in the user's order.
+  final List<String> rowOrder;
+  final Map<String, TvTopSpec> tops;
 
   const _TvDiscover({
     required this.profileId,
@@ -1101,6 +1142,7 @@ class _TvDiscover extends StatefulWidget {
     required this.forYouSource,
     required this.forYouSeries,
     required this.forYouSeriesSource,
+    required this.rowOrder,
     required this.tops,
   });
 
@@ -1134,7 +1176,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
     } else if (widget.forYouSeries.isNotEmpty) {
       first = widget.forYouSeries.first;
     } else {
-      for (final t in widget.tops) {
+      for (final t in widget.tops.values) {
         final items = t.$4.isNotEmpty ? t.$4 : t.$5;
         if (items.isNotEmpty) {
           first = items.first;
@@ -1282,14 +1324,21 @@ class _TvDiscoverState extends State<_TvDiscover> {
       ]);
     }
 
-    history(widget.startedSeries);
-    history(widget.startedMovies);
-    posters(widget.forYou);
-    posters(widget.forYouSeries);
-    for (final top in widget.tops) {
-      final movies = top.$4;
-      final series = top.$5;
-      posters(movies.isNotEmpty ? movies : series);
+    // Same order and skips as the sections, so index N warms row N + 1.
+    for (final id in widget.rowOrder) {
+      switch (id) {
+        case HomeRows.recentSeries:
+          history(widget.startedSeries);
+        case HomeRows.recentMovies:
+          history(widget.startedMovies);
+        case HomeRows.forYouMovies:
+          posters(widget.forYou);
+        case HomeRows.forYouSeries:
+          posters(widget.forYouSeries);
+        default:
+          final top = widget.tops[id];
+          if (top != null) posters(top.$4.isNotEmpty ? top.$4 : top.$5);
+      }
     }
     return rows;
   }
@@ -1458,59 +1507,67 @@ class _TvDiscoverState extends State<_TvDiscover> {
                           sections.add(build(index));
                         }
 
-                        add(
-                          widget.startedSeries.isNotEmpty,
-                          (index) => _historySection(
-                            'Serie viste di recente',
-                            widget.startedSeries,
-                            onSettled: () => _warmFollowing(rows, index),
-                          ),
-                        );
-                        add(
-                          widget.startedMovies.isNotEmpty,
-                          (index) => _historySection(
-                            'Film visti di recente',
-                            widget.startedMovies,
-                            onSettled: () => _warmFollowing(rows, index),
-                          ),
-                        );
-                        add(
-                          widget.forYou.isNotEmpty,
-                          (index) => _row(
-                            'Film consigliati per te',
-                            widget.forYou,
-                            subtitle: widget.forYouSource == null
-                                ? null
-                                : 'Perché hai guardato '
-                                      '${displayTitle(widget.forYouSource ?? "")}',
-                            onSettled: () => _warmFollowing(rows, index),
-                          ),
-                        );
-                        add(
-                          widget.forYouSeries.isNotEmpty,
-                          (index) => _row(
-                            'Serie consigliate per te',
-                            widget.forYouSeries,
-                            subtitle: widget.forYouSeriesSource == null
-                                ? null
-                                : 'Perché hai guardato '
-                                      '${displayTitle(widget.forYouSeriesSource ?? "")}',
-                            onSettled: () => _warmFollowing(rows, index),
-                          ),
-                        );
-                        for (final top in widget.tops) {
-                          if (top.$4.isEmpty && top.$5.isEmpty) continue;
-                          final index = sections.length;
-                          sections.add(
-                            _TvTopRow(
-                              key: ValueKey(top.$1),
-                              spec: top,
-                              onFocusItem: (item) {
-                                _focus(item);
-                                _warmFollowing(rows, index);
-                              },
-                            ),
-                          );
+                        for (final id in widget.rowOrder) {
+                          switch (id) {
+                            case HomeRows.recentSeries:
+                              add(
+                                widget.startedSeries.isNotEmpty,
+                                (index) => _historySection(
+                                  'Serie viste di recente',
+                                  widget.startedSeries,
+                                  onSettled: () => _warmFollowing(rows, index),
+                                ),
+                              );
+                            case HomeRows.recentMovies:
+                              add(
+                                widget.startedMovies.isNotEmpty,
+                                (index) => _historySection(
+                                  'Film visti di recente',
+                                  widget.startedMovies,
+                                  onSettled: () => _warmFollowing(rows, index),
+                                ),
+                              );
+                            case HomeRows.forYouMovies:
+                              add(
+                                widget.forYou.isNotEmpty,
+                                (index) => _row(
+                                  'Film consigliati per te',
+                                  widget.forYou,
+                                  subtitle: widget.forYouSource == null
+                                      ? null
+                                      : 'Perché hai guardato '
+                                            '${displayTitle(widget.forYouSource ?? "")}',
+                                  onSettled: () => _warmFollowing(rows, index),
+                                ),
+                              );
+                            case HomeRows.forYouSeries:
+                              add(
+                                widget.forYouSeries.isNotEmpty,
+                                (index) => _row(
+                                  'Serie consigliate per te',
+                                  widget.forYouSeries,
+                                  subtitle: widget.forYouSeriesSource == null
+                                      ? null
+                                      : 'Perché hai guardato '
+                                            '${displayTitle(widget.forYouSeriesSource ?? "")}',
+                                  onSettled: () => _warmFollowing(rows, index),
+                                ),
+                              );
+                            default:
+                              final top = widget.tops[id];
+                              if (top == null) continue;
+                              add(
+                                top.$4.isNotEmpty || top.$5.isNotEmpty,
+                                (index) => _TvTopRow(
+                                  key: ValueKey(top.$1),
+                                  spec: top,
+                                  onFocusItem: (item) {
+                                    _focus(item);
+                                    _warmFollowing(rows, index);
+                                  },
+                                ),
+                              );
+                          }
                         }
                         return TvHomeRows(sections: sections);
                       },

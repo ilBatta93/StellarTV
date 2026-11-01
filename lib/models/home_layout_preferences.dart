@@ -86,3 +86,64 @@ class HomeLayoutPolicy {
     return bounded * factor;
   }
 }
+
+/// Home rows the user can reorder or hide. Ids are stable and neutral: they
+/// travel to the cloud with the other look-and-feel preferences.
+class HomeRows {
+  static const recentSeries = 'recent_series';
+  static const recentMovies = 'recent_movies';
+  static const forYouMovies = 'for_you_movies';
+  static const forYouSeries = 'for_you_series';
+  static const topWeek = 'top_week';
+  static String top(String platformName) =>
+      'top_${platformName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')}';
+
+  /// Default order: the TV opens on what you are watching, series first;
+  /// the phone keeps its films-first order.
+  static List<String> defaults({
+    required bool tv,
+    required Iterable<String> platforms,
+  }) => [
+    if (tv) ...[
+      recentSeries,
+      recentMovies,
+    ] else ...[
+      recentMovies,
+      recentSeries,
+    ],
+    forYouMovies,
+    forYouSeries,
+    topWeek,
+    for (final p in platforms) top(p),
+  ];
+
+  /// Saved ids first, in their order. A row the save does not know (a new
+  /// platform, an older save) keeps its default place after its default
+  /// predecessor; unknown saved ids are dropped.
+  static List<String> arrange(List<String> defaults, List<String> saved) {
+    final known = defaults.toSet();
+    final result = <String>[];
+    for (final id in saved) {
+      if (known.contains(id) && !result.contains(id)) result.add(id);
+    }
+    for (var i = 0; i < defaults.length; i++) {
+      final id = defaults[i];
+      if (result.contains(id)) continue;
+      var at = 0;
+      for (var j = i - 1; j >= 0; j--) {
+        final before = result.indexOf(defaults[j]);
+        if (before >= 0) {
+          at = before + 1;
+          break;
+        }
+      }
+      result.insert(at, id);
+    }
+    return result;
+  }
+
+  static List<String> visible(List<String> order, Set<String> hidden) => [
+    for (final id in order)
+      if (!hidden.contains(id)) id,
+  ];
+}

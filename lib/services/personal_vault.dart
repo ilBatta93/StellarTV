@@ -60,6 +60,8 @@ class PersonalVault {
     'ui_home_overview',
     'ui_home_titles',
     'ui_home_recent_titles',
+    'ui_home_row_order',
+    'ui_home_hidden_rows',
     'ui_scale',
     'ui_watched_percent',
     'ui_auto_next_episode',
