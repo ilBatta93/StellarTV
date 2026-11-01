@@ -718,9 +718,16 @@ class PlaybackSession extends ChangeNotifier {
     await _applyTrackPreferences(engine);
   }
 
+  /// Resume seek attempts before playback stays where the stream started:
+  /// four quick ones, then one every 2 s, about 20 s in all.
+  static const resumeSeekAttempts = 13;
+
   /// Seeks to the resume point once the stream is seekable. mpv and
   /// ExoPlayer ignore a seek issued before the duration is known, which made
   /// "Continua a guardare" restart from the beginning; retry until it lands.
+  /// A source still busy with another connection (a title reopened right
+  /// after closing it) refuses seeks for a few seconds: keep retrying for
+  /// [resumeSeekAttempts], unless the viewer moves the position first.
   Future<void> _seekWhenReady(
     PlaybackEngine engine,
     Duration target,
@@ -731,13 +738,22 @@ class PlaybackSession extends ChangeNotifier {
       if (engine.value.duration > Duration.zero) break;
       await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-    for (var attempt = 0; attempt < 4; attempt++) {
-      if (gen != _generation || _disposed) return;
+    final revision = _seekRevision;
+    for (var attempt = 0; attempt < resumeSeekAttempts; attempt++) {
+      if (gen != _generation || _disposed || revision != _seekRevision) {
+        return;
+      }
       await engine.seekTo(target);
-      await Future<void>.delayed(const Duration(milliseconds: 900));
+      await Future<void>.delayed(
+        Duration(milliseconds: attempt < 4 ? 900 : 2000),
+      );
+      if (gen != _generation || _disposed || revision != _seekRevision) {
+        return;
+      }
       final pos = engine.value.position;
       if (pos >= target - const Duration(seconds: 10)) return;
     }
+    debugPrint('Resume seek did not land');
   }
 
   Future<void> _applyTrackPreferences(PlaybackEngine engine) async {

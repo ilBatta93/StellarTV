@@ -818,6 +818,82 @@ void main() {
     session.dispose();
     await session.released;
   });
+
+  test('la ripresa riprova finché la sorgente accetta il seek', () async {
+    // Reopened right after closing: the source refuses seeks while the
+    // previous connection is still closing.
+    final engine = _BusySeekEngine(
+      PlayerEngineType.mediakit,
+      refuseFor: const Duration(seconds: 5),
+    );
+    final session = PlaybackSession(
+      url: 'https://example.invalid/video.mp4',
+      isLive: false,
+      startAt: const Duration(minutes: 12),
+      settings: PlayerSettings(primaryEngine: PlayerEngineType.mediakit),
+      engineFactory: (_) => engine,
+    );
+    await session.start();
+    expect(engine.value.position, const Duration(minutes: 12));
+    expect(engine.seeks, greaterThan(4));
+    session.dispose();
+    await session.released;
+  });
+
+  test('un seek dello spettatore ferma i tentativi di ripresa', () async {
+    final engine = _BusySeekEngine(
+      PlayerEngineType.mediakit,
+      refuseFor: const Duration(minutes: 1),
+    );
+    final session = PlaybackSession(
+      url: 'https://example.invalid/video.mp4',
+      isLive: false,
+      startAt: const Duration(minutes: 12),
+      settings: PlayerSettings(primaryEngine: PlayerEngineType.mediakit),
+      engineFactory: (_) => engine,
+    );
+    unawaited(session.start());
+    await Future<void>.delayed(const Duration(seconds: 1));
+    await session.seekTo(const Duration(minutes: 3));
+    await Future<void>.delayed(const Duration(seconds: 4));
+    expect(engine.sought, const Duration(minutes: 3));
+    session.dispose();
+    await session.released;
+  });
+}
+
+/// Video whose seeks are ignored for [refuseFor] after opening.
+class _BusySeekEngine extends _FakeEngine {
+  _BusySeekEngine(PlayerEngineType type, {required this.refuseFor})
+    : super(type, _xtream, succeed: true);
+
+  final Duration refuseFor;
+  final _opened = Stopwatch();
+  int seeks = 0;
+
+  @override
+  Future<void> open({double initialVolume = 1}) async {
+    await super.open(initialVolume: initialVolume);
+    _value = const PlaybackSnapshot(
+      isReady: true,
+      isPlaying: true,
+      duration: Duration(minutes: 24),
+    );
+    _opened.start();
+  }
+
+  @override
+  Future<void> seekTo(Duration position) async {
+    seeks++;
+    sought = position;
+    if (_opened.elapsed < refuseFor) return;
+    _value = PlaybackSnapshot(
+      isReady: true,
+      isPlaying: true,
+      position: position,
+      duration: _value.duration,
+    );
+  }
 }
 
 class _StickyEngine extends _FakeEngine {

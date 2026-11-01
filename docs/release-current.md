@@ -38,4 +38,5 @@
 - Durante la riproduzione i comandi del player rispondono più rapidi: le pagine sotto il player non si ridisegnano più ogni pochi secondi.
 - Sulla TV locandine e sfondi sono più nitidi, soprattutto sugli schermi Full HD e 4K.
 - Sulla TV la locandina selezionata nei consigliati della Home e in «Titoli simili» resta tutta sullo schermo.
+- Un titolo riaperto subito dopo averlo chiuso riprende dal punto in cui eri rimasto invece di ripartire dall'inizio, e il punto salvato non viene più perso se la ripresa non riesce.
 - Nel player arriva «Effetti audio»: equalizzatore con preset (Cinema, Musica, Bassi potenti, Alti brillanti) e bande regolabili, «Dialoghi più chiari» per sentire meglio le voci e la «Modalità notte», che abbassa esplosioni e musica e alza le voci, sempre attiva o automatica dalle 22 alle 7. La scelta resta salvata sul dispositivo e si regola anche col telecomando.
