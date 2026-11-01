@@ -38,6 +38,28 @@ double? snapFrameRate(double? fps) {
   return doubled == null ? null : doubled * 2;
 }
 
+/// Cadences a count of drawn pictures can tell apart. A few seconds of
+/// counting cannot separate 24 from 25 (a 25 fps channel was counted at 24
+/// and played at 24 Hz), so 24 is left out: only live streams are counted,
+/// and films declare their own rate.
+const kMeasuredFrameRates = <double>[25, 30, 50, 60];
+
+/// Nearest cadence within 6% for a rate measured by counting pictures, or
+/// null when the count fits none (a stalled or dropping decoder).
+double? snapMeasuredFrameRate(double? fps) {
+  if (fps == null || !fps.isFinite || fps <= 0) return null;
+  double? best;
+  var bestDiff = double.infinity;
+  for (final rate in kMeasuredFrameRates) {
+    final diff = (fps - rate).abs() / rate;
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = rate;
+    }
+  }
+  return bestDiff <= 0.06 ? best : null;
+}
+
 /// Display rate for [fps] among [rates]: the highest exact multiple not above
 /// [kMaxMatchedRefresh], so 25 fps plays at 50 Hz and the menus stay fluid.
 /// Only video faster than that limit (100 fps) may use a fraction (50 Hz).

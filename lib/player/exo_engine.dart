@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
+import '../models/frame_rate_policy.dart';
 import '../models/player_settings.dart';
 import '../services/frame_telemetry_service.dart';
 import 'playback_engine.dart';
@@ -396,10 +397,26 @@ class ExoEngine extends PlaybackEngine {
         for (final t in tracks)
           if ((t.frameRate ?? 0) > 0) t.frameRate!,
       };
-      return rates.length == 1 ? rates.first : null;
-    } catch (_) {
-      return null;
-    }
+      if (rates.length == 1) return rates.first;
+    } catch (_) {}
+    return _measuredFrameRate();
+  }
+
+  /// Live MPEG-TS declares no frame rate: count the pictures drawn instead,
+  /// after the uneven first pictures of a start.
+  Future<double?> _measuredFrameRate() async {
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (_disposed) return null;
+    await _pollWindow();
+    final first = renderedFrameCount;
+    if (_disposed || first == null || !value.isPlaying) return null;
+    final clock = Stopwatch()..start();
+    await Future<void>.delayed(const Duration(seconds: 4));
+    await _pollWindow();
+    final last = renderedFrameCount;
+    if (_disposed || last == null || !value.isPlaying) return null;
+    final seconds = clock.elapsedMilliseconds / 1000;
+    return snapMeasuredFrameRate((last - first) / seconds);
   }
 
   @override

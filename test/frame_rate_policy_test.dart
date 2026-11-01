@@ -74,6 +74,27 @@ void main() {
     });
   });
 
+  group('snapMeasuredFrameRate', () {
+    test('rounds a count of drawn pictures to a broadcast cadence', () {
+      expect(snapMeasuredFrameRate(24.6), 25);
+      // A 25 fps channel counted at 24 must not switch the display to 24 Hz.
+      expect(snapMeasuredFrameRate(24.0), 25);
+      expect(snapMeasuredFrameRate(23.8), 25);
+      expect(snapMeasuredFrameRate(25.9), 25);
+      expect(snapMeasuredFrameRate(49.0), 50);
+      expect(snapMeasuredFrameRate(29.6), 30);
+      expect(snapMeasuredFrameRate(58.7), 60);
+      expect(pickRefreshRate(snapMeasuredFrameRate(24.6), chromecast), 50);
+    });
+
+    test('rejects counts from a stalled or dropping decoder', () {
+      expect(snapMeasuredFrameRate(null), isNull);
+      expect(snapMeasuredFrameRate(0), isNull);
+      expect(snapMeasuredFrameRate(8.2), isNull);
+      expect(snapMeasuredFrameRate(40), isNull);
+    });
+  });
+
   test('formats rates the way a TV menu shows them', () {
     expect(formatRefreshRate(60.000004), '60 Hz');
     expect(formatRefreshRate(59.94006), '59,94 Hz');
