@@ -1853,7 +1853,25 @@ class _TvRowTitle extends StatelessWidget {
   }
 }
 
+/// Drops the part of the hero picture hidden by the solid scrim.
+class _LeftCut extends CustomClipper<Rect> {
+  final double left;
+  const _LeftCut(this.left);
+
+  @override
+  Rect getClip(Size size) =>
+      Rect.fromLTRB(left.clamp(0, size.width), 0, size.width, size.height);
+
+  @override
+  bool shouldReclip(_LeftCut old) => old.left != left;
+}
+
 class _TvHeroBackdrop extends StatelessWidget {
+  /// Scrim stops across the width: solid black up to [_scrimSolid], fading
+  /// to clear at [_scrimClear].
+  static const _scrimSolid = 0.28;
+  static const _scrimClear = 0.58;
+
   final TmdbItem? item;
 
   final int decodeWidth;
@@ -1863,32 +1881,40 @@ class _TvHeroBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     // Full-screen artwork. One scrim: solid black on the text side, clear
     // past the middle so the picture stays readable from the sofa.
+    // This layer is redrawn on every frame of a row scroll: the picture is
+    // skipped where the scrim is solid and the gradient covers only its fade,
+    // halving the pixels a weak TV GPU fills (Fire TV Stick: slowest raster
+    // frames from 35 to 20 ms).
     return RepaintBoundary(
       child: item == null
           ? const SizedBox.expand()
-          : Stack(
+          : LayoutBuilder(
               key: ValueKey(item!.key),
-              fit: StackFit.expand,
-              children: [
-                PosterImage(
-                  url: item?.backdropUrl,
-                  maxDecodeWidth: decodeWidth,
-                ),
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        AppColors.background,
-                        AppColors.background,
-                        AppColors.clear,
-                      ],
-                      stops: [0, 0.28, 0.58],
+              builder: (_, c) => Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRect(
+                    clipper: _LeftCut(c.maxWidth * _scrimSolid),
+                    child: PosterImage(
+                      url: item?.backdropUrl,
+                      maxDecodeWidth: decodeWidth,
                     ),
                   ),
-                ),
-              ],
+                  Positioned(
+                    left: c.maxWidth * _scrimSolid,
+                    width: c.maxWidth * (_scrimClear - _scrimSolid),
+                    top: 0,
+                    bottom: 0,
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [AppColors.background, AppColors.clear],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
     );
   }
