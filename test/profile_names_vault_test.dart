@@ -17,6 +17,7 @@ const _account = '00000000-0000-4000-8000-000000000002';
 class _FakeProfiles {
   final rows = <Map<String, dynamic>>[];
   final writtenNames = <String>[];
+  var reads = 0;
 
   Future<http.Response> handle(http.Request r) async {
     http.Response reply(Object body) => http.Response(
@@ -47,6 +48,7 @@ class _FakeProfiles {
         rows.removeWhere((row) => row['id'] == id);
         return reply([]);
       default:
+        reads++;
         return reply(rows);
     }
   }
@@ -177,6 +179,50 @@ void main() {
     );
     await profiles.load();
     expect(profiles.items.single.name, 'Profilo 1');
+    await client.dispose();
+  });
+
+  test('periodic rereads wait for the refresh age once names are in the '
+      'vault', () async {
+    SharedPreferences.setMockInitialValues({
+      'sync_last_saved_snapshot': DateTime.utc(2020).toIso8601String(),
+    });
+    FlutterSecureStorage.setMockInitialValues({
+      'personal_vault_$_account': PersonalVault.generateKey(),
+    });
+    final server = _FakeProfiles()
+      ..rows.add({
+        'id': 'p1',
+        'sync_code': _account,
+        'name': 'Sample',
+        'created_at': '2026-11-01T00:00:00Z',
+      });
+    final client = await _client(server);
+    final profiles = ProfileProvider(
+      ProfileService(client),
+      SyncService(client),
+    );
+    await profiles.load();
+    expect(server.reads, 1);
+
+    // A plain name still in the table keeps every reread going.
+    await profiles.refreshIfStale();
+    expect(server.reads, 2);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'sync_last_saved_snapshot',
+      DateTime.now().add(const Duration(seconds: 5)).toIso8601String(),
+    );
+    await profiles.refreshIfStale();
+    expect(server.reads, 3);
+    expect(server.rows.single['name'], '');
+
+    await profiles.refreshIfStale();
+    expect(server.reads, 3, reason: 'nothing pending, still fresh');
+    await profiles.refreshIfStale(
+      now: DateTime.now().add(ProfileProvider.refreshAge),
+    );
+    expect(server.reads, 4);
     await client.dispose();
   });
 

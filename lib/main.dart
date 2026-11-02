@@ -210,9 +210,9 @@ class _StellarTvAppState extends State<StellarTvApp> {
       // Profile names arrive encrypted with the other settings.
       await _profileProvider.load(silent: true);
     };
-    // Profiles created/edited on other devices show up automatically.
-    _historyProvider.onAfterAutoPull = () =>
-        _profileProvider.load(silent: true);
+    // Profiles edited elsewhere show up automatically: names with the vault
+    // (settings restored above), table-only edits at the next stale reread.
+    _historyProvider.onAfterAutoPull = _profileProvider.refreshIfStale;
     // The first cloud pull is not needed to draw Home: start it right after
     // the first frame so startup and the first scroll stay smooth. Pushes
     // from user actions remain instant (schedulePush is independent).

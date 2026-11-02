@@ -40,6 +40,25 @@ class ProfileProvider extends ChangeNotifier {
   UserProfile? get selected =>
       _items.where((e) => e.id == _selectedId).firstOrNull;
 
+  /// Name changes reload right away when the vault brings them; only
+  /// table-only edits (avatar, color, kids flag, profiles added from the
+  /// site) rely on this periodic reread.
+  static const refreshAge = Duration(minutes: 30);
+  DateTime? _fetchedAt;
+  bool _namesPending = false;
+
+  /// Rereads the table after an automatic cloud pull, at most every
+  /// [refreshAge] unless a plain name is still waiting to leave the table.
+  Future<void> refreshIfStale({DateTime? now}) async {
+    final at = _fetchedAt;
+    if (!_namesPending &&
+        at != null &&
+        (now ?? DateTime.now()).difference(at) < refreshAge) {
+      return;
+    }
+    await load(silent: true);
+  }
+
   Future<void> load({bool silent = false}) async {
     final code = await _sync.getStoredCode();
     if (code == null) {
@@ -57,6 +76,7 @@ class ProfileProvider extends ChangeNotifier {
     _selectedId ??= await _service.getSelectedProfileId();
     try {
       _items = await _withNames(code, await _service.listProfiles(code));
+      _fetchedAt = DateTime.now();
       _selectedId = await _service.getSelectedProfileId();
       if (_selectedId != null && !_items.any((e) => e.id == _selectedId)) {
         _selectedId = null;
@@ -94,6 +114,7 @@ class ProfileProvider extends ChangeNotifier {
     var events = await _service.nameEvents();
     final saved = await _sync.lastSavedSnapshot();
     final out = <UserProfile>[];
+    var pending = false;
     for (var i = 0; i < rows.length; i++) {
       final row = rows[i];
       final event = events[row.id] is Map
@@ -103,6 +124,7 @@ class ProfileProvider extends ChangeNotifier {
           ? null
           : event?['name'] as String?;
       if (vault && row.name.isNotEmpty) {
+        var cleared = false;
         if (encrypted != row.name) {
           await _service.recordName(row.id, name: row.name);
           events = await _service.nameEvents();
@@ -111,11 +133,13 @@ class ProfileProvider extends ChangeNotifier {
           if (saved != null && at != null && saved.isAfter(at)) {
             try {
               await _service.clearTableName(id: row.id, syncCode: code);
+              cleared = true;
             } catch (_) {
               /* Retried at the next load; the name is safe in the vault. */
             }
           }
         }
+        if (!cleared) pending = true;
       }
       final shown = row.name.isNotEmpty
           ? row.name
@@ -124,6 +148,7 @@ class ProfileProvider extends ChangeNotifier {
           : 'Profilo ${i + 1}';
       out.add(shown == row.name ? row : row.copyWith(name: shown));
     }
+    _namesPending = pending;
     return out;
   }
 
