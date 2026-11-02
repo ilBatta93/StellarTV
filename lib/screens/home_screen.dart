@@ -1,7 +1,6 @@
 import '../widgets/ui_scale.dart';
 
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +15,7 @@ import '../services/frame_telemetry_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/tv_catalog_toolbar.dart';
 import '../widgets/brand_logo.dart';
+import '../widgets/glass.dart';
 import '../widgets/tv_catalog_navigation.dart';
 import '../widgets/tv_focusable.dart';
 import '../widgets/tv_home_layout.dart';
@@ -111,23 +111,32 @@ class _HomeScreenState extends State<HomeScreen> {
         titleSpacing: 20,
         title: const BrandLogo(size: 28),
         actions: [
-          IconButton(
-            tooltip: 'Cerca',
-            icon: const Icon(Icons.search_rounded),
-            onPressed: () => _push(const SearchScreen()),
+          GlassSurface(
+            borderRadius: const BorderRadius.all(Radius.circular(26)),
+            blur: 18,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Cerca',
+                  icon: const Icon(Icons.search_rounded),
+                  onPressed: () => _push(const SearchScreen()),
+                ),
+                IconButton(
+                  tooltip: 'Preferiti',
+                  icon: Icon(Icons.favorite_rounded, color: AppColors.primary),
+                  onPressed: () => _push(const FavoritesPage()),
+                ),
+                const _ProfileButton(),
+                IconButton(
+                  tooltip: 'Impostazioni',
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: () => _push(const SettingsScreen()),
+                ),
+              ],
+            ),
           ),
-          IconButton(
-            tooltip: 'Preferiti',
-            icon: Icon(Icons.favorite_rounded, color: AppColors.primary),
-            onPressed: () => _push(const FavoritesPage()),
-          ),
-          const _ProfileButton(),
-          IconButton(
-            tooltip: 'Impostazioni',
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => _push(const SettingsScreen()),
-          ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
         ],
       ),
       body: IndexedStack(
@@ -140,36 +149,36 @@ class _HomeScreenState extends State<HomeScreen> {
           const FavoritesPage(),
         ],
       ),
-      bottomNavigationBar: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: DecoratedBox(
-            decoration: const BoxDecoration(
-              color: Color(0x991C1C1E),
-              border: Border(top: BorderSide(color: Color(0x2EFFFFFF))),
-            ),
-            child: SafeArea(
-              top: false,
-              child: NavigationBar(
-                backgroundColor: const Color(0x00000000),
-                surfaceTintColor: const Color(0x00000000),
-                shadowColor: const Color(0x00000000),
-                indicatorColor: const Color(0x00000000),
-                elevation: 0,
-                selectedIndex: _currentIndex,
-                onDestinationSelected: (i) => setState(() {
-                  _currentIndex = i;
-                  if (i >= 0 && i < _order.length) _visited.add(_order[i]);
-                }),
-                destinations: [
-                  for (final section in _order) _mobileDestination(section),
-                  const NavigationDestination(
-                    icon: Icon(Icons.favorite_border_rounded),
-                    selectedIcon: Icon(Icons.favorite_rounded),
-                    label: 'Preferiti',
-                  ),
-                ],
-              ),
+      // Floating glass tab bar, as on iOS: content scrolls under it.
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.only(bottom: 8),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+          child: GlassSurface(
+            borderRadius: const BorderRadius.all(Radius.circular(34)),
+            child: NavigationBar(
+              height: 64,
+              backgroundColor: AppColors.clear,
+              surfaceTintColor: AppColors.clear,
+              shadowColor: AppColors.clear,
+              indicatorColor: AppColors.glassSelected,
+              indicatorShape: const StadiumBorder(),
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              elevation: 0,
+              selectedIndex: _currentIndex,
+              onDestinationSelected: (i) => setState(() {
+                _currentIndex = i;
+                if (i >= 0 && i < _order.length) _visited.add(_order[i]);
+              }),
+              destinations: [
+                for (final section in _order) _mobileDestination(section),
+                const NavigationDestination(
+                  icon: Icon(Icons.favorite_border_rounded),
+                  selectedIcon: Icon(Icons.favorite_rounded),
+                  label: 'Preferiti',
+                ),
+              ],
             ),
           ),
         ),

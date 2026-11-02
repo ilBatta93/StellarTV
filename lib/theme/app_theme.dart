@@ -13,6 +13,9 @@ class AppColors {
   static const glassStroke = Color(0x29FFFFFF);
   static const glassSelected = Color(0x33FFFFFF);
   static const glassText = Color(0xCCFFFFFF);
+  // Touch glass (tab bar, toolbars, sheets): dark tint under the blur.
+  static const glassTint = Color(0x8C1C1C1E);
+  static const glassSheet = Color(0xF21C1C1E);
   static const overlay = Color(0x99000000);
   static const clear = Color(0x00000000);
   static const onOverlay = textPrimary;
@@ -146,7 +149,12 @@ class AppTheme {
         color: AppColors.surface,
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(isTv ? 14 : 18),
+          side: isTv
+              ? BorderSide.none
+              : const BorderSide(color: AppColors.glassStroke, width: 0.6),
+        ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         // iOS tab bar: translucent, no pill, tinted icon when selected.
@@ -171,13 +179,22 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surface,
+        fillColor: isTv ? AppColors.surface : AppColors.glassFill,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(isTv ? 12 : 14),
           borderSide: BorderSide.none,
         ),
+        enabledBorder: isTv
+            ? null
+            : OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(
+                  color: AppColors.glassStroke,
+                  width: 0.8,
+                ),
+              ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(isTv ? 12 : 14),
           borderSide: BorderSide(color: accent, width: 1.5),
         ),
         hintStyle: const TextStyle(color: AppColors.textMuted),
@@ -242,12 +259,14 @@ class AppTheme {
         style:
             OutlinedButton.styleFrom(
               foregroundColor: AppColors.textPrimary,
-              backgroundColor: AppColors.surface,
+              backgroundColor: isTv ? AppColors.surface : AppColors.glassFill,
               minimumSize: Size(48, isTv ? 44 : 48),
               shape: const StadiumBorder(),
             ).copyWith(
               side: WidgetStateProperty.resolveWith((states) {
-                const idle = BorderSide(color: AppColors.border);
+                final idle = BorderSide(
+                  color: isTv ? AppColors.border : AppColors.glassStroke,
+                );
                 if (!isTv) return idle;
                 return focusRing(states, accent, idle: idle);
               }),
@@ -280,10 +299,12 @@ class AppTheme {
             ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.surface,
+        backgroundColor: isTv ? AppColors.surface : AppColors.glassFill,
         selectedColor: accent.withValues(alpha: 0.2),
         surfaceTintColor: AppColors.clear,
-        side: const BorderSide(color: AppColors.border),
+        side: BorderSide(
+          color: isTv ? AppColors.border : AppColors.glassStroke,
+        ),
         shape: const StadiumBorder(),
         labelStyle: const TextStyle(
           color: AppColors.textPrimary,
@@ -298,8 +319,12 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        backgroundColor: AppColors.card,
+        shape: isTv
+            ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))
+            : const StadiumBorder(
+                side: BorderSide(color: AppColors.glassStroke, width: 0.8),
+              ),
+        backgroundColor: isTv ? AppColors.card : AppColors.glassSheet,
         contentTextStyle: TextStyle(color: AppColors.textPrimary),
       ),
       textTheme: TextTheme(
@@ -378,19 +403,43 @@ class AppTheme {
         thumbColor: const WidgetStatePropertyAll(Colors.white),
         trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: AppColors.surface,
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: isTv ? AppColors.surface : AppColors.glassSheet,
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
+        dragHandleColor: isTv ? null : AppColors.glassText,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(isTv ? 22 : 30),
+          ),
+          side: isTv
+              ? BorderSide.none
+              : const BorderSide(color: AppColors.glassStroke, width: 0.8),
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: AppColors.surface,
+        backgroundColor: isTv ? AppColors.surface : AppColors.glassSheet,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(isTv ? 22 : 30),
+          side: isTv
+              ? BorderSide.none
+              : const BorderSide(color: AppColors.glassStroke, width: 0.8),
+        ),
       ),
+      popupMenuTheme: isTv
+          ? null
+          : PopupMenuThemeData(
+              color: AppColors.glassSheet,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: const BorderSide(
+                  color: AppColors.glassStroke,
+                  width: 0.8,
+                ),
+              ),
+            ),
     );
   }
 }

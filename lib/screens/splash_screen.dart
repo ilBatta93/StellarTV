@@ -183,7 +183,11 @@ class _SplashScreenState extends State<SplashScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          const ColoredBox(color: kBrandCanvas),
+          AnimatedBuilder(
+            animation: _animController,
+            builder: (context, _) =>
+                BrandIntroBackdrop(progress: _animController.value),
+          ),
           Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
