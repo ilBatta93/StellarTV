@@ -80,7 +80,7 @@ La build iOS (`build-ios.yml`) parte solo su richiesta esplicita equivalente.
 - Con una sola connessione ammessa il rilascio del player nativo precede il flusso successivo. Con più connessioni il successivo può aprirsi prima della chiusura, e `released` attende comunque lo smaltimento reale.
 - La diretta non entra nella cronologia di visione né nel cloud.
 - Un episodio non eredita il voto della serie ma ha il suo. Un voto IMDb non ancora arrivato non si mostra.
-- Supabase: progetto `dzojklhnwdjcrmkbepft`, schema solo via SQL incollato a mano (master §8).
+- Supabase: progetto `dzojklhnwdjcrmkbepft`, schema solo tramite script `docs/*.sql` eseguiti come da master §8.
 
 ## 8. Sito companion
 In `../stellartv-ae76efd2`, con il suo `AGENTS.md`. Le API che l'app chiama stanno in `src/routes/api/public/` del sito; la guida per l'utente in `src/lib/guideContent.ts`.

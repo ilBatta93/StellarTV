@@ -5,7 +5,7 @@ Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`
 ## Contenuto
 - `release-current.md`: fonte delle note di rilascio (`AGENTS.md` §6). Solo elenco puntato di novità per l'utente, neutre, senza nomi di classi o metodi.
 - `*.md` tecnici: analisi e decisioni (player, primo piano, diagnostica, privacy, migrazioni). Si aggiornano quando cambia il comportamento che descrivono.
-- `*.sql`: script Supabase da incollare a mano (master §8): transazionali e idempotenti.
+- `*.sql`: script Supabase eseguiti come da master §8: transazionali e idempotenti.
 - `handoff/`: file di ripresa fra sessioni, ignorati da git. Formato comune a Claude e Grok nel master §12.
 
 ## Regole

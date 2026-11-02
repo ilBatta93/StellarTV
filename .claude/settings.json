@@ -95,7 +95,9 @@
       "Bash(git rebase *)",
       "Bash(git branch -D *)",
       "Bash(supabase db pull*)",
-      "PowerShell(supabase db pull*)"
+      "PowerShell(supabase db pull*)",
+      "Bash(supabase db query *)",
+      "PowerShell(supabase db query *)"
     ],
     "deny": [
       "Read(android/key.properties)",
@@ -127,8 +129,6 @@
       "PowerShell(supabase db push*)",
       "Bash(supabase db reset*)",
       "PowerShell(supabase db reset*)",
-      "Bash(supabase db query*)",
-      "PowerShell(supabase db query*)",
       "Bash(supabase db execute*)",
       "PowerShell(supabase db execute*)",
       "Bash(supabase db remote*)",
