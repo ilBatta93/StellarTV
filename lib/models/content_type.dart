@@ -7,10 +7,11 @@ extension ContentTypeExtension on ContentType {
         return 'Diretta';
       case ContentType.movie:
         return 'Film';
+      // Animation is a classification inside the Serie TV section, not a
+      // section of its own.
       case ContentType.series:
-        return 'Serie TV';
       case ContentType.anime:
-        return 'Anime';
+        return 'Serie TV';
     }
   }
 }

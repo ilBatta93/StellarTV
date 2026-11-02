@@ -367,9 +367,8 @@ class _HistoryTile extends StatelessWidget {
       case ContentType.movie:
         return 'Film';
       case ContentType.series:
-        return 'Serie TV';
       case ContentType.anime:
-        return 'Anime';
+        return 'Serie TV';
     }
   }
 

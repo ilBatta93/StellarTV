@@ -294,11 +294,13 @@ class _SearchScreenState extends State<SearchScreen> {
       (ContentType.live, 'Canali in diretta'),
       (ContentType.movie, 'Film nella tua lista'),
       (ContentType.series, 'Serie TV nella tua lista'),
-      (ContentType.anime, 'Animazione nella tua lista'),
     ];
     final rows = <Widget>[];
     for (final (type, label) in sections) {
-      final found = _local[type] ?? const <Channel>[];
+      // Animation titles live in the Serie TV section, so they share its row.
+      final found = type == ContentType.series
+          ? [...?_local[ContentType.series], ...?_local[ContentType.anime]]
+          : _local[type] ?? const <Channel>[];
       if (found.isEmpty || !_filter.showsLocal(type)) continue;
       rows.add(
         SliverToBoxAdapter(
