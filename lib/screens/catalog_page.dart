@@ -913,8 +913,8 @@ class _CatalogPageState extends State<CatalogPage> {
     final names = _genreNames;
     final counts = app.genreCountsOf(widget.type);
     if (counts.isEmpty) return const SizedBox.shrink();
-    final ids = counts.keys.toList()
-      ..sort((a, b) => names[a]!.compareTo(names[b]!));
+    final ids = genreChipIds(counts, names);
+    if (ids.isEmpty) return const SizedBox.shrink();
     Widget chip(String label, bool selected, VoidCallback onTap) {
       final control = Padding(
         padding: const EdgeInsets.only(right: 8),
@@ -1687,3 +1687,11 @@ class _CategoryDrawer extends StatelessWidget {
     );
   }
 }
+
+/// Genre ids of the touch chip bar, sorted by name. Counts can hold genre ids
+/// of the other kind (a movie id inside a series section): only named genres
+/// get a chip.
+@visibleForTesting
+List<int> genreChipIds(Map<int, int> counts, Map<int, String> names) =>
+    counts.keys.where(names.containsKey).toList()
+      ..sort((a, b) => names[a]!.compareTo(names[b]!));
