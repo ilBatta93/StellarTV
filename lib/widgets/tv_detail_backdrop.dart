@@ -6,6 +6,7 @@ import "package:cached_network_image/cached_network_image.dart";
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'tv_scrimmed_art.dart';
 
 /// TV only: movie, series and person pages fill the screen with a still
 /// backdrop (no picture cut at the top while scrolling). Decode and the
@@ -40,73 +41,43 @@ class TvDetailBackdrop extends StatelessWidget {
         children: [
           // Own layer: scrolling the page never repaints the picture.
           RepaintBoundary(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ValueListenableBuilder<bool>(
-                  valueListenable: TvImageMemoryGuard.reducedRendering,
-                  builder: (_, pressure, _) {
-                    final cap = TvRenderPolicy.backdropDecodeLimit(
+            child: TvScrimmedArt(
+              bottomFadeFrom: 0.55,
+              picture: ValueListenableBuilder<bool>(
+                valueListenable: TvImageMemoryGuard.reducedRendering,
+                builder: (_, pressure, _) {
+                  final cap = TvRenderPolicy.backdropDecodeLimit(
+                    memoryPressure: pressure,
+                  );
+                  final physical =
+                      (width *
+                              TvRenderPolicy.imagePixelRatio(
+                                isTv: true,
+                                devicePixelRatio: devicePixelRatio,
+                                memoryPressure: pressure,
+                              ))
+                          .round();
+                  final decodeWidth = physical > 0 && physical < cap
+                      ? physical
+                      : cap;
+                  final url = requestUrl(
+                    image,
+                    TvRenderPolicy.backdropRequestWidth(
                       memoryPressure: pressure,
-                    );
-                    final physical =
-                        (width *
-                                TvRenderPolicy.imagePixelRatio(
-                                  isTv: true,
-                                  devicePixelRatio: devicePixelRatio,
-                                  memoryPressure: pressure,
-                                ))
-                            .round();
-                    final decodeWidth = physical > 0 && physical < cap
-                        ? physical
-                        : cap;
-                    final url = requestUrl(
-                      image,
-                      TvRenderPolicy.backdropRequestWidth(
-                        memoryPressure: pressure,
-                      ),
-                    );
-                    if (url == null) return const SizedBox.expand();
-                    return CachedNetworkImage(
-                      cacheManager: AppImageCache.manager,
-                      imageUrl: url,
-                      fit: BoxFit.cover,
-                      memCacheWidth: decodeWidth,
-                      placeholder: (_, _) => const SizedBox.expand(),
-                      errorWidget: (_, _, _) => const SizedBox.expand(),
-                      fadeInDuration: const Duration(milliseconds: 300),
-                    );
-                  },
-                ),
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        AppColors.background,
-                        AppColors.background,
-                        AppColors.clear,
-                      ],
-                      stops: [0, 0.28, 0.58],
                     ),
-                  ),
-                ),
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        AppColors.clear,
-                        AppColors.clear,
-                        AppColors.background,
-                      ],
-                      stops: [0, 0.55, 1],
-                    ),
-                  ),
-                ),
-              ],
+                  );
+                  if (url == null) return const SizedBox.expand();
+                  return CachedNetworkImage(
+                    cacheManager: AppImageCache.manager,
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    memCacheWidth: decodeWidth,
+                    placeholder: (_, _) => const SizedBox.expand(),
+                    errorWidget: (_, _, _) => const SizedBox.expand(),
+                    fadeInDuration: const Duration(milliseconds: 300),
+                  );
+                },
+              ),
             ),
           ),
           child,
