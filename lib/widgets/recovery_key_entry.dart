@@ -209,7 +209,7 @@ Future<bool> acceptTypedRecoveryKey({
     return false;
   }
   try {
-    await history.pullFromCloud();
+    await history.pullFromCloud(force: true);
   } catch (_) {}
   return true;
 }

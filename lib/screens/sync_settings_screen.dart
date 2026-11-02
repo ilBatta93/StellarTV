@@ -158,7 +158,7 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
     final sync = context.read<SyncProvider>();
     final history = context.read<HistoryProvider>();
     await sync.pullNow();
-    await history.pullFromCloud();
+    await history.pullFromCloud(force: true);
     if (!context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     if (history.error != null) {

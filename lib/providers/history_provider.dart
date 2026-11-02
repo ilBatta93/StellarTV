@@ -476,7 +476,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Pulls cloud state and merges it into local (newer `watched` wins for
   /// history; settings and credentials are filled in when missing locally).
-  Future<bool> pullFromCloud() async {
+  ///
+  /// Unless [force], a cloud copy already applied on this device for the
+  /// current profile is skipped after a tiny revision read.
+  Future<bool> pullFromCloud({bool force = false}) async {
     await _manualWrites;
     // The local load is async and started in the constructor: never merge
     // against an empty in-memory list or this would overwrite the local
@@ -492,10 +495,19 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
         _error = 'Accedi al tuo account per usare il cloud.';
         return false;
       }
-      final (payload, updatedAt) = await _sync.pull(code);
+      final profileId = _profileId;
+      final pulled = await _sync.pull(code, profileId: profileId, force: force);
       if (epoch != _profileEpoch || code != _sync.currentUserId) return false;
+      if (pulled.unchanged) {
+        await _syncProvider?.markPulled();
+        return true;
+      }
+      final payload = pulled.payload;
+      final updatedAt = pulled.updatedAt;
       if (payload == null) {
-        _error = 'Nessun dato salvato nel cloud per questo account.';
+        _error = _sync.lastPullError == null
+            ? 'Nessun dato salvato nel cloud per questo account.'
+            : 'Sincronizzazione non riuscita. Controlla la connessione.';
         return false;
       }
       // Other profiles' histories are merged straight into local storage.
@@ -561,6 +573,9 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       );
       if (settingsChanged) await onSettingsRestored?.call();
       await _persistLocal();
+      if (epoch == _profileEpoch) {
+        await _sync.markApplied(code, profileId, pulled.revision);
+      }
       await _syncProvider?.markPulled();
       return true;
     } catch (_) {

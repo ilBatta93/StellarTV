@@ -101,11 +101,96 @@ class SyncService {
     }
     if (account != currentUserId) throw StateError('Account cambiato');
     await _keys.save(account, recovery);
+    await _forgetApplied(account);
   }
 
   Future<void> forgetVaultKey() async {
     final account = currentUserId;
-    if (account != null) await _keys.forget(account);
+    if (account == null) return;
+    await _keys.forget(account);
+    await _forgetApplied(account);
+    _remote = null;
+  }
+
+  // ----- revision cache -----
+
+  /// Last decrypted cloud copy. The vault revision grows on every save (the
+  /// RPC compares and increments it), so a fresh revision read that matches
+  /// proves this copy is still the cloud content: no download, no decrypt.
+  _RemoteVault? _remote;
+
+  static String _appliedKey(String account, String? profileId) =>
+      'vault_applied_revision_${account}_${profileId ?? ''}';
+
+  /// Records that this device's local data already contains the cloud copy
+  /// at [revision] for [profileId], so the next pull at the same revision
+  /// can skip download, decrypt and merge.
+  Future<void> markApplied(
+    String account,
+    String? profileId,
+    int? revision,
+  ) async {
+    if (revision == null || account != currentUserId) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_appliedKey(account, profileId), revision);
+  }
+
+  Future<void> _forgetApplied(String account) async {
+    final prefs = await SharedPreferences.getInstance();
+    final prefix = 'vault_applied_revision_${account}_';
+    for (final key in prefs.getKeys().toList()) {
+      if (key.startsWith(prefix)) await prefs.remove(key);
+    }
+  }
+
+  static int? _revision(dynamic v) => v is num ? v.toInt() : null;
+
+  /// Returns the cloud copy, downloading the envelope only when the revision
+  /// differs from the cached one. [head] carries the fields of the cheap
+  /// revision read (e.g. `updated_at`), or of the full read on a miss.
+  Future<
+    ({Map<String, dynamic> data, int? revision, Map<String, dynamic>? head})
+  >
+  _readRemote(
+    String code,
+    String recovery, {
+    String headFields = 'revision',
+  }) async {
+    final cached = _remote;
+    if (cached != null &&
+        cached.account == code &&
+        cached.recovery == recovery) {
+      final head = await _client
+          .from('personal_vaults')
+          .select(headFields)
+          .eq('user_id', code)
+          .maybeSingle();
+      if (head == null) {
+        _remote = null;
+        return (data: PersonalVault.clean({}), revision: null, head: null);
+      }
+      if (_revision(head['revision']) == cached.revision) {
+        return (data: cached.data, revision: cached.revision, head: head);
+      }
+    }
+    final fields = headFields == 'revision'
+        ? 'envelope,revision'
+        : 'envelope,$headFields';
+    final row = await _client
+        .from('personal_vaults')
+        .select(fields)
+        .eq('user_id', code)
+        .maybeSingle();
+    if (row == null) {
+      _remote = null;
+      return (data: PersonalVault.clean({}), revision: null, head: null);
+    }
+    final data = await PersonalVault.decrypt(row['envelope'], recovery, code);
+    final revision = _revision(row['revision']);
+    _remote = revision == null
+        ? null
+        : _RemoteVault(code, recovery, revision, data);
+    return (data: data, revision: revision, head: row);
   }
 
   /// The cloud "code" is now the id of the signed-in account: every row in
@@ -233,6 +318,7 @@ class SyncService {
 
   /// Signs out and wipes every local copy of account data from this device.
   Future<void> signOut() async {
+    _remote = null;
     try {
       await _client.auth.signOut(scope: SignOutScope.local);
     } catch (_) {}
@@ -393,6 +479,10 @@ class SyncService {
     bool overwrite = false,
   }) async {
     final prefs = await SharedPreferences.getInstance();
+    final account = currentUserId;
+    final base = account == null
+        ? null
+        : _settingsBase(prefs, account) ?? <String, dynamic>{};
     var changed = false;
     for (final entry in settings.entries) {
       final key = entry.key;
@@ -405,10 +495,21 @@ class SyncService {
               entry.value as String,
             )
           : safe;
+      final local = PersonalVault.preference(prefs.get(key));
+      // With a known base a key is replaced only when this device did not
+      // change it since the last sync; the clock comparison stays for keys
+      // never synced from here.
+      final unchangedHere =
+          base != null && base.containsKey(key) && _same(local, base[key]);
       final write =
           key == ReactionsProvider.storageKey ||
-          overwrite ||
-          !prefs.containsKey(key);
+          !prefs.containsKey(key) ||
+          (base != null && base.containsKey(key) ? unchangedHere : overwrite);
+      if (base != null &&
+          key != ReactionsProvider.storageKey &&
+          (write || _same(local, value))) {
+        base[key] = value;
+      }
       if (!write || prefs.get(key).toString() == value.toString()) continue;
       changed = true;
       if (value is String) {
@@ -423,7 +524,68 @@ class SyncService {
         await prefs.setStringList(key, value.whereType<String>().toList());
       }
     }
+    if (account != null && base != null && account == currentUserId) {
+      await _saveSettingsBase(prefs, account, base);
+    }
     return changed;
+  }
+
+  static String _baseKey(String account) => 'vault_settings_base_$account';
+
+  /// Synced values as they were at the last successful sync of this device:
+  /// the common ancestor that tells a local change from a stale value.
+  /// Null before the first sync (old behavior applies).
+  static Map<String, dynamic>? _settingsBase(
+    SharedPreferences prefs,
+    String account,
+  ) {
+    final raw = prefs.getString(_baseKey(account));
+    if (raw == null) return null;
+    try {
+      return PersonalVault.object(jsonDecode(raw));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> _saveSettingsBase(
+    SharedPreferences prefs,
+    String account,
+    Map<String, dynamic> base,
+  ) async {
+    final encoded = jsonEncode(base);
+    if (prefs.getString(_baseKey(account)) != encoded) {
+      await prefs.setString(_baseKey(account), encoded);
+    }
+  }
+
+  static bool _same(dynamic a, dynamic b) =>
+      PersonalVault.canonical(a) == PersonalVault.canonical(b);
+
+  /// Settings to upload: a key this device left untouched since the last
+  /// sync takes the cloud value, so a stale device never reverts a choice
+  /// made elsewhere; reactions are unioned instead of replaced.
+  @visibleForTesting
+  static Map<String, dynamic> resolveSettings({
+    required Map<String, dynamic> local,
+    required Map<String, dynamic> remote,
+    required Map<String, dynamic>? base,
+  }) {
+    final out = Map<String, dynamic>.from(local);
+    for (final e in remote.entries) {
+      final mine = local[e.key];
+      if (!local.containsKey(e.key) || _same(mine, e.value)) continue;
+      if (e.key == ReactionsProvider.storageKey &&
+          mine is String &&
+          e.value is String) {
+        out[e.key] = ReactionsProvider.merge(mine, e.value as String);
+      } else if (base != null &&
+          base.containsKey(e.key) &&
+          _same(mine, base[e.key])) {
+        out[e.key] = e.value;
+      }
+    }
+    return out;
   }
 
   /// Overwrites local storage with cloud credentials (used when the local
@@ -554,28 +716,38 @@ class SyncService {
       }
       if (code != currentUserId) return null;
       final local = PersonalVault.merge(legacy, payload.toJson());
+      final localSettings = PersonalVault.object(local['settings']);
+      final base = _settingsBase(prefs, code);
+      Future<DateTime> done() async {
+        lastError = null;
+        if (legacyOk) await prefs.setBool(marker, true);
+        if (code == currentUserId) {
+          await _saveSettingsBase(prefs, code, localSettings);
+        }
+        final now = DateTime.now();
+        await prefs.setString(_lastPushKey, now.toIso8601String());
+        return now;
+      }
+
       for (var attempt = 0; attempt < 4; attempt++) {
         if (PlaybackWorkPolicy.instance.blocksCloud) return null;
-        final row = await _client
-            .from('personal_vaults')
-            .select('envelope,revision')
-            .eq('user_id', code)
-            .maybeSingle();
-        final remote = row == null
-            ? PersonalVault.clean({})
-            : await PersonalVault.decrypt(row['envelope'], recovery, code);
-        final merged = PersonalVault.merge(remote, local);
+        // Fresh revision read is mandatory: the cached copy is reused only
+        // when the cloud still holds exactly that revision.
+        final read = await _readRemote(code, recovery);
+        final remote = read.data;
+        final merged = PersonalVault.merge(remote, {
+          ...local,
+          'settings': resolveSettings(
+            local: localSettings,
+            remote: PersonalVault.object(remote['settings']),
+            base: base,
+          ),
+        });
         if (code != currentUserId) return null;
-        // Fresh remote read remains mandatory: never suppress another
-        // device's changes using a cached local fingerprint.
-        if (row != null &&
+        if (read.revision != null &&
             PersonalVault.canonical(remote) ==
                 PersonalVault.canonical(merged)) {
-          lastError = null;
-          if (legacyOk) await prefs.setBool(marker, true);
-          final now = DateTime.now();
-          await prefs.setString(_lastPushKey, now.toIso8601String());
-          return now;
+          return await done();
         }
         if (PlaybackWorkPolicy.instance.blocksCloud) return null;
         final envelope = await PersonalVault.encrypt(merged, recovery, code);
@@ -588,11 +760,12 @@ class SyncService {
             'save_personal_vault',
             params: {
               '_envelope': envelope,
-              '_expected_revision': row?['revision'] ?? 0,
+              '_expected_revision': read.revision ?? 0,
             },
           );
         } on PostgrestException catch (e) {
           if (e.code == '40001' && attempt < 3) {
+            _remote = null;
             await Future<void>.delayed(
               PlaybackWorkPolicy.conflictDelay(Random()),
             );
@@ -600,38 +773,21 @@ class SyncService {
           }
           rethrow;
         }
-        if (PlaybackWorkPolicy.instance.blocksCloud) return null;
-        final check = await _client
-            .from('personal_vaults')
-            .select('envelope,revision')
-            .eq('user_id', code)
-            .single();
-        final decoded = await PersonalVault.decrypt(
-          check['envelope'],
-          recovery,
-          code,
-        );
-        if (code != currentUserId) return null;
-        if (check['revision'].toString() != revision.toString()) {
-          if (attempt < 3) {
-            await Future<void>.delayed(
-              PlaybackWorkPolicy.conflictDelay(Random()),
-            );
-          }
-          continue;
-        }
-        // AES-GCM already authenticates the stored copy; a byte-level
-        // comparison wrongly rejected saves whose numbers or ordering
-        // changed in transit. Only require that the essentials survived.
+        // The RPC stored this envelope at the returned revision (compare and
+        // swap). Verify the ciphertext locally instead of downloading it
+        // again: AES-GCM authenticates it and the essentials must survive.
+        final decoded = await PersonalVault.decrypt(envelope, recovery, code);
         if ((decoded['history'] as Map).length <
             (PersonalVault.clean(merged)['history'] as Map).length) {
+          _remote = null;
           throw StateError('Verifica cifrata non riuscita');
         }
-        final now = DateTime.now();
-        lastError = null;
-        if (legacyOk) await prefs.setBool(marker, true);
-        await prefs.setString(_lastPushKey, now.toIso8601String());
-        return now;
+        final saved = _revision(revision);
+        _remote = saved == null
+            ? null
+            : _RemoteVault(code, recovery, saved, decoded);
+        if (code != currentUserId) return null;
+        return await done();
       }
     } catch (e) {
       /* Preserve all local and legacy copies on any failure. */
@@ -643,35 +799,62 @@ class SyncService {
     return null;
   }
 
-  Future<(SyncPayload?, DateTime?)> pull(String code) async {
+  /// Reason of the last failed pull, for the settings UI; null on success.
+  String? lastPullError;
+
+  /// Reads the cloud copy. Unless [force], a pull whose revision this device
+  /// already applied for [profileId] returns `unchanged` after a tiny read,
+  /// with no download, decrypt or merge.
+  Future<VaultPull> pull(
+    String code, {
+    String? profileId,
+    bool force = false,
+  }) async {
     if (PlaybackWorkPolicy.instance.blocksGuide || code != currentUserId) {
-      return (null, null);
+      return const VaultPull();
     }
     try {
       final recovery = await recoveryKey();
       if (recovery == null || PlaybackWorkPolicy.instance.blocksGuide) {
-        return (null, null);
+        lastPullError = recovery == null
+            ? 'chiave di recupero assente su questo dispositivo'
+            : null;
+        return const VaultPull();
       }
-      final row = await _client
-          .from('personal_vaults')
-          .select('envelope,updated_at')
-          .eq('user_id', code)
-          .maybeSingle();
-      if (row == null) return (null, null);
-      final decoded = await PersonalVault.decrypt(
-        row['envelope'],
-        recovery,
+      if (!force) {
+        final prefs = await SharedPreferences.getInstance();
+        final applied = prefs.getInt(_appliedKey(code, profileId));
+        if (applied != null) {
+          final head = await _client
+              .from('personal_vaults')
+              .select('revision')
+              .eq('user_id', code)
+              .maybeSingle();
+          if (head != null && _revision(head['revision']) == applied) {
+            lastPullError = null;
+            return VaultPull(unchanged: true, revision: applied);
+          }
+        }
+      }
+      final read = await _readRemote(
         code,
+        recovery,
+        headFields: 'revision,updated_at',
       );
       if (PlaybackWorkPolicy.instance.blocksGuide || code != currentUserId) {
-        return (null, null);
+        return const VaultPull();
       }
-      return (
-        SyncPayload.fromJson(PersonalVault.merge({}, decoded)),
-        DateTime.tryParse(row['updated_at'].toString()),
+      lastPullError = null;
+      if (read.revision == null) return const VaultPull();
+      return VaultPull(
+        payload: SyncPayload.fromJson(PersonalVault.merge({}, read.data)),
+        updatedAt: DateTime.tryParse(read.head?['updated_at'].toString() ?? ''),
+        revision: read.revision,
       );
-    } catch (_) {
-      return (null, null);
+    } catch (e) {
+      lastPullError = e.toString();
+      debugPrint('Vault pull failed: $e');
+      return const VaultPull();
     }
   }
 
@@ -690,6 +873,29 @@ class SyncService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastPullKey, DateTime.now().toIso8601String());
   }
+}
+
+/// Result of [SyncService.pull]. [unchanged] means the cloud still holds
+/// the revision this device already applied: nothing to merge.
+class VaultPull {
+  const VaultPull({
+    this.payload,
+    this.updatedAt,
+    this.revision,
+    this.unchanged = false,
+  });
+  final SyncPayload? payload;
+  final DateTime? updatedAt;
+  final int? revision;
+  final bool unchanged;
+}
+
+class _RemoteVault {
+  const _RemoteVault(this.account, this.recovery, this.revision, this.data);
+  final String account;
+  final String recovery;
+  final int revision;
+  final Map<String, dynamic> data;
 }
 
 class _QueuedHistory {

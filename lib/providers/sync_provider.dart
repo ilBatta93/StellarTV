@@ -269,11 +269,14 @@ class SyncProvider extends ChangeNotifier {
     _message = null;
     notifyListeners();
     try {
-      final (payload, _) = await _sync.pull(code);
+      final payload = (await _sync.pull(code, force: true)).payload;
       _success = payload != null;
-      _message = payload == null
+      final why = _sync.lastPullError;
+      _message = payload != null
+          ? 'Dati scaricati dal cloud.'
+          : why == null
           ? 'Nessun dato salvato nel cloud per questo account.'
-          : 'Dati scaricati dal cloud.';
+          : 'Download non riuscito. Verifica connessione e chiave in Dati cifrati.';
       return payload != null;
     } finally {
       _busy = false;
@@ -285,8 +288,7 @@ class SyncProvider extends ChangeNotifier {
   Future<SyncPayload?> pullPayload() async {
     final code = _code;
     if (code == null) return null;
-    final (payload, _) = await _sync.pull(code);
-    return payload;
+    return (await _sync.pull(code, force: true)).payload;
   }
 
   Future<void> markPulled() async {
