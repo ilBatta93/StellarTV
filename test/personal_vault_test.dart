@@ -226,4 +226,74 @@ void main() {
     expect(result['history']['sample']['pos'], 37);
     expect(result['favorite_ids'], ['sample']);
   });
+  test('reactions travel in their own lane and come back intact', () {
+    final device = {
+      'p1': {
+        'movie_7': {
+          'vote': 1,
+          'at': '2026-11-02T10:00:00.000Z',
+          'item': {
+            'id': 7,
+            'media_type': 'movie',
+            'title': 'Sample',
+            'poster_path': '/abc.jpg',
+            'stellar_vote_policy': 1,
+          },
+        },
+        'tv_9': {'vote': 0, 'at': '2026-11-02T11:00:00.000Z', 'item': {}},
+      },
+    };
+    final lane = PersonalVault.reactionsToLane(device);
+    expect(lane.keys, containsAll(['p1|movie_7', 'p1|tv_9']));
+    final merged = PersonalVault.merge({}, {
+      'profile_histories': {PersonalVault.reactionsLane: lane},
+    });
+    final back = PersonalVault.laneToReactions(
+      merged['profile_histories'][PersonalVault.reactionsLane],
+    );
+    expect(back['p1']['movie_7']['vote'], 1);
+    expect(back['p1']['movie_7']['item']['poster_path'], '/abc.jpg');
+    expect(back['p1']['tv_9']['vote'], 0);
+  });
+  test('the reactions lane is not capped like a history', () {
+    final lane = {
+      for (var i = 0; i < 600; i++)
+        'p|movie_$i': {
+          'id': i,
+          'media_type': 'movie',
+          'vote': 1,
+          'watched': '2026-11-02T10:00:00.000Z',
+        },
+    };
+    final merged = PersonalVault.merge({}, {
+      'profile_histories': {PersonalVault.reactionsLane: lane},
+    });
+    expect(
+      (merged['profile_histories'][PersonalVault.reactionsLane] as Map).length,
+      600,
+    );
+  });
+  test('image paths are kept only as relative TMDB file names', () {
+    final clean = PersonalVault.clean({
+      'tmdb_favorites': [
+        {
+          'id': 1,
+          'media_type': 'movie',
+          'poster_path': '/abc.jpg',
+          'backdrop_path': 'https://x.test/a.jpg',
+        },
+        {'id': 2, 'media_type': 'tv', 'poster_path': '../etc/passwd'},
+      ],
+    });
+    final items = clean['tmdb_favorites'] as List;
+    expect(items[0]['poster_path'], '/abc.jpg');
+    expect(items[0].containsKey('backdrop_path'), isFalse);
+    expect(items[1].containsKey('poster_path'), isFalse);
+  });
+  test('the adult content switch stays on the device', () {
+    final clean = PersonalVault.clean({
+      'settings': {'show_adult_content': true, 'theme_mode': 'dark'},
+    });
+    expect(clean['settings'], {'theme_mode': 'dark'});
+  });
 }

@@ -56,7 +56,6 @@ class PersonalVault {
     'ui_section_order',
     'ui_start_section',
     'ui_multiview_layout',
-    'show_adult_content',
     'ui_home_shape',
     'ui_home_recent_shape',
     'ui_home_density',
@@ -93,7 +92,15 @@ class PersonalVault {
     'genre_ids',
     'original_title',
     'original_name',
+    'vote',
+    'poster_path',
+    'backdrop_path',
   };
+
+  /// TMDB image paths are relative file names, never addresses.
+  static final _imagePath = RegExp(
+    r'^/[A-Za-z0-9_-]{1,80}\.(jpg|jpeg|png|svg|webp)$',
+  );
   static Map<String, dynamic> object(dynamic v) =>
       v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
   static String generateKey() {
@@ -158,7 +165,9 @@ class PersonalVault {
               e.key == 'genre_ids' &&
                   e.value is List &&
                   (e.value as List).every((v) => v is num)))
-        e.key: e.value,
+        if (!e.key.endsWith('_path') ||
+            e.value is String && _imagePath.hasMatch(e.value as String))
+          e.key: e.value,
   };
   static Map<String, dynamic> _history(dynamic raw) => {
     for (final e in object(raw).entries)
@@ -235,6 +244,44 @@ class PersonalVault {
   /// Favorite tombstones live in a reserved, encrypted profile lane, supported
   /// by the existing website sanitizer without exposing identifiers to cloud.
   static const favoriteLane = '__stellar_favorites_v1';
+
+  /// Likes and dislikes of every profile, keyed `scope|itemKey`; vote 0 is
+  /// the removal marker. Newest `watched` wins like any other lane.
+  static const reactionsLane = '__stellar_reactions_v1';
+
+  /// Device reactions (`{scope: {itemKey: {vote, at, item}}}`) as lane rows.
+  static Map<String, dynamic> reactionsToLane(dynamic all) => {
+    for (final profile in object(all).entries)
+      for (final e in object(profile.value).entries)
+        if (object(e.value)['at'] is String)
+          '${profile.key}|${e.key}': _entry({
+            ...object(object(e.value)['item']),
+            'vote': object(e.value)['vote'] ?? 0,
+            'watched': object(e.value)['at'],
+          }),
+  };
+
+  /// Lane rows back to the device reactions format.
+  static Map<String, dynamic> laneToReactions(dynamic lane) {
+    final out = <String, dynamic>{};
+    for (final e in object(lane).entries) {
+      final split = e.key.indexOf('|');
+      final row = object(e.value);
+      if (split <= 0 || row['watched'] is! String) continue;
+      final item = Map<String, dynamic>.from(row)
+        ..remove('vote')
+        ..remove('watched');
+      (out[e.key.substring(0, split)] ??= <String, dynamic>{})[e.key.substring(
+        split + 1,
+      )] = {
+        'vote': (row['vote'] as num?)?.toInt() ?? 0,
+        'at': row['watched'],
+        'item': item,
+      };
+    }
+    return out;
+  }
+
   static Map<String, dynamic> merge(dynamic remote, dynamic local) {
     final a = clean(remote), b = clean(local);
     final profiles = object(a['profile_histories']);
@@ -242,7 +289,9 @@ class PersonalVault {
       profiles[e.key] = mergeHistory(profiles[e.key], e.value);
     }
     for (final k in profiles.keys.toList()) {
-      if (k != favoriteLane) profiles[k] = capHistory(profiles[k]);
+      if (k != favoriteLane && k != reactionsLane) {
+        profiles[k] = capHistory(profiles[k]);
+      }
     }
     final ids = <String>{
       ...(a['favorite_ids'] as List).cast<String>(),

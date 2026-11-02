@@ -457,6 +457,11 @@ class SyncService {
     profiles[PersonalVault.favoriteLane] = PersonalVault.object(
       jsonDecode(prefs.getString('vault_favorite_events_v1') ?? '{}'),
     );
+    try {
+      profiles[PersonalVault.reactionsLane] = PersonalVault.reactionsToLane(
+        jsonDecode(prefs.getString(ReactionsProvider.storageKey) ?? '{}'),
+      );
+    } catch (_) {}
     return SyncPayload(
       history: localHistory,
       profileHistories: profiles,
@@ -527,6 +532,19 @@ class SyncService {
       await _saveSettingsBase(prefs, account, base);
     }
     return changed;
+  }
+
+  /// Merges cloud reactions into this device (newest per title wins).
+  /// Returns true when the stored reactions changed.
+  Future<bool> applyReactions(dynamic lane) async {
+    final remote = PersonalVault.laneToReactions(lane);
+    if (remote.isEmpty) return false;
+    final prefs = await SharedPreferences.getInstance();
+    final local = prefs.getString(ReactionsProvider.storageKey) ?? '{}';
+    final merged = ReactionsProvider.merge(local, jsonEncode(remote));
+    if (merged == local) return false;
+    await prefs.setString(ReactionsProvider.storageKey, merged);
+    return true;
   }
 
   static String _baseKey(String account) => 'vault_settings_base_$account';
