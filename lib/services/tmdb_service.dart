@@ -50,10 +50,9 @@ class TmdbService {
     final uri = Uri.parse(SupabaseConfig.tmdbProxyUrl)
         .replace(queryParameters: {'path': path, ...params});
     final http.Response res;
-    String bearer = SupabaseConfig.anonKey;
+    String? session;
     try {
-      bearer =
-          Supabase.instance.client.auth.currentSession?.accessToken ?? bearer;
+      session = Supabase.instance.client.auth.currentSession?.accessToken;
     } catch (_) {
       // Public browsing works before account initialization as before.
     }
@@ -61,9 +60,12 @@ class TmdbService {
       res = await _foregroundHttp
           .get(
             uri,
+            // No Authorization header: it makes the site's edge bypass its
+            // cache of public TMDB data. The account token travels apart and
+            // only lets a cache miss refill the shared table.
             headers: {
-              'Authorization': 'Bearer $bearer',
               'apikey': SupabaseConfig.anonKey,
+              'X-Stellar-Auth': ?session,
             },
           )
           .timeout(const Duration(seconds: 15));
