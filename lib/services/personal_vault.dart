@@ -71,6 +71,8 @@ class PersonalVault {
     'ui_scale',
     'ui_watched_percent',
     'ui_auto_next_episode',
+    'ui_player_languages',
+    'kids_pin',
   };
   static const _fields = {
     'id',

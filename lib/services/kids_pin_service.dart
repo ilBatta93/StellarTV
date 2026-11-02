@@ -1,7 +1,10 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'sync_hooks.dart';
+
 /// 4-digit PIN that protects leaving a kids profile and the other protected
 /// actions. An absent or invalid value does not authorize those actions.
+/// It travels only inside the encrypted vault, so every device shares it.
 class KidsPinService {
   static const key = 'kids_pin';
 
@@ -14,5 +17,6 @@ class KidsPinService {
   static Future<void> set(String pin) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(key, pin);
+    SyncHooks.settingsChanged();
   }
 }

@@ -11,6 +11,33 @@ enum PlayerSettingsScope { shared, liveTv, filmSeriesTv }
 class PlayerSettingsService {
   static const _settingsKey = 'player_settings_v1';
   static const autoNextKey = 'ui_auto_next_episode';
+
+  /// Personal playback preferences shared by every device of the account:
+  /// languages and subtitle style. Engine, codecs, caches and subtitle delay
+  /// stay per device. Short keys pass the cloud preference filter.
+  static const languagesKey = 'ui_player_languages';
+  static Map<String, dynamic> personal(PlayerSettings s) => {
+    'audio': s.preferredAudioLanguage,
+    'subs': s.preferredSubtitleLanguage,
+    'on': s.subtitlesEnabled,
+    'size': s.subtitleSize.name,
+    'color': s.subtitleColor.name,
+    'back': s.subtitleBackground,
+    'bold': s.subtitleBold,
+  };
+  static PlayerSettings _withPersonal(
+    PlayerSettings s,
+    Map<String, dynamic> p,
+  ) => PlayerSettings.fromJson({
+    ...s.toJson(),
+    if (p['audio'] is String) 'preferredAudioLanguage': p['audio'],
+    if (p['subs'] is String) 'preferredSubtitleLanguage': p['subs'],
+    if (p['on'] is bool) 'subtitlesEnabled': p['on'],
+    if (p['size'] is String) 'subtitleSize': p['size'],
+    if (p['color'] is String) 'subtitleColor': p['color'],
+    if (p['back'] is bool) 'subtitleBackground': p['back'],
+    if (p['bold'] is bool) 'subtitleBold': p['bold'],
+  });
   static const _resumeKey = 'player_resume_positions';
   static const _maxResumeEntries = 200;
 
@@ -98,6 +125,20 @@ class PlayerSettingsService {
     SharedPreferences prefs,
     PlayerSettingsScope scope,
   ) async {
+    final raw = prefs.getString(languagesKey);
+    if (raw == null) {
+      // First run: the current device choice becomes the shared one.
+      await prefs.setString(languagesKey, jsonEncode(personal(settings)));
+    } else {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          settings = _withPersonal(settings, decoded);
+        }
+      } on FormatException {
+        /* Keep the device settings. */
+      }
+    }
     if (scope == PlayerSettingsScope.liveTv) return settings;
     final shared = prefs.getBool(autoNextKey);
     if (shared == null) {
@@ -141,6 +182,7 @@ class PlayerSettingsService {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key(scope), jsonEncode(settings.toJson()));
+    await prefs.setString(languagesKey, jsonEncode(personal(settings)));
     SyncHooks.settingsChanged();
   }
 
