@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'sync_hooks.dart';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/custom_category.dart';
@@ -40,13 +42,82 @@ class SettingsService {
     onCredentialsChanged?.call();
   }
 
+  /// iOS keeps the access data in the device-only Keychain: preferences
+  /// reach iCloud and computer backups there. Android excludes every file
+  /// from backup already, so it keeps preferences.
+  static bool useKeychain = Platform.isIOS;
+  static CredentialKeychain keychain = const SecureCredentialKeychain();
+
+  // Set only once the Keychain holds the access data. A Keychain copy
+  // without it survived an uninstall and is stale.
+  static const _keychainMarkerKey = 'xtream_in_keychain';
+  static const _credentialKeys = [
+    _xtreamServerKey,
+    _xtreamUserKey,
+    _xtreamPassKey,
+  ];
+
   Future<Map<String, String>?> getXtreamCredentials() async {
     final prefs = await SharedPreferences.getInstance();
+    if (useKeychain) {
+      try {
+        if (prefs.getBool(_keychainMarkerKey) == true) {
+          final stored = await _readKeychain();
+          if (stored != null) return stored;
+        } else {
+          await _clearKeychain();
+        }
+        final legacy = _readPrefs(prefs);
+        if (legacy != null && await _writeKeychain(legacy)) {
+          await prefs.setBool(_keychainMarkerKey, true);
+          for (final key in _credentialKeys) {
+            await prefs.remove(key);
+          }
+        }
+        return legacy;
+      } catch (_) {
+        // Keychain unavailable: the preference copy keeps the app usable.
+      }
+    }
+    return _readPrefs(prefs);
+  }
+
+  Map<String, String>? _readPrefs(SharedPreferences prefs) {
     final server = prefs.getString(_xtreamServerKey);
     final user = prefs.getString(_xtreamUserKey);
     final pass = prefs.getString(_xtreamPassKey);
     if (server == null || user == null || pass == null) return null;
     return {'server': server, 'username': user, 'password': pass};
+  }
+
+  Future<Map<String, String>?> _readKeychain() async {
+    final server = await keychain.read(_xtreamServerKey);
+    final user = await keychain.read(_xtreamUserKey);
+    final pass = await keychain.read(_xtreamPassKey);
+    if (server == null || user == null || pass == null) return null;
+    return {'server': server, 'username': user, 'password': pass};
+  }
+
+  /// True only when every value reads back unchanged.
+  Future<bool> _writeKeychain(Map<String, String> credentials) async {
+    try {
+      await keychain.write(_xtreamServerKey, credentials['server']!);
+      await keychain.write(_xtreamUserKey, credentials['username']!);
+      await keychain.write(_xtreamPassKey, credentials['password']!);
+      final back = await _readKeychain();
+      return back != null &&
+          back['server'] == credentials['server'] &&
+          back['username'] == credentials['username'] &&
+          back['password'] == credentials['password'];
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _clearKeychain() async {
+    for (final key in _credentialKeys) {
+      await keychain.delete(key);
+    }
   }
 
   Future<void> setXtreamCredentials({
@@ -55,18 +126,39 @@ class SettingsService {
     required String password,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_xtreamServerKey, server);
-    await prefs.setString(_xtreamUserKey, username);
-    await prefs.setString(_xtreamPassKey, password);
+    final saved =
+        useKeychain &&
+        await _writeKeychain({
+          'server': server,
+          'username': username,
+          'password': password,
+        });
+    if (saved) {
+      await prefs.setBool(_keychainMarkerKey, true);
+      for (final key in _credentialKeys) {
+        await prefs.remove(key);
+      }
+    } else {
+      await prefs.setString(_xtreamServerKey, server);
+      await prefs.setString(_xtreamUserKey, username);
+      await prefs.setString(_xtreamPassKey, password);
+      if (useKeychain) await prefs.remove(_keychainMarkerKey);
+    }
     onCredentialsChanged?.call();
   }
 
   Future<void> clearCredentials() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_authMethodKey);
-    await prefs.remove(_xtreamServerKey);
-    await prefs.remove(_xtreamUserKey);
-    await prefs.remove(_xtreamPassKey);
+    for (final key in _credentialKeys) {
+      await prefs.remove(key);
+    }
+    await prefs.remove(_keychainMarkerKey);
+    if (useKeychain) {
+      try {
+        await _clearKeychain();
+      } catch (_) {}
+    }
   }
 
   static const _hiddenCategoriesKey = 'hidden_categories';
@@ -140,4 +232,30 @@ class SettingsService {
       jsonEncode([for (final c in list) c.toJson()]),
     );
   }
+}
+
+/// Device-only secret storage for the access data.
+abstract class CredentialKeychain {
+  Future<String?> read(String key);
+  Future<void> write(String key, String value);
+  Future<void> delete(String key);
+}
+
+class SecureCredentialKeychain implements CredentialKeychain {
+  const SecureCredentialKeychain();
+
+  // "This device only": never copied to backups or to a new phone.
+  static const _storage = FlutterSecureStorage(
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
+  );
+
+  @override
+  Future<String?> read(String key) => _storage.read(key: key);
+  @override
+  Future<void> write(String key, String value) =>
+      _storage.write(key: key, value: value);
+  @override
+  Future<void> delete(String key) => _storage.delete(key: key);
 }
