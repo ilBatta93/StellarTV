@@ -30,6 +30,7 @@ import 'widgets/playlist_refresh_guard.dart';
 import 'services/profile_service.dart';
 import 'services/device_type_service.dart';
 import 'services/audio_effects_service.dart';
+import 'services/external_player_service.dart';
 import 'services/device_identity.dart';
 import 'services/expiry_reminder_service.dart';
 import 'services/tv_remote_keys.dart';
@@ -71,6 +72,7 @@ Future<void> main() async {
   perf.mark('tipo dispositivo');
   // ExoPlayer is built synchronously and needs the effects session ready.
   unawaited(AudioEffectsService.instance.prepare());
+  unawaited(ExternalPlayerService.instance.ensureLoaded());
   AppImageCache.enforceBudget();
   if (DeviceTypeService.isTv) {
     // TV boxes have little RAM: cap decoded images to avoid being killed.

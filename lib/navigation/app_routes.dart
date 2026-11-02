@@ -1,19 +1,29 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/channel.dart';
 import '../models/content_type.dart';
+import '../models/player_settings.dart';
 import '../models/tmdb_item.dart';
 import '../providers/app_provider.dart';
 import '../providers/history_provider.dart';
 import '../screens/player_screen.dart';
 import '../screens/series_detail_screen.dart';
 import '../screens/title_detail_screen.dart';
+import '../services/device_type_service.dart';
 import '../services/download_service.dart';
+import '../services/external_player_service.dart';
+import '../services/player_settings_service.dart';
 import '../services/recent_live_channels.dart';
 
 /// Plays a channel. For series episodes [queue] is the ordered episode list
 /// used by "Episodio successivo"; when omitted the player loads it itself.
+/// [external] forces (true) or skips (false) the external player; null
+/// follows the setting. The player's own "next episode" (replace) stays
+/// inside the app.
 void playChannel(
   BuildContext context,
   Channel channel, {
@@ -21,6 +31,7 @@ void playChannel(
   List<Channel>? queue,
   bool replace = false,
   bool archivePlayback = false,
+  bool? external,
 }) {
   final app = context.read<AppProvider>();
   if (app.kidsMode && !app.isKidsContent(channel)) return;
@@ -41,6 +52,16 @@ void playChannel(
   final offline = DownloadService.instance;
   if (!archivePlayback) channel = offline.playable(channel);
   queue = queue?.map(offline.playable).toList();
+  final externals = ExternalPlayerService.instance;
+  if (!archivePlayback &&
+      !replace &&
+      externals.supported &&
+      externals.player != null &&
+      (external ?? externals.enabled) &&
+      ExternalPlayerService.canPlay(channel)) {
+    unawaited(_playExternally(context, channel, startAt));
+    return;
+  }
   final route = MaterialPageRoute(
     builder: (_) => PlayerScreen(
       channel: channel,
@@ -53,6 +74,49 @@ void playChannel(
     Navigator.pushReplacement(context, route);
   } else {
     Navigator.push(context, route);
+  }
+}
+
+/// Hands [channel] to the chosen player app and stores the position it
+/// reports back. If the app cannot start, the built-in player opens.
+Future<void> _playExternally(
+  BuildContext context,
+  Channel channel,
+  Duration? startAt,
+) async {
+  final history = context.read<HistoryProvider>();
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final settings = await PlayerSettingsService().load(
+    scope: DeviceTypeService.isTv
+        ? PlayerSettingsScope.filmSeriesTv
+        : PlayerSettingsScope.shared,
+  );
+  final resume =
+      startAt ??
+      (settings.resumePlayback
+          ? history.entryFor(channel.id)?.resumePosition
+          : null);
+  try {
+    final result = await ExternalPlayerService.instance.play(
+      channel,
+      userAgent: effectiveStreamUserAgent(settings.userAgent),
+      startAt: resume,
+    );
+    final duration = result.duration;
+    if (duration == null) return;
+    if (result.completed) {
+      await history.markWatched(channel, duration: duration);
+    } else if (result.position case final position?) {
+      await history.updatePosition(channel.id, position, duration);
+    }
+  } on PlatformException {
+    messenger?.showSnackBar(
+      const SnackBar(
+        content: Text('Player esterno non disponibile: uso quello interno'),
+      ),
+    );
+    if (!context.mounted) return;
+    playChannel(context, channel, startAt: resume, external: false);
   }
 }
 

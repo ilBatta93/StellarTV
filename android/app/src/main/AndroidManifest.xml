@@ -82,6 +82,15 @@
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
         </intent>
+        <!-- External video players (VLC, MX Player, Just Player...) -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" android:mimeType="video/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" android:mimeType="video/*" />
+        </intent>
     </queries>
 </manifest>
 

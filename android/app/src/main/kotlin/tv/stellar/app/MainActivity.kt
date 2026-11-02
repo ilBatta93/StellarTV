@@ -86,6 +86,11 @@ class MainActivity : FlutterActivity() {
             pendingSpeech = null
             return
         }
+        if (requestCode == externalPlayerRequest) {
+            pendingExternal?.success(externalResult(resultCode, data))
+            pendingExternal = null
+            return
+        }
         super.onActivityResult(requestCode, resultCode, data)
     }
 
@@ -375,6 +380,8 @@ class MainActivity : FlutterActivity() {
                     )
                 }
                 "getCapabilities" -> result.success(capabilities())
+                "externalPlayers" -> result.success(externalPlayers())
+                "openExternal" -> openExternal(call.arguments as? Map<*, *>, result)
                 "getDisplayRefresh" -> result.success(displayRefresh())
                 "setPreferredRefreshRate" -> {
                     result.success(setPreferredRefreshRate(call.argument<Double>("rate")))
@@ -517,6 +524,77 @@ class MainActivity : FlutterActivity() {
             if (displayId != Display.DEFAULT_DISPLAY) return
             channel?.invokeMethod("refreshRateChanged", currentDisplay()?.refreshRate?.toDouble())
         }
+    }
+
+    private var pendingExternal: MethodChannel.Result? = null
+    private val externalPlayerRequest = 7342
+
+    /// Apps that open a network video. The sample address only drives the
+    /// intent match; StellarTV itself is left out.
+    private fun externalPlayers(): List<Map<String, String>> {
+        val probe = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(Uri.parse("https://example.com/video.mp4"), "video/*")
+        return try {
+            packageManager.queryIntentActivities(probe, 0)
+                .mapNotNull { it.activityInfo }
+                .filter { it.packageName != packageName }
+                .distinctBy { it.packageName }
+                .map { mapOf(
+                    "package" to it.packageName,
+                    "label" to it.applicationInfo.loadLabel(packageManager).toString(),
+                ) }
+                .sortedBy { it["label"]?.lowercase() }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    /// Extras understood by VLC (long position, "from_start") and by
+    /// MX Player and Just Player (int position, "return_result", headers).
+    private fun openExternal(args: Map<*, *>?, result: MethodChannel.Result) {
+        val url = args?.get("url") as? String
+        val pkg = args?.get("package") as? String
+        if (url == null || pkg == null) {
+            result.error("args", "url and package required", null)
+            return
+        }
+        val position = (args["positionMs"] as? Number)?.toLong() ?: 0L
+        val intent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(Uri.parse(url), "video/*")
+            .setPackage(pkg)
+            .putExtra("title", args["title"] as? String ?: "")
+            .putExtra("return_result", true)
+        (args["userAgent"] as? String)?.takeIf { it.isNotBlank() }?.let {
+            intent.putExtra("headers", arrayOf("User-Agent", it))
+        }
+        if (pkg.startsWith("org.videolan")) {
+            intent.putExtra("position", position)
+            intent.putExtra("from_start", position <= 0L)
+        } else if (position > 0L) {
+            intent.putExtra("position", position.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        }
+        pendingExternal?.success(null)
+        pendingExternal = result
+        try {
+            startActivityForResult(intent, externalPlayerRequest)
+        } catch (e: Exception) {
+            pendingExternal = null
+            result.error("unavailable", e.message, null)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun externalResult(resultCode: Int, data: Intent?): Map<String, Any?> {
+        val extras = data?.extras
+        fun ms(key: String): Long? = when (val v = extras?.get(key)) {
+            is Int -> v.toLong()
+            is Long -> v
+            else -> null
+        }
+        return mapOf(
+            "ok" to (resultCode == RESULT_OK),
+            "position" to (ms("extra_position") ?: ms("position")),
+            "duration" to (ms("extra_duration") ?: ms("duration")),
+            "completed" to (extras?.getString("end_by") == "playback_completion"),
+        )
     }
 
     private fun capabilities(): Map<String, Any> {

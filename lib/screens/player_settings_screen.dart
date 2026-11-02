@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../widgets/apple_page_scaffold.dart';
+import '../widgets/external_player_picker.dart';
 
 import '../models/player_settings.dart';
 import '../services/native_player_bridge.dart';
 import '../services/device_type_service.dart';
 import '../services/display_refresh_service.dart';
+import '../services/external_player_service.dart';
 import '../services/player_settings_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/player/player_format.dart';
@@ -46,6 +48,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     final settings = await _service.load(scope: _scope);
     final caps = await NativePlayerBridge.instance.getCapabilities();
     await DisplayRefreshService.instance.ensureLoaded();
+    await _externals.ensureLoaded();
     if (!mounted) return;
     setState(() {
       _s = settings;
@@ -131,6 +134,8 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               children: [
+                if (_externals.supported && (!_tvProfile || !_live))
+                  _externalSection(),
                 ..._engineSection(s),
                 ..._playbackSection(s),
                 ..._audioSection(s),
@@ -144,6 +149,45 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             ),
     );
   }
+
+  final _externals = ExternalPlayerService.instance;
+
+  Widget _externalSection() => ListenableBuilder(
+    listenable: _externals,
+    builder: (context, _) {
+      final player = _externals.player;
+      return SettingsSection(
+        title: 'Player esterno',
+        description:
+            'Film ed episodi si aprono in un\'altra app (VLC, MX Player, '
+            'Just Player…). La posizione raggiunta torna in StellarTV se il '
+            'player la comunica. Le dirette restano nel player interno.',
+        children: [
+          SettingsValueTile(
+            icon: Icons.open_in_new_rounded,
+            title: 'App da usare',
+            value: player?.label ?? 'Nessuna',
+            onTap: () => chooseExternalPlayer(context),
+          ),
+          SettingsSwitchTile(
+            icon: Icons.smart_display_outlined,
+            title: 'Usa sempre il player esterno',
+            subtitle: player == null
+                ? 'Scegli prima l\'app da usare'
+                : 'Altrimenti si usa solo con «Apri con ${player.label}» '
+                      'nella scheda del titolo',
+            value: _externals.enabled,
+            onChanged: (v) async {
+              if (v && _externals.player == null) {
+                if (await chooseExternalPlayer(context) == null) return;
+              }
+              await _externals.setEnabled(v);
+            },
+          ),
+        ],
+      );
+    },
+  );
 
   List<Widget> _engineSection(PlayerSettings s) => [
     SettingsSection(

@@ -26,6 +26,7 @@ import '../services/device_type_service.dart';
 import '../widgets/tv_focusable.dart';
 import '../widgets/tv_detail_backdrop.dart';
 import '../widgets/download_button.dart';
+import '../widgets/external_player_picker.dart';
 import '../widgets/reaction_buttons.dart';
 import '../widgets/trailer_button.dart';
 import '../services/download_service.dart';
@@ -557,6 +558,12 @@ class _Actions extends StatelessWidget {
                 playable!.type == ContentType.movie &&
                 DownloadService.canDownload(playable!))
               DownloadButton(channel: playable!, expanded: true),
+            if (playable case final movie? when movie.type == ContentType.movie)
+              ExternalPlayButton(
+                channel: movie,
+                style: compact,
+                onPlay: (external) => _play(context, external: external),
+              ),
             if (item case final trailerItem?) TrailerButton(item: trailerItem),
             if (playable case final assignable?)
               CategoryAssignButton(item: assignable),
@@ -715,6 +722,11 @@ class _Actions extends StatelessWidget {
                   label: Text('Versione: ${TitleVersions.labelOf(channel)}'),
                 ),
               ),
+            if (channel.type == ContentType.movie)
+              ExternalPlayButton(
+                channel: channel,
+                onPlay: (external) => _play(context, external: external),
+              ),
             if (DownloadService.canDownload(channel))
               DownloadButton(channel: channel, expanded: true),
           ],
@@ -735,7 +747,7 @@ class _Actions extends StatelessWidget {
     );
   }
 
-  Future<void> _play(BuildContext context) async {
+  Future<void> _play(BuildContext context, {bool? external}) async {
     if (playable == null) return;
     final entry = CatalogEntry(
       primary: playable!,
@@ -747,7 +759,12 @@ class _Actions extends StatelessWidget {
       openSeries(context, channel, item: item);
       return;
     }
-    playChannel(context, channel, startAt: _resumeFor(context, channel));
+    playChannel(
+      context,
+      channel,
+      startAt: _resumeFor(context, channel),
+      external: external,
+    );
   }
 
   Duration? _resumeFor(BuildContext context, Channel channel) {
