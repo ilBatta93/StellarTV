@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../providers/reactions_provider.dart';
+import 'device_type_service.dart';
 import 'personal_vault.dart';
 import 'favorites_service.dart';
 
@@ -73,6 +74,11 @@ class SyncService {
   static const _lastSnapshotKey = 'sync_last_saved_snapshot';
   static bool isSyncedKey(String key) =>
       PersonalVault.settingKeys.contains(key);
+
+  /// Layout settings are kept per device class (see
+  /// [PersonalVault.layoutKeys]); replaceable in tests.
+  static String Function() deviceClass = () =>
+      DeviceTypeService.isTv ? 'tv' : 'touch';
 
   final VaultKeyStore _keys = VaultKeyStore();
   Future<String?> recoveryKey() async {
@@ -457,6 +463,10 @@ class SyncService {
       final value = PersonalVault.preference(prefs.get(key));
       if (value != null) settings[key] = value;
     }
+    final vaultSettings = PersonalVault.settingsToVault(
+      settings,
+      deviceClass(),
+    );
     final localHistory = await loadLocalHistory();
     final profiles = await loadAllProfileHistories();
     profiles[PersonalVault.favoriteLane] = PersonalVault.object(
@@ -476,7 +486,7 @@ class SyncService {
       profileHistories: profiles,
       favoriteIds: favoriteIds?.toList() ?? const [],
       tmdbFavorites: tmdbFavorites ?? const [],
-      settings: _dropNulls(settings),
+      settings: _dropNulls(vaultSettings),
     );
   }
 
@@ -497,7 +507,11 @@ class SyncService {
         ? null
         : _settingsBase(prefs, account) ?? <String, dynamic>{};
     var changed = false;
-    for (final entry in settings.entries) {
+    final deviceSettings = PersonalVault.settingsFromVault(
+      settings,
+      deviceClass(),
+    );
+    for (final entry in deviceSettings.entries) {
       final key = entry.key;
       if (!isSyncedKey(key)) continue;
       final safe = PersonalVault.preference(entry.value);
@@ -675,12 +689,21 @@ class SyncService {
         PersonalVault.clean({}),
         payload.toJson(),
       );
+      // The base keeps device (plain) keys; local and remote use the vault
+      // keys, so the base is translated for the comparison.
       final localSettings = PersonalVault.object(local['settings']);
-      final base = _settingsBase(prefs, code);
+      final storedBase = _settingsBase(prefs, code);
+      final base = storedBase == null
+          ? null
+          : PersonalVault.settingsToVault(storedBase, deviceClass());
       Future<DateTime> done() async {
         lastError = null;
         if (code == currentUserId) {
-          await _saveSettingsBase(prefs, code, localSettings);
+          await _saveSettingsBase(
+            prefs,
+            code,
+            PersonalVault.settingsFromVault(localSettings, deviceClass()),
+          );
         }
         final now = DateTime.now();
         await prefs.setString(_lastPushKey, now.toIso8601String());

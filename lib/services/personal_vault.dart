@@ -74,6 +74,71 @@ class PersonalVault {
     'ui_player_languages',
     'kids_pin',
   };
+
+  /// Layout choices kept apart for TVs and for phones/tablets: in the vault
+  /// they travel as `key@tv` / `key@touch`. A plain key (older versions)
+  /// is only the starting value of a class that has none of its own.
+  static const layoutKeys = {
+    'ui_text_scale',
+    'ui_grid_size',
+    'ui_show_titles',
+    'ui_compact',
+    'ui_catalog_view',
+    'ui_catalog_view_movie',
+    'ui_catalog_view_series',
+    'ui_section_order',
+    'ui_start_section',
+    'ui_multiview_layout',
+    'ui_home_shape',
+    'ui_home_recent_shape',
+    'ui_home_density',
+    'ui_home_recent_density',
+    'ui_home_recommendation_limit',
+    'ui_home_recent_limit',
+    'ui_home_banner_size',
+    'ui_home_overview',
+    'ui_scale',
+    'ui_home_titles',
+    'ui_home_recent_titles',
+    'ui_home_row_order',
+    'ui_home_hidden_rows',
+  };
+  static const layoutClasses = {'tv', 'touch'};
+
+  /// True for every key the vault may hold in its settings.
+  static bool isVaultSettingKey(String key) {
+    final at = key.indexOf('@');
+    if (at < 0) return settingKeys.contains(key);
+    return layoutKeys.contains(key.substring(0, at)) &&
+        layoutClasses.contains(key.substring(at + 1));
+  }
+
+  /// Device settings (plain keys) as stored in the vault for [deviceClass].
+  static Map<String, dynamic> settingsToVault(
+    Map<String, dynamic> local,
+    String deviceClass,
+  ) => {
+    for (final e in local.entries)
+      layoutKeys.contains(e.key) ? '${e.key}@$deviceClass' : e.key: e.value,
+  };
+
+  /// Vault settings seen by a device of [deviceClass], with plain keys.
+  static Map<String, dynamic> settingsFromVault(
+    Map<String, dynamic> vault,
+    String deviceClass,
+  ) {
+    final out = <String, dynamic>{};
+    for (final e in vault.entries) {
+      if (e.key.contains('@')) continue;
+      out[e.key] = e.value;
+    }
+    for (final key in layoutKeys) {
+      final own = '$key@$deviceClass';
+      if (vault.containsKey(own)) out[key] = vault[own];
+    }
+    return out;
+  }
+
   static const _fields = {
     'id',
     'type',
@@ -195,7 +260,7 @@ class PersonalVault {
               .toList(),
       'settings': {
         for (final e in object(p['settings']).entries)
-          if (settingKeys.contains(e.key) && preference(e.value) != null)
+          if (isVaultSettingKey(e.key) && preference(e.value) != null)
             e.key: preference(e.value),
       },
     };
