@@ -13,7 +13,7 @@ Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`
 
 ## Invarianti
 - Credenziali e indirizzi dei flussi restano sul dispositivo, mai in righe cloud né in snapshot.
-- Le chiavi del vault stanno solo nello storage sicuro del dispositivo (`personal_vault.dart`), mai in preferenze o cloud. Cronologia e preferiti vanno in cloud solo tramite il vault cifrato; `cloud_favorites_service` è un adattatore ritirato e non riprende a scrivere.
+- Le chiavi del vault stanno solo nello storage sicuro del dispositivo (`personal_vault.dart`), mai in preferenze o cloud. Cronologia e preferiti vanno in cloud solo tramite il vault cifrato `personal_vaults`: le vecchie tabelle in chiaro sono state eliminate e non si reintroducono. La busta del vault è la v2 (JSON compresso con gzip, versione nell'AAD; la v1 si legge ancora), gemella di `src/lib/personalVault.ts` del sito: si cambia insieme, con le fixture incrociate in `test/fixtures/`.
 - La sincronizzazione usa l'id dell'account autenticato. La diretta non entra in cronologia né in cloud.
 - Le righe legacy del vault non si cancellano da sole. Un preferito rimosso resta un tombstone nella corsia riservata.
 - Profilo bambino: la cache sul dispositivo include le certificazioni; i verdetti in cloud si rivalutano; un vecchio consenso basato solo sul rating non basta; un verdetto sconosciuto resta nascosto.

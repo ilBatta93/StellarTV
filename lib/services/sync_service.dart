@@ -5,7 +5,6 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'playback_work_policy.dart';
-import 'foreground_policy.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -56,8 +55,8 @@ class SyncPayload {
   );
 }
 
-/// Handles everything for the optional cloud sync: local persistence, pairing
-/// code generation, push and pull against the `sync_profiles` table.
+/// Handles everything for the optional cloud sync: local persistence, account
+/// session and push/pull of the encrypted `personal_vaults` copy.
 class SyncService {
   SyncService(this._client);
 
@@ -594,83 +593,6 @@ class SyncService {
   bool hasCredentials(Map<String, dynamic> settings) => false;
   Future<bool> restorePlaylistFromCloud() async => false;
 
-  Future<List<Map<String, dynamic>>> _all(
-    String table,
-    String fields,
-    String column,
-    String account,
-  ) async {
-    final out = <Map<String, dynamic>>[];
-    for (var offset = 0; ; offset += 500) {
-      if (!ForegroundPolicy.instance.active) {
-        throw StateError('App non visibile');
-      }
-      final page = await _client
-          .from(table)
-          .select(fields)
-          .eq(column, account)
-          .order(
-            table == 'sync_profiles'
-                ? 'code'
-                : table == 'user_sync_data'
-                ? 'user_id'
-                : 'id',
-          )
-          .range(offset, offset + 499);
-      out.addAll(page.map((v) => Map<String, dynamic>.from(v)));
-      if (page.length < 500) return out;
-    }
-  }
-
-  /// Read all old classes, never delete any of them. A failed read aborts
-  /// migration rather than silently producing an incomplete backup.
-  Future<Map<String, dynamic>> _legacy(String account) async {
-    final profiles = await _all('sync_profiles', 'payload', 'code', account);
-    final fallback = await _all(
-      'user_sync_data',
-      'payload',
-      'user_id',
-      account,
-    );
-    final favorites = await _all(
-      'cloud_favorites',
-      'item_key,item_kind,payload',
-      'sync_code',
-      account,
-    );
-    final history = await _all(
-      'watch_history',
-      'content_id,content_type,title,position_seconds,duration_seconds,last_watched_at',
-      'user_id',
-      account,
-    );
-    var out = PersonalVault.clean({});
-    for (final row in [...fallback, ...profiles]) {
-      out = PersonalVault.merge(out, row['payload']);
-    }
-    return PersonalVault.merge(out, {
-      'favorite_ids': [
-        for (final row in favorites)
-          if (row['item_kind'] == 'channel') row['item_key'],
-      ],
-      'tmdb_favorites': [
-        for (final row in favorites)
-          if (row['item_kind'] == 'tmdb') row['payload'],
-      ],
-      'history': {
-        for (final row in history)
-          row['content_id'].toString(): {
-            'id': row['content_id'],
-            'type': row['content_type'],
-            'title': row['title'],
-            'pos': row['position_seconds'],
-            'dur': row['duration_seconds'],
-            'watched': row['last_watched_at'],
-          },
-      },
-    });
-  }
-
   /// Short reason of the last failed encrypted save, for the settings UI.
   String? lastError;
 
@@ -701,26 +623,15 @@ class SyncService {
         return null;
       }
       final prefs = await SharedPreferences.getInstance();
-      final marker = 'vault_legacy_verified_$code';
-      // Old tables are only an extra source: a failed read must not block
-      // the encrypted save (nothing is deleted; the marker stays unset).
-      Map<String, dynamic> legacy = PersonalVault.clean({});
-      var legacyOk = prefs.getBool(marker) == true;
-      if (!legacyOk) {
-        try {
-          legacy = await _legacy(code);
-          legacyOk = true;
-        } catch (e) {
-          debugPrint('Vault: legacy read skipped $e');
-        }
-      }
       if (code != currentUserId) return null;
-      final local = PersonalVault.merge(legacy, payload.toJson());
+      final local = PersonalVault.merge(
+        PersonalVault.clean({}),
+        payload.toJson(),
+      );
       final localSettings = PersonalVault.object(local['settings']);
       final base = _settingsBase(prefs, code);
       Future<DateTime> done() async {
         lastError = null;
-        if (legacyOk) await prefs.setBool(marker, true);
         if (code == currentUserId) {
           await _saveSettingsBase(prefs, code, localSettings);
         }
@@ -790,7 +701,7 @@ class SyncService {
         return await done();
       }
     } catch (e) {
-      /* Preserve all local and legacy copies on any failure. */
+      /* Preserve every local copy on any failure. */
       lastError = e.toString();
       debugPrint('Vault push failed: $e');
       return null;

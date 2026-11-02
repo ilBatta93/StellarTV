@@ -178,4 +178,52 @@ void main() {
     expect(result['history']['sample']['pos'], 37);
     expect(result['favorite_ids'], ['sample']);
   });
+  test('v2 envelopes are compressed and round-trip', () async {
+    final history = {
+      for (var i = 0; i < 500; i++)
+        'movie:$i': {
+          'id': 'movie:$i',
+          'type': 'movie',
+          'title': 'Sample title number $i',
+          'pos': i,
+          'dur': 5400,
+          'watched': DateTime.utc(
+            2026,
+            1,
+            1,
+          ).add(Duration(minutes: i)).toIso8601String(),
+        },
+    };
+    final payload = {'history': history};
+    final envelope = await PersonalVault.encrypt(payload, key, 'account-a');
+    expect(envelope['v'], 2);
+    final plainSize = utf8
+        .encode(jsonEncode(PersonalVault.clean(payload)))
+        .length;
+    final cipherSize = base64Decode(envelope['ciphertext'] as String).length;
+    expect(cipherSize, lessThan(plainSize ~/ 4));
+    final back = await PersonalVault.decrypt(envelope, key, 'account-a');
+    expect((back['history'] as Map).length, 500);
+    expect(back['history']['movie:7']['pos'], 7);
+  });
+  test('a v2 envelope relabelled as v1 is rejected', () async {
+    final envelope = await PersonalVault.encrypt({}, key, 'account-a');
+    await expectLater(
+      PersonalVault.decrypt({...envelope, 'v': 1}, key, 'account-a'),
+      throwsA(anything),
+    );
+  });
+  test('decrypts the synthetic website v2 fixture', () async {
+    final envelope = jsonDecode(
+      await File('test/fixtures/web_vault_v2.json').readAsString(),
+    );
+    expect(envelope['v'], 2);
+    final result = await PersonalVault.decrypt(
+      envelope,
+      key,
+      'fixture-account',
+    );
+    expect(result['history']['sample']['pos'], 37);
+    expect(result['favorite_ids'], ['sample']);
+  });
 }

@@ -219,13 +219,10 @@ class _StellarTvAppState extends State<StellarTvApp> {
         if (mounted) _historyProvider.startAutoSync();
       });
     });
-    // Keep the cloud favorites table in step with the sync code: upload the
-    // local list when a code is enabled/entered, stop mirroring when cleared.
-    _syncProvider.onCodeReady = _appProvider.pushAllFavorites;
+    // Favorites reach the cloud only inside the encrypted vault snapshot.
     _syncProvider.onCodeCleared = () async {
       // Sign-out wipes the device: drop the playlist, profiles and history
       // kept in memory so the next account starts clean.
-      _appProvider.clearCloudCode();
       await _appProvider.logout();
       await _appProvider.reloadFromStorage();
       await _historyProvider.switchProfile(null, force: true);

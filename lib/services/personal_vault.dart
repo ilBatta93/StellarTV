@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io' show gzip;
 import 'dart:math';
+import 'dart:typed_data' show BytesBuilder;
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -291,6 +293,16 @@ class PersonalVault {
     return jsonEncode(value);
   }
 
+  /// Envelope written today. v2 gzips the JSON before encryption (a history
+  /// compresses several times); v1 (plain JSON) is still read.
+  static const envelopeVersion = 2;
+
+  /// Upper bound for a decompressed snapshot, against compression bombs.
+  static const maxPlainBytes = 32 * 1024 * 1024;
+
+  static List<int> _aad(int version, String account, String id) =>
+      utf8.encode('StellarTV:vault:$version:$account:$id');
+
   static Future<Map<String, dynamic>> encrypt(
     dynamic raw,
     String recovery,
@@ -298,12 +310,12 @@ class PersonalVault {
   ) async {
     final id = await keyId(recovery, account);
     final box = await _aes.encrypt(
-      utf8.encode(jsonEncode(clean(raw))),
+      gzip.encode(utf8.encode(jsonEncode(clean(raw)))),
       secretKey: SecretKey(keyBytes(recovery)),
-      aad: utf8.encode('StellarTV:vault:1:$account:$id'),
+      aad: _aad(envelopeVersion, account, id),
     );
     return {
-      'v': 1,
+      'v': envelopeVersion,
       'alg': 'A256GCM',
       'keyId': id,
       'nonce': base64Encode(box.nonce),
@@ -317,8 +329,9 @@ class PersonalVault {
     String account,
   ) async {
     final e = object(raw);
+    final version = e['v'];
     if (e.length != 5 ||
-        e['v'] != 1 ||
+        (version != 1 && version != 2) ||
         e['alg'] != 'A256GCM' ||
         e['keyId'] != await keyId(recovery, account) ||
         e['nonce'] is! String ||
@@ -341,8 +354,37 @@ class PersonalVault {
         mac: Mac(data.sublist(data.length - 16)),
       ),
       secretKey: SecretKey(keyBytes(recovery)),
-      aad: utf8.encode('StellarTV:vault:1:$account:${e['keyId']}'),
+      aad: _aad(version as int, account, e['keyId'] as String),
     );
-    return clean(jsonDecode(utf8.decode(plain)));
+    final bytes = version == 2 ? _gunzip(plain) : plain;
+    return clean(jsonDecode(utf8.decode(bytes)));
   }
+
+  static List<int> _gunzip(List<int> data) {
+    final out = BytesBuilder(copy: false);
+    final input = gzip.decoder.startChunkedConversion(
+      _LimitedSink(out, maxPlainBytes),
+    );
+    input.add(data);
+    input.close();
+    return out.takeBytes();
+  }
+}
+
+/// Collects decompressed bytes and stops once [limit] is exceeded.
+class _LimitedSink implements Sink<List<int>> {
+  _LimitedSink(this._out, this._limit);
+  final BytesBuilder _out;
+  final int _limit;
+
+  @override
+  void add(List<int> chunk) {
+    if (_out.length + chunk.length > _limit) {
+      throw const FormatException('Salvataggio non valido');
+    }
+    _out.add(chunk);
+  }
+
+  @override
+  void close() {}
 }

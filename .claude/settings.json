@@ -81,7 +81,9 @@
       "Bash(vercel project ls)",
       "PowerShell(vercel project ls)",
       "Bash(vercel project ls *)",
-      "PowerShell(vercel project ls *)"
+      "PowerShell(vercel project ls *)",
+      "Bash(supabase db query *)",
+      "PowerShell(supabase db query *)"
     ],
     "ask": [
       "Bash(gh workflow run *)",
@@ -95,9 +97,7 @@
       "Bash(git rebase *)",
       "Bash(git branch -D *)",
       "Bash(supabase db pull*)",
-      "PowerShell(supabase db pull*)",
-      "Bash(supabase db query *)",
-      "PowerShell(supabase db query *)"
+      "PowerShell(supabase db pull*)"
     ],
     "deny": [
       "Read(android/key.properties)",
