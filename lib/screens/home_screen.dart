@@ -140,13 +140,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: IndexedStack(
-        index: _currentIndex,
+        // Touch has no Favorites tab (the heart in the header opens it).
+        index: _currentIndex.clamp(0, _order.length - 1),
         children: [
           for (final section in _order)
             _visited.contains(section)
                 ? _pageFor(section)
                 : const SizedBox.shrink(),
-          const FavoritesPage(),
         ],
       ),
       // Floating glass tab bar, as on iOS: content scrolls under it.
@@ -154,30 +154,23 @@ class _HomeScreenState extends State<HomeScreen> {
         top: false,
         minimum: const EdgeInsets.only(bottom: 8),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           child: GlassSurface(
-            borderRadius: const BorderRadius.all(Radius.circular(34)),
-            child: NavigationBar(
-              height: 64,
-              backgroundColor: AppColors.clear,
-              surfaceTintColor: AppColors.clear,
-              shadowColor: AppColors.clear,
-              indicatorColor: AppColors.glassSelected,
-              indicatorShape: const StadiumBorder(),
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              elevation: 0,
-              selectedIndex: _currentIndex,
-              onDestinationSelected: (i) => setState(() {
-                _currentIndex = i;
-                if (i >= 0 && i < _order.length) _visited.add(_order[i]);
-              }),
-              destinations: [
-                for (final section in _order) _mobileDestination(section),
-                const NavigationDestination(
-                  icon: Icon(Icons.favorite_border_rounded),
-                  selectedIcon: Icon(Icons.favorite_rounded),
-                  label: 'Preferiti',
-                ),
+            borderRadius: const BorderRadius.all(Radius.circular(32)),
+            padding: const EdgeInsets.all(5),
+            child: Row(
+              children: [
+                for (var i = 0; i < _order.length; i++)
+                  Expanded(
+                    child: _GlassTab(
+                      section: _order[i],
+                      selected: i == _currentIndex,
+                      onTap: () => setState(() {
+                        _currentIndex = i;
+                        _visited.add(_order[i]);
+                      }),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -185,48 +178,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  NavigationDestination _mobileDestination(AppSection section) =>
-      switch (section) {
-        AppSection.home => const NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
-          label: 'Home',
-        ),
-        AppSection.live => const NavigationDestination(
-          icon: CatalogNavigationIcon(
-            icon: Icons.live_tv_outlined,
-            type: ContentType.live,
-          ),
-          selectedIcon: CatalogNavigationIcon(
-            icon: Icons.live_tv_rounded,
-            type: ContentType.live,
-          ),
-          label: 'Diretta',
-        ),
-        AppSection.movies => const NavigationDestination(
-          icon: CatalogNavigationIcon(
-            icon: Icons.movie_outlined,
-            type: ContentType.movie,
-          ),
-          selectedIcon: CatalogNavigationIcon(
-            icon: Icons.movie_rounded,
-            type: ContentType.movie,
-          ),
-          label: 'Film',
-        ),
-        AppSection.series => const NavigationDestination(
-          icon: CatalogNavigationIcon(
-            icon: Icons.video_library_outlined,
-            type: ContentType.series,
-          ),
-          selectedIcon: CatalogNavigationIcon(
-            icon: Icons.video_library_rounded,
-            type: ContentType.series,
-          ),
-          label: 'Serie TV',
-        ),
-      };
 
   final FocusScopeNode _tvNavScope = FocusScopeNode(debugLabel: 'tvNav');
   final FocusScopeNode _tvContentScope = FocusScopeNode(
@@ -923,6 +874,101 @@ class _ProfileButton extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One tab of the touch glass bar: icon in a fixed box over its label, the
+/// selected tab inside an accent pill.
+class _GlassTab extends StatelessWidget {
+  const _GlassTab({
+    required this.section,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppSection section;
+  final bool selected;
+  final VoidCallback onTap;
+
+  (IconData, IconData, String, ContentType?) get _look => switch (section) {
+    AppSection.home => (Icons.home_outlined, Icons.home_rounded, 'Home', null),
+    AppSection.live => (
+      Icons.live_tv_outlined,
+      Icons.live_tv_rounded,
+      'Diretta',
+      ContentType.live,
+    ),
+    AppSection.movies => (
+      Icons.movie_outlined,
+      Icons.movie_rounded,
+      'Film',
+      ContentType.movie,
+    ),
+    AppSection.series => (
+      Icons.video_library_outlined,
+      Icons.video_library_rounded,
+      'Serie TV',
+      ContentType.series,
+    ),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final (idle, active, label, type) = _look;
+    final accent = AppColors.primary;
+    final motion = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 220);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      excludeSemantics: type == null,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          if (!selected) HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: AnimatedContainer(
+          duration: motion,
+          curve: Curves.easeOutCubic,
+          height: 56,
+          decoration: BoxDecoration(
+            color: selected ? accent.withValues(alpha: 0.16) : AppColors.clear,
+            borderRadius: BorderRadius.circular(26),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CatalogNavigationIcon(
+                icon: selected ? active : idle,
+                type: type,
+                color: selected ? accent : AppColors.textSecondary,
+              ),
+              const SizedBox(height: 3),
+              AnimatedDefaultTextStyle(
+                duration: motion,
+                style: TextStyle(
+                  fontSize: 11,
+                  height: 1.1,
+                  letterSpacing: 0.1,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
+                ),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
         ),
       ),

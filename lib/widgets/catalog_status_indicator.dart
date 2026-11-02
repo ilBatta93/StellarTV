@@ -62,27 +62,89 @@ class CatalogStatusIndicator extends StatelessWidget {
   }
 }
 
+/// Touch tab icon: every tab draws its icon in the same 28 pt box, and the
+/// catalog status is a small badge on the icon corner, shown only while the
+/// section loads, waits or has a problem (ready stays readable by
+/// accessibility without a mark).
 class CatalogNavigationIcon extends StatelessWidget {
   final IconData icon;
-  final ContentType type;
+  final ContentType? type;
+  final Color? color;
   const CatalogNavigationIcon({
     super.key,
     required this.icon,
-    required this.type,
+    this.type,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 42,
-    height: 26,
+    width: 28,
+    height: 28,
     child: Stack(
+      clipBehavior: Clip.none,
       children: [
-        Align(alignment: Alignment.centerLeft, child: Icon(icon)),
-        Align(
-          alignment: Alignment.topRight,
-          child: CatalogStatusIndicator(type: type),
-        ),
+        Center(child: Icon(icon, size: 25, color: color)),
+        if (type != null)
+          Positioned(right: -5, top: -3, child: _CatalogBadge(type: type!)),
       ],
+    ),
+  );
+}
+
+class _CatalogBadge extends StatelessWidget {
+  final ContentType type;
+  const _CatalogBadge({required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.select<AppProvider, CatalogLoadState>(
+      (app) => app.catalogState(type),
+    );
+    final label = '${type.label}: ${state.label}';
+    final Widget? mark = switch (state.phase) {
+      CatalogLoadPhase.idle || CatalogLoadPhase.ready => null,
+      CatalogLoadPhase.loading => CircularProgressIndicator(
+        strokeWidth: 1.6,
+        value: MediaQuery.disableAnimationsOf(context) ? 0.7 : null,
+        color: AppColors.primary,
+      ),
+      CatalogLoadPhase.failed => const _Dot(AppColors.error),
+      CatalogLoadPhase.cached => const _Dot(AppColors.warning),
+      _ => const _Dot(AppColors.textMuted),
+    };
+    return SizedBox(
+      width: 12,
+      height: 12,
+      child: state.phase == CatalogLoadPhase.idle
+          ? null
+          : ExcludeFocus(
+              child: Tooltip(
+                message: label,
+                child: Semantics(
+                  label: label,
+                  child: ExcludeSemantics(child: mark ?? const SizedBox()),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class _Dot extends StatelessWidget {
+  final Color color;
+  const _Dot(this.color);
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Container(
+      width: 9,
+      height: 9,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColors.background, width: 1.5),
+      ),
     ),
   );
 }
