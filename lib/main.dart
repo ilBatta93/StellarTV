@@ -207,6 +207,8 @@ class _StellarTvAppState extends State<StellarTvApp> {
       await ExpiryReminderService.instance.reloadSettings();
       await _uiSettings.load();
       await _reactions.reload();
+      // Profile names arrive encrypted with the other settings.
+      await _profileProvider.load(silent: true);
     };
     // Profiles created/edited on other devices show up automatically.
     _historyProvider.onAfterAutoPull = () =>

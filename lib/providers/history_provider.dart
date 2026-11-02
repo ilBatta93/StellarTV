@@ -512,8 +512,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
       // Other profiles' histories are merged straight into local storage.
       for (final e in payload.profileHistories.entries) {
-        if (e.key == PersonalVault.favoriteLane ||
-            e.key == PersonalVault.reactionsLane ||
+        if (PersonalVault.reservedLanes.contains(e.key) ||
             e.key == _profileId ||
             e.value is! Map<String, dynamic>) {
           continue;
@@ -575,7 +574,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       final reactionsChanged = await _sync.applyReactions(
         payload.profileHistories[PersonalVault.reactionsLane],
       );
-      if (settingsChanged || reactionsChanged) {
+      final namesChanged = await _sync.applyProfileNames(
+        payload.profileHistories[PersonalVault.profilesLane],
+      );
+      if (settingsChanged || reactionsChanged || namesChanged) {
         await onSettingsRestored?.call();
       }
       await _persistLocal();

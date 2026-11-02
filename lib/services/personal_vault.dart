@@ -251,6 +251,13 @@ class PersonalVault {
   /// the removal marker. Newest `watched` wins like any other lane.
   static const reactionsLane = '__stellar_reactions_v1';
 
+  /// Profile names keyed by profile id (`name`, `watched`, `deleted`): the
+  /// `user_profiles` table keeps only avatar, color and kids flag.
+  static const profilesLane = '__stellar_profiles_v1';
+
+  /// Reserved lanes that are not watch histories.
+  static const reservedLanes = {favoriteLane, reactionsLane, profilesLane};
+
   /// Device reactions (`{scope: {itemKey: {vote, at, item}}}`) as lane rows.
   static Map<String, dynamic> reactionsToLane(dynamic all) => {
     for (final profile in object(all).entries)
@@ -291,7 +298,7 @@ class PersonalVault {
       profiles[e.key] = mergeHistory(profiles[e.key], e.value);
     }
     for (final k in profiles.keys.toList()) {
-      if (k != favoriteLane && k != reactionsLane) {
+      if (!reservedLanes.contains(k)) {
         profiles[k] = capHistory(profiles[k]);
       }
     }

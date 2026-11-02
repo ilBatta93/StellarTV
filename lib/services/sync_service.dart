@@ -24,7 +24,11 @@ class SyncPayload {
   /// profile. [history] is the history used when no profile is selected.
   final Map<String, dynamic> profileHistories;
 
+  /// When this snapshot was read from the device (not serialized).
+  final DateTime? collectedAt;
+
   const SyncPayload({
+    this.collectedAt,
     required this.history,
     required this.favoriteIds,
     required this.tmdbFavorites,
@@ -66,6 +70,7 @@ class SyncService {
   static const _localHistoryKey = 'local_watch_history';
   static const _lastPushKey = 'sync_last_push';
   static const _lastPullKey = 'sync_last_pull';
+  static const _lastSnapshotKey = 'sync_last_saved_snapshot';
   static bool isSyncedKey(String key) =>
       PersonalVault.settingKeys.contains(key);
 
@@ -457,12 +462,16 @@ class SyncService {
     profiles[PersonalVault.favoriteLane] = PersonalVault.object(
       jsonDecode(prefs.getString('vault_favorite_events_v1') ?? '{}'),
     );
+    profiles[PersonalVault.profilesLane] = PersonalVault.object(
+      jsonDecode(prefs.getString(profileNamesKey) ?? '{}'),
+    );
     try {
       profiles[PersonalVault.reactionsLane] = PersonalVault.reactionsToLane(
         jsonDecode(prefs.getString(ReactionsProvider.storageKey) ?? '{}'),
       );
     } catch (_) {}
     return SyncPayload(
+      collectedAt: DateTime.now(),
       history: localHistory,
       profileHistories: profiles,
       favoriteIds: favoriteIds?.toList() ?? const [],
@@ -532,6 +541,26 @@ class SyncService {
       await _saveSettingsBase(prefs, account, base);
     }
     return changed;
+  }
+
+  /// Encrypted profile names of this device, in the vault lane format.
+  static const profileNamesKey = 'vault_profile_names_v1';
+
+  /// Merges cloud profile names into this device (newest event wins).
+  /// Returns true when the stored names changed.
+  Future<bool> applyProfileNames(dynamic lane) async {
+    final remote = PersonalVault.object(lane);
+    if (remote.isEmpty) return false;
+    final prefs = await SharedPreferences.getInstance();
+    final local = PersonalVault.object(
+      jsonDecode(prefs.getString(profileNamesKey) ?? '{}'),
+    );
+    final merged = PersonalVault.mergeHistory(local, remote);
+    if (PersonalVault.canonical(merged) == PersonalVault.canonical(local)) {
+      return false;
+    }
+    await prefs.setString(profileNamesKey, jsonEncode(merged));
+    return true;
   }
 
   /// Merges cloud reactions into this device (newest per title wins).
@@ -655,6 +684,10 @@ class SyncService {
         }
         final now = DateTime.now();
         await prefs.setString(_lastPushKey, now.toIso8601String());
+        final collected = payload.collectedAt;
+        if (collected != null) {
+          await prefs.setString(_lastSnapshotKey, collected.toIso8601String());
+        }
         return now;
       }
 
@@ -790,6 +823,13 @@ class SyncService {
   Future<DateTime?> lastPush() async {
     final prefs = await SharedPreferences.getInstance();
     return DateTime.tryParse(prefs.getString(_lastPushKey) ?? '');
+  }
+
+  /// Read time of the newest snapshot confirmed in the encrypted cloud copy:
+  /// every local change older than this is safely in the vault.
+  Future<DateTime?> lastSavedSnapshot() async {
+    final prefs = await SharedPreferences.getInstance();
+    return DateTime.tryParse(prefs.getString(_lastSnapshotKey) ?? '');
   }
 
   Future<DateTime?> lastPull() async {

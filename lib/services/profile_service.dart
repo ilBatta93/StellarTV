@@ -1,8 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/user_profile.dart';
+import 'personal_vault.dart';
+import 'sync_hooks.dart';
+import 'sync_service.dart';
 
 /// Built-in avatar catalog: a fixed set of icons and colors the user can
 /// pick from. Keys are stored in the `user_profiles` table columns.
@@ -102,6 +107,53 @@ class ProfileService {
     await _client
         .from('user_profiles')
         .delete()
+        .eq('id', id)
+        .eq('sync_code', syncCode);
+  }
+
+  // ----- encrypted names -----
+
+  /// Name events of every profile (vault lane format) kept on this device.
+  Future<Map<String, dynamic>> nameEvents() async {
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      return PersonalVault.object(
+        jsonDecode(prefs.getString(SyncService.profileNamesKey) ?? '{}'),
+      );
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Records a name (or a removal) for the encrypted vault and asks for a
+  /// cloud save. [at] orders concurrent edits across devices.
+  Future<void> recordName(
+    String id, {
+    String? name,
+    bool deleted = false,
+    DateTime? at,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final events = await nameEvents();
+    events[id] = {
+      'id': id,
+      if (!deleted && name != null) 'name': name,
+      if (deleted) 'deleted': true,
+      'watched': (at ?? DateTime.now()).toUtc().toIso8601String(),
+    };
+    await prefs.setString(SyncService.profileNamesKey, jsonEncode(events));
+    SyncHooks.settingsChanged();
+  }
+
+  /// Replaces the plain name in the table with the empty placeholder, once
+  /// the encrypted copy is confirmed in the cloud.
+  Future<void> clearTableName({
+    required String id,
+    required String syncCode,
+  }) async {
+    await _client
+        .from('user_profiles')
+        .update({'name': ''})
         .eq('id', id)
         .eq('sync_code', syncCode);
   }

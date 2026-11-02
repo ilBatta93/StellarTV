@@ -56,7 +56,7 @@ class ProfileProvider extends ChangeNotifier {
     // Show the selection saved on this device right away (offline too).
     _selectedId ??= await _service.getSelectedProfileId();
     try {
-      _items = await _service.listProfiles(code);
+      _items = await _withNames(code, await _service.listProfiles(code));
       _selectedId = await _service.getSelectedProfileId();
       if (_selectedId != null && !_items.any((e) => e.id == _selectedId)) {
         _selectedId = null;
@@ -80,6 +80,51 @@ class ProfileProvider extends ChangeNotifier {
     notifyListeners();
     _announce();
     await _service.setSelectedProfileId(profile.id);
+  }
+
+  /// Names live in the encrypted vault; the table keeps an empty
+  /// placeholder. A plain name still found in the table (old app, or an
+  /// account without encrypted data) is adopted into the vault and cleared
+  /// from the table only after a confirmed encrypted save that includes it.
+  Future<List<UserProfile>> _withNames(
+    String code,
+    List<UserProfile> rows,
+  ) async {
+    final vault = await _sync.recoveryKey() != null;
+    var events = await _service.nameEvents();
+    final saved = await _sync.lastSavedSnapshot();
+    final out = <UserProfile>[];
+    for (var i = 0; i < rows.length; i++) {
+      final row = rows[i];
+      final event = events[row.id] is Map
+          ? Map<String, dynamic>.from(events[row.id] as Map)
+          : null;
+      final encrypted = event?['deleted'] == true
+          ? null
+          : event?['name'] as String?;
+      if (vault && row.name.isNotEmpty) {
+        if (encrypted != row.name) {
+          await _service.recordName(row.id, name: row.name);
+          events = await _service.nameEvents();
+        } else {
+          final at = DateTime.tryParse(event?['watched']?.toString() ?? '');
+          if (saved != null && at != null && saved.isAfter(at)) {
+            try {
+              await _service.clearTableName(id: row.id, syncCode: code);
+            } catch (_) {
+              /* Retried at the next load; the name is safe in the vault. */
+            }
+          }
+        }
+      }
+      final shown = row.name.isNotEmpty
+          ? row.name
+          : (encrypted != null && encrypted.isNotEmpty)
+          ? encrypted
+          : 'Profilo ${i + 1}';
+      out.add(shown == row.name ? row : row.copyWith(name: shown));
+    }
+    return out;
   }
 
   /// Remembers which profiles are kids profiles, so the filter applies
@@ -115,13 +160,17 @@ class ProfileProvider extends ChangeNotifier {
   }) async {
     // Genera il codice al primo uso, cosi la creazione non fallisce.
     final code = await _sync.ensureCode();
-    final profile = await _service.createProfile(
+    final vault = await _sync.recoveryKey() != null;
+    final created = await _service.createProfile(
       syncCode: code,
-      name: name,
+      // With encrypted data the name never reaches the table.
+      name: vault ? '' : name,
       avatarKey: avatarKey,
       avatarColor: avatarColor,
       isKids: isKids,
     );
+    await _service.recordName(created.id, name: name);
+    final profile = created.copyWith(name: name);
     _items = [..._items, profile];
     _cacheKids();
     notifyListeners();
@@ -137,10 +186,12 @@ class ProfileProvider extends ChangeNotifier {
   }) async {
     final code = await _sync.getStoredCode();
     if (code == null) return;
+    final vault = await _sync.recoveryKey() != null;
+    if (name != null) await _service.recordName(profile.id, name: name);
     await _service.updateProfile(
       id: profile.id,
       syncCode: code,
-      name: name,
+      name: name == null ? null : (vault ? '' : name),
       avatarKey: avatarKey,
       avatarColor: avatarColor,
       isKids: isKids,
@@ -170,6 +221,7 @@ class ProfileProvider extends ChangeNotifier {
     if (code == null) return;
     try {
       await _service.deleteProfile(id: profile.id, syncCode: code);
+      await _service.recordName(profile.id, deleted: true);
       _items = _items.where((e) => e.id != profile.id).toList();
       if (_selectedId == profile.id) {
         _selectedId = null;
