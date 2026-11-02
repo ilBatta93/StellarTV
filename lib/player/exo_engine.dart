@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/frame_rate_policy.dart';
+import '../models/live_buffer_policy.dart';
 import '../models/player_settings.dart';
 import '../services/audio_effects_service.dart';
 import '../services/frame_telemetry_service.dart';
@@ -20,12 +21,18 @@ class ExoEngine extends PlaybackEngine {
     required PlayerSettings settings,
     bool shared = false,
     this.isLive = false,
+    int bufferLevel = 0,
   }) : _shared = shared,
        _mediaUrl = url,
        _controller = VideoPlayerController.networkUrl(
          Uri.parse(url),
          formatHint: _formatHint(url),
-         httpHeaders: _streamHeaders(settings, shared: shared, live: isLive),
+         httpHeaders: _streamHeaders(
+           settings,
+           shared: shared,
+           live: isLive,
+           level: bufferLevel,
+         ),
          videoPlayerOptions: VideoPlayerOptions(
            // Without this every new player steals the audio focus and
            // Android pauses the others: the MultiView tiles froze.
@@ -54,6 +61,7 @@ class ExoEngine extends PlaybackEngine {
     PlayerSettings settings, {
     required bool shared,
     required bool live,
+    int level = 0,
   }) {
     final headers = <String, String>{
       'User-Agent': effectiveStreamUserAgent(settings.userAgent),
@@ -65,6 +73,7 @@ class ExoEngine extends PlaybackEngine {
         backBufferMs: shared
             ? 0
             : (live ? 60000 : settings.backBufferSeconds * 1000),
+        level: level,
       ).wire;
       // Only the full-screen player carries the audio effects.
       final session = shared ? null : AudioEffectsService.instance.sessionId;
@@ -190,9 +199,20 @@ class ExoEngine extends PlaybackEngine {
   @override
   bool get supportsDelays => false;
 
+  bool _playedOnce = false;
+  bool _wasBuffering = false;
+  int _stalls = 0;
+
+  @override
+  int get stalls => _stalls;
+
   void _sync() {
     if (_disposed) return;
     final v = _controller.value;
+    // A buffer that starts after playback was running is a stall.
+    if (v.isBuffering && !_wasBuffering && _playedOnce) _stalls++;
+    _wasBuffering = v.isBuffering;
+    if (v.isPlaying && !v.isBuffering) _playedOnce = true;
     final buffered = v.buffered.isEmpty ? Duration.zero : v.buffered.last.end;
     _value = PlaybackSnapshot(
       isReady: v.isInitialized,
@@ -493,11 +513,16 @@ class ExoLoadProfile {
   String get wire =>
       '$minBufferMs,$maxBufferMs,$bufferForPlaybackMs,$bufferForPlaybackAfterRebufferMs,$backBufferMs,${backBufferRequiresSeekable ? 1 : 0},$targetBufferBytes';
 
+  /// [level] is the adaptive buffer level learned for the server: each step
+  /// adds a refill cushion after a stall and a deeper forward window.
+  /// Preview keeps its fixed short profile.
   static ExoLoadProfile forPlayback({
     required bool preview,
     required bool live,
     required int backBufferMs,
+    int level = 0,
   }) {
+    final l = level.clamp(0, AdaptiveBuffer.maxLevel);
     if (preview) {
       return ExoLoadProfile(
         minBufferMs: 1500,
@@ -511,20 +536,20 @@ class ExoLoadProfile {
     }
     if (live) {
       return ExoLoadProfile(
-        minBufferMs: 800,
-        maxBufferMs: 12000,
+        minBufferMs: 800 + l * 1500,
+        maxBufferMs: 12000 + l * 6000,
         bufferForPlaybackMs: 400,
-        bufferForPlaybackAfterRebufferMs: 2000,
+        bufferForPlaybackAfterRebufferMs: 2000 + l * 1500,
         backBufferMs: backBufferMs,
         backBufferRequiresSeekable: true,
         targetBufferBytes: 0,
       );
     }
     return ExoLoadProfile(
-      minBufferMs: 15000,
-      maxBufferMs: 50000,
+      minBufferMs: 15000 + l * 5000,
+      maxBufferMs: 50000 + l * 10000,
       bufferForPlaybackMs: 2500,
-      bufferForPlaybackAfterRebufferMs: 5000,
+      bufferForPlaybackAfterRebufferMs: 5000 + l * 2000,
       backBufferMs: backBufferMs,
       backBufferRequiresSeekable: false,
       targetBufferBytes: 0,

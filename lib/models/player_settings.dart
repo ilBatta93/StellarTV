@@ -137,6 +137,9 @@ class PlayerSettings {
   int networkCachingMs;
   int liveCachingMs;
   int backBufferSeconds;
+
+  /// Live pause and rewind from a local buffer sized on the device RAM.
+  bool liveRewind;
   bool httpReconnect;
   bool dropLateFrames;
   bool skipFrames;
@@ -180,6 +183,7 @@ class PlayerSettings {
     this.networkCachingMs = 8192,
     this.liveCachingMs = 3000,
     this.backBufferSeconds = 60,
+    this.liveRewind = true,
     this.httpReconnect = true,
     this.dropLateFrames = true,
     this.skipFrames = false,
@@ -292,6 +296,7 @@ class PlayerSettings {
       networkCachingMs: i('networkCachingMs', d.networkCachingMs),
       liveCachingMs: i('liveCachingMs', d.liveCachingMs),
       backBufferSeconds: i('backBufferSeconds', d.backBufferSeconds),
+      liveRewind: b('liveRewind', d.liveRewind),
       httpReconnect: b('httpReconnect', d.httpReconnect),
       dropLateFrames: b('dropLateFrames', d.dropLateFrames),
       // The old default was on, but the engine ignored it. Keep that
@@ -355,6 +360,7 @@ class PlayerSettings {
     'networkCachingMs': networkCachingMs,
     'liveCachingMs': liveCachingMs,
     'backBufferSeconds': backBufferSeconds,
+    'liveRewind': liveRewind,
     'httpReconnect': httpReconnect,
     'dropLateFrames': dropLateFrames,
     'skipFrames': skipFrames,

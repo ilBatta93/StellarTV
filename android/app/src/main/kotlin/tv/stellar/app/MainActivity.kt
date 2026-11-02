@@ -1,5 +1,6 @@
 package tv.stellar.app
 
+import android.app.ActivityManager
 import android.app.PictureInPictureParams
 import android.app.UiModeManager
 import android.content.Context
@@ -286,6 +287,15 @@ class MainActivity : FlutterActivity() {
                         (Build.MANUFACTURER.equals("Amazon", ignoreCase = true) ||
                          packageManager.hasSystemFeature("amazon.hardware.fire_tv")))
                     "moveToBack" -> result.success(moveTaskToBack(true))
+                    "memoryInfo" -> {
+                        // Sizes the live rewind buffer; no app data involved.
+                        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                        val info = ActivityManager.MemoryInfo()
+                        am.getMemoryInfo(info)
+                        result.success(mapOf(
+                            "totalBytes" to info.totalMem,
+                            "lowRam" to am.isLowRamDevice))
+                    }
                     "canInstallApk" -> result.success(
                         Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
                             packageManager.canRequestPackageInstalls())

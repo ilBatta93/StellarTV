@@ -9,6 +9,7 @@ Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`
 - `playback_session.dart`: possiede il player visibile, pianifica i tentativi (motore × indirizzo).
 - `stream_health.dart`: budget unico per prima immagine e blocchi successivi.
 - `decoder_memory.dart`: ricorda le dirette che il decoder hardware non riesce a disegnare.
+- `buffer_memory.dart`: livello di buffer adattivo per server (solo impronta dell'host, sul dispositivo). Policy in `models/live_buffer_policy.dart`.
 - `multiview_audio.dart`: un solo proprietario dell'audio in multivista.
 - `tv_playback_shortcuts.dart`: tasti del telecomando a controlli nascosti.
 
@@ -16,6 +17,8 @@ Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`
 - Con una sola connessione ammessa, il rilascio del player nativo precede l'apertura del flusso successivo. Con più connessioni il successivo può aprirsi prima, e `released` attende comunque lo smaltimento reale.
 - Un cambio di focus rapido non crea mai due proprietari dell'audio.
 - La diretta non entra nella cronologia di visione né nel cloud.
+- Riavvolgimento della diretta: il ritardo e la finestra mostrati sono quelli che il player tiene davvero (`liveWindow` di mpv, finestra nativa di ExoPlayer), mai una stima a orologio quando c'è un dato reale. Il buffer all'indietro di mpv è dimensionato sulla RAM (`liveRewindBytes`); in pausa il buffer in avanti cresce al più fino allo stesso budget.
+- Buffer adattivo: sale di un livello solo dopo due blocchi ravvicinati, scende dopo 10 minuti calmi; un blocco entro 5 s da seek, pausa o LIVE non conta. A livello 0 la diretta mpv resta sul bordo live (`cache-pause=no`).
 - I bridge nativi e i nomi Dart cambiano insieme (vedi `packages/video_player_android/CLAUDE.md`).
 - Nessun indirizzo di flusso nei log inviati o nella diagnostica cloud.
 - Effetti audio (`services/audio_effects_service.dart`): solo il player a schermo intero suona sulla sessione Android degli effetti; anteprime e multivista no. La libmpv inclusa ha solo il filtro `equalizer` di FFmpeg, quindi compressione e dialoghi su Android passano da `android.media.audiofx` (`AudioEffectsController.kt`).

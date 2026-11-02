@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:stellar_tv/models/live_buffer_policy.dart';
 import 'package:stellar_tv/models/player_settings.dart';
 import 'package:stellar_tv/player/decoder_memory.dart';
 import 'package:stellar_tv/player/playback_engine.dart';
@@ -42,7 +43,20 @@ class _FakeEngine extends PlaybackEngine {
     ),
   );
   @override
-  bool get supportsTimeshift => _value.nativeLiveSeekable;
+  bool get supportsTimeshift =>
+      _value.nativeLiveSeekable || _value.liveWindow != null;
+  void cacheWindow() {
+    _value = const PlaybackSnapshot(
+      isReady: true,
+      isPlaying: true,
+      position: Duration(seconds: 100),
+      liveWindow: LiveWindow(
+        start: Duration(seconds: 40),
+        edge: Duration(seconds: 130),
+      ),
+    );
+  }
+
   void liveWindow() {
     _value = const PlaybackSnapshot(
       isReady: true,
@@ -331,6 +345,36 @@ void main() {
     },
   );
 
+  test('Cache window: real delay, rewind clamped to held data', () async {
+    final engine = _FakeEngine(
+      PlayerEngineType.mediakit,
+      _xtream,
+      succeed: true,
+    );
+    final session = PlaybackSession(
+      url: _xtream,
+      isLive: true,
+      settings: PlayerSettings(),
+      engineFactory: (_) => engine,
+    );
+    await session.start();
+    engine.cacheWindow();
+    expect(session.canTimeshift, isTrue);
+    expect(session.liveDelay, const Duration(seconds: 30));
+    expect(session.rewindAvailable, const Duration(seconds: 60));
+    expect(session.canStepBack, isTrue);
+    expect(session.canStepForward, isTrue);
+    // 30 s is past the 10 s refill cushion: the badge shows.
+    expect(session.isBehindLive, isTrue);
+    await session.timeshiftBy(const Duration(minutes: -5));
+    expect(engine.sought, const Duration(seconds: 40));
+    await session.timeshiftBy(const Duration(minutes: 5));
+    expect(engine.sought, const Duration(seconds: 129));
+    await session.goLive();
+    expect(engine.defaultLiveSought, isTrue);
+    session.dispose();
+    await session.released;
+  });
   test(
     'Black-video software decoding works even with engine fallback off',
     () async {

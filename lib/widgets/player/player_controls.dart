@@ -242,7 +242,9 @@ class PlayerControls extends StatelessWidget {
           _RoundButton(
             icon: Icons.replay_10_rounded,
             tooltip: 'Indietro di ${step.inSeconds} secondi',
-            onPressed: () => _act(() => session.timeshiftBy(-step)),
+            onPressed: session.canStepBack
+                ? () => _act(() => session.timeshiftBy(-step))
+                : null,
           ),
         ],
         const SizedBox(width: 32),
@@ -275,7 +277,7 @@ class PlayerControls extends StatelessWidget {
           _RoundButton(
             icon: Icons.forward_10_rounded,
             tooltip: 'Avanti di ${step.inSeconds} secondi',
-            onPressed: session.isBehindLive
+            onPressed: session.canStepForward
                 ? () => _act(() => session.timeshiftBy(step))
                 : null,
           ),

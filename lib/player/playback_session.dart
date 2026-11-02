@@ -3,7 +3,9 @@ import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart';
 
+import '../models/live_buffer_policy.dart';
 import '../models/player_settings.dart';
+import 'buffer_memory.dart';
 import 'decoder_memory.dart';
 import '../services/playback_work_policy.dart';
 import '../services/stream_probe.dart';
@@ -339,6 +341,13 @@ class PlaybackSession extends ChangeNotifier {
       _diagnosticPreference();
     }
 
+    if (!previewMode && _adaptive == null) {
+      try {
+        await BufferMemory.ensureLoaded();
+      } catch (_) {}
+      if (_disposed) return;
+      _adaptive = AdaptiveBuffer(level: BufferMemory.levelFor(_playbackUrl));
+    }
     if (isLive) {
       try {
         await DecoderMemory.ensureLoaded();
@@ -467,6 +476,7 @@ class PlaybackSession extends ChangeNotifier {
           settings: settings,
           shared: previewMode,
           isLive: isLive,
+          bufferLevel: bufferLevel,
         ),
         PlayerEngineType.mediakit => MediaKitEngine(
           url: address,
@@ -475,6 +485,7 @@ class PlaybackSession extends ChangeNotifier {
           previewMode: previewMode,
           softwareDecode: _softwareDecode,
           hardwareCopy: _phoneHardwareCopy,
+          bufferLevel: bufferLevel,
         ),
       };
 
@@ -677,6 +688,8 @@ class PlaybackSession extends ChangeNotifier {
     // Fresh stream (new channel or reconnect): timeshift starts from here.
     _shift = Duration.zero;
     _pausedAt = null;
+    _viewerShifted = false;
+    _seenStalls = engine.stalls;
     _liveStartedAt = isLive ? DateTime.now() : null;
     _playingSince = DateTime.now();
     _armHealth(engine, gen);
@@ -903,6 +916,7 @@ class PlaybackSession extends ChangeNotifier {
       try {
         await engine.sampleOutput();
         if (_disposed || gen != _generation || _engine != engine) return;
+        _tickBuffer(engine);
         final v = engine.value;
         final decision = health.tick(
           evaluatePicture: evaluatePicture,
@@ -1174,6 +1188,41 @@ class PlaybackSession extends ChangeNotifier {
     _notify();
   }
 
+  // ---- Adaptive buffering ----------------------------------------------
+  // Stalls the engine reports raise the forward buffer one level at a time;
+  // a long calm stretch lowers it. The level is remembered per server so
+  // the next stream starts where this one settled. Previews keep theirs.
+  AdaptiveBuffer? _adaptive;
+  int _seenStalls = 0;
+  DateTime _lastTransport = DateTime.fromMillisecondsSinceEpoch(0);
+
+  @visibleForTesting
+  int get bufferLevel => _adaptive?.level ?? 0;
+
+  /// A seek, pause or LIVE refills the buffer on purpose: not a stall.
+  void _markTransport() => _lastTransport = DateTime.now();
+
+  void _tickBuffer(PlaybackEngine engine) {
+    final adaptive = _adaptive;
+    if (adaptive == null) return;
+    final now = DateTime.now();
+    final stalls = engine.stalls;
+    final fresh = stalls - _seenStalls;
+    _seenStalls = stalls;
+    final v = engine.value;
+    var changed = false;
+    if (fresh > 0) {
+      if (now.difference(_lastTransport) > const Duration(seconds: 5)) {
+        changed = adaptive.onStall(now);
+      }
+    } else if (v.isPlaying && !v.isBuffering) {
+      changed = adaptive.onSteady(now);
+    }
+    if (!changed) return;
+    unawaited(engine.setBufferLevel(adaptive.level));
+    unawaited(BufferMemory.remember(_playbackUrl, adaptive.level));
+  }
+
   // ---- Live timeshift --------------------------------------------------
   // The delay is tracked on the wall clock (pauses add to it, rewinds add,
   // fast-forwards remove), so it stays right even when the stream clock of
@@ -1202,11 +1251,19 @@ class PlaybackSession extends ChangeNotifier {
 
   bool get canTimeshift => isLive && (_engine?.supportsTimeshift ?? false);
 
+  /// The viewer paused or rewound since the last LIVE: a delay is theirs,
+  /// not the refill cushion the adaptive buffer keeps on its own.
+  bool _viewerShifted = false;
+
   /// How far behind the live point the picture is.
   Duration get liveDelay {
-    if (_engine?.value.nativeLiveSeekable == true) {
-      return _engine?.value.nativeLiveOffset ?? Duration.zero;
+    final engine = _engine;
+    if (engine?.value.nativeLiveSeekable == true) {
+      return engine?.value.nativeLiveOffset ?? Duration.zero;
     }
+    // mpv's own cache: the real distance from the newest buffered picture.
+    final window = engine?.value.liveWindow;
+    if (window != null) return window.behind(engine!.value.position);
     var d = _shift;
     if (_pausedAt != null) d += DateTime.now().difference(_pausedAt!);
     final cap = _maxRewind;
@@ -1214,7 +1271,29 @@ class PlaybackSession extends ChangeNotifier {
     return d.isNegative ? Duration.zero : d;
   }
 
-  bool get isBehindLive => canTimeshift && liveDelay.inSeconds >= 3;
+  /// A few seconds of refill cushion are not "behind": the badge appears
+  /// for the viewer's own pause or rewind, or for a drift past 10 s.
+  bool get isBehindLive =>
+      canTimeshift && liveDelay.inSeconds >= (_viewerShifted ? 3 : 10);
+
+  /// Rewind is offered only once the player holds at least a second.
+  bool get canStepBack => rewindAvailable >= const Duration(seconds: 1);
+
+  /// Forward is offered whenever the picture is behind the newest data.
+  bool get canStepForward => canTimeshift && liveDelay.inSeconds >= 3;
+
+  /// How far back the viewer can still go: the data the player really
+  /// holds, never a clock estimate.
+  Duration get rewindAvailable {
+    final engine = _engine;
+    if (engine == null || !canTimeshift) return Duration.zero;
+    final v = engine.value;
+    if (v.nativeLiveSeekable) return v.position;
+    final window = v.liveWindow;
+    if (window != null) return window.rewindable(v.position);
+    final left = _maxRewind - liveDelay;
+    return left.isNegative ? Duration.zero : left;
+  }
 
   Duration get _maxRewind {
     final start = _liveStartedAt;
@@ -1233,6 +1312,15 @@ class PlaybackSession extends ChangeNotifier {
   Future<void> timeshiftBy(Duration offset) async {
     final engine = _engine;
     if (engine == null || !canTimeshift) return;
+    _markTransport();
+    if (offset.isNegative) _viewerShifted = true;
+    final window = engine.value.liveWindow;
+    if (window != null) {
+      final target = window.clamp(engine.value.position + offset);
+      await _timed(engine, 'timeshift', () => engine.seekTo(target));
+      _notify();
+      return;
+    }
     if (engine.value.nativeLiveSeekable) {
       var position = engine.value.position + offset;
       if (position.isNegative) position = Duration.zero;
@@ -1260,8 +1348,18 @@ class PlaybackSession extends ChangeNotifier {
     final engine = _engine;
     if (engine == null) return;
     if (_deferredLiveFailure) return _resumeDeferredLive();
+    if (isLive && _userPausedLive) {
+      // LIVE from a viewer pause resumes playback: same as Play.
+      _cloudPaused = false;
+      PlaybackWorkPolicy.instance.update(this, cloudBlocked: true);
+      _armHealth(engine, _generation);
+    }
     _userPausedLive = false;
-    if (engine.value.nativeLiveSeekable) {
+    _viewerShifted = false;
+    _markTransport();
+    if (engine.value.nativeLiveSeekable || engine.value.liveWindow != null) {
+      _shift = Duration.zero;
+      _pausedAt = null;
       await engine.seekToLive();
       if (!engine.value.isPlaying) await engine.play();
       _notify();
@@ -1318,6 +1416,8 @@ class PlaybackSession extends ChangeNotifier {
       return _resumeDeferredLive();
     }
     final pausing = engine.value.isPlaying;
+    _markTransport();
+    if (pausing && isLive) _viewerShifted = true;
     if (!pausing) {
       _cloudPaused = false;
       PlaybackWorkPolicy.instance.update(this, cloudBlocked: true);
@@ -1383,6 +1483,7 @@ class PlaybackSession extends ChangeNotifier {
     final revision = ++_seekRevision;
     final engine = _engine;
     if (engine == null || isLive) return;
+    _markTransport();
     final max = engine.value.duration;
     var target = position < Duration.zero ? Duration.zero : position;
     if (max > Duration.zero && target > max) target = max;

@@ -457,7 +457,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       if ((left || right) && _isLive && session.canTimeshift) {
         // Live timeshift straight from the arrows, like a DVR.
         _showTvControls(TvPlayerRowKind.center);
-        if (left || session.isBehindLive) {
+        if (left ? session.canStepBack : session.canStepForward) {
           session.timeshiftBy(left ? -step : step);
         }
         return;
@@ -872,7 +872,9 @@ class _PlayerScreenState extends State<PlayerScreen>
             id: 'liveRewind',
             icon: Icons.replay_10_rounded,
             label: 'Indietro ${step.inSeconds} s',
-            onPressed: () => session.timeshiftBy(-step),
+            onPressed: session.canStepBack
+                ? () => session.timeshiftBy(-step)
+                : null,
           ),
         TvPlayerAction(
           id: 'play',
@@ -896,7 +898,7 @@ class _PlayerScreenState extends State<PlayerScreen>
             id: 'liveForward',
             icon: Icons.forward_10_rounded,
             label: 'Avanti ${step.inSeconds} s',
-            onPressed: session.isBehindLive
+            onPressed: session.canStepForward
                 ? () => session.timeshiftBy(step)
                 : null,
           ),

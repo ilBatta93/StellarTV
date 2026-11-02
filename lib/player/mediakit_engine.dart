@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/widgets.dart';
@@ -6,6 +7,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../models/audio_effects.dart';
+import '../models/live_buffer_policy.dart';
 import '../models/player_settings.dart';
 import '../services/audio_effects_service.dart';
 import '../services/device_type_service.dart';
@@ -21,7 +23,9 @@ class MediaKitEngine extends PlaybackEngine {
     this.previewMode = false,
     this.softwareDecode = false,
     this.hardwareCopy = false,
+    int bufferLevel = 0,
   }) : _settings = settings,
+       _bufferLevel = bufferLevel.clamp(0, AdaptiveBuffer.maxLevel),
        _player = Player(
          configuration: PlayerConfiguration(
            // The old value (network caching ms * 1 KB, ~1.5 MB) held about a
@@ -361,41 +365,177 @@ class MediaKitEngine extends PlaybackEngine {
   @override
   bool get supportsDelays => true;
 
+  /// Full-screen live on every device, unless the viewer turned it off. The
+  /// controls still follow [PlaybackSnapshot.liveWindow]: nothing to rewind
+  /// is offered before the cache really holds it.
   @override
-  bool get supportsTimeshift =>
-      isLive && !previewMode && !DeviceTypeService.isTv;
+  bool get supportsTimeshift => isLive && !previewMode && _settings.liveRewind;
 
-  /// Local timeshift window kept by mpv behind the playback point.
-  static const timeshiftBackBytes = 256 * 1024 * 1024;
+  /// Bytes mpv keeps behind the playback point, sized on the device RAM.
+  int get _rewindBytes => liveRewindBytes(
+    tv: DeviceTypeService.isTv,
+    totalRamBytes: DeviceTypeService.totalRamBytes,
+    lowRam: DeviceTypeService.isLowRam,
+  );
+
+  int get _forwardBytes => cacheBytes(
+    _settings,
+    isLive: isLive,
+    tv: DeviceTypeService.isTv,
+    preview: previewMode,
+  );
 
   /// Lets mpv keep already-played live data so the viewer can pause and
-  /// rewind, and keep downloading while paused (true timeshift buffer).
+  /// rewind inside it.
   Future<void> _enableTimeshift() async {
     final platform = _player.platform;
     if (platform is! NativePlayer) return;
     final options = {
       'cache': 'yes',
-      // The seekable cache made mpv jump back into already-played data on
-      // MPEG-TS timestamp resets (live replayed in a loop): keep it off and
-      // let pause/rewind use the plain back buffer.
-      'demuxer-seekable-cache': 'no',
+      // Rewind needs seeks served from the cache. MPEG-TS timestamp resets
+      // once made the cache replay already-seen minutes: the cache poll
+      // detects that jump and drops the old data (see _onClockJump).
+      'demuxer-seekable-cache': supportsTimeshift ? 'yes' : 'no',
       // No 'force-seekable': media_kit seeks to 0 every time the Android
       // surface is (re)attached; on a forced-seekable live stream that seek
-      // jumped outside the stream (black picture, stalled player). The
-      // seekable cache alone already allows pause/rewind (partially-seekable).
-      // RAM is bounded on every TV (Fire TV/Chromecast have 1-2 GB).
-      'demuxer-max-back-bytes':
-          '${DeviceTypeService.isTv ? 32 * 1024 * 1024 : timeshiftBackBytes}',
+      // jumped outside the stream (black picture, stalled player).
+      'demuxer-max-back-bytes': supportsTimeshift ? '$_rewindBytes' : '0',
       'demuxer-donate-buffer': 'no',
-      // Pausing on every hiccup drifted the live behind until it fell out of
-      // the provider window: drop late frames and stay on the live edge.
-      'cache-pause': 'no',
+      // Level 0 stays on the live edge and plays through a hiccup; a server
+      // that keeps stalling earns a refill cushion (mpvCachePauseWait).
+      ..._cachePauseOptions(),
     };
     for (final entry in options.entries) {
       try {
         await platform.setProperty(entry.key, entry.value);
       } catch (_) {}
     }
+  }
+
+  int _bufferLevel;
+
+  Map<String, String> _cachePauseOptions() {
+    final wait = mpvCachePauseWait(level: _bufferLevel, live: isLive);
+    return {
+      'cache-pause': wait == null ? 'no' : 'yes',
+      if (wait != null) 'cache-pause-wait': wait.toStringAsFixed(1),
+      if (!isLive) 'cache-secs': '${mpvCacheSeconds(_bufferLevel)}',
+    };
+  }
+
+  @override
+  Future<void> setBufferLevel(int level) async {
+    if (previewMode || level == _bufferLevel) return;
+    _bufferLevel = level;
+    final platform = _player.platform;
+    if (_disposed || platform is! NativePlayer) return;
+    for (final entry in _cachePauseOptions().entries) {
+      try {
+        await platform.setProperty(entry.key, entry.value);
+      } catch (_) {}
+    }
+  }
+
+  // ---- Cache poll: live window, clock jumps, stalls -------------------
+
+  Timer? _cachePoll;
+  bool _polling = false;
+  Duration? _lastPollPosition;
+  DateTime _seekQuietUntil = DateTime.fromMillisecondsSinceEpoch(0);
+  LiveWindow? _window;
+  bool _underrun = false;
+  int _stalls = 0;
+
+  @override
+  int get stalls => _stalls;
+
+  /// One property read per second, full-screen only.
+  void _startCachePoll() {
+    if (previewMode || _disposed) return;
+    _cachePoll ??= Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _pollCache(),
+    );
+  }
+
+  Future<void> _pollCache() async {
+    final platform = _player.platform;
+    if (_polling || _disposed || platform is! NativePlayer) return;
+    _polling = true;
+    try {
+      final raw = await platform
+          .getProperty('demuxer-cache-state')
+          .timeout(const Duration(milliseconds: 400));
+      if (_disposed) return;
+      Object? decoded;
+      try {
+        decoded = raw.isEmpty ? null : jsonDecode(raw);
+      } on FormatException {
+        decoded = null;
+      }
+      final state = CacheState.parse(decoded);
+      if (state == null) return;
+      final p = _player.state;
+      // A rising underrun after the first picture is a stall; the start
+      // of a stream and a viewer pause are not.
+      if (state.underrun && !_underrun && _firstFrameRendered && p.playing) {
+        _stalls++;
+      }
+      _underrun = state.underrun;
+      if (!supportsTimeshift) return;
+      final previous = _lastPollPosition;
+      _lastPollPosition = p.position;
+      if (previous != null &&
+          liveClockJumped(
+            previous: previous,
+            current: p.position,
+            seeking: DateTime.now().isBefore(_seekQuietUntil),
+          )) {
+        await _onClockJump();
+        return;
+      }
+      final window = liveWindowAt(p.position, state.ranges);
+      if (window?.start != _window?.start || window?.edge != _window?.edge) {
+        _window = window;
+        _sync();
+      }
+    } catch (_) {
+      // A slow read is skipped; the next tick tries again.
+    } finally {
+      _polling = false;
+    }
+  }
+
+  /// The stream clock went backwards without a seek: the provider restarted
+  /// its timestamps. The data behind the reader now belongs to another
+  /// timeline, so it is dropped (back buffer to zero for a moment) and the
+  /// window starts again from the new clock.
+  Future<void> _onClockJump() async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return;
+    _window = null;
+    _lastPollPosition = null;
+    _sync();
+    try {
+      await platform.setProperty('demuxer-max-back-bytes', '0');
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (_disposed) return;
+      await platform.setProperty('demuxer-max-back-bytes', '$_rewindBytes');
+    } catch (_) {}
+  }
+
+  /// While the viewer pauses, the forward cache grows to the rewind budget
+  /// so the stream keeps downloading and the paused minutes stay
+  /// watchable. Play restores the normal forward size.
+  Future<void> _growForwardForPause(bool paused) async {
+    final platform = _player.platform;
+    if (!supportsTimeshift || platform is! NativePlayer) return;
+    final bytes = paused && _rewindBytes > _forwardBytes
+        ? _rewindBytes
+        : _forwardBytes;
+    try {
+      await platform.setProperty('demuxer-max-bytes', '$bytes');
+    } catch (_) {}
   }
 
   Timer? _errorConfirm;
@@ -501,6 +641,7 @@ class MediaKitEngine extends PlaybackEngine {
       size: size,
       speed: p.rate,
       error: _value.hasError ? _value.error : null,
+      liveWindow: _window,
     );
     notifyListeners();
     if (_playing != null &&
@@ -783,6 +924,11 @@ class MediaKitEngine extends PlaybackEngine {
       }
     }
     if (isLive && !previewMode) await _enableTimeshift();
+    if (!isLive && !previewMode && _bufferLevel > 0) {
+      final level = _bufferLevel;
+      _bufferLevel = 0;
+      await setBufferLevel(level);
+    }
     if (!previewMode) {
       // Before the first AudioTrack exists: mpv reads the session at init.
       if (Platform.isAndroid) {
@@ -820,6 +966,7 @@ class MediaKitEngine extends PlaybackEngine {
       onTimeout: () =>
           throw const PlaybackException('Il flusso non risponde (timeout)'),
     );
+    _startCachePoll();
   }
 
   @override
@@ -833,6 +980,11 @@ class MediaKitEngine extends PlaybackEngine {
     _outputFrames = null;
     _outputToken = null;
     _outputProperty = null;
+    // A new stream starts a new clock and an empty window.
+    _window = null;
+    _lastPollPosition = null;
+    _underrun = false;
+    await _growForwardForPause(false);
     _playing = Completer<void>();
     try {
       final ua = effectiveStreamUserAgent(_settings.userAgent);
@@ -891,13 +1043,32 @@ class MediaKitEngine extends PlaybackEngine {
   );
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() async {
+    await _growForwardForPause(false);
+    await _player.play();
+  }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    await _player.pause();
+    await _growForwardForPause(true);
+  }
 
   @override
-  Future<void> seekTo(Duration position) => _player.seek(position);
+  Future<void> seekTo(Duration position) {
+    // A viewer seek moves the clock on purpose: not a timestamp reset.
+    _seekQuietUntil = DateTime.now().add(const Duration(seconds: 3));
+    _lastPollPosition = null;
+    return _player.seek(position);
+  }
+
+  /// The newest buffered picture, when the cache window is known.
+  @override
+  Future<void> seekToLive() {
+    final window = _window;
+    if (window == null) return seekTo(value.bufferedUntil);
+    return seekTo(window.clamp(window.edge));
+  }
 
   @override
   Future<void> setSpeed(double speed) => _player.setRate(speed);
@@ -1055,6 +1226,7 @@ class MediaKitEngine extends PlaybackEngine {
       unawaited(AudioEffectsService.instance.playerStopped());
     }
     _errorConfirm?.cancel();
+    _cachePoll?.cancel();
     if (_playing != null && !_playing!.isCompleted) {
       _playing!.completeError(const PlaybackException('Chiuso'));
       _playing!.future.catchError((_) {});

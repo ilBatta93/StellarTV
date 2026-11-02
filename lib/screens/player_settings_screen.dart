@@ -559,6 +559,18 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             format: (v) => '${v.round()} s',
             onChanged: (v) => _update((s) => s.backBufferSeconds = v.round()),
           ),
+        if (s.primaryEngine.supportsTimeshift && (!_tvProfile || _live))
+          SettingsSwitchTile(
+            icon: Icons.history_rounded,
+            title: 'Riavvolgimento della diretta',
+            subtitle:
+                'Pausa e indietro nella diretta. La memoria usata si adatta '
+                'al dispositivo; il buffer in avanti si regola da solo se '
+                'il flusso si blocca',
+            badge: 'mpv',
+            value: s.liveRewind,
+            onChanged: (v) => _update((s) => s.liveRewind = v),
+          ),
         if (s.primaryEngine.supportsReconnect)
           SettingsSwitchTile(
             icon: Icons.wifi_protected_setup_rounded,
@@ -845,10 +857,7 @@ class _EngineFeatures extends StatelessWidget {
       ('Sottotitoli incorporati', engine.supportsSubtitles),
       ('Scelta qualità', engine.supportsQuality),
       ('Ritardo audio e sottotitoli', engine.supportsDelays),
-      (
-        'Pausa e riavvolgimento diretta',
-        engine.supportsTimeshift && !DeviceTypeService.isTv,
-      ),
+      ('Pausa e riavvolgimento diretta', engine.supportsTimeshift),
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),

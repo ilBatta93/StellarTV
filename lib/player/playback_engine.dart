@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../models/live_buffer_policy.dart';
 import '../models/player_settings.dart';
 
 class MediaTrack {
@@ -33,6 +34,10 @@ class PlaybackSnapshot {
   final bool nativeLiveSeekable;
   final Duration? nativeLiveOffset;
 
+  /// Live rewind window read from the player's own cache (mpv). Null when
+  /// the engine has no local window or reports a native one instead.
+  final LiveWindow? liveWindow;
+
   const PlaybackSnapshot({
     this.isReady = false,
     this.isPlaying = false,
@@ -47,6 +52,7 @@ class PlaybackSnapshot {
     this.caption = '',
     this.nativeLiveSeekable = false,
     this.nativeLiveOffset,
+    this.liveWindow,
   });
 
   bool get hasError => error != null;
@@ -101,6 +107,14 @@ abstract class PlaybackEngine extends ChangeNotifier {
   /// Keeps the native player and its surface, opening [url] in place.
   /// False when the engine has to be created again.
   Future<bool> reopen(String url) async => false;
+
+  /// Stalls since open: the decoder waited for data after playback had
+  /// started. Monotonic; the session compares successive readings.
+  int get stalls => 0;
+
+  /// Applies an adaptive buffer level to the running player. Engines that
+  /// only size their buffer at creation ignore it.
+  Future<void> setBufferLevel(int level) async {}
 
   /// Refreshes renderer counters used by the shared health budget.
   Future<void> sampleOutput() async {}
