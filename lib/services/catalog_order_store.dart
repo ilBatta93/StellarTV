@@ -43,11 +43,7 @@ class CatalogOrderStore extends ChangeNotifier {
     if (TitleMetadataStore.disabled) return;
     try {
       final path = await _path();
-      final raw = await Isolate.run(() {
-        final file = File(path);
-        if (!file.existsSync()) return null;
-        return jsonDecode(file.readAsStringSync());
-      });
+      final raw = await _readOrdersInBackground(path);
       if (raw is! Map) return;
       var added = false;
       raw.forEach((key, value) {
@@ -83,3 +79,12 @@ class CatalogOrderStore extends ChangeNotifier {
 
   bool get loaded => _loaded;
 }
+
+// Top-level so the isolate closure captures only [path]. Built inside
+// [CatalogOrderStore._read], next to a closure using the store, it carried
+// the store and its Timer: the send failed and saved orders were never read.
+Future<Object?> _readOrdersInBackground(String path) => Isolate.run(() {
+  final file = File(path);
+  if (!file.existsSync()) return null;
+  return jsonDecode(file.readAsStringSync());
+});

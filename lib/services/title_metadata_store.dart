@@ -35,8 +35,9 @@ class TitleMetadataStore<T> extends ChangeNotifier {
   /// the TV's UI thread while a catalog was being scored.
   final Set<String> _changed = {};
 
-  /// Widget tests never touch files or the network.
-  static final bool disabled = Platform.environment.containsKey('FLUTTER_TEST');
+  /// Widget tests never touch files or the network. Assignable so a test
+  /// can exercise the device files under a temporary directory.
+  static bool disabled = Platform.environment.containsKey('FLUTTER_TEST');
 
   void notifyAvailabilityChanged() => notifyListeners();
 
@@ -69,13 +70,12 @@ class TitleMetadataStore<T> extends ChangeNotifier {
       final path = (await _file()).path;
       // Values are decoded in the isolate too: tens of thousands of title
       // identities parsed on the UI thread froze the TV at start.
-      final decodeValue = decode;
       Map<String, (T, int)>? decoded;
       try {
-        decoded = await Isolate.run(() => _readStore(path, decodeValue));
+        decoded = await _readStoreInBackground(path, decode);
       } catch (_) {
         // A decoder that cannot cross isolates still loads, on this thread.
-        decoded = _readStore(path, decodeValue);
+        decoded = _readStore(path, decode);
       }
       if (decoded != null) {
         decoded.forEach((key, value) {
@@ -142,6 +142,14 @@ class TitleMetadataStore<T> extends ChangeNotifier {
     if (_changed.isNotEmpty) _scheduleSave();
   }
 }
+
+// Top-level so the isolate closure captures only its arguments. Built
+// inside [TitleMetadataStore.load] it carried the store and its pending
+// Future, could not be sent, and every load ran on the UI thread.
+Future<Map<String, (T, int)>?> _readStoreInBackground<T>(
+  String path,
+  T? Function(Object? raw) decode,
+) => Isolate.run(() => _readStore(path, decode));
 
 Map<String, (T, int)>? _readStore<T>(
   String path,

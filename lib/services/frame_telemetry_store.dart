@@ -12,7 +12,12 @@ class FrameTelemetryStore {
   Future<Map<String, Object?>?>? _recovery;
 
   Future<Map<String, Object?>?> recover() =>
-      _recovery ??= Isolate.run(() async {
+      _recovery ??= _recoverInBackground(directory);
+
+  // Static so the isolate closure captures only [directory], not the store
+  // with its pending Futures.
+  static Future<Map<String, Object?>?> _recoverInBackground(String directory) =>
+      Isolate.run(() async {
         final dir = Directory(directory);
         await dir.create(recursive: true);
         final current = File('${dir.path}/telemetry_current.json');
