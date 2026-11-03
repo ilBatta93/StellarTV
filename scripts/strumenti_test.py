@@ -74,6 +74,14 @@ class RulesTest(unittest.TestCase):
         blocking, _ = lexicon_findings('src/lib/guideContent.ts', [(9, 'text: "Collega il tuo provider"')])
         self.assertEqual(len(blocking), 1)
 
+    def test_release_notes_use_the_build_list(self):
+        # The release build stopped on this line: the review must stop it first.
+        line = '- Pulsante «Apri con» anche per le serie'
+        blocking, _ = lexicon_findings('docs/release-current.md', [(5, line)])
+        self.assertEqual(blocking, ['docs/release-current.md:5 «serie»'])
+        # Other public text keeps the master list only.
+        self.assertEqual(lexicon_findings('docs/player.md', [(1, line)]), ([], []))
+
     def test_lexicon_allows_hls_and_legacy_identifiers(self):
         lines = [(1, "final url = '$base/index.m3u8';"), (2, 'final s = XtreamService();'),
                  (3, "import 'package:provider/provider.dart';")]

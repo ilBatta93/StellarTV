@@ -7,7 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-APP = Path(__file__).resolve().parents[1]
+# The release build refuses these words in the notes: the review reads the same list.
+from release_notes import BLOCKED as RELEASE_BLOCKED
+
+APP =Path(__file__).resolve().parents[1]
 ROOT = APP.parent
 SITE = ROOT / 'stellartv-ae76efd2'
 HANDOFF = APP / 'docs' / 'handoff'
@@ -20,6 +23,7 @@ FORBIDDEN_CODE = re.compile(r'\b(iptv|xtream(?:\s+codes)?|m3u|abbonament[oi])\b'
 LEXICON_EXEMPT = re.compile(r'(^|/)(CLAUDE|AGENTS)\.md$|(^|/)scripts/[^/]+\.py$')
 # Text that reaches users or public history: a forbidden word here blocks the push.
 PUBLIC_TEXT = re.compile(r'\.md$|(^|/)guideContent\.ts$')
+RELEASE_NOTES = 'docs/release-current.md'
 
 STRONG_SECRETS = [
     ('chiave privata', re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----')),
@@ -155,6 +159,8 @@ def lexicon_findings(path, added):
     for line_no, text in added:
         if public:
             match = FORBIDDEN.search(text)
+            if not match and path == RELEASE_NOTES and text.startswith('- '):
+                match = RELEASE_BLOCKED.search(text)
             if match:
                 blocking.append(f'{path}:{line_no} «{match.group(0)}»')
             continue
