@@ -43,6 +43,14 @@ class _Facet {
     imdbDays = other.imdbDays;
     if (other.imdbId != null) imdbId = other.imdbId;
   }
+
+  bool sameImdbAs(_Facet other) =>
+      imdb == other.imdb &&
+      imdbKnown == other.imdbKnown &&
+      imdbAt == other.imdbAt &&
+      imdbVotes == other.imdbVotes &&
+      imdbDays == other.imdbDays &&
+      (other.imdbId == null || imdbId == other.imdbId);
 }
 
 class _Subject {
@@ -91,10 +99,15 @@ class TitleFacetIndex extends ChangeNotifier {
 
   int _now() => DateTime.now().millisecondsSinceEpoch;
 
-  _Facet _row(String key) {
-    _changed.add(key);
-    return _rows.putIfAbsent(key, _Facet.new);
-  }
+  _Facet _row(String key) => _rows.putIfAbsent(key, _Facet.new);
+
+  /// Marks a row for the next save. Only real changes count: marking every
+  /// row the start-up merges passed over rewrote the whole index each launch,
+  /// and the TV's UI thread stopped for about 1.7 s copying it.
+  void _mark(String key) => _changed.add(key);
+
+  @visibleForTesting
+  Set<String> get pendingRows => _changed;
 
   /// IMDb score for `movie:{id}` or `tv:{id}`. Null while unknown.
   /// Zero means a finished lookup found no IMDb score.
@@ -139,9 +152,11 @@ class TitleFacetIndex extends ChangeNotifier {
     final row = _row(key);
     if (row.imdbId == imdbId) return;
     row.imdbId = imdbId;
+    _mark(key);
     if (key.split(':').length == 2) {
       for (final titleKey in _titleKeysByMedia[key] ?? const <String>{}) {
         _row(titleKey).imdbId = imdbId;
+        _mark(titleKey);
       }
     }
     if (quiet) {
@@ -171,8 +186,10 @@ class TitleFacetIndex extends ChangeNotifier {
     final row = _row(mediaKey);
     final stamp = at ?? _now();
     if (row.platforms != null && row.platformsAt > stamp) return;
+    if (row.platformsAt == stamp && listEquals(row.platforms, names)) return;
     row.platforms = List<String>.from(names);
     row.platformsAt = stamp;
+    _mark(mediaKey);
     if (quiet) {
       _dirty = true;
     } else {
@@ -215,6 +232,7 @@ class TitleFacetIndex extends ChangeNotifier {
     row.logoKnown = true;
     row.logoUrl = url;
     row.logoExpires = expires;
+    _mark(mediaKey);
     if (quiet) {
       _dirty = true;
     } else {
@@ -230,10 +248,11 @@ class TitleFacetIndex extends ChangeNotifier {
 
   List<int>? genresOf(String key) => _rows[key]?.genres;
 
-  bool genresFresh(String key) {
+  /// [now] lets a pass over a whole catalog read the clock once.
+  bool genresFresh(String key, {int? now}) {
     final row = _rows[key];
     if (row == null || row.genres == null || row.genresAt == 0) return false;
-    return _now() - row.genresAt < genreTtl.inMilliseconds;
+    return (now ?? _now()) - row.genresAt < genreTtl.inMilliseconds;
   }
 
   /// Sort score for a canonical title key. IMDb wins when it is positive.
@@ -325,16 +344,26 @@ class TitleFacetIndex extends ChangeNotifier {
     final row = _row(mediaKey);
     final stamp = at ?? _now();
     if (row.imdbKnown && row.imdbAt > stamp) return;
+    final validId = imdbId != null && RegExp(r'^tt\d+$').hasMatch(imdbId);
+    // The device store merged at start mostly repeats what the index has.
+    if (row.imdbKnown &&
+        row.imdbAt == stamp &&
+        row.imdb == score.rating &&
+        row.imdbVotes == score.votes &&
+        row.imdbDays == score.days &&
+        (!validId || row.imdbId == imdbId)) {
+      return;
+    }
     row.imdb = score.rating;
     row.imdbKnown = true;
     row.imdbAt = stamp;
     row.imdbVotes = score.votes;
     row.imdbDays = score.days;
-    if (imdbId != null && RegExp(r'^tt\d+$').hasMatch(imdbId)) {
-      row.imdbId = imdbId;
-    }
+    if (validId) row.imdbId = imdbId;
+    _mark(mediaKey);
     for (final titleKey in _titleKeysByMedia[mediaKey] ?? const <String>{}) {
       _row(titleKey).copyImdbFrom(row);
+      _mark(titleKey);
     }
     if (quiet) {
       _dirty = true;
@@ -347,9 +376,17 @@ class TitleFacetIndex extends ChangeNotifier {
     final row = _row(titleKey);
     final stamp = at ?? _now();
     if (row.tmdbKnown && row.tmdbAt > stamp) return;
+    // An import stamps with the file time, not a lookup: the same score
+    // keeps its own time and the row is not rewritten.
+    if (row.tmdbKnown &&
+        row.tmdb == rating &&
+        (row.tmdbAt == stamp || at != null)) {
+      return;
+    }
     row.tmdb = rating;
     row.tmdbKnown = true;
     row.tmdbAt = stamp;
+    _mark(titleKey);
     if (quiet) {
       _dirty = true;
     } else {
@@ -366,19 +403,30 @@ class TitleFacetIndex extends ChangeNotifier {
     bool quiet = false,
   }) {
     final row = _row(titleKey);
+    var changed = row.tmdbId != tmdbId || row.mediaKey != mediaKey;
     row.tmdbId = tmdbId;
     row.mediaKey = mediaKey;
     if (tmdb != null) {
       final stamp = tmdbAt ?? _now();
-      if (!row.tmdbKnown || row.tmdbAt <= stamp) {
+      // Same rule as [putTmdb]: an import keeps the time of the lookup.
+      final same =
+          row.tmdbKnown &&
+          row.tmdb == tmdb &&
+          (row.tmdbAt == stamp || tmdbAt != null);
+      if (!row.tmdbKnown || (row.tmdbAt <= stamp && !same)) {
         row.tmdb = tmdb;
         row.tmdbKnown = true;
         row.tmdbAt = stamp;
+        changed = true;
       }
     }
     (_titleKeysByMedia[mediaKey] ??= <String>{}).add(titleKey);
     final media = _rows[mediaKey];
-    if (media != null && media.imdbKnown) row.copyImdbFrom(media);
+    if (media != null && media.imdbKnown && !row.sameImdbAs(media)) {
+      row.copyImdbFrom(media);
+      changed = true;
+    }
+    if (changed) _mark(titleKey);
     if (quiet) {
       _dirty = true;
     } else if (tmdb != null || (media != null && media.imdbKnown)) {
@@ -392,6 +440,7 @@ class TitleFacetIndex extends ChangeNotifier {
     if (row.genres != null && row.genresAt > stamp) return;
     row.genres = List<int>.from(genres);
     row.genresAt = stamp;
+    _mark(key);
     _scheduleSave();
   }
 
@@ -399,10 +448,11 @@ class TitleFacetIndex extends ChangeNotifier {
     final stamp = at ?? _now();
     var changed = false;
     genres.forEach((key, value) {
+      if (_rows[key]?.genres != null) return;
       final row = _row(key);
-      if (row.genres != null) return;
       row.genres = List<int>.from(value);
       row.genresAt = stamp;
+      _mark(key);
       changed = true;
     });
     if (changed) _scheduleSave();
@@ -595,12 +645,17 @@ class TitleFacetIndex extends ChangeNotifier {
       final mediaRow = _row(media);
       if (entry.value.imdbKnown &&
           (!mediaRow.imdbKnown || entry.value.imdbAt >= mediaRow.imdbAt)) {
-        mediaRow.copyImdbFrom(entry.value);
-      } else if (mediaRow.imdbKnown) {
+        if (!mediaRow.sameImdbAs(entry.value)) {
+          mediaRow.copyImdbFrom(entry.value);
+          _mark(media);
+        }
+      } else if (mediaRow.imdbKnown && !entry.value.sameImdbAs(mediaRow)) {
         entry.value.copyImdbFrom(mediaRow);
+        _mark(entry.key);
       }
       if (entry.value.imdbId != null && mediaRow.imdbId == null) {
         mediaRow.imdbId = entry.value.imdbId;
+        _mark(media);
       }
     }
   }

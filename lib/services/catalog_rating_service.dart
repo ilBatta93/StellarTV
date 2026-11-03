@@ -131,7 +131,7 @@ class CatalogRatingService extends ChangeNotifier {
       final clock = Stopwatch()..start();
       version++;
       notifyListeners();
-      _primeImdb();
+      unawaited(_primeImdb());
       FrameTelemetryService.instance.recordWork('voti.notifica', clock);
     });
   }
@@ -143,19 +143,35 @@ class CatalogRatingService extends ChangeNotifier {
   /// tenth of the TV's UI thread.
   final List<TmdbItem> _unprimed = [];
   bool _primedAll = false;
+  bool _priming = false;
 
-  void _primeImdb() {
-    if (PlaybackWorkPolicy.instance.blocksGuide) return;
-    final source = _primedAll ? _unprimed : identities.values;
-    final items = <TmdbItem>[];
-    for (final item in source) {
-      if (!TitleFacetIndex.instance.imdbFresh(ImdbRatingService.keyOf(item))) {
-        items.add(item);
+  /// In slices: the first full pass over every stored identity held the
+  /// TV's UI thread for about 160 ms at start. A call made while a pass
+  /// runs is skipped; its identities wait in [_unprimed] for the next one.
+  Future<void> _primeImdb() async {
+    if (_priming || PlaybackWorkPolicy.instance.blocksGuide) return;
+    _priming = true;
+    try {
+      // A copy: identities can be put between slices.
+      final source = (_primedAll ? _unprimed : identities.values).toList(
+        growable: false,
+      );
+      _primedAll = true;
+      _unprimed.clear();
+      final items = <TmdbItem>[];
+      final slice = WorkSlicer();
+      for (final item in source) {
+        await slice.pause();
+        if (!TitleFacetIndex.instance.imdbFresh(
+          ImdbRatingService.keyOf(item),
+        )) {
+          items.add(item);
+        }
       }
+      if (items.isNotEmpty) ImdbRatingService.instance.prime(items);
+    } finally {
+      _priming = false;
     }
-    _primedAll = true;
-    _unprimed.clear();
-    if (items.isNotEmpty) ImdbRatingService.instance.prime(items);
   }
 
   /// Fills missing scores for the published catalog while the player is closed.
@@ -304,7 +320,7 @@ class CatalogRatingService extends ChangeNotifier {
       notifyListeners();
       // Stored identities are now in memory: one full pass covers them.
       _primedAll = false;
-      _primeImdb();
+      unawaited(_primeImdb());
     } catch (_) {}
   }
 

@@ -142,4 +142,45 @@ void main() {
     expect(checks, 0);
     expect(service.queuedKeys, isEmpty);
   });
+
+  // The catalog warmup queues a whole catalog in slices: every title must
+  // still reach the bulk lookup, and known ones must stay out of it.
+  test('a catalog queued in slices sends every unknown title', () async {
+    File('${dir.path}/stellartv_kids_v3.json').writeAsStringSync(
+      jsonEncode({
+        'v': {'movie:t0': true},
+        'g': {
+          'movie:t0': [16],
+        },
+        'c': {'movie:t0': 'IT:T'},
+      }),
+    );
+    final sent = <String>{};
+    final service = KidsContentService();
+    addTearDown(service.dispose);
+    await service.load();
+    await http.runWithClient(
+      () async {
+        await service.requestIndexedSliced([
+          for (var i = 0; i < 3000; i++) (key: 'movie:t$i', title: 'T$i'),
+        ]);
+        await settled(service);
+      },
+      () => MockClient((request) async {
+        if (!request.url.path.endsWith('/kids-lookup')) {
+          return http.Response(jsonEncode({'results': []}), 200);
+        }
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final keys = (body['keys'] as List).cast<String>();
+        sent.addAll(keys);
+        return http.Response(
+          jsonEncode({'results': keys.map(row).toList()}),
+          200,
+        );
+      }),
+    );
+    expect(sent, hasLength(2999));
+    expect(sent, isNot(contains('movie:t0')));
+    expect(service.queuedKeys, isEmpty);
+  });
 }

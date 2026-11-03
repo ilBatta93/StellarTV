@@ -698,7 +698,9 @@ class AppProvider extends ChangeNotifier {
       await _shelf.warmNames(type, (ids, names) {
         if (_disposed || epoch != _shelfEpoch) return;
         unawaited(TitleFacetIndex.instance.rank(type, ids, names));
-        _kids.requestIndexed(_shelf.kidsIndexPairs(ids, names));
+        unawaited(
+          _kids.requestIndexedSliced(_shelf.kidsIndexPairs(ids, names)),
+        );
         unawaited(CatalogRatingService.instance.warmTitles(type, ids, names));
       });
     } catch (_) {}

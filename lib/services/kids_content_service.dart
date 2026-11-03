@@ -17,6 +17,7 @@ import '../models/content_type.dart';
 import 'kids_policy.dart';
 import 'catalog_work_queue.dart';
 import 'title_facet_index.dart';
+import 'work_slicer.dart';
 import 'frame_telemetry_service.dart';
 
 final _foregroundHttp = ForegroundHttpClient();
@@ -200,22 +201,40 @@ class KidsContentService {
   void requestIndexed(Iterable<({String key, String title})> items) {
     final now = DateTime.now();
     for (final item in items) {
-      final key = item.key;
-      if (key.isEmpty || _known(key)) continue;
-      final title = item.title.trim();
-      _work.add(
-        key,
-        '${key.split(':').first}\u0000${title.isEmpty ? key : title}',
-        now,
-      );
+      _queue(item, now);
     }
     if (!_running) unawaited(_run());
   }
 
-  bool _known(String key) =>
+  /// [requestIndexed] for a whole published catalog, in slices: one pass
+  /// over every title held the TV's UI thread for about 200 ms at start.
+  Future<void> requestIndexedSliced(
+    Iterable<({String key, String title})> items,
+  ) async {
+    final now = DateTime.now();
+    final slice = WorkSlicer();
+    for (final item in items) {
+      _queue(item, now);
+      await slice.pause();
+    }
+    if (!_running) unawaited(_run());
+  }
+
+  void _queue(({String key, String title}) item, DateTime now) {
+    final key = item.key;
+    if (key.isEmpty || _known(key, now.millisecondsSinceEpoch)) return;
+    final title = item.title.trim();
+    _work.add(
+      key,
+      '${key.split(':').first}\u0000${title.isEmpty ? key : title}',
+      now,
+    );
+  }
+
+  bool _known(String key, int now) =>
       _verdicts.containsKey(key) &&
       _certifications.containsKey(key) &&
-      TitleFacetIndex.instance.genresFresh(key);
+      TitleFacetIndex.instance.genresFresh(key, now: now);
 
   @visibleForTesting
   Iterable<String> get queuedKeys => _work.pending.keys;
@@ -294,7 +313,9 @@ class KidsContentService {
       // The catalog can queue titles before the saved verdicts are read:
       // without this every known title went back to the server at startup.
       await load();
-      for (final key in _work.pending.keys.where(_known).toList()) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final known = _work.pending.keys.where((key) => _known(key, now));
+      for (final key in known.toList()) {
         _work.complete(key);
       }
       while (_work.pending.isNotEmpty &&
