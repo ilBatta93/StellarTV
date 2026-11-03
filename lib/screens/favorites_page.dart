@@ -27,108 +27,114 @@ class FavoritesPage extends StatelessWidget {
       (ContentType.series, 'Serie TV'),
     ];
 
+    final view = TabBarView(
+      children: [
+        for (final (type, label) in tabs)
+          Builder(
+            builder: (context) {
+              final items = favs
+                  .where(
+                    (c) =>
+                        c.type == type ||
+                        (type == ContentType.series &&
+                            c.type == ContentType.anime),
+                  )
+                  .toList();
+              if (items.isEmpty) {
+                final tabs = DefaultTabController.of(context);
+                void next() => tabs.animateTo((tabs.index + 1) % tabs.length);
+                return EmptyState(
+                  icon: Icons.favorite_border_rounded,
+                  title: 'Nessun preferito in $label',
+                  message: 'Tocca il cuore su un contenuto (o tienilo premuto) per salvarlo qui.',
+                  action: DeviceTypeService.isTv
+                      ? TvFocusable(
+                          // Keeps the remote anchored when the
+                          // last favourite of this tab is removed.
+                          autofocus: true,
+                          focusedScale: 1,
+                          borderRadius: BorderRadius.circular(8),
+                          onPressed: next,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: const Text('Scheda successiva'),
+                          ),
+                        )
+                      : null,
+                );
+              }
+              return ChannelGrid(
+                channels: items,
+                type: type,
+                padding: const EdgeInsets.all(16),
+              );
+            },
+          ),
+        _MyList(),
+      ],
+    );
+
+    // Touch opens Favorites as a pushed route: its own Scaffold keeps the
+    // tabs below the status bar and gives it a back button.
+    if (!DeviceTypeService.isTv) {
+      return DefaultTabController(
+        length: tabs.length + 1,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Preferiti'),
+            bottom: TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              indicatorColor: AppColors.primary,
+              labelColor: AppColors.textPrimary,
+              unselectedLabelColor: AppColors.textSecondary,
+              dividerColor: AppColors.border,
+              labelStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              tabs: [
+                const Tab(text: 'Diretta'),
+                const Tab(text: 'Film'),
+                const Tab(text: 'Serie TV'),
+                const Tab(text: 'La mia lista'),
+              ],
+            ),
+          ),
+          body: view,
+        ),
+      );
+    }
+
     return DefaultTabController(
       length: tabs.length + 1,
       child: Builder(
         builder: (context) => catalogColumn(
           children: [
-            if (DeviceTypeService.isTv)
-              AnimatedBuilder(
-                animation: DefaultTabController.of(context),
-                builder: (_, _) => TvFilterPanel(
-                  inline: true,
-                  options: [
-                    for (final (index, label) in [
-                      'Diretta',
-                      'Film',
-                      'Serie TV',
-                      'La mia lista',
-                    ].indexed)
-                      TvFilterOption(
-                        label,
-                        DefaultTabController.of(context).index == index,
-                        () => DefaultTabController.of(context).animateTo(index),
-                      ),
-                  ],
-                ),
-              )
-            else
-              TabBar(
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                indicatorColor: AppColors.primary,
-                labelColor: AppColors.textPrimary,
-                unselectedLabelColor: AppColors.textSecondary,
-                dividerColor: AppColors.border,
-                labelStyle: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-                tabs: [
-                  const Tab(text: 'Diretta'),
-                  const Tab(text: 'Film'),
-                  const Tab(text: 'Serie TV'),
-                  const Tab(text: 'La mia lista'),
-                ],
-              ),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  for (final (type, label) in tabs)
-                    Builder(
-                      builder: (context) {
-                        final items = favs
-                            .where(
-                              (c) =>
-                                  c.type == type ||
-                                  (type == ContentType.series &&
-                                      c.type == ContentType.anime),
-                            )
-                            .toList();
-                        if (items.isEmpty) {
-                          final tabs = DefaultTabController.of(context);
-                          void next() =>
-                              tabs.animateTo((tabs.index + 1) % tabs.length);
-                          return EmptyState(
-                            icon: Icons.favorite_border_rounded,
-                            title: 'Nessun preferito in $label',
-                            message: 'Tocca il cuore su un contenuto (o tienilo premuto) per salvarlo qui.',
-                            action: DeviceTypeService.isTv
-                                ? TvFocusable(
-                                    // Keeps the remote anchored when the
-                                    // last favourite of this tab is removed.
-                                    autofocus: true,
-                                    focusedScale: 1,
-                                    borderRadius: BorderRadius.circular(8),
-                                    onPressed: next,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 18,
-                                        vertical: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: AppColors.border,
-                                        ),
-                                      ),
-                                      child: const Text('Scheda successiva'),
-                                    ),
-                                  )
-                                : null,
-                          );
-                        }
-                        return ChannelGrid(
-                          channels: items,
-                          type: type,
-                          padding: const EdgeInsets.all(16),
-                        );
-                      },
+            AnimatedBuilder(
+              animation: DefaultTabController.of(context),
+              builder: (_, _) => TvFilterPanel(
+                inline: true,
+                options: [
+                  for (final (index, label) in [
+                    'Diretta',
+                    'Film',
+                    'Serie TV',
+                    'La mia lista',
+                  ].indexed)
+                    TvFilterOption(
+                      label,
+                      DefaultTabController.of(context).index == index,
+                      () => DefaultTabController.of(context).animateTo(index),
                     ),
-                  _MyList(),
                 ],
               ),
             ),
+            Expanded(child: view),
           ],
         ),
       ),

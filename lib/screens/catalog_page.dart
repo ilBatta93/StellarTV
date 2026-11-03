@@ -409,6 +409,20 @@ class _CatalogPageState extends State<CatalogPage> {
     _setSort(saved, remember: false);
   }
 
+  Future<void> _pickSortMobile() async {
+    final chosen = await pickOption<CatalogSort>(
+      context,
+      title: 'Ordina',
+      options: [
+        for (final order in CatalogSort.values)
+          if (widget.type != ContentType.live || !order.vodOnly) order,
+      ],
+      current: _sort ?? CatalogSort.provider,
+      label: (order) => order.label,
+    );
+    if (chosen != null && mounted) _setSort(chosen);
+  }
+
   void _setSort(CatalogSort? value, {bool remember = true}) {
     if (_sort == value) return;
     _ratingDebounce?.cancel();
@@ -790,8 +804,18 @@ class _CatalogPageState extends State<CatalogPage> {
                     ),
                   IconButton(
                     tooltip: 'Categorie',
-                    icon: const Icon(Icons.reorder_rounded),
+                    color: _selectedCategory != null ? AppColors.primary : null,
+                    icon: const Icon(Icons.folder_open_rounded),
                     onPressed: _openCategories,
+                  ),
+                  IconButton(
+                    tooltip: 'Ordina: ${(_sort ?? CatalogSort.provider).label}',
+                    color:
+                        (_sort ?? CatalogSort.provider) != CatalogSort.provider
+                        ? AppColors.primary
+                        : null,
+                    icon: const Icon(Icons.sort_rounded),
+                    onPressed: _pickSortMobile,
                   ),
                 ],
               ),
@@ -1363,7 +1387,7 @@ class _CatalogPageState extends State<CatalogPage> {
       '$_genreId|${_platform?.name ?? ''}|$_only4k|$_query';
 
   List<CatalogEntry> _ordered(List<CatalogEntry> entries) {
-    if (!DeviceTypeService.isTv || _sort == null) return entries;
+    if (_sort == null) return entries;
     if (_sort == CatalogSort.rating) return _orderedByRating(entries);
     if (_sort == CatalogSort.provider) return entries;
     _requestedSortSource = entries;
