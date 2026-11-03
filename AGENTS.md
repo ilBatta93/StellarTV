@@ -21,8 +21,8 @@ Sintesi delle sezioni non derogabili del master, valide anche se il master non f
 - Mai chiavi di firma, password o `.env` nel repository.
 
 ## 2. Avvio sessione
-- Branch `main`: `git fetch`, `git pull --ff-only`, `git status`.
-- Leggi l'handoff più recente in `docs/handoff/` (non versionato) se esiste.
+- `python scripts/avvio.py` allinea i due repository (fetch; pull `--ff-only` solo se puliti) e riassume in circa 25 righe: modifiche locali, ultimo handoff e commit fatti dopo, CI, release, deploy del sito, note di rilascio, TODO nuovi. Per Claude parte da solo all'avvio della sessione.
+- Se segnala modifiche non tue o commit senza handoff, leggi l'handoff (`docs/handoff/`, non versionato) prima di toccare quelle aree.
 
 ## 3. Mappa delle aree
 | Cartella | Contenuto |
@@ -37,7 +37,7 @@ Sintesi delle sezioni non derogabili del master, valide anche se il master non f
 | `packages/video_player_android/` | fork del plugin video Android (ExoPlayer) |
 | `android/` · `ios/` | progetti nativi, manifest, firma |
 | `test/` | test Flutter e script di policy `*_check.dart` |
-| `scripts/` | generatore delle note di rilascio |
+| `scripts/` | note di rilascio e strumenti di sessione (avvio, revisione, coerenza app↔sito, salute del database) |
 | `docs/` | note di rilascio, analisi tecniche, SQL Supabase, handoff |
 | `.github/` | workflow di verifica e rilascio |
 
@@ -50,7 +50,9 @@ flutter test
 dart run test/<nome>_check.dart
 python -m unittest discover -s scripts -p "*_test.py"
 ```
-Sono gli stessi controlli di `verify.yml`: falli passare per le aree toccate prima di dire «fatto».
+Sono gli stessi controlli di `verify.yml`: falli passare per le aree toccate prima di dire «fatto». `python scripts/revisione.py --esegui` sceglie e lancia solo quelli collegati ai file toccati (anche per il sito, con `--repo ../stellartv-ae76efd2`) e controlla lessico, segreti, funzioni rimosse e gemelle col sito. Un hook git pre-push ne ripete la parte bloccante.
+
+Strumenti in `scripts/` (dettagli in `scripts/CLAUDE.md`): `gemelle.py` per la coerenza app↔sito, `db_salute.py` per le query lente e lo stato del database.
 
 Per capire o trovare codice usa prima CodeGraph, poi grep o la lettura dei file: `codegraph explore "<simboli o domanda>"` restituisce il sorgente dei simboli, chi li chiama e i test collegati. L'indice sta in `.codegraph/` (non versionato) e si aggiorna da solo; se manca, `codegraph init` lo ricrea.
 
@@ -73,14 +75,17 @@ La build iOS (`build-ios.yml`) parte solo su richiesta esplicita equivalente.
 
 ## 7. Invarianti di prodotto
 - UI pensata prima per il telecomando: focus visibile, D-Pad fluido, tasto Indietro coerente. La presentazione TV dipende dalla modalità di interfaccia Android; il layout touch resta quello attuale.
-- Identità nativa StellarTV su ogni piattaforma (`tv.stellar.app`). I nomi Dart e i bridge nativi del player cambiano insieme.
-- Le cache bambino sul dispositivo includono le certificazioni. I verdetti in cloud si rivalutano. Un consenso vecchio basato solo sul rating non basta. Un verdetto sconosciuto resta nascosto.
-- La sincronizzazione usa l'id dell'account autenticato.
-- Le righe legacy del vault non si cancellano da sole. Un preferito rimosso resta un tombstone nella corsia riservata.
-- Con una sola connessione ammessa il rilascio del player nativo precede il flusso successivo. Con più connessioni il successivo può aprirsi prima della chiusura, e `released` attende comunque lo smaltimento reale.
-- La diretta non entra nella cronologia di visione né nel cloud.
-- Un episodio non eredita il voto della serie ma ha il suo. Un voto IMDb non ancora arrivato non si mostra.
-- Supabase: progetto `dzojklhnwdjcrmkbepft`, schema solo tramite script `docs/*.sql` eseguiti come da master §8.
+- Identità nativa StellarTV su ogni piattaforma (`tv.stellar.app`).
+
+Gli altri invarianti stanno nell'area che li fa rispettare (master §11): leggi quel `CLAUDE.md` prima di toccarla.
+
+| Tema | Dove |
+| --- | --- |
+| Vault, sincronizzazione, profilo bambino, voti, diretta fuori dal cloud | `lib/services/CLAUDE.md` |
+| Rilascio del player, multivista, buffer, bridge nativi | `lib/player/CLAUDE.md`, `packages/video_player_android/CLAUDE.md` |
+| Soglie e policy pure condivise col sito | `lib/models/CLAUDE.md` |
+| Focus, telecomando, touch | `lib/widgets/CLAUDE.md`, `lib/screens/CLAUDE.md` |
+| Supabase e schema | master §8 |
 
 ## 8. Sito companion
 In `../stellartv-ae76efd2`, con il suo `AGENTS.md`. Le API che l'app chiama stanno in `src/routes/api/public/` del sito; la guida per l'utente in `src/lib/guideContent.ts`.
