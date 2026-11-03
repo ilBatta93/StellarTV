@@ -1,0 +1,145 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:stellar_tv/models/channel.dart';
+import 'package:stellar_tv/models/content_type.dart';
+import 'package:stellar_tv/services/kids_content_service.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const channel = MethodChannel('plugins.flutter.io/path_provider');
+  late Directory dir;
+
+  setUp(() async {
+    dir = await Directory.systemTemp.createTemp('kids-queue-test');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (_) async => dir.path);
+  });
+
+  tearDown(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
+    await dir.delete(recursive: true);
+  });
+
+  Future<void> settled(KidsContentService service) async {
+    for (var i = 0; i < 200 && service.queuedKeys.isNotEmpty; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    // Let the last response finish before the client zone closes.
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+  }
+
+  Map<String, Object> row(String key) => {
+    'key': key,
+    'is_kids': true,
+    'genre_ids': [16],
+    'certification': 'IT:T',
+  };
+
+  test('saved verdicts are read back from the device store', () async {
+    File('${dir.path}/stellartv_kids_v3.json').writeAsStringSync(
+      jsonEncode({
+        'v': {'movie:noto': true},
+        'g': {
+          'movie:noto': [16],
+        },
+        'c': {'movie:noto': 'IT:T'},
+      }),
+    );
+    final service = KidsContentService();
+    addTearDown(service.dispose);
+    await service.load();
+    final item = Channel(
+      id: '1',
+      name: 'Noto',
+      url: '',
+      logo: '',
+      group: 'Film',
+      type: ContentType.movie,
+    );
+    expect(service.isKnown(item), isTrue);
+  });
+
+  test(
+    'titles queued before the saved verdicts load are not re-sent',
+    () async {
+      File('${dir.path}/stellartv_kids_v3.json').writeAsStringSync(
+        jsonEncode({
+          'v': {'movie:noto': true},
+          'g': {
+            'movie:noto': [16],
+          },
+          'c': {'movie:noto': 'IT:T'},
+        }),
+      );
+      final sent = <String>[];
+      final service = KidsContentService();
+      addTearDown(service.dispose);
+      await http.runWithClient(
+        () async {
+          // The catalog warmup does not wait for load().
+          service.requestIndexed([
+            (key: 'movie:noto', title: 'Noto'),
+            (key: 'movie:nuovo', title: 'Nuovo'),
+          ]);
+          await settled(service);
+        },
+        () => MockClient((request) async {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          if (request.url.path.endsWith('/kids-lookup')) {
+            sent.addAll((body['keys'] as List).cast<String>());
+            return http.Response(
+              jsonEncode({
+                'results': [row('movie:nuovo')],
+              }),
+              200,
+            );
+          }
+          fail('unexpected ${request.url.path}');
+        }),
+      );
+      expect(sent, ['movie:nuovo']);
+    },
+  );
+
+  test('titles queued during a scan still use the bulk lookup', () async {
+    final lookups = <List<String>>[];
+    var checks = 0;
+    final service = KidsContentService();
+    addTearDown(service.dispose);
+    await http.runWithClient(
+      () async {
+        service.requestIndexed([(key: 'movie:film', title: 'Film')]);
+        await settled(service);
+      },
+      () => MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        if (request.url.path.endsWith('/kids-check')) {
+          checks++;
+          return http.Response(jsonEncode({'results': []}), 200);
+        }
+        final keys = (body['keys'] as List).cast<String>();
+        lookups.add(keys);
+        // Another catalog type arrives while the first lookup is running.
+        if (lookups.length == 1) {
+          service.requestIndexed([(key: 'tv:serie', title: 'Serie')]);
+        }
+        return http.Response(
+          jsonEncode({'results': keys.map(row).toList()}),
+          200,
+        );
+      }),
+    );
+    expect(lookups, [
+      ['movie:film'],
+      ['tv:serie'],
+    ]);
+    expect(checks, 0);
+    expect(service.queuedKeys, isEmpty);
+  });
+}

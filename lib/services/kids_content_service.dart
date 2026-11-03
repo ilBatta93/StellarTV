@@ -100,7 +100,7 @@ class KidsContentService {
     try {
       final file = await _file();
       final path = file.path;
-      final data = await Isolate.run(() => _readStore(path));
+      final data = await _readStoreInBackground(path);
       _verdicts.addAll(data.verdicts);
       _genres.addAll(data.genres);
       _certifications.addAll(data.certifications);
@@ -110,7 +110,7 @@ class KidsContentService {
       final rawGenres = prefs.getString(_genresKey);
       final raw = prefs.getString(_cacheKey);
       if (raw != null || rawGenres != null) {
-        final legacy = await Isolate.run(() => _decodeLegacy(raw, rawGenres));
+        final legacy = await _decodeLegacyInBackground(raw, rawGenres);
         // Old rating-only approvals must never authorize the strict policy.
         legacy.genres.forEach((k, v) => _genres.putIfAbsent(k, () => v));
         await _persist();
@@ -201,12 +201,7 @@ class KidsContentService {
     final now = DateTime.now();
     for (final item in items) {
       final key = item.key;
-      if (key.isEmpty) continue;
-      if (_verdicts.containsKey(key) &&
-          _certifications.containsKey(key) &&
-          TitleFacetIndex.instance.genresFresh(key)) {
-        continue;
-      }
+      if (key.isEmpty || _known(key)) continue;
       final title = item.title.trim();
       _work.add(
         key,
@@ -217,15 +212,27 @@ class KidsContentService {
     if (!_running) unawaited(_run());
   }
 
+  bool _known(String key) =>
+      _verdicts.containsKey(key) &&
+      _certifications.containsKey(key) &&
+      TitleFacetIndex.instance.genresFresh(key);
+
   @visibleForTesting
   Iterable<String> get queuedKeys => _work.pending.keys;
+
+  /// Keys already sent to the bulk lookup in this session. Titles queued
+  /// while a scan runs (another catalog type) still get the bulk read first.
+  final Set<String> _lookedUp = {};
 
   /// Bulk-reads titles already classified in the cloud (shared by every
   /// device and profile), so only truly new titles hit the slow check.
   /// False when the shared cache could not be read: the slow per-title
   /// check then waits for the next scan instead of flooding the server.
   Future<bool> _cloudLookup() async {
-    final keys = Map<String, String>.from(_work.pending);
+    final keys = {
+      for (final e in _work.pending.entries)
+        if (!_lookedUp.contains(e.key)) e.key: e.value,
+    };
     final all = keys.keys.toList();
     var changed = false;
     for (var i = 0; i < all.length; i += 1000) {
@@ -266,6 +273,7 @@ class KidsContentService {
           if (keys.containsKey(key)) _work.complete(key);
           changed = true;
         }
+        _lookedUp.addAll(chunk);
         FrameTelemetryService.instance.recordWork('bambini.cache', clock);
       } catch (_) {
         return false;
@@ -283,14 +291,23 @@ class KidsContentService {
     _running = true;
     _resumePending = false;
     try {
-      if (!await _cloudLookup()) {
-        if (PlaybackWorkPolicy.instance.blocksGuide) return;
-        final failed = _work.take(_work.pending.length);
-        _work.release(failed.keys, {}, DateTime.now());
-        return;
+      // The catalog can queue titles before the saved verdicts are read:
+      // without this every known title went back to the server at startup.
+      await load();
+      for (final key in _work.pending.keys.where(_known).toList()) {
+        _work.complete(key);
       }
       while (_work.pending.isNotEmpty &&
           !PlaybackWorkPolicy.instance.blocksGuide) {
+        if (!await _cloudLookup()) {
+          if (PlaybackWorkPolicy.instance.blocksGuide) return;
+          final failed = _work.take(_work.pending.length);
+          _work.release(failed.keys, {}, DateTime.now());
+          return;
+        }
+        if (_work.pending.isEmpty) break;
+        // Titles queued while the lookup ran get the bulk read first too.
+        if (_work.pending.keys.any((k) => !_lookedUp.contains(k))) continue;
         final work = _work.take(_batchSize);
         final batch = work.values.toList();
         final resolved = <String>{};
@@ -378,14 +395,33 @@ class KidsContentService {
       final verdicts = Map<String, bool>.of(_verdicts);
       final genres = Map<String, List<int>>.of(_genres);
       final certifications = Map<String, String>.of(_certifications);
-      final pending = Isolate.run(
-        () => _writeStore(path, verdicts, genres, certifications),
+      final pending = _writeStoreInBackground(
+        path,
+        verdicts,
+        genres,
+        certifications,
       );
       FrameTelemetryService.instance.recordWork('bambini.salvataggio', clock);
       await pending;
     } catch (_) {}
   }
 }
+
+// Isolate closures are built here, outside the service: a closure created in
+// an instance method can share a context holding `this`, whose pending
+// futures cannot cross isolates, and the saved verdicts were never read.
+Future<_KidsStore> _readStoreInBackground(String path) =>
+    Isolate.run(() => _readStore(path));
+
+Future<_KidsStore> _decodeLegacyInBackground(String? raw, String? rawGenres) =>
+    Isolate.run(() => _decodeLegacy(raw, rawGenres));
+
+Future<void> _writeStoreInBackground(
+  String path,
+  Map<String, bool> verdicts,
+  Map<String, List<int>> genres,
+  Map<String, String> certifications,
+) => Isolate.run(() => _writeStore(path, verdicts, genres, certifications));
 
 class _KidsStore {
   final Map<String, bool> verdicts;
