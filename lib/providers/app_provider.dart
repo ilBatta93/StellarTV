@@ -1660,12 +1660,14 @@ class AppProvider extends ChangeNotifier {
         'username': username,
         'password': password,
       };
-      await loadFromXtream(
-        server: server,
-        username: username,
-        password: password,
+      // Like a configured start: Home opens and sections fill in as they
+      // arrive. Awaiting here kept the access form on screen for the whole
+      // first download, minutes on a TV box.
+      unawaited(
+        loadFromXtream(server: server, username: username, password: password),
       );
       _isAuthenticated = true;
+      notifyListeners();
       return true;
     } catch (e) {
       _error = e.toString();

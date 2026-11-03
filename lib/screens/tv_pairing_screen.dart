@@ -286,15 +286,20 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
               return;
             }
             _finish(BundleHandoff.parse(raw));
-          } catch (_) {
+          } catch (e) {
+            // Type only: the package holds credentials and the key.
+            debugPrint(
+              'TvPairing: phone package not opened (${e.runtimeType})',
+            );
             _finish(null);
           }
         });
         throw _PhoneDone();
       } on _PhoneDone {
         rethrow;
-      } catch (_) {
+      } catch (e) {
         // Receiver unavailable: continue with the normal sign-in.
+        debugPrint('TvPairing: phone receiver unavailable (${e.runtimeType})');
       }
     }
     await _finish(null);

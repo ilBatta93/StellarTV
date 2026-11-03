@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:cryptography/dart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Receives the recovery key typed on a phone. The X25519 private key lives
@@ -26,8 +27,10 @@ class KeyHandoff {
     return List.generate(6, (_) => alphabet[r.nextInt(alphabet.length)]).join();
   }
 
+  // Dart HMAC on purpose: the site's HKDF salt is empty, and Android's native
+  // HMAC (cryptography_flutter) rejects an empty key without falling back.
   static Future<SecretKey> _key(List<int> shared, String code) =>
-      Hkdf(hmac: Hmac.sha256(), outputLength: 32).deriveKey(
+      Hkdf(hmac: DartHmac.sha256(), outputLength: 32).deriveKey(
         secretKey: SecretKey(shared),
         nonce: const [],
         info: utf8.encode('STV-HANDOFF-1|$code'),

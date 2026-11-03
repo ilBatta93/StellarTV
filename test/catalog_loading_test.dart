@@ -15,6 +15,7 @@ import 'package:stellar_tv/screens/catalog_page.dart';
 import 'package:stellar_tv/screens/live_page.dart';
 import 'package:stellar_tv/services/catalog_shelf.dart';
 import 'package:stellar_tv/services/catalog_sort.dart';
+import 'package:stellar_tv/services/source_login_result.dart';
 import 'package:stellar_tv/services/xtream_service.dart';
 import 'package:stellar_tv/widgets/catalog_status_indicator.dart';
 
@@ -175,6 +176,30 @@ void main() {
       app.dispose();
     },
   );
+
+  test('first access returns while the catalog is still downloading', () async {
+    final api = FakeXtream();
+    final app = AppProvider(xtreamService: api, catalogCache: FakeCache());
+    final login = app.loginWithXtream(
+      server: 'test',
+      username: 'u',
+      password: 'p',
+      verified: const SourceLoginResult(SourceLoginKind.ok),
+    );
+    final ok = await login.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () => fail('access waited for the whole catalog'),
+    );
+    expect(ok, true);
+    expect(app.isAuthenticated, true);
+    expect(app.isLoading, true);
+    expect(app.catalogState(ContentType.live).isPending, true);
+    api.live.complete([channel(ContentType.live)]);
+    api.movies.complete([]);
+    api.series.complete([]);
+    await sectionReady(app, ContentType.series);
+    app.dispose();
+  });
 
   test(
     'Sections become ready independently before global completion',
