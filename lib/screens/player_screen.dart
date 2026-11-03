@@ -37,6 +37,9 @@ import '../services/catalog_shelf.dart';
 import '../widgets/player/tv_live_banner.dart';
 import '../services/device_type_service.dart';
 import '../services/display_refresh_service.dart';
+import '../services/display_resolution_service.dart';
+import '../services/title_tracks_service.dart';
+import '../models/track_languages_policy.dart';
 import '../services/frame_telemetry_service.dart';
 import '../models/frame_rate_policy.dart';
 import '../theme/app_theme.dart';
@@ -1330,6 +1333,52 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (DeviceTypeService.isTv) _remoteFocus.requestFocus();
   }
 
+  /// Engine whose tracks were already noted; a fallback engine notes again.
+  Object? _tracksEngine;
+
+  /// Languages for the badges of the title page. The stream has been
+  /// playing for a few seconds, so the track list is complete.
+  Future<void> _recordTracks(PlaybackSession session) async {
+    final engine = session.engine;
+    if (engine == null) return;
+    try {
+      final audio = engine.supportsAudioTracks
+          ? await engine.getAudioTracks()
+          : const <MediaTrack>[];
+      final subs = engine.supportsSubtitleTracks
+          ? await engine.getSubtitleTracks()
+          : null;
+      await TitleTracksService.instance.record(
+        _channel.id,
+        audio: trackLanguageCodes([
+          for (final t in audio) (t.language, t.label),
+        ]),
+        subtitles: subs == null
+            ? null
+            : trackLanguageCodes([for (final t in subs) (t.language, t.label)]),
+      );
+    } catch (_) {
+      /* Badges are optional. */
+    }
+  }
+
+  /// Openings already skipped on this page: seeking back into one plays it.
+  final Set<Duration> _autoSkipped = {};
+
+  void _autoSkipIntro(PlaybackSession session) {
+    final choice = _skipChoice(session);
+    if (choice == null || !choice.intro || !session.value.isPlaying) return;
+    if (!_autoSkipped.add(choice.segment.start)) return;
+    session.seekTo(choice.target);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Sigla saltata'),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   void _checkOutro(Duration position) {
     final session = _session;
     final outro = _effectiveSegments.outro;
@@ -1600,6 +1649,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (DeviceTypeService.isTv) {
       unawaited(DisplayRefreshService.instance.ensureLoaded());
     }
+    // The "native" cap needs the screen before the engine is created.
+    if (settings.maxResolution == MaxVideoResolution.native) {
+      await DisplayResolutionService.instance.ensureLoaded();
+      if (!mounted) return;
+    }
     _frameRate = FrameRateMatcher(
       enabled: DeviceTypeService.isTv && settings.matchFrameRate,
     );
@@ -1672,6 +1726,14 @@ class _PlayerScreenState extends State<PlayerScreen>
     final v = session.value;
     _frameRate?.update(session, _channel.url);
     unawaited(_readLocalChapters(session));
+    if (settings.autoSkipIntro && !_isLive) _autoSkipIntro(session);
+    if (!_isLive &&
+        !identical(session.engine, _tracksEngine) &&
+        v.isPlaying &&
+        v.position > const Duration(seconds: 5)) {
+      _tracksEngine = session.engine;
+      unawaited(_recordTracks(session));
+    }
     final introActive = _visibleSkip(session) != null;
     if (introActive && !_introWasActive) {
       _hideTimer?.cancel();

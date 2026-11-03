@@ -35,6 +35,11 @@ public class VideoPlayerOptions {
   /** App-owned audio session carrying the equalizer and night-mode effects. */
   @Nullable public Integer audioSessionId;
 
+  /** Largest picture the track selector picks on adaptive streams; null for no cap. */
+  @Nullable public Integer maxVideoWidth;
+
+  @Nullable public Integer maxVideoHeight;
+
   public VideoPlayerOptions() {}
 
   /** Copy constructor to ensure all options are reliably copied. */
@@ -48,5 +53,7 @@ public class VideoPlayerOptions {
     this.backBufferRequiresSeekable = other.backBufferRequiresSeekable;
     this.targetBufferBytes = other.targetBufferBytes;
     this.audioSessionId = other.audioSessionId;
+    this.maxVideoWidth = other.maxVideoWidth;
+    this.maxVideoHeight = other.maxVideoHeight;
   }
 }

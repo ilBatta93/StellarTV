@@ -125,7 +125,11 @@ class SkipChoice {
   final SkipSegment segment;
   final Duration target;
   final String label;
-  const SkipChoice(this.segment, this.target, this.label);
+
+  /// The jump passes an opening theme: automatic skipping acts only on
+  /// these, never on a recap alone or on credits.
+  final bool intro;
+  const SkipChoice(this.segment, this.target, this.label, {this.intro = false});
 }
 
 /// The opening segment under [position]. A recap glued to the intro skips
@@ -157,6 +161,7 @@ SkipChoice? activeSkip(EpisodeSegments segments, Duration position) {
     current,
     target,
     reachesIntro ? 'Salta sigla' : 'Salta riepilogo',
+    intro: reachesIntro,
   );
 }
 

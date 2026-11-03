@@ -139,7 +139,33 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
         Boolean.TRUE.equals(options.getBackBufferRequiresSeekable());
     playerOptions.targetBufferBytes = options.getTargetBufferBytes();
     playerOptions.audioSessionId = audioSessionFromHeaders(options.getHttpHeaders());
+    applyMaxVideoFromHeaders(playerOptions, options.getHttpHeaders());
   }
+
+  /** "WIDTHxHEIGHT" from the app's resolution setting, never sent to the stream. */
+  private static void applyMaxVideoFromHeaders(
+      @NonNull VideoPlayerOptions playerOptions, @NonNull Map<String, String> headers) {
+    for (Map.Entry<String, String> entry : headers.entrySet()) {
+      if (!MAX_VIDEO_HEADER.equals(entry.getKey().toLowerCase(Locale.US))) {
+        continue;
+      }
+      String[] parts = entry.getValue().trim().toLowerCase(Locale.US).split("x");
+      if (parts.length != 2) return;
+      try {
+        int width = Integer.parseInt(parts[0].trim());
+        int height = Integer.parseInt(parts[1].trim());
+        if (width > 0 && height > 0) {
+          playerOptions.maxVideoWidth = width;
+          playerOptions.maxVideoHeight = height;
+        }
+      } catch (NumberFormatException e) {
+        return;
+      }
+      return;
+    }
+  }
+
+  private static final String MAX_VIDEO_HEADER = "x-stellartv-maxvideo";
 
   /** Full-screen player only: the app's audio-effects session, never sent to the stream. */
   private static @Nullable Integer audioSessionFromHeaders(@NonNull Map<String, String> headers) {
@@ -166,7 +192,9 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
     Map<String, String> copy = new HashMap<>();
     for (Map.Entry<String, String> entry : headers.entrySet()) {
       String key = entry.getKey().toLowerCase(Locale.US);
-      if (!"x-stellartv-loadcontrol".equals(key) && !AUDIO_SESSION_HEADER.equals(key)) {
+      if (!"x-stellartv-loadcontrol".equals(key)
+          && !AUDIO_SESSION_HEADER.equals(key)
+          && !MAX_VIDEO_HEADER.equals(key)) {
         copy.put(entry.getKey(), entry.getValue());
       }
     }

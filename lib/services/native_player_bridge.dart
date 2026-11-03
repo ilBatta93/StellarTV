@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import '../models/video_resolution_policy.dart';
+
 class DeviceMediaCapabilities {
   final List<String> hdrFormats;
   final Map<String, bool> decoders;
@@ -114,6 +116,24 @@ class NativePlayerBridge {
       _call<void>('setBrightness', {'value': value});
 
   Future<void> resetBrightness() => setBrightness(-1);
+
+  /// Android only: the panel's largest mode and the active one. Null
+  /// elsewhere, where Flutter's own display size is used instead.
+  Future<DisplayResolution?> getDisplayResolution() async {
+    final raw = await _call<Map<Object?, Object?>>('getDisplayResolution');
+    if (raw == null) return null;
+    final w = raw['width'];
+    final h = raw['height'];
+    if (w is! int || h is! int || w <= 0 || h <= 0) return null;
+    final cw = raw['currentWidth'];
+    final ch = raw['currentHeight'];
+    return DisplayResolution(
+      width: w,
+      height: h,
+      currentWidth: cw is int ? cw : null,
+      currentHeight: ch is int ? ch : null,
+    );
+  }
 
   Future<DisplayRefresh> getDisplayRefresh() async {
     final raw = await _call<Map<Object?, Object?>>('getDisplayRefresh');

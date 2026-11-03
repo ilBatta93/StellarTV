@@ -111,6 +111,40 @@ class SubtitlesService {
     return _memByKey[key] = cues;
   }
 
+  /// Lookup only, nothing downloaded: does the site know an Italian
+  /// subtitle for this title? Null when it cannot say (signed out, offline).
+  static Future<bool?> available({
+    required String imdbId,
+    int? season,
+    int? episode,
+    String language = 'it',
+  }) async {
+    if ((season == null) != (episode == null)) return null;
+    final headers = _authHeaders();
+    if (headers.isEmpty) return null;
+    final uri = Uri.parse('${SupabaseConfig.apiBase}/subtitles').replace(
+      queryParameters: {
+        'imdb_id': imdbId,
+        if (season != null) 'season': '$season',
+        if (episode != null) 'episode': '$episode',
+        'language': language,
+        'check': '1',
+      },
+    );
+    try {
+      final res = await _foregroundHttp
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return null;
+      final body = jsonDecode(res.body);
+      return body is Map && body['available'] is bool
+          ? body['available'] as bool
+          : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// The subtitle service is reserved to signed-in accounts.
   static Map<String, String> _authHeaders() {
     final token = Supabase.instance.client.auth.currentSession?.accessToken;

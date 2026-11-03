@@ -9,6 +9,7 @@ import '../models/frame_rate_policy.dart';
 import '../models/live_buffer_policy.dart';
 import '../models/player_settings.dart';
 import '../services/audio_effects_service.dart';
+import '../services/display_resolution_service.dart';
 import '../services/frame_telemetry_service.dart';
 import 'playback_engine.dart';
 
@@ -78,6 +79,10 @@ class ExoEngine extends PlaybackEngine {
       // Only the full-screen player carries the audio effects.
       final session = shared ? null : AudioEffectsService.instance.sessionId;
       if (session != null) headers[exoAudioSessionHeader] = '$session';
+      final cap = DisplayResolutionService.instance.capFor(
+        settings.maxResolution,
+      );
+      if (cap != null) headers[exoMaxVideoHeader] = '$cap';
     }
     return headers;
   }
@@ -485,6 +490,10 @@ const exoLoadControlHeader = 'X-StellarTV-LoadControl';
 
 /// Audio-effects session for the Android player; removed before any request.
 const exoAudioSessionHeader = 'X-StellarTV-AudioSession';
+
+/// Resolution cap as "WIDTHxHEIGHT" for the Android track selector; removed
+/// before any request.
+const exoMaxVideoHeader = 'X-StellarTV-MaxVideo';
 
 /// Forward buffer for one ExoPlayer. Preview and MultiView stay short so four
 /// tiles do not each keep a film-sized buffer. Live keeps its back buffer only

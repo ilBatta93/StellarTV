@@ -91,6 +91,16 @@ public abstract class VideoPlayer implements VideoPlayerInstanceApi {
       trackSelector = (DefaultTrackSelector) exoPlayer.getTrackSelector();
     }
 
+    // Before prepare, so the first variant already respects the cap. A stream
+    // with only bigger pictures still plays (exceed-if-necessary stays on).
+    if (trackSelector != null && options.maxVideoWidth != null && options.maxVideoHeight != null) {
+      trackSelector.setParameters(
+          trackSelector
+              .buildUponParameters()
+              .setMaxVideoSize(options.maxVideoWidth, options.maxVideoHeight)
+              .build());
+    }
+
     exoPlayer.setMediaItem(mediaItem);
     exoPlayer.prepare();
     exoPlayerEventListener = createExoPlayerEventListener(exoPlayer, surfaceProducer);

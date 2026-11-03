@@ -393,6 +393,7 @@ class MainActivity : FlutterActivity() {
                 "externalPlayers" -> result.success(externalPlayers())
                 "openExternal" -> openExternal(call.arguments as? Map<*, *>, result)
                 "getDisplayRefresh" -> result.success(displayRefresh())
+                "getDisplayResolution" -> result.success(displayResolution())
                 "setPreferredRefreshRate" -> {
                     result.success(setPreferredRefreshRate(call.argument<Double>("rate")))
                 }
@@ -504,6 +505,28 @@ class MainActivity : FlutterActivity() {
             }
         }
         return out
+    }
+
+    // The panel's own size: Android TV often draws its interface at 1080p on
+    // a 4K screen, so the largest mode counts, not only the active one.
+    private fun displayResolution(): Map<String, Int>? {
+        val display = currentDisplay() ?: return null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            val size = android.graphics.Point()
+            @Suppress("DEPRECATION")
+            display.getRealSize(size)
+            return mapOf(
+                "width" to size.x, "height" to size.y,
+                "currentWidth" to size.x, "currentHeight" to size.y,
+            )
+        }
+        val active = display.mode
+        val largest = display.supportedModes
+            .maxByOrNull { it.physicalWidth.toLong() * it.physicalHeight } ?: active
+        return mapOf(
+            "width" to largest.physicalWidth, "height" to largest.physicalHeight,
+            "currentWidth" to active.physicalWidth, "currentHeight" to active.physicalHeight,
+        )
     }
 
     /** Null (or no matching mode) gives the display back to the system. */

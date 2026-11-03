@@ -35,6 +35,8 @@ import '../services/episode_metadata_service.dart';
 import '../services/segment_library.dart';
 import '../services/imdb_rating_service.dart';
 import '../services/catalog_rating_service.dart';
+import '../services/title_tracks_service.dart';
+import '../widgets/track_language_badges.dart';
 
 double _phoneBackdropHeight(BuildContext context) {
   final height = MediaQuery.sizeOf(context).height * 0.32;
@@ -382,6 +384,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                     _Chip(label: series.group),
                   ],
                 ),
+                _trackBadges(series, item),
                 TitleCreditsLine(
                   directors: const [],
                   info: _info,
@@ -612,6 +615,33 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   }
 
   /// Countdown and playback always refer to the same selected episode.
+  /// Languages seen in any episode; the online check asks for the episode
+  /// the play button would start, once episodes and TMDB match are known.
+  Widget _trackBadges(Channel series, TmdbItem? item) {
+    final details = _details;
+    final episodes = details?.allEpisodes ?? const <SeriesEpisode>[];
+    final ready = details != null && !_loading && episodes.isNotEmpty;
+    return TrackLanguageBadges(
+      key: ValueKey('${series.id}:${item?.id}:$ready:${episodes.length}'),
+      ids: [for (final e in episodes) e.channel.id],
+      online: !ready
+          ? null
+          : () {
+              final target =
+                  _resumeEpisode(context.read<HistoryProvider>()) ??
+                  episodes.first;
+              return TitleTracksService.instance.checkTitle(
+                series,
+                movie: false,
+                tmdbId: item?.id,
+                title: item?.title ?? series.displaySeriesName,
+                season: target.season,
+                episode: target.number,
+              );
+            },
+    );
+  }
+
   Widget _buildPlaybackButton(BuildContext context) {
     final history = context.watch<HistoryProvider>();
     final episode = _resumeEpisode(history);

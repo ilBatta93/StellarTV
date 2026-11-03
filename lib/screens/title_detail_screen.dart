@@ -38,6 +38,8 @@ import '../widgets/title_facets.dart';
 import '../widgets/version_picker.dart';
 import '../widgets/cast_row.dart';
 import '../widgets/title_credits_line.dart';
+import '../widgets/track_language_badges.dart';
+import '../services/title_tracks_service.dart';
 
 double _phoneBackdropHeight(BuildContext context) {
   final height = MediaQuery.sizeOf(context).height * 0.32;
@@ -297,6 +299,21 @@ class _TitleDetailScreenState extends State<TitleDetailScreen> {
                   item: item,
                   channel: widget.channel == null ? null : playable,
                 ),
+                if (playable != null)
+                  TrackLanguageBadges(
+                    // Asked once the TMDB match is settled: its id gives a
+                    // surer lookup than the catalog name.
+                    key: ValueKey('${playable.id}:${item?.id}:$_loading'),
+                    ids: [playable.id],
+                    online: _loading
+                        ? null
+                        : () => TitleTracksService.instance.checkTitle(
+                            playable,
+                            movie: item?.isMovie ?? true,
+                            tmdbId: item?.id,
+                            title: item?.title ?? playable.name,
+                          ),
+                  ),
                 TitleCreditsLine(
                   directors: _directors,
                   info: _info,

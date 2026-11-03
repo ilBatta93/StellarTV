@@ -9,8 +9,10 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../models/audio_effects.dart';
 import '../models/live_buffer_policy.dart';
 import '../models/player_settings.dart';
+import '../models/video_resolution_policy.dart';
 import '../services/audio_effects_service.dart';
 import '../services/device_type_service.dart';
+import '../services/display_resolution_service.dart';
 import 'playback_engine.dart';
 
 /// mpv-backed engine (media_kit): subtitles and several audio tracks,
@@ -689,7 +691,7 @@ class MediaKitEngine extends PlaybackEngine {
           ? '4'
           : '5',
       'demuxer-lavf-probe-info': 'auto',
-      'hls-bitrate': 'max',
+      'hls-bitrate': '${hlsBitrateFor(_sizeCap) ?? 'max'}',
       'demuxer-max-bytes':
           '${cacheBytes(_settings, isLive: isLive, tv: DeviceTypeService.isTv, preview: previewMode)}',
     };
@@ -954,6 +956,7 @@ class MediaKitEngine extends PlaybackEngine {
       throw PlaybackException('$e');
     }
     if (_disposed) throw const PlaybackException('Chiuso');
+    unawaited(_capVideoVariant());
     if (!previewMode && !_effectsStarted) {
       _effectsStarted = true;
       AudioEffectsService.instance.addListener(_onAudioEffectsChanged);
@@ -997,7 +1000,50 @@ class MediaKitEngine extends PlaybackEngine {
     }
     if (_disposed) return false;
     unawaited(_observeFirstFrame());
+    unawaited(_capVideoVariant());
     return true;
+  }
+
+  VideoSizeCap? get _sizeCap =>
+      DisplayResolutionService.instance.capFor(_settings.maxResolution);
+
+  static List<VideoTrack> _sizedVariants(Tracks tracks) => [
+    for (final t in tracks.video)
+      if (t.id != 'auto' && t.id != 'no' && (t.w ?? 0) > 0 && (t.h ?? 0) > 0) t,
+  ];
+
+  /// mpv opens an adaptive stream on the variant picked by bitrate; once the
+  /// track list shows the real sizes, the largest one inside the cap wins.
+  /// Unselected HLS variants are not downloaded. A single-picture stream has
+  /// nothing to choose.
+  Future<void> _capVideoVariant() async {
+    final cap = _sizeCap;
+    final platform = _player.platform;
+    if (cap == null || platform is! NativePlayer) return;
+    var variants = _sizedVariants(_player.state.tracks);
+    if (variants.length < 2) {
+      try {
+        final tracks = await _player.stream.tracks
+            .firstWhere((t) => _sizedVariants(t).length > 1)
+            .timeout(const Duration(seconds: 20));
+        variants = _sizedVariants(tracks);
+      } catch (_) {
+        return;
+      }
+    }
+    if (_disposed) return;
+    final pick = pickCappedVariant([
+      for (final t in variants) (t.w!, t.h!),
+    ], cap);
+    if (pick == null) return;
+    final chosen = variants[pick];
+    try {
+      final current = await platform
+          .getProperty('current-tracks/video/id')
+          .timeout(const Duration(milliseconds: 800));
+      if (_disposed || current == chosen.id) return;
+      await _player.setVideoTrack(chosen);
+    } catch (_) {}
   }
 
   Future<void> _observeFirstFrame() async {

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'video_resolution_policy.dart';
+
+export 'video_resolution_policy.dart' show MaxVideoResolution;
+
 enum PlayerEngineType {
   exo(
     'ExoPlayer',
@@ -174,6 +178,12 @@ class PlayerSettings {
   /// Android TV: switch the display to the video's frame rate.
   bool matchFrameRate;
 
+  /// Bandwidth cap for adaptive streams (see video_resolution_policy.dart).
+  MaxVideoResolution maxResolution;
+
+  /// Jumps over the opening theme once per title, as the skip button would.
+  bool autoSkipIntro;
+
   PlayerSettings({
     this.primaryEngine = PlayerEngineType.mediakit,
     this.autoFallback = true,
@@ -213,6 +223,8 @@ class PlayerSettings {
     this.backgroundAudio = false,
     this.showStats = false,
     this.matchFrameRate = false,
+    this.maxResolution = MaxVideoResolution.unlimited,
+    this.autoSkipIntro = false,
   });
 
   static const int cacheMib = 1024 * 1024;
@@ -346,6 +358,12 @@ class PlayerSettings {
       backgroundAudio: b('backgroundAudio', d.backgroundAudio),
       showStats: b('showStats', d.showStats),
       matchFrameRate: b('matchFrameRate', d.matchFrameRate),
+      maxResolution: _enum(
+        MaxVideoResolution.values,
+        j['maxResolution'],
+        d.maxResolution,
+      ),
+      autoSkipIntro: b('autoSkipIntro', d.autoSkipIntro),
     );
   }
 
@@ -391,6 +409,8 @@ class PlayerSettings {
     'backgroundAudio': backgroundAudio,
     'showStats': showStats,
     'matchFrameRate': matchFrameRate,
+    'maxResolution': maxResolution.name,
+    'autoSkipIntro': autoSkipIntro,
   };
 }
 

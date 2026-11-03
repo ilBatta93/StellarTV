@@ -4,9 +4,11 @@ import '../widgets/apple_page_scaffold.dart';
 import '../widgets/external_player_picker.dart';
 
 import '../models/player_settings.dart';
+import '../models/video_resolution_policy.dart';
 import '../services/native_player_bridge.dart';
 import '../services/device_type_service.dart';
 import '../services/display_refresh_service.dart';
+import '../services/display_resolution_service.dart';
 import '../services/external_player_service.dart';
 import '../services/player_settings_service.dart';
 import '../theme/app_theme.dart';
@@ -48,6 +50,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
     final settings = await _service.load(scope: _scope);
     final caps = await NativePlayerBridge.instance.getCapabilities();
     await DisplayRefreshService.instance.ensureLoaded();
+    await DisplayResolutionService.instance.ensureLoaded();
     await _externals.ensureLoaded();
     if (!mounted) return;
     setState(() {
@@ -264,6 +267,17 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
               _update((s) => s.autoNextEpisode = v);
               _service.setAutoNextEpisode(v);
             },
+          ),
+        if (!_live)
+          SettingsSwitchTile(
+            icon: Icons.fast_forward_rounded,
+            title: 'Salta sigle automaticamente',
+            subtitle:
+                'Quando la sigla è riconosciuta la salta da sola, una volta '
+                'per episodio. Il riepilogo attaccato alla sigla viene '
+                'saltato insieme',
+            value: s.autoSkipIntro,
+            onChanged: (v) => _update((s) => s.autoSkipIntro = v),
           ),
         if (!_tvProfile || !_live)
           SettingsValueTile(
@@ -542,6 +556,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
       title: 'Rete e buffer',
       description: 'Valori più alti riducono le interruzioni su connessioni instabili ma aumentano il tempo di avvio.',
       children: [
+        _resolutionTile(s),
         if (s.primaryEngine.supportsCacheBuffer && (!_tvProfile || !_live))
           _cacheSlider(s, live: false),
         if (s.primaryEngine.supportsCacheBuffer && (!_tvProfile || _live))
@@ -593,6 +608,49 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
       ],
     ),
   ];
+
+  String _screenLabel() {
+    final display = DisplayResolutionService.instance.display;
+    if (display == null) return 'Schermo non rilevato';
+    final output = display.outputDiffers
+        ? ', uscita attuale '
+              '${describeResolution(display.currentWidth!, display.currentHeight!)}'
+        : '';
+    return 'Schermo: ${display.label}$output';
+  }
+
+  Widget _resolutionTile(PlayerSettings s) {
+    final display = DisplayResolutionService.instance.display;
+    return SettingsValueTile(
+      icon: Icons.high_quality_rounded,
+      title: 'Risoluzione massima',
+      subtitle:
+          '${_screenLabel()}. Con una connessione debole limita la qualità '
+          'scaricata; vale per i flussi che offrono più qualità',
+      value: s.maxResolution == MaxVideoResolution.native && display != null
+          ? '${s.maxResolution.label} (${display.short}p)'
+          : s.maxResolution.label,
+      onTap: () => _pick(
+        'Risoluzione massima',
+        MaxVideoResolution.values,
+        s.maxResolution,
+        (v) => v.label,
+        (s, v) => s.maxResolution = v,
+        detail: (v) => switch (v) {
+          MaxVideoResolution.unlimited => 'La qualità più alta del flusso',
+          MaxVideoResolution.native =>
+            display == null
+                ? 'Non oltre lo schermo di questo dispositivo'
+                : 'Fino a ${display.label}: niente dati sprecati oltre lo '
+                      'schermo',
+          MaxVideoResolution.p2160 => 'Circa 15-25 Mbps',
+          MaxVideoResolution.p1080 => 'Circa 5-8 Mbps',
+          MaxVideoResolution.p720 => 'Circa 2,5-4 Mbps',
+          MaxVideoResolution.p480 => 'Circa 1-1,5 Mbps, per connessioni lente',
+        },
+      ),
+    );
+  }
 
   List<Widget> _systemSection(PlayerSettings s) => [
     SettingsSection(
