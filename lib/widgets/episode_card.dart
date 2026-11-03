@@ -12,12 +12,16 @@ import 'poster_card.dart';
 import 'episode_still_overlay.dart';
 import 'tv_focusable.dart';
 import 'download_button.dart';
+import 'external_player_picker.dart';
 
 /// A fixed-width episode with a single playback stop and explicit actions.
 class EpisodeCard extends StatefulWidget {
   final SeriesEpisode episode;
   final VoidCallback onPlay;
   final VoidCallback onToggleWatched;
+
+  /// Plays with the other player (true = external); null hides the button.
+  final ValueChanged<bool>? onPlayWith;
   final bool watched;
   final double? progress;
   final int? seriesTmdbId;
@@ -27,6 +31,7 @@ class EpisodeCard extends StatefulWidget {
     required this.episode,
     required this.onPlay,
     required this.onToggleWatched,
+    this.onPlayWith,
     this.watched = false,
     this.progress,
     this.seriesTmdbId,
@@ -43,6 +48,9 @@ class _EpisodeCardState extends State<EpisodeCard> {
   late final FocusNode _download = FocusNode(
     debugLabel: 'episode-download:${widget.episode.channel.id}',
   );
+  late final FocusNode _external = FocusNode(
+    debugLabel: 'episode-external:${widget.episode.channel.id}',
+  );
   late final FocusNode _info = FocusNode(
     debugLabel: 'episode-info:${widget.episode.channel.id}',
   );
@@ -53,9 +61,22 @@ class _EpisodeCardState extends State<EpisodeCard> {
   void dispose() {
     _play.dispose();
     _download.dispose();
+    _external.dispose();
     _watched.dispose();
     _info.dispose();
     super.dispose();
+  }
+
+  /// Action row under the still, left to right, as rendered.
+  List<FocusNode> get _actions {
+    final channel = widget.episode.channel;
+    return [
+      if (DownloadService.canDownload(channel)) _download,
+      if (widget.onPlayWith != null && ExternalPlayButton.shows(channel))
+        _external,
+      _watched,
+      _info,
+    ];
   }
 
   KeyEventResult _arrows(FocusNode node, KeyEvent event) {
@@ -64,39 +85,28 @@ class _EpisodeCardState extends State<EpisodeCard> {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
-    final available = DownloadService.canDownload(widget.episode.channel);
+    final actions = _actions;
     if (_play.hasFocus && key == LogicalKeyboardKey.arrowDown) {
-      (available ? _download : _watched).requestFocus();
+      actions.first.requestFocus();
       return KeyEventResult.handled;
     }
-    if (_download.hasFocus || _watched.hasFocus || _info.hasFocus) {
-      if (key == LogicalKeyboardKey.arrowUp) {
-        _play.requestFocus();
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.arrowLeft ||
-          key == LogicalKeyboardKey.arrowRight) {
-        if (key == LogicalKeyboardKey.arrowRight) {
-          if (_download.hasFocus) {
-            _watched.requestFocus();
-          } else if (_watched.hasFocus) {
-            _info.requestFocus();
-          } else if (_info.hasFocus && available) {
-            // When on info and download is available, wrap to download
-            _download.requestFocus();
-          }
-        } else if (key == LogicalKeyboardKey.arrowLeft) {
-          if (_info.hasFocus) {
-            _watched.requestFocus();
-          } else if (_watched.hasFocus) {
-            _download.requestFocus();
-          } else if (_download.hasFocus && !available) {
-            // When download is not available, left from watched goes to info
-            _info.requestFocus();
-          }
-        }
-        return KeyEventResult.handled;
-      }
+    final index = actions.indexWhere((n) => n.hasFocus);
+    if (index < 0) return KeyEventResult.ignored;
+    if (key == LogicalKeyboardKey.arrowUp) {
+      _play.requestFocus();
+      return KeyEventResult.handled;
+    }
+    // Left and Right stay inside the row, so focus never jumps to the
+    // neighbouring episode's buttons.
+    if (key == LogicalKeyboardKey.arrowLeft && index > 0) {
+      actions[index - 1].requestFocus();
+    } else if (key == LogicalKeyboardKey.arrowRight &&
+        index < actions.length - 1) {
+      actions[index + 1].requestFocus();
+    }
+    if (key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.arrowRight) {
+      return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }
@@ -251,6 +261,13 @@ class _EpisodeCardState extends State<EpisodeCard> {
                       channel: episode.channel,
                       focusNode: _download,
                     ),
+                    if (widget.onPlayWith case final playWith?)
+                      ExternalPlayButton(
+                        channel: episode.channel,
+                        compact: true,
+                        focusNode: _external,
+                        onPlay: playWith,
+                      ),
                     const Spacer(),
                     TvFocusable(
                       focusNode: _watched,

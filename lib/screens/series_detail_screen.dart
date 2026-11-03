@@ -23,6 +23,7 @@ import '../widgets/tv_focusable.dart';
 import '../widgets/tv_detail_backdrop.dart';
 import '../widgets/reaction_buttons.dart';
 import '../widgets/episode_card.dart';
+import '../widgets/external_player_picker.dart';
 import '../widgets/home_art.dart';
 import '../widgets/trailer_button.dart';
 import '../services/title_matching.dart';
@@ -403,6 +404,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
+                      _externalPlayButton(context),
                       _manageWatchButton(),
                       if (item != null) TrailerButton(item: item),
                       CategoryAssignButton(item: widget.series),
@@ -549,18 +551,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                       );
                     }
                   },
-                  onPlay: () => playChannel(
-                    context,
-                    ep.channel,
-                    queue: [
-                      for (final e in _details?.allEpisodes ?? const [])
-                        e.channel,
-                    ],
-                    startAt: context
-                        .read<HistoryProvider>()
-                        .entryFor(ep.channel.id)
-                        ?.resumePosition,
-                  ),
+                  onPlay: () => _playEpisode(ep),
+                  onPlayWith: (external) =>
+                      _playEpisode(ep, external: external),
                 );
               },
             ),
@@ -583,6 +576,31 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       return TvDetailBackdrop(image: image, child: scroll);
     }
     return Scaffold(body: scroll);
+  }
+
+  /// Plays [episode] from where it was left, with the whole series as
+  /// queue. [external] picks the player as in [playChannel].
+  void _playEpisode(SeriesEpisode episode, {bool? external}) {
+    playChannel(
+      context,
+      episode.channel,
+      queue: [for (final e in _details?.allEpisodes ?? const []) e.channel],
+      startAt: context
+          .read<HistoryProvider>()
+          .entryFor(episode.channel.id)
+          ?.resumePosition,
+      external: external,
+    );
+  }
+
+  /// "Apri con …" for the episode the play button would start.
+  Widget _externalPlayButton(BuildContext context) {
+    final episode = _resumeEpisode(context.watch<HistoryProvider>());
+    if (episode == null) return const SizedBox.shrink();
+    return ExternalPlayButton(
+      channel: episode.channel,
+      onPlay: (external) => _playEpisode(episode, external: external),
+    );
   }
 
   /// Episode to start from: the one in progress, otherwise the first one
@@ -656,12 +674,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         : '$baseLabel · $remaining min rim.';
     void play() {
       if (episode == null) return;
-      playChannel(
-        context,
-        episode.channel,
-        queue: [for (final e in _details?.allEpisodes ?? const []) e.channel],
-        startAt: history.entryFor(episode.channel.id)?.resumePosition,
-      );
+      _playEpisode(episode);
     }
 
     final button = ElevatedButton.icon(
@@ -690,6 +703,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         runSpacing: 12,
         children: [
           _buildPlaybackButton(context),
+          _externalPlayButton(context),
           _manageWatchButton(),
           TvFocusable(
             onPressed: () => app.toggleFavorite(widget.series),

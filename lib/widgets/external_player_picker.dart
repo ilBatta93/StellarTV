@@ -37,27 +37,36 @@ Future<ExternalPlayer?> chooseExternalPlayer(BuildContext context) async {
   return picked;
 }
 
-/// "Apri con …" on a title page. When the external player is already
-/// the default it offers the built-in one instead. [onPlay] receives the
-/// player to use (true = external).
+/// "Apri con …" on a title page or an episode. When the external player
+/// is already the default it offers the built-in one instead. [onPlay]
+/// receives the player to use (true = external).
 class ExternalPlayButton extends StatelessWidget {
   const ExternalPlayButton({
     super.key,
     required this.channel,
     required this.onPlay,
     this.style,
+    this.compact = false,
+    this.focusNode,
   });
 
   final Channel channel;
   final ValueChanged<bool> onPlay;
   final ButtonStyle? style;
 
+  /// Icon only, with the label as tooltip (episode cards).
+  final bool compact;
+  final FocusNode? focusNode;
+
+  /// Whether the button renders anything for [channel] on this device.
+  static bool shows(Channel channel) =>
+      ExternalPlayerService.instance.supported &&
+      ExternalPlayerService.canPlay(channel);
+
   @override
   Widget build(BuildContext context) {
     final service = ExternalPlayerService.instance;
-    if (!service.supported || !ExternalPlayerService.canPlay(channel)) {
-      return const SizedBox.shrink();
-    }
+    if (!shows(channel)) return const SizedBox.shrink();
     return ListenableBuilder(
       listenable: service,
       builder: (context, _) {
@@ -72,16 +81,25 @@ class ExternalPlayButton extends StatelessWidget {
           onPlay(external);
         }
 
+        final icon = Icon(
+          external ? Icons.open_in_new_rounded : Icons.play_circle_outline,
+        );
         return TvFocusable(
+          focusNode: focusNode,
           onPressed: press,
-          child: OutlinedButton.icon(
-            onPressed: press,
-            style: style,
-            icon: Icon(
-              external ? Icons.open_in_new_rounded : Icons.play_circle_outline,
-            ),
-            label: Text(label),
-          ),
+          child: compact
+              ? IconButton(
+                  tooltip: label,
+                  onPressed: press,
+                  style: style,
+                  icon: icon,
+                )
+              : OutlinedButton.icon(
+                  onPressed: press,
+                  style: style,
+                  icon: icon,
+                  label: Text(label),
+                ),
         );
       },
     );
