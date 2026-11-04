@@ -119,6 +119,57 @@ void main() {
     expect(CatalogShelf.diskReads, 1);
   });
 
+  test('startup adopts every saved index in one merge', () async {
+    final dir = Directory.systemTemp.createTempSync('stv_index_');
+    final live = File('${dir.path}/live.ndjson');
+    final movies = File('${dir.path}/movie.ndjson');
+    final series = File('${dir.path}/series.ndjson');
+    writeSection(live, [row(1, name: 'Alfa Uno', type: ContentType.live)]);
+    writeSection(movies, [row(2, name: 'Il Padrino')]);
+    writeSection(series, [
+      row(3, name: 'Dark Matter', type: ContentType.series),
+    ]);
+    final built = CatalogShelf.empty();
+    addTearDown(() async {
+      built.close();
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    for (final file in [live, movies, series]) {
+      await built.appendSection(
+        file.path,
+        hidden: const {},
+        custom: const [],
+        order: const {},
+      );
+    }
+    final token = built.settingsToken;
+    final paths = [live.path, movies.path, series.path];
+    built.close();
+
+    final stale = CatalogShelf.empty();
+    addTearDown(stale.close);
+    expect(await stale.adoptIndexes(paths, token: 'other'), isFalse);
+    expect(stale.isEmpty, isTrue);
+
+    final restored = CatalogShelf.empty();
+    addTearDown(restored.close);
+    CatalogShelf.forbidDiskReads = true;
+    try {
+      expect(await restored.adoptIndexes(paths, token: token), isTrue);
+      expect(restored.sectionPaths, paths);
+      expect(restored.settingsToken, token);
+      expect(restored.plan(ContentType.live)?.channels, isNotEmpty);
+      expect(restored.plan(ContentType.movie)?.channels, isNotEmpty);
+      expect(restored.plan(ContentType.series)?.channels, isNotEmpty);
+      expect(restored.searchSlots('padrino'), isNotEmpty);
+      expect(await restored.adoptIndexes(paths, token: token), isFalse);
+    } finally {
+      CatalogShelf.forbidDiskReads = false;
+    }
+    final slot = restored.plan(ContentType.movie)!.channels.first;
+    expect(restored.readSlot(slot).name, 'Il Padrino');
+  });
+
   test('kids warmup pairs facet keys without reading titles', () async {
     final shelf = await CatalogShelf.fromChannels(
       [row(1, name: 'Il Padrino'), row(2, name: 'Inception')],

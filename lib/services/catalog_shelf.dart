@@ -1575,6 +1575,32 @@ class CatalogShelf implements CatalogChannelSource {
     return true;
   }
 
+  /// Publishes every saved index in [paths] at once, reading and merging them
+  /// off the UI isolate. One merge per section on the UI isolate cost seconds
+  /// at startup on the TV. Adopts nothing and returns false when any index is
+  /// missing, stale, or built for another settings token, so the caller can
+  /// keep the section order with [adoptIndex] and [appendSection]. Only for an
+  /// empty shelf.
+  Future<bool> adoptIndexes(List<String> paths, {required String token}) async {
+    if (_pieces.isNotEmpty || paths.isEmpty) return false;
+    final read = await Isolate.run(() {
+      final images = <_ShelfImage>[];
+      for (final path in paths) {
+        final image = File(path).existsSync()
+            ? _readSectionIndex(path, token)
+            : null;
+        if (image == null) return null;
+        images.add(image);
+      }
+      return (pieces: images, merged: _mergePieces(images, token));
+    });
+    if (read == null) return false;
+    _pieces.addAll(read.pieces);
+    _releaseHandles();
+    _image = read.merged;
+    return true;
+  }
+
   void _releaseHandles() {
     for (final file in _files) {
       try {

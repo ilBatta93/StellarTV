@@ -542,6 +542,18 @@ class AppProvider extends ChangeNotifier {
       return;
     }
     final shelf = CatalogShelf.empty();
+    if (await shelf.adoptIndexes(present, token: token)) {
+      if (_disposed || epoch != _shelfEpoch) {
+        shelf.close();
+        return;
+      }
+      _swap(shelf);
+      return;
+    }
+    if (_disposed || epoch != _shelfEpoch) {
+      shelf.close();
+      return;
+    }
     for (final path in present) {
       await _openSavedSection(shelf, path);
       if (_disposed || epoch != _shelfEpoch) {
