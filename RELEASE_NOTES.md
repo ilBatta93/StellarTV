@@ -1,15 +1,6 @@
-## StellarTV v3.8.0
+## StellarTV v--help
 
 <!-- stellar-summary -->
-- Aggiornamento scheda e navigazione della sezione aperta per voto e classifiche.
-- Miglioramento sottotitoli e loghi con dati locali; risoluzione locandine uniforme.
-- Ottimizzazione playback e decoder per diretta e anteprima live su TV.
-- Correzione sincronizzazione e gestione della memoria del player.
-- Aggiornamento guida e impostazioni della schermata iniziale.
-- Fix: rimozione metodo _syncDelayTick inutilizzato e completamento sincronizzazione.
-- Fix: regolazione regex note rilascio e fallback tag per build.
-- Perf: liste più fluide e rendering live con anticipazione del player.
-- Aggiornamento versioni Gradle e configurazione locale Android
-- Aggiornato script release_notes.py - rimosso blocco che impediva la build quando le note non coprivano tutte le modifiche lib/
-- Migliorata convalida dello script per garantire nuovi contenuti quando cambiano i file della libreria
+- DNS integrato: l'app usa di base un DNS cifrato e senza filtri, solo per sé, per accesso, cataloghi, guida TV e riproduzione. Si cambia in I
+- Ripresa della visione più affidabile: se il flusso si interrompe mentre il titolo sta tornando al punto salvato riparte da lì e non dall'ini
 <!-- /stellar-summary -->
