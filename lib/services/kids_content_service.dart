@@ -60,6 +60,13 @@ class KidsContentService {
   final Map<String, bool> _verdicts = {};
   final Map<String, String> _certifications = {};
 
+  /// When a title was last checked without getting a verdict (the cloud has
+  /// no row and the check could not classify it). Saved on the device: the
+  /// in-session cooldown alone sent every such title back to the server at
+  /// each cold start.
+  final Map<String, int> _unanswered = {};
+  static const unansweredFor = Duration(days: 1);
+
   /// TMDB genre ids per title, filled by the same background scan.
   final Map<String, List<int>> _genres = {};
   final CatalogWorkQueue _work = CatalogWorkQueue();
@@ -105,6 +112,7 @@ class KidsContentService {
       _verdicts.addAll(data.verdicts);
       _genres.addAll(data.genres);
       _certifications.addAll(data.certifications);
+      _unanswered.addAll(data.unanswered);
     } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -222,7 +230,7 @@ class KidsContentService {
 
   void _queue(({String key, String title}) item, DateTime now) {
     final key = item.key;
-    if (key.isEmpty || _known(key, now.millisecondsSinceEpoch)) return;
+    if (key.isEmpty || _skip(key, now.millisecondsSinceEpoch)) return;
     final title = item.title.trim();
     _work.add(
       key,
@@ -235,6 +243,12 @@ class KidsContentService {
       _verdicts.containsKey(key) &&
       _certifications.containsKey(key) &&
       TitleFacetIndex.instance.genresFresh(key, now: now);
+
+  bool _skip(String key, int now) {
+    if (_known(key, now)) return true;
+    final asked = _unanswered[key];
+    return asked != null && now - asked < unansweredFor.inMilliseconds;
+  }
 
   @visibleForTesting
   Iterable<String> get queuedKeys => _work.pending.keys;
@@ -281,6 +295,7 @@ class KidsContentService {
           final key = r['key'] as String;
           _verdicts[key] = r['is_kids'] as bool;
           _certifications[key] = r['certification'] as String;
+          _unanswered.remove(key);
           final g = r['genre_ids'];
           _genres[key] = g is List
               ? [
@@ -314,7 +329,7 @@ class KidsContentService {
       // without this every known title went back to the server at startup.
       await load();
       final now = DateTime.now().millisecondsSinceEpoch;
-      final known = _work.pending.keys.where((key) => _known(key, now));
+      final known = _work.pending.keys.where((key) => _skip(key, now));
       for (final key in known.toList()) {
         _work.complete(key);
       }
@@ -363,6 +378,7 @@ class KidsContentService {
             final key = '${r['type']}:$norm';
             _verdicts[key] = r['is_kids'] as bool;
             _certifications[key] = r['certification'] as String;
+            _unanswered.remove(key);
             final g = r['genre_ids'];
             _genres[key] = g is List
                 ? [
@@ -372,6 +388,10 @@ class KidsContentService {
                 : const [];
             TitleFacetIndex.instance.putGenres(key, _genres[key]!);
             resolved.add(key);
+          }
+          final asked = DateTime.now().millisecondsSinceEpoch;
+          for (final key in work.keys) {
+            if (!resolved.contains(key)) _unanswered[key] = asked;
           }
           FrameTelemetryService.instance.recordWork('bambini.verifica', clock);
           await _save();
@@ -408,6 +428,9 @@ class KidsContentService {
     });
   }
 
+  @visibleForTesting
+  Future<void> saveNow() => _persist();
+
   Future<void> _persist() async {
     try {
       final file = await _file();
@@ -416,11 +439,17 @@ class KidsContentService {
       final verdicts = Map<String, bool>.of(_verdicts);
       final genres = Map<String, List<int>>.of(_genres);
       final certifications = Map<String, String>.of(_certifications);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      _unanswered.removeWhere(
+        (_, asked) => now - asked >= unansweredFor.inMilliseconds,
+      );
+      final unanswered = Map<String, int>.of(_unanswered);
       final pending = _writeStoreInBackground(
         path,
         verdicts,
         genres,
         certifications,
+        unanswered,
       );
       FrameTelemetryService.instance.recordWork('bambini.salvataggio', clock);
       await pending;
@@ -442,16 +471,21 @@ Future<void> _writeStoreInBackground(
   Map<String, bool> verdicts,
   Map<String, List<int>> genres,
   Map<String, String> certifications,
-) => Isolate.run(() => _writeStore(path, verdicts, genres, certifications));
+  Map<String, int> unanswered,
+) => Isolate.run(
+  () => _writeStore(path, verdicts, genres, certifications, unanswered),
+);
 
 class _KidsStore {
   final Map<String, bool> verdicts;
   final Map<String, List<int>> genres;
   final Map<String, String> certifications;
+  final Map<String, int> unanswered;
   const _KidsStore(
     this.verdicts,
     this.genres, [
     this.certifications = const {},
+    this.unanswered = const {},
   ]);
 }
 
@@ -484,7 +518,14 @@ _KidsStore _readStore(String path) {
         if (k is String && v is String) certifications[k] = v;
       });
     }
-    return _KidsStore(verdicts, genres, certifications);
+    final unanswered = <String, int>{};
+    final u = map['u'];
+    if (u is Map) {
+      u.forEach((k, v) {
+        if (k is String && v is int) unanswered[k] = v;
+      });
+    }
+    return _KidsStore(verdicts, genres, certifications, unanswered);
   } catch (_) {
     return const _KidsStore({}, {});
   }
@@ -515,10 +556,16 @@ void _writeStore(
   Map<String, bool> verdicts,
   Map<String, List<int>> genres,
   Map<String, String> certifications,
+  Map<String, int> unanswered,
 ) {
   final temporary = File('$path.tmp');
   temporary.writeAsStringSync(
-    jsonEncode({'v': verdicts, 'g': genres, 'c': certifications}),
+    jsonEncode({
+      'v': verdicts,
+      'g': genres,
+      'c': certifications,
+      'u': unanswered,
+    }),
     flush: true,
   );
   temporary.renameSync(path);

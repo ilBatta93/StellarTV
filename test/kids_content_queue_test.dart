@@ -183,4 +183,70 @@ void main() {
     expect(sent, isNot(contains('movie:t0')));
     expect(service.queuedKeys, isEmpty);
   });
+
+  // Titles the check cannot classify used to go back to the server at every
+  // cold start: the cooldown lived only in memory.
+  test('titles without a verdict wait a day across restarts', () async {
+    final sent = <String>[];
+    Future<void> session(void Function(KidsContentService) body) async {
+      final service = KidsContentService();
+      addTearDown(service.dispose);
+      await http.runWithClient(
+        () async {
+          body(service);
+          await settled(service);
+          await service.saveNow();
+        },
+        () => MockClient((request) async {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          if (request.url.path.endsWith('/kids-lookup')) {
+            sent.addAll((body['keys'] as List).cast<String>());
+            return http.Response(jsonEncode({'results': []}), 200);
+          }
+          final items = (body['items'] as List).cast<Map>();
+          sent.addAll(items.map((i) => 'check:${i['title']}'));
+          return http.Response(
+            jsonEncode({
+              'results': [
+                for (final i in items)
+                  {
+                    'title': i['title'],
+                    'type': i['type'],
+                    'is_kids': null,
+                    'genre_ids': null,
+                    'certification': null,
+                  },
+              ],
+            }),
+            200,
+          );
+        }),
+      );
+    }
+
+    await session(
+      (s) => s.requestIndexed([(key: 'movie:ignoto', title: 'Ignoto')]),
+    );
+    expect(sent, ['movie:ignoto', 'check:Ignoto']);
+
+    sent.clear();
+    await session(
+      (s) => s.requestIndexed([(key: 'movie:ignoto', title: 'Ignoto')]),
+    );
+    expect(sent, isEmpty);
+
+    // After a day the title is asked again.
+    final file = File('${dir.path}/stellartv_kids_v3.json');
+    final store = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+    final dayAgo = DateTime.now()
+        .subtract(KidsContentService.unansweredFor)
+        .millisecondsSinceEpoch;
+    store['u'] = {'movie:ignoto': dayAgo};
+    file.writeAsStringSync(jsonEncode(store));
+    sent.clear();
+    await session(
+      (s) => s.requestIndexed([(key: 'movie:ignoto', title: 'Ignoto')]),
+    );
+    expect(sent, ['movie:ignoto', 'check:Ignoto']);
+  });
 }

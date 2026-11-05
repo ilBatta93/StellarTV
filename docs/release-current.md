@@ -1,3 +1,3 @@
 # Release Notes — Novità
 
-- Animazione di avvio più fluida sulle TV: stesso aspetto di prima, ma il cielo stellato si disegna in un solo passaggio e i caricamenti meno urgenti aspettano la fine dell'animazione.
+- Profilo bambino: i titoli che non si riescono a classificare vengono ricontrollati una volta al giorno invece che a ogni avvio, con meno richieste al server.
