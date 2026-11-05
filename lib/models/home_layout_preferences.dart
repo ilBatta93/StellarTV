@@ -6,6 +6,12 @@ enum HomeDensity { automatic, spacious, balanced, dense }
 
 enum HomeBannerSize { compact, balanced, large }
 
+/// What the Home banner shows. [automatic] keeps each device's own choice:
+/// the TV opens on the last title watched, the phone on the weekly Top 10.
+/// The TV banner always follows the focused title, so [none] is phone-only;
+/// [top] on the phone is [automatic] itself.
+enum HomeBannerSource { automatic, forYou, top, none }
+
 extension HomePosterShapeInfo on HomePosterShape {
   double get aspectRatio => switch (this) {
     HomePosterShape.portrait => 2 / 3,
@@ -45,6 +51,39 @@ extension HomeBannerSizeInfo on HomeBannerSize {
     HomeBannerSize.balanced => 'Bilanciato',
     HomeBannerSize.large => 'Grande',
   };
+}
+
+extension HomeBannerSourceInfo on HomeBannerSource {
+  String label({required bool tv}) => switch (this) {
+    HomeBannerSource.automatic =>
+      tv ? 'Ultima visione' : 'Top 10 della settimana',
+    HomeBannerSource.forYou => 'Consigliati per te',
+    HomeBannerSource.top => 'Top 10 della settimana',
+    HomeBannerSource.none => 'Nessun banner',
+  };
+
+  /// Choices offered on this kind of device, without duplicates.
+  static List<HomeBannerSource> options({required bool tv}) => tv
+      ? const [
+          HomeBannerSource.automatic,
+          HomeBannerSource.forYou,
+          HomeBannerSource.top,
+        ]
+      : const [
+          HomeBannerSource.automatic,
+          HomeBannerSource.forYou,
+          HomeBannerSource.none,
+        ];
+
+  /// A value saved on the other kind of device maps to the nearest choice.
+  HomeBannerSource on({required bool tv}) => switch (this) {
+    HomeBannerSource.top when !tv => HomeBannerSource.automatic,
+    HomeBannerSource.none when tv => HomeBannerSource.automatic,
+    _ => this,
+  };
+
+  static HomeBannerSource parse(Object? value) =>
+      HomeBannerSource.values.asNameMap()[value] ?? HomeBannerSource.automatic;
 }
 
 /// Pure bounds shared by rendering, persistence and tests. No catalog fetches.

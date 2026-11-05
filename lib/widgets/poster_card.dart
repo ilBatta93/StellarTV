@@ -245,25 +245,31 @@ class TmdbPosterCard extends StatelessWidget {
     final home = HomePresentation.contains(context);
     final ui = context.watch<UiSettings>();
     final ratio = home ? ui.homePosterShape.aspectRatio : 2 / 3;
+    final fillsCell = !width.isFinite;
+    // Grids (Preferiti, ricerca) follow the catalog poster options; rows
+    // keep their fixed layout and Home has its own titles option.
+    final catalogGrid = fillsCell && !home;
+    final showTitles = home ? ui.homeTitles : (!catalogGrid || ui.showTitles);
+    final showRating = !catalogGrid || ui.showRatings;
     final poster = ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: Stack(
         fit: StackFit.expand,
         children: [
           PosterImage(url: homePosterUrl(context, item), rememberWidth: home),
-          Positioned(
-            top: 6,
-            left: 6,
-            child: RatingBadge(
-              value: item.voteAverage,
-              item: item,
-              reveal: true,
+          if (showRating)
+            Positioned(
+              top: 6,
+              left: 6,
+              child: RatingBadge(
+                value: item.voteAverage,
+                item: item,
+                reveal: true,
+              ),
             ),
-          ),
         ],
       ),
     );
-    final fillsCell = !width.isFinite;
     final effectiveWidth = home && !fillsCell
         ? HomePresentation.width(context)
         : DeviceTypeService.isTv && !fillsCell
@@ -281,7 +287,7 @@ class TmdbPosterCard extends StatelessWidget {
               Expanded(child: poster)
             else
               AspectRatio(aspectRatio: ratio, child: poster),
-            if (!home || ui.homeTitles)
+            if (showTitles)
               Padding(
                 padding: DeviceTypeService.isTv
                     ? const EdgeInsets.fromLTRB(9, 8, 9, 9)

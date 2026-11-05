@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/ui_settings.dart';
 
 import '../services/catalog_builder.dart';
 import 'title_facets.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
+import 'channel_card.dart';
 import 'poster_card.dart';
 import 'tv_focusable.dart';
 
@@ -27,7 +31,10 @@ class CatalogLandscapeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tv = DeviceTypeService.isTv;
     final channel = entry.primary;
-    final quality = CatalogBuilder.qualityLabel(channel.name);
+    final ui = context.watch<UiSettings>();
+    final quality = ui.showQuality
+        ? CatalogBuilder.qualityLabel(channel.name)
+        : null;
     final content = ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: Stack(
@@ -36,7 +43,7 @@ class CatalogLandscapeCard extends StatelessWidget {
           // Blurred-looking fill plus the full poster on the left: posters
           // are vertical, so they are framed instead of cropped badly.
           if (!tv)
-            Opacity(opacity: 0.35, child: PosterImage(url: channel.logo)),
+            Opacity(opacity: 0.35, child: CatalogArtwork(channel: channel)),
           const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -50,7 +57,7 @@ class CatalogLandscapeCard extends StatelessWidget {
             children: [
               AspectRatio(
                 aspectRatio: 2 / 3,
-                child: PosterImage(url: channel.logo),
+                child: CatalogArtwork(channel: channel),
               ),
               Expanded(
                 child: Padding(
@@ -76,7 +83,7 @@ class CatalogLandscapeCard extends StatelessWidget {
                         runSpacing: 4,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          ChannelRatingBadge(channel),
+                          if (ui.showRatings) ChannelRatingBadge(channel),
                           if (quality != null) _Chip(quality),
                         ],
                       ),
@@ -167,7 +174,7 @@ class _SpotlightBody extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (!tv)
-            Opacity(opacity: 0.18, child: PosterImage(url: channel.logo)),
+            Opacity(opacity: 0.18, child: CatalogArtwork(channel: channel)),
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -176,7 +183,7 @@ class _SpotlightBody extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                   child: AspectRatio(
                     aspectRatio: 2 / 3,
-                    child: PosterImage(url: channel.logo),
+                    child: CatalogArtwork(channel: channel),
                   ),
                 ),
                 const SizedBox(width: 16),

@@ -106,14 +106,16 @@ class ExternalPlayerService extends ChangeNotifier {
     }
   }
 
-  /// Opens [channel] in the chosen player and waits until it closes.
+  /// Opens [channel] in [using] (a one-off pick from "Apri con") or in the
+  /// saved player, and waits until it closes.
   /// Throws [PlatformException] when the player cannot be started.
   Future<ExternalPlaybackResult> play(
     Channel channel, {
     required String userAgent,
     Duration? startAt,
+    ExternalPlayer? using,
   }) async {
-    final player = _player;
+    final player = using ?? _player;
     if (player == null) {
       throw PlatformException(code: 'no_player');
     }

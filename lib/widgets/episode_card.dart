@@ -12,6 +12,7 @@ import 'poster_card.dart';
 import 'episode_still_overlay.dart';
 import 'tv_focusable.dart';
 import 'download_button.dart';
+import '../services/external_player_service.dart';
 import 'external_player_picker.dart';
 
 /// A fixed-width episode with a single playback stop and explicit actions.
@@ -20,8 +21,9 @@ class EpisodeCard extends StatefulWidget {
   final VoidCallback onPlay;
   final VoidCallback onToggleWatched;
 
-  /// Plays with the other player (true = external); null hides the button.
-  final ValueChanged<bool>? onPlayWith;
+  /// Plays with the other player: the app picked in "Apri con", or null for
+  /// the built-in one. A null callback hides the button.
+  final ValueChanged<ExternalPlayer?>? onPlayWith;
   final bool watched;
   final double? progress;
   final int? seriesTmdbId;

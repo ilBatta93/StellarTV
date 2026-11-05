@@ -1,3 +1,4 @@
+import '../services/external_player_service.dart';
 import '../widgets/ui_scale.dart';
 
 import 'package:flutter/material.dart';
@@ -552,8 +553,8 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                     }
                   },
                   onPlay: () => _playEpisode(ep),
-                  onPlayWith: (external) =>
-                      _playEpisode(ep, external: external),
+                  onPlayWith: (app) =>
+                      _playEpisode(ep, external: app != null, app: app),
                 );
               },
             ),
@@ -579,8 +580,13 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   }
 
   /// Plays [episode] from where it was left, with the whole series as
-  /// queue. [external] picks the player as in [playChannel].
-  void _playEpisode(SeriesEpisode episode, {bool? external}) {
+  /// queue. [external] picks the player as in [playChannel]; [app] is the
+  /// one-off "Apri con" pick.
+  void _playEpisode(
+    SeriesEpisode episode, {
+    bool? external,
+    ExternalPlayer? app,
+  }) {
     playChannel(
       context,
       episode.channel,
@@ -590,6 +596,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
           .entryFor(episode.channel.id)
           ?.resumePosition,
       external: external,
+      externalApp: app,
     );
   }
 
@@ -599,7 +606,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     if (episode == null) return const SizedBox.shrink();
     return ExternalPlayButton(
       channel: episode.channel,
-      onPlay: (external) => _playEpisode(episode, external: external),
+      onPlay: (app) => _playEpisode(episode, external: app != null, app: app),
     );
   }
 

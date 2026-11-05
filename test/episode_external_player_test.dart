@@ -11,9 +11,13 @@ import 'package:stellar_tv/services/device_type_service.dart';
 import 'package:stellar_tv/services/external_player_service.dart';
 import 'package:stellar_tv/widgets/episode_card.dart';
 
-/// Episodes offer "Apri con …" like films, by remote and by touch.
+/// Episodes offer "Apri con …" like films, by remote and by touch. Every
+/// press asks which app to use and stores nothing.
 void main() {
-  Future<List<bool>> pumpCard(WidgetTester tester, {required bool tv}) async {
+  Future<List<String?>> pumpCard(
+    WidgetTester tester, {
+    required bool tv,
+  }) async {
     SharedPreferences.setMockInitialValues({});
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
@@ -21,10 +25,17 @@ void main() {
           (_) async => tv,
         );
     await DeviceTypeService.initialize();
-    await ExternalPlayerService.instance.setPlayer(
-      const ExternalPlayer(package: 'org.videolan.vlc', label: 'VLC'),
-    );
-    final played = <bool>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('stellartv/player'), (
+          call,
+        ) async {
+          if (call.method != 'externalPlayers') return null;
+          return [
+            {'package': 'org.videolan.vlc', 'label': 'VLC'},
+            {'package': 'com.brouken.player', 'label': 'Just Player'},
+          ];
+        });
+    final played = <String?>[];
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => UiSettings(),
@@ -47,7 +58,7 @@ void main() {
                 ),
                 onPlay: () {},
                 onToggleWatched: () {},
-                onPlayWith: played.add,
+                onPlayWith: (app) => played.add(app?.package),
               ),
             ),
           ),
@@ -62,9 +73,13 @@ void main() {
     tester,
   ) async {
     final played = await pumpCard(tester, tv: false);
-    await tester.tap(find.byTooltip('Apri con VLC'));
-    await tester.pump();
-    expect(played, [true]);
+    await tester.tap(find.byTooltip('Apri con…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Just Player'));
+    await tester.pumpAndSettle();
+    expect(played, ['com.brouken.player']);
+    // The pick is one-off: nothing becomes the saved player.
+    expect(ExternalPlayerService.instance.player, isNull);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
   testWidgets('remote: Down then Right reaches the external player button', (
@@ -94,7 +109,11 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.select, platform: 'android');
-    await tester.pump();
-    expect(played, [true]);
+    await tester.pumpAndSettle();
+    expect(find.text('Apri con'), findsOneWidget);
+    await tester.tap(find.text('VLC'));
+    await tester.pumpAndSettle();
+    expect(played, ['org.videolan.vlc']);
+    expect(ExternalPlayerService.instance.player, isNull);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 }

@@ -22,7 +22,8 @@ import '../services/recent_live_channels.dart';
 /// Plays a channel. For series episodes [queue] is the ordered episode list
 /// used by "Episodio successivo"; when omitted the player loads it itself.
 /// [external] forces (true) or skips (false) the external player; null
-/// follows the setting. The player's own "next episode" (replace) stays
+/// follows the setting. [externalApp] is a one-off pick from "Apri con":
+/// it plays there without becoming the saved player. The player's own "next episode" (replace) stays
 /// inside the app.
 void playChannel(
   BuildContext context,
@@ -32,6 +33,7 @@ void playChannel(
   bool replace = false,
   bool archivePlayback = false,
   bool? external,
+  ExternalPlayer? externalApp,
 }) {
   final app = context.read<AppProvider>();
   if (app.kidsMode && !app.isKidsContent(channel)) return;
@@ -56,10 +58,10 @@ void playChannel(
   if (!archivePlayback &&
       !replace &&
       externals.supported &&
-      externals.player != null &&
-      (external ?? externals.enabled) &&
+      (externalApp != null ||
+          (externals.player != null && (external ?? externals.enabled))) &&
       ExternalPlayerService.canPlay(channel)) {
-    unawaited(_playExternally(context, channel, startAt));
+    unawaited(_playExternally(context, channel, startAt, externalApp));
     return;
   }
   final route = MaterialPageRoute(
@@ -83,6 +85,7 @@ Future<void> _playExternally(
   BuildContext context,
   Channel channel,
   Duration? startAt,
+  ExternalPlayer? using,
 ) async {
   final history = context.read<HistoryProvider>();
   final messenger = ScaffoldMessenger.maybeOf(context);
@@ -101,6 +104,7 @@ Future<void> _playExternally(
       channel,
       userAgent: effectiveStreamUserAgent(settings.userAgent),
       startAt: resume,
+      using: using,
     );
     final duration = result.duration;
     if (duration == null) return;

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../models/catalog_start_category.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/epg_program.dart';
@@ -199,6 +200,9 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
 
   /// Last category picked, read once; null while still loading.
   ({bool saved, String? label})? _rememberedCategory;
+
+  /// Opening category chosen in Impostazioni → Categorie.
+  CatalogStartCategory? _startCategory;
   static const _watchedLabel = 'Visti di recente';
   bool _defaultApplied = false;
   Timer? _tick;
@@ -1177,11 +1181,13 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
   Future<void> _loadViewMemory() async {
     final sort = await CatalogViewMemory.sort(ContentType.live);
     final category = await CatalogViewMemory.liveCategory();
+    final start = await CatalogViewMemory.startCategory(ContentType.live);
     if (!mounted) return;
     setState(() {
       // A sort picked before the memory arrived wins.
       if (sort != null && _sort == CatalogSort.provider) _sort = sort;
       _rememberedCategory = category;
+      _startCategory = start;
     });
   }
 
@@ -1251,10 +1257,24 @@ class _LivePageState extends State<LivePage> with WidgetsBindingObserver {
         message: 'Nessun contenuto in diretta disponibile.',
       );
     }
-    // Default category: the last one picked on this device, else "TV Sat"
-    // (when the playlist has it).
-    final remembered = _rememberedCategory;
-    if (!_defaultApplied && groups.isNotEmpty && remembered != null) {
+    // Opening category: the one chosen in the settings; by default the last
+    // one picked on this device, else "TV Sat" (when the playlist has it).
+    final start = _startCategory;
+    final remembered = switch (start?.kind) {
+      null || CatalogStartKind.last => _rememberedCategory,
+      CatalogStartKind.all => (saved: true, label: null),
+      CatalogStartKind.watched => (saved: true, label: _watchedLabel),
+      _ => (saved: true, label: start!.group),
+    };
+    final waitGroup =
+        start?.kind == CatalogStartKind.group &&
+        !groups.any((g) => g.label == start!.group) &&
+        app.catalogPreparing(ContentType.live);
+    if (!_defaultApplied &&
+        !waitGroup &&
+        groups.isNotEmpty &&
+        start != null &&
+        remembered != null) {
       final label = remembered.label;
       String n(String s) =>
           s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');

@@ -33,33 +33,10 @@ class ChannelCard extends StatelessWidget {
 
   String get _title => _isLive ? channel.name : displayTitle(channel.name);
 
-  static const _audiobookCover = 'assets/images/audiobook_cover.jpg';
-
-  /// Provider artwork first, then the official TMDB poster, then the
-  /// audiobook cover or the neutral icon.
-  Widget _artwork() {
-    final audiobook = isAudiobook(channel.name, channel.group);
-    final tmdb = audiobook
-        ? null
-        : CatalogRatingService.instance.itemOf(channel)?.posterUrl;
-    final icon =
-        channel.type == ContentType.series || channel.type == ContentType.anime
-        ? Icons.video_library_outlined
-        : Icons.movie_outlined;
-    final cover = Image.asset(
-      _audiobookCover,
-      fit: BoxFit.cover,
-      cacheWidth: 360,
-    );
-    if (channel.logo.isEmpty && tmdb == null && audiobook) return cover;
-    return PosterImage(
-      url: channel.logo.isEmpty ? tmdb : channel.logo,
-      fallbackUrls: [if (tmdb != null && channel.logo.isNotEmpty) tmdb],
-      fallbackIcon: icon,
-      audiobookCover: audiobook ? _audiobookCover : null,
-      fallbackLabel: DeviceTypeService.isTv ? _title : null,
-    );
-  }
+  Widget _artwork() => CatalogArtwork(
+    channel: channel,
+    fallbackLabel: DeviceTypeService.isTv ? _title : null,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -171,6 +148,40 @@ class ChannelCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Poster of a film or series in every catalog layout: provider artwork
+/// first, then the official TMDB poster, then the audiobook cover or the
+/// neutral icon.
+class CatalogArtwork extends StatelessWidget {
+  const CatalogArtwork({super.key, required this.channel, this.fallbackLabel});
+
+  final Channel channel;
+  final String? fallbackLabel;
+
+  static const _audiobookCover = 'assets/images/audiobook_cover.jpg';
+
+  @override
+  Widget build(BuildContext context) {
+    final audiobook = isAudiobook(channel.name, channel.group);
+    final tmdb = audiobook
+        ? null
+        : CatalogRatingService.instance.itemOf(channel)?.posterUrl;
+    final icon =
+        channel.type == ContentType.series || channel.type == ContentType.anime
+        ? Icons.video_library_outlined
+        : Icons.movie_outlined;
+    if (channel.logo.isEmpty && tmdb == null && audiobook) {
+      return Image.asset(_audiobookCover, fit: BoxFit.cover, cacheWidth: 360);
+    }
+    return PosterImage(
+      url: channel.logo.isEmpty ? tmdb : channel.logo,
+      fallbackUrls: [if (tmdb != null && channel.logo.isNotEmpty) tmdb],
+      fallbackIcon: icon,
+      audiobookCover: audiobook ? _audiobookCover : null,
+      fallbackLabel: fallbackLabel,
     );
   }
 }

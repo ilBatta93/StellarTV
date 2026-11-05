@@ -38,6 +38,7 @@ void main() {
       'ui_home_recommendation_limit',
       'ui_home_recent_limit',
       'ui_home_banner_size',
+      'ui_home_banner_source',
       'ui_home_overview',
       'ui_home_titles',
       'ui_home_recent_titles',

@@ -26,6 +26,7 @@ import '../services/device_type_service.dart';
 import '../widgets/tv_focusable.dart';
 import '../widgets/tv_detail_backdrop.dart';
 import '../widgets/download_button.dart';
+import '../services/external_player_service.dart';
 import '../widgets/external_player_picker.dart';
 import '../widgets/reaction_buttons.dart';
 import '../widgets/trailer_button.dart';
@@ -579,7 +580,8 @@ class _Actions extends StatelessWidget {
               ExternalPlayButton(
                 channel: movie,
                 style: compact,
-                onPlay: (external) => _play(context, external: external),
+                onPlay: (app) =>
+                    _play(context, external: app != null, app: app),
               ),
             if (item case final trailerItem?) TrailerButton(item: trailerItem),
             if (playable case final assignable?)
@@ -742,7 +744,8 @@ class _Actions extends StatelessWidget {
             if (channel.type == ContentType.movie)
               ExternalPlayButton(
                 channel: channel,
-                onPlay: (external) => _play(context, external: external),
+                onPlay: (app) =>
+                    _play(context, external: app != null, app: app),
               ),
             if (DownloadService.canDownload(channel))
               DownloadButton(channel: channel, expanded: true),
@@ -764,7 +767,12 @@ class _Actions extends StatelessWidget {
     );
   }
 
-  Future<void> _play(BuildContext context, {bool? external}) async {
+  /// [external] as in [playChannel]; [app] is the one-off "Apri con" pick.
+  Future<void> _play(
+    BuildContext context, {
+    bool? external,
+    ExternalPlayer? app,
+  }) async {
     if (playable == null) return;
     final entry = CatalogEntry(
       primary: playable!,
@@ -781,6 +789,7 @@ class _Actions extends StatelessWidget {
       channel,
       startAt: _resumeFor(context, channel),
       external: external,
+      externalApp: app,
     );
   }
 

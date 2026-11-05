@@ -84,6 +84,7 @@ class UiSettings extends ChangeNotifier {
     'ui_home_recommendation_limit',
     'ui_home_recent_limit',
     'ui_home_banner_size',
+    homeBannerSourceKey,
     'ui_home_overview',
     'ui_home_titles',
     'ui_home_recent_titles',
@@ -91,6 +92,7 @@ class UiSettings extends ChangeNotifier {
     homeRowOrderKey,
     homeHiddenRowsKey,
   };
+  static const homeBannerSourceKey = 'ui_home_banner_source';
   static const homeRowOrderKey = 'ui_home_row_order';
   static const homeHiddenRowsKey = 'ui_home_hidden_rows';
   HomePosterShape homePosterShape = HomePosterShape.portrait;
@@ -100,6 +102,7 @@ class UiSettings extends ChangeNotifier {
   int homeRecommendationLimit = 10;
   int homeRecentLimit = 50;
   HomeBannerSize homeBannerSize = HomeBannerSize.compact;
+  HomeBannerSource homeBannerSource = HomeBannerSource.automatic;
   bool homeOverview = true;
   bool homeTitles = false;
   bool homeRecentTitles = false;
@@ -158,6 +161,12 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setHomeBannerSource(HomeBannerSource value) async {
+    homeBannerSource = value;
+    await _save(homeBannerSourceKey, value.name);
+    notifyListeners();
+  }
+
   Future<void> setHomeOverview(bool value) async {
     homeOverview = value;
     await _save('ui_home_overview', value);
@@ -212,6 +221,7 @@ class UiSettings extends ChangeNotifier {
     homeRecommendationLimit = 10;
     homeRecentLimit = 50;
     homeBannerSize = HomeBannerSize.compact;
+    homeBannerSource = HomeBannerSource.automatic;
     homeOverview = true;
     homeTitles = homeRecentTitles = false;
     uiScalePercent = 100;
@@ -225,6 +235,7 @@ class UiSettings extends ChangeNotifier {
       'ui_home_recommendation_limit': homeRecommendationLimit,
       'ui_home_recent_limit': homeRecentLimit,
       'ui_home_banner_size': homeBannerSize.name,
+      homeBannerSourceKey: homeBannerSource.name,
       'ui_home_overview': homeOverview,
       'ui_home_titles': homeTitles,
       'ui_home_recent_titles': homeRecentTitles,
@@ -348,6 +359,7 @@ class UiSettings extends ChangeNotifier {
     homeRecommendationLimit,
     homeRecentLimit,
     homeBannerSize.name,
+    homeBannerSource.name,
     homeOverview,
     homeTitles,
     homeRecentTitles,
@@ -412,6 +424,9 @@ class UiSettings extends ChangeNotifier {
     homeBannerSize =
         HomeBannerSize.values.asNameMap()[prefs.get('ui_home_banner_size')] ??
         HomeBannerSize.compact;
+    homeBannerSource = HomeBannerSourceInfo.parse(
+      prefs.get(homeBannerSourceKey),
+    );
     homeTitles = prefs.get('ui_home_titles') is bool
         ? prefs.get('ui_home_titles') as bool
         : false;

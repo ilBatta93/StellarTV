@@ -177,7 +177,7 @@ class _PlayerSettingsScreenState extends State<PlayerSettingsScreen> {
             title: 'Usa sempre il player esterno',
             subtitle: player == null
                 ? 'Scegli prima l\'app da usare'
-                : 'Altrimenti si usa solo con «Apri con ${player.label}» '
+                : 'Altrimenti scegli l\'app ogni volta con «Apri con…» '
                       'nella scheda del titolo',
             value: _externals.enabled,
             onChanged: (v) async {

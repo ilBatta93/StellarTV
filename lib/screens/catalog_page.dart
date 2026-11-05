@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 
+import '../models/catalog_start_category.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../navigation/app_routes.dart';
@@ -77,26 +78,39 @@ String catalogEntryIdentity(AppProvider app, CatalogEntry entry) {
   return catalogEntryKey(entry.primary);
 }
 
+/// [showTitles] off ("Titoli sotto le locandine"): the cell is exactly a
+/// poster, so the cover is neither stretched nor cropped. Live channels
+/// always keep their name.
 SliverGridDelegateWithMaxCrossAxisExtent channelGridDelegate(
   ContentType type, {
   double maxExtent = 140,
   bool compact = false,
+  bool showTitles = true,
 }) {
   final isLive = type == ContentType.live;
+  const posterOnly = 2 / 3;
   if (DeviceTypeService.isTv) {
     // TV honours "Dimensione griglia" (relative to the 'media' size) and
     // "Modalità compatta" too, on top of its larger remote-friendly base.
     final scale = (maxExtent / 140) * (compact ? 0.86 : 1);
     return SliverGridDelegateWithMaxCrossAxisExtent(
       maxCrossAxisExtent: (isLive ? 180 : 132) * scale,
-      childAspectRatio: isLive ? 1.05 : (compact ? 0.62 : 0.6),
+      childAspectRatio: isLive
+          ? 1.05
+          : !showTitles
+          ? posterOnly
+          : (compact ? 0.62 : 0.6),
       crossAxisSpacing: compact ? 10 : 16,
       mainAxisSpacing: compact ? 10 : 16,
     );
   }
   return SliverGridDelegateWithMaxCrossAxisExtent(
     maxCrossAxisExtent: isLive ? 150 : (compact ? maxExtent * 0.86 : maxExtent),
-    childAspectRatio: isLive ? 0.9 : (compact ? 0.62 : 0.58),
+    childAspectRatio: isLive
+        ? 0.9
+        : !showTitles
+        ? posterOnly
+        : (compact ? 0.62 : 0.58),
     crossAxisSpacing: compact ? 8 : 12,
     mainAxisSpacing: compact ? 10 : 16,
   );
@@ -238,6 +252,7 @@ class ChannelGrid extends StatelessWidget {
       type,
       maxExtent: ui.gridMaxExtent,
       compact: ui.compact,
+      showTitles: ui.showTitles,
     );
     return GridView.builder(
       padding: padding,
@@ -365,6 +380,12 @@ class _CatalogPageState extends State<CatalogPage> {
   Timer? _personDebounce;
   List<PersonTitles> _personMatches = const [];
   String? _selectedCategory;
+
+  /// Opening category (Impostazioni → Categorie) and the last one picked,
+  /// read once; applied on the first build that knows the categories.
+  CatalogStartCategory? _start;
+  String? _lastCategory;
+  bool _startApplied = false;
   int? _genreId;
   StreamingPlatform? _platform;
 
@@ -400,6 +421,49 @@ class _CatalogPageState extends State<CatalogPage> {
     TitleFacetIndex.instance.addListener(_onFacetRank);
     unawaited(CatalogOrderStore.instance.load());
     unawaited(_restoreSort());
+    unawaited(_loadStartCategory());
+  }
+
+  Future<void> _loadStartCategory() async {
+    final start = await CatalogViewMemory.startCategory(widget.type);
+    final last = await CatalogViewMemory.lastCategory(widget.type);
+    if (!mounted) return;
+    setState(() {
+      _start = start;
+      _lastCategory = last;
+    });
+  }
+
+  /// Picks the opening category once. A category not in the source yet
+  /// waits while the catalog is still being prepared, then falls back to
+  /// the latest additions. A pick made before this never gets overridden.
+  void _applyStartCategory(List<CatalogGroup> groups, AppProvider app) {
+    final start = _start;
+    if (_startApplied || start == null) return;
+    final label = switch (start.kind) {
+      CatalogStartKind.last => _lastCategory,
+      CatalogStartKind.newest => null,
+      CatalogStartKind.watched => _watchedLabel,
+      CatalogStartKind.all => _allLabel,
+      CatalogStartKind.group => start.group,
+    };
+    final known =
+        label == null ||
+        label == _watchedLabel ||
+        label == _allLabel ||
+        groups.any((g) => g.label == label && g.entries.isNotEmpty);
+    if (!known && app.catalogPreparing(widget.type)) return;
+    _startApplied = true;
+    _selectedCategory = known ? label : null;
+  }
+
+  void _pickCategory(String category) {
+    final value = category == _recentLabel ? null : category;
+    setState(() {
+      _startApplied = true;
+      _selectedCategory = value;
+    });
+    unawaited(CatalogViewMemory.saveLastCategory(widget.type, value));
   }
 
   /// The sort picked last time on this device, unless one was picked since.
@@ -673,6 +737,7 @@ class _CatalogPageState extends State<CatalogPage> {
       });
     }
 
+    _applyStartCategory(groups, app);
     final watched = app.recentlyWatchedEntries(
       widget.type,
       context.watch<HistoryProvider>().entries,
@@ -702,11 +767,7 @@ class _CatalogPageState extends State<CatalogPage> {
                     g.label: g.entries.length,
               },
               selected: _selectedCategory ?? _recentLabel,
-              onSelected: (category) => setState(
-                () => _selectedCategory = category == _recentLabel
-                    ? null
-                    : category,
-              ),
+              onSelected: _pickCategory,
               onClose: _closeCategories,
             )
           : _CategoryDrawer(
@@ -719,13 +780,7 @@ class _CatalogPageState extends State<CatalogPage> {
                     g.label: g.entries.length,
               },
               selected: _selectedCategory,
-              onSelected: (category) {
-                setState(
-                  () => _selectedCategory = category == _recentLabel
-                      ? null
-                      : category,
-                );
-              },
+              onSelected: _pickCategory,
             ),
       body: catalogColumn(
         children: [
@@ -1102,17 +1157,7 @@ class _CatalogPageState extends State<CatalogPage> {
         },
       );
     }
-    final dense =
-        ui.compact ||
-        ui.viewModeFor(widget.type) == CatalogViewMode.compact ||
-        ui.viewModeFor(widget.type) == CatalogViewMode.spotlight;
-    final delegate = channelGridDelegate(
-      widget.type,
-      maxExtent: ui.viewModeFor(widget.type) == CatalogViewMode.compact
-          ? ui.gridMaxExtent * 0.82
-          : ui.gridMaxExtent,
-      compact: dense,
-    );
+    final delegate = _gridDelegate(ui);
     final grid = GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       scrollCacheExtent: tvCatalogCacheExtent(delegate),
@@ -1496,13 +1541,25 @@ class _CatalogPageState extends State<CatalogPage> {
         child: _entryCard(app, entry),
       );
 
-  int _columns() {
-    final ui = context.read<UiSettings>();
-    final delegate = channelGridDelegate(
+  /// Poster grid of the chosen layout. The remote's column count reads the
+  /// same delegate, so Su/Giù land on the poster right above or below.
+  SliverGridDelegateWithMaxCrossAxisExtent _gridDelegate(UiSettings ui) {
+    final mode = ui.viewModeFor(widget.type);
+    return channelGridDelegate(
       widget.type,
-      maxExtent: ui.gridMaxExtent,
-      compact: ui.compact,
+      maxExtent: mode == CatalogViewMode.compact
+          ? ui.gridMaxExtent * 0.82
+          : ui.gridMaxExtent,
+      compact:
+          ui.compact ||
+          mode == CatalogViewMode.compact ||
+          mode == CatalogViewMode.spotlight,
+      showTitles: ui.showTitles,
     );
+  }
+
+  int _columns() {
+    final delegate = _gridDelegate(context.read<UiSettings>());
     final width = MediaQuery.sizeOf(context).width - 32;
     return (width / (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
         .ceil()
@@ -1572,7 +1629,7 @@ class _CatalogListTile extends StatelessWidget {
                 child: SizedBox(
                   width: 56,
                   height: 84,
-                  child: PosterImage(url: channel.logo),
+                  child: CatalogArtwork(channel: channel),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1594,8 +1651,10 @@ class _CatalogListTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        ChannelRatingBadge(channel),
-                        const SizedBox(width: 8),
+                        if (context.watch<UiSettings>().showRatings) ...[
+                          ChannelRatingBadge(channel),
+                          const SizedBox(width: 8),
+                        ],
                         Expanded(
                           child: Text(
                             channel.group,

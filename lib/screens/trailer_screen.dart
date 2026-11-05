@@ -243,6 +243,22 @@ function seekBy(d){if(!player)return;player.seekTo(Math.max(0,player.getCurrentT
     );
   }
 
+  /// Android: Hybrid Composition. The default mode copies every WebView
+  /// frame through a Flutter texture, which drops video frames and made
+  /// trailers stutter; as a real Android view the page's video is drawn by
+  /// the system compositor at the video's own pace.
+  Widget _webView() {
+    if (_web.platform is AndroidWebViewController) {
+      return WebViewWidget.fromPlatformCreationParams(
+        params: AndroidWebViewWidgetCreationParams(
+          controller: _web.platform,
+          displayWithHybridComposition: true,
+        ),
+      );
+    }
+    return WebViewWidget(controller: _web);
+  }
+
   @override
   Widget build(BuildContext context) {
     final playing = _state == TrailerState.playing;
@@ -253,9 +269,7 @@ function seekBy(d){if(!player)return;player.seekTo(Math.max(0,player.getCurrentT
         child: Stack(
           children: [
             // The web page must never take the remote's focus.
-            Positioned.fill(
-              child: ExcludeFocus(child: WebViewWidget(controller: _web)),
-            ),
+            Positioned.fill(child: ExcludeFocus(child: _webView())),
             if (_state == TrailerState.loading)
               const Center(child: CircularProgressIndicator()),
             if (_state == TrailerState.error)

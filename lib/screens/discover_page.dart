@@ -360,6 +360,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
         .toList();
     final forYou = recommended(discover.forYou);
     final forYouSeries = recommended(discover.forYouSeries);
+    final bannerSource = ui.homeBannerSource.on(tv: DeviceTypeService.isTv);
     // Rows in the order the user chose, without the hidden ones.
     final rowOrder = HomeRows.visible(
       HomeRows.arrange(
@@ -377,6 +378,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       // per-platform Top 10, recommendations), laid out for the remote.
       return _TvDiscover(
         profileId: context.watch<ProfileProvider>().selected?.id,
+        bannerSource: bannerSource,
         banner: banner,
         initialHistory: latestHistoryResume(entries, app),
         startedMovies: startedMovies,
@@ -498,7 +500,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
         padding: const EdgeInsets.only(bottom: 32),
         children: [
           const ExpiryBanner(),
-          if (banner.isNotEmpty) _Top10Banner(items: banner),
+          ..._phoneBanner(bannerSource, banner, forYou, forYouSeries),
           for (final id in rowOrder) ...phoneRow(id),
           if (discover.isLoading)
             Padding(
@@ -671,10 +673,37 @@ class _TopSectionState extends State<_TopSection> {
   }
 }
 
+/// Phone banner for the chosen source. Recommendations alternate films and
+/// series; with none yet (no history) the weekly Top 10 stays.
+List<Widget> _phoneBanner(
+  HomeBannerSource source,
+  List<TmdbItem> top,
+  List<TmdbItem> forYou,
+  List<TmdbItem> forYouSeries,
+) {
+  if (source == HomeBannerSource.none) return const [];
+  if (source == HomeBannerSource.forYou) {
+    final mixed = <TmdbItem>[];
+    for (var i = 0; i < 10 && mixed.length < 10; i++) {
+      if (i < forYou.length) mixed.add(forYou[i]);
+      if (i < forYouSeries.length && mixed.length < 10) {
+        mixed.add(forYouSeries[i]);
+      }
+    }
+    if (mixed.isNotEmpty) {
+      return [_Top10Banner(items: mixed, tag: 'CONSIGLIATO PER TE')];
+    }
+  }
+  return [if (top.isNotEmpty) _Top10Banner(items: top)];
+}
+
 class _Top10Banner extends StatefulWidget {
   final List<TmdbItem> items;
 
-  const _Top10Banner({required this.items});
+  /// Badge over every slide; null keeps the trending one.
+  final String? tag;
+
+  const _Top10Banner({required this.items, this.tag});
 
   @override
   State<_Top10Banner> createState() => _Top10BannerState();
@@ -722,8 +751,11 @@ class _Top10BannerState extends State<_Top10Banner> {
             controller: _controller,
             itemCount: widget.items.length,
             onPageChanged: (i) => setState(() => _page = i),
-            itemBuilder: (context, i) =>
-                _BannerSlide(item: widget.items[i], rank: i + 1),
+            itemBuilder: (context, i) => _BannerSlide(
+              item: widget.items[i],
+              rank: i + 1,
+              tag: widget.tag,
+            ),
           ),
         ),
         const SizedBox(height: 10),
@@ -753,8 +785,9 @@ class _Top10BannerState extends State<_Top10Banner> {
 class _BannerSlide extends StatelessWidget {
   final TmdbItem item;
   final int rank;
+  final String? tag;
 
-  const _BannerSlide({required this.item, required this.rank});
+  const _BannerSlide({required this.item, required this.rank, this.tag});
 
   @override
   Widget build(BuildContext context) {
@@ -797,7 +830,10 @@ class _BannerSlide extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    item.isMovie ? 'FILM IN TENDENZA' : 'SERIE IN TENDENZA',
+                    tag ??
+                        (item.isMovie
+                            ? 'FILM IN TENDENZA'
+                            : 'SERIE IN TENDENZA'),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,
@@ -1120,6 +1156,10 @@ typedef TvTopSpec = (
 
 class _TvDiscover extends StatefulWidget {
   final String? profileId;
+
+  /// First title of the banner before the user moves: last watched
+  /// ([HomeBannerSource.automatic]), a recommendation or the Top 10.
+  final HomeBannerSource bannerSource;
   final List<TmdbItem> banner;
   final ResumeItem? initialHistory;
   final List<ResumeItem> startedMovies;
@@ -1135,6 +1175,7 @@ class _TvDiscover extends StatefulWidget {
 
   const _TvDiscover({
     required this.profileId,
+    required this.bannerSource,
     required this.banner,
     required this.initialHistory,
     required this.startedMovies,
@@ -1170,7 +1211,12 @@ class _TvDiscoverState extends State<_TvDiscover> {
 
   TmdbItem? _firstHero() {
     TmdbItem? first;
-    if (widget.banner.isNotEmpty) {
+    if (widget.bannerSource == HomeBannerSource.forYou &&
+        (widget.forYou.isNotEmpty || widget.forYouSeries.isNotEmpty)) {
+      first = widget.forYou.isNotEmpty
+          ? widget.forYou.first
+          : widget.forYouSeries.first;
+    } else if (widget.banner.isNotEmpty) {
       first = widget.banner.first;
     } else if (widget.forYou.isNotEmpty) {
       first = widget.forYou.first;
@@ -1191,12 +1237,20 @@ class _TvDiscoverState extends State<_TvDiscover> {
   @override
   void didUpdateWidget(covariant _TvDiscover oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.profileId != widget.profileId) {
+    if (oldWidget.profileId != widget.profileId ||
+        oldWidget.bannerSource != widget.bannerSource) {
       _heroRequest++;
       _debounce?.cancel();
       _historyInfo.clear();
       _userFocused = false;
       _seededHistory = null;
+      _hero.value = _firstHero();
+    } else if (!_userFocused &&
+        widget.bannerSource == HomeBannerSource.forYou &&
+        oldWidget.forYou.isEmpty &&
+        oldWidget.forYouSeries.isEmpty &&
+        (widget.forYou.isNotEmpty || widget.forYouSeries.isNotEmpty)) {
+      // Recommendations arrive after the first frame: show them once ready.
       _hero.value = _firstHero();
     }
     _seedInitialHistory();
@@ -1226,7 +1280,8 @@ class _TvDiscoverState extends State<_TvDiscover> {
 
   void _seedInitialHistory() {
     final resume = widget.initialHistory;
-    if (_userFocused ||
+    if (widget.bannerSource != HomeBannerSource.automatic ||
+        _userFocused ||
         resume == null ||
         _seededHistory == resume.$1.contentId) {
       return;

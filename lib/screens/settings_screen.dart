@@ -16,6 +16,7 @@ import '../models/home_layout_preferences.dart';
 import '../models/watch_completion_policy.dart';
 import '../services/playlist_refresh_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/catalog_start_tiles.dart';
 import '../widgets/settings_tiles.dart';
 import '../widgets/phone_tap.dart';
 import '../widgets/tv_focusable.dart';
@@ -278,6 +279,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ui.homeBannerSize,
                 (v) => v.label,
                 ui.setHomeBannerSize,
+              ),
+            ),
+            SettingsValueTile(
+              icon: Icons.auto_awesome_motion_rounded,
+              title: 'Contenuto del banner',
+              value: ui.homeBannerSource
+                  .on(tv: DeviceTypeService.isTv)
+                  .label(tv: DeviceTypeService.isTv),
+              onTap: () => pick<HomeBannerSource>(
+                'Contenuto del banner',
+                HomeBannerSourceInfo.options(tv: DeviceTypeService.isTv),
+                ui.homeBannerSource.on(tv: DeviceTypeService.isTv),
+                (v) => v.label(tv: DeviceTypeService.isTv),
+                ui.setHomeBannerSource,
               ),
             ),
             SettingsSwitchTile(
@@ -771,6 +786,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               MaterialPageRoute(builder: (_) => const HiddenCategoriesScreen()),
             ),
           ),
+          const CatalogStartTiles(),
           SettingsSwitchTile(
             icon: Icons.no_adult_content_outlined,
             title: 'Mostra contenuti per adulti',

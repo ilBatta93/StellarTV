@@ -5,9 +5,12 @@ import '../services/external_player_service.dart';
 import 'settings_tiles.dart';
 import 'tv_focusable.dart';
 
-/// Lists the player apps installed on the device and stores the choice.
-/// Returns null when none is installed or the sheet is dismissed.
-Future<ExternalPlayer?> chooseExternalPlayer(BuildContext context) async {
+/// Lists the player apps installed on the device. Returns null when none is
+/// installed or the sheet is dismissed. Nothing is stored.
+Future<ExternalPlayer?> pickInstalledPlayer(
+  BuildContext context, {
+  String title = 'Apri con',
+}) async {
   final service = ExternalPlayerService.instance;
   final players = await service.installed();
   if (!context.mounted) return null;
@@ -26,20 +29,26 @@ Future<ExternalPlayer?> chooseExternalPlayer(BuildContext context) async {
     (p) => p.package == service.player?.package,
     orElse: () => players.first,
   );
-  final picked = await pickOption<ExternalPlayer>(
+  return pickOption<ExternalPlayer>(
     context,
-    title: 'Player esterno',
+    title: title,
     options: players,
     current: current,
     label: (p) => p.label,
   );
-  if (picked != null) await service.setPlayer(picked);
+}
+
+/// Settings: picks the player app and stores the choice.
+Future<ExternalPlayer?> chooseExternalPlayer(BuildContext context) async {
+  final picked = await pickInstalledPlayer(context, title: 'Player esterno');
+  if (picked != null) await ExternalPlayerService.instance.setPlayer(picked);
   return picked;
 }
 
-/// "Apri con …" on a title page or an episode. When the external player
-/// is already the default it offers the built-in one instead. [onPlay]
-/// receives the player to use (true = external).
+/// "Apri con …" on a title page or an episode: every press asks which app
+/// to use and never stores the answer. When the external player is already
+/// the default it offers the built-in one instead. [onPlay] receives the
+/// app picked, or null for the built-in player.
 class ExternalPlayButton extends StatelessWidget {
   const ExternalPlayButton({
     super.key,
@@ -51,7 +60,7 @@ class ExternalPlayButton extends StatelessWidget {
   });
 
   final Channel channel;
-  final ValueChanged<bool> onPlay;
+  final ValueChanged<ExternalPlayer?> onPlay;
   final ButtonStyle? style;
 
   /// Icon only, with the label as tooltip (episode cards).
@@ -71,14 +80,11 @@ class ExternalPlayButton extends StatelessWidget {
       listenable: service,
       builder: (context, _) {
         final external = !service.enabled;
-        final label = !external
-            ? 'Player interno'
-            : 'Apri con ${service.player?.label ?? 'player esterno'}';
+        final label = !external ? 'Player interno' : 'Apri con…';
         Future<void> press() async {
-          if (external && service.player == null) {
-            if (await chooseExternalPlayer(context) == null) return;
-          }
-          onPlay(external);
+          if (!external) return onPlay(null);
+          final picked = await pickInstalledPlayer(context);
+          if (picked != null) onPlay(picked);
         }
 
         final icon = Icon(

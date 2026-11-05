@@ -174,4 +174,41 @@ void main() {
       expect(reloaded.homeHiddenRows, isEmpty);
     },
   );
+
+  test('banner source offers only what each device can show', () {
+    expect(
+      HomeBannerSourceInfo.options(tv: true),
+      isNot(contains(HomeBannerSource.none)),
+    );
+    expect(
+      HomeBannerSourceInfo.options(tv: false),
+      isNot(contains(HomeBannerSource.top)),
+    );
+    expect(HomeBannerSource.none.on(tv: true), HomeBannerSource.automatic);
+    expect(HomeBannerSource.top.on(tv: false), HomeBannerSource.automatic);
+    expect(HomeBannerSource.forYou.on(tv: true), HomeBannerSource.forYou);
+    expect(HomeBannerSource.automatic.label(tv: true), 'Ultima visione');
+    expect(
+      HomeBannerSource.automatic.label(tv: false),
+      'Top 10 della settimana',
+    );
+    expect(HomeBannerSourceInfo.parse('gone'), HomeBannerSource.automatic);
+  });
+
+  test('banner source is saved, reset and travels with the Home', () async {
+    SharedPreferences.setMockInitialValues({});
+    final ui = UiSettings();
+    await ui.load();
+    expect(ui.homeBannerSource, HomeBannerSource.automatic);
+    final before = ui.signature;
+    await ui.setHomeBannerSource(HomeBannerSource.forYou);
+    expect(ui.signature, isNot(before));
+    final again = UiSettings();
+    await again.load();
+    expect(again.homeBannerSource, HomeBannerSource.forYou);
+    expect(UiSettings.homeKeys, contains(UiSettings.homeBannerSourceKey));
+    expect(SyncService.isSyncedKey(UiSettings.homeBannerSourceKey), isTrue);
+    await again.resetHomeLayout();
+    expect(again.homeBannerSource, HomeBannerSource.automatic);
+  });
 }
