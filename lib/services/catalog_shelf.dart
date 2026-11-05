@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/custom_category.dart';
@@ -578,6 +580,29 @@ _ShelfImage _buildShelfFromPlainBody(
   return _buildShelfFromChannels(directory, channels, hidden, custom, order);
 }
 
+/// The `name` field of each slot, as [Channel.name] holds it.
+List<String> readShelfNames(
+  String path,
+  List<int> offsets,
+  List<int> lengths,
+  List<int> slots,
+) {
+  final handle = File(path).openSync();
+  try {
+    return [
+      for (final slot in slots)
+        () {
+          handle.setPositionSync(offsets[slot]);
+          final value = jsonDecode(utf8.decode(handle.readSync(lengths[slot])));
+          final name = value is Map ? value['name'] : null;
+          return name is String ? name : '';
+        }(),
+    ];
+  } finally {
+    handle.closeSync();
+  }
+}
+
 List<String> readShelfDisplayNames(
   String path,
   List<int> offsets,
@@ -860,6 +885,10 @@ void _absorbPostings(
     }
   }
 }
+
+Map<String, int> _idLookup(List<String> ids) => {
+  for (var i = 0; i < ids.length; i++) ids[i]: i,
+};
 
 _ShelfImage _mergePieces(List<_ShelfImage> pieces, String token) {
   if (pieces.isEmpty) {
@@ -1298,7 +1327,7 @@ class CatalogVisibility {
 /// the filters. Titles and playback addresses stay in the section file and are
 /// read a few dozen at a time. A new section is appended; the others stay.
 class CatalogShelf implements CatalogChannelSource {
-  CatalogShelf._(this._image, this.generation);
+  CatalogShelf._(this._image, this.generation, [this._idIndexCache]);
 
   static bool forbidDiskReads = false;
 
@@ -1343,10 +1372,17 @@ class CatalogShelf implements CatalogChannelSource {
     if (channels.isEmpty) return CatalogShelf.empty();
     final directory = Directory.systemTemp.createTempSync('stv_shelf_').path;
     final rows = channels;
-    final image = await Isolate.run(
-      () => _buildShelfFromChannels(directory, rows, hidden, custom, order),
-    );
-    return CatalogShelf._(image, generation);
+    final built = await Isolate.run(() {
+      final image = _buildShelfFromChannels(
+        directory,
+        rows,
+        hidden,
+        custom,
+        order,
+      );
+      return (image: image, ids: _idLookup(image.ids));
+    });
+    return CatalogShelf._(built.image, generation, built.ids);
   }
 
   static Future<CatalogShelf> fromSectionFiles(
@@ -1361,10 +1397,17 @@ class CatalogShelf implements CatalogChannelSource {
     }
     final directory = Directory.systemTemp.createTempSync('stv_shelf_').path;
     final paths = sectionPaths;
-    final image = await Isolate.run(
-      () => _buildShelfFromFiles(paths, directory, hidden, custom, order),
-    );
-    return CatalogShelf._(image, generation);
+    final built = await Isolate.run(() {
+      final image = _buildShelfFromFiles(
+        paths,
+        directory,
+        hidden,
+        custom,
+        order,
+      );
+      return (image: image, ids: _idLookup(image.ids));
+    });
+    return CatalogShelf._(built.image, generation, built.ids);
   }
 
   _ShelfImage _image;
@@ -1435,6 +1478,31 @@ class CatalogShelf implements CatalogChannelSource {
 
   String idAt(int slot) => _image.ids[slot];
 
+  /// Title name of each slot in [slots], read off the UI isolate.
+  Future<Map<int, String>> namesOf(List<int> slots) async {
+    final out = <int, String>{};
+    if (_image.paths.isEmpty || slots.isEmpty) return out;
+    final byFile = <int, List<int>>{};
+    for (final slot in slots) {
+      if (slot < 0 || slot >= _image.fileOf.length) continue;
+      (byFile[_image.fileOf[slot]] ??= <int>[]).add(slot);
+    }
+    for (final entry in byFile.entries) {
+      if (entry.key < 0 || entry.key >= _image.paths.length) continue;
+      final path = _image.paths[entry.key];
+      final offsets = _image.offsets;
+      final lengths = _image.lengths;
+      final mine = entry.value;
+      final names = await Isolate.run(
+        () => readShelfNames(path, offsets, lengths, mine),
+      );
+      for (var i = 0; i < mine.length && i < names.length; i++) {
+        out[mine[i]] = names[i];
+      }
+    }
+    return out;
+  }
+
   /// [slots] in [order], read and compared off the UI isolate.
   Future<List<int>> sortSlots(List<int> slots, CatalogSort order) {
     if (order == CatalogSort.provider ||
@@ -1496,9 +1564,12 @@ class CatalogShelf implements CatalogChannelSource {
 
   Map<String, int>? _idIndexCache;
 
-  Map<String, int> get _idIndex => _idIndexCache ??= {
-    for (var i = 0; i < _image.ids.length; i++) _image.ids[i]: i,
-  };
+  /// Built off the UI isolate together with the image when it can be: built
+  /// here on the first lookup it held the TV's UI thread for about 0.5 s.
+  Map<String, int> get _idIndex => _idIndexCache ??= _idLookup(_image.ids);
+
+  @visibleForTesting
+  bool get hasIdIndex => _idIndexCache != null;
 
   List<int> slotsOfType(ContentType type) {
     final index = type.index;
@@ -1592,12 +1663,14 @@ class CatalogShelf implements CatalogChannelSource {
         if (image == null) return null;
         images.add(image);
       }
-      return (pieces: images, merged: _mergePieces(images, token));
+      final merged = _mergePieces(images, token);
+      return (pieces: images, merged: merged, ids: _idLookup(merged.ids));
     });
     if (read == null) return false;
     _pieces.addAll(read.pieces);
     _releaseHandles();
     _image = read.merged;
+    _idIndexCache = read.ids;
     return true;
   }
 

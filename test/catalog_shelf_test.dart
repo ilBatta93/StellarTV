@@ -170,6 +170,77 @@ void main() {
     expect(restored.readSlot(slot).name, 'Il Padrino');
   });
 
+  test('id lookup arrives built with the adopted and built shelves', () async {
+    final dir = Directory.systemTemp.createTempSync('stv_ids_');
+    final live = File('${dir.path}/live.ndjson');
+    final movies = File('${dir.path}/movie.ndjson');
+    writeSection(live, [row(1, name: 'Alfa Uno', type: ContentType.live)]);
+    writeSection(movies, [row(2, name: 'Il Padrino'), row(3, name: 'Heat')]);
+    final built = CatalogShelf.empty();
+    addTearDown(() async {
+      built.close();
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    for (final file in [live, movies]) {
+      await built.appendSection(
+        file.path,
+        hidden: const {},
+        custom: const [],
+        order: const {},
+      );
+    }
+    final token = built.settingsToken;
+    built.close();
+
+    final restored = CatalogShelf.empty();
+    addTearDown(restored.close);
+    expect(
+      await restored.adoptIndexes([live.path, movies.path], token: token),
+      isTrue,
+    );
+    expect(restored.hasIdIndex, isTrue);
+    for (var slot = 0; slot < restored.length; slot++) {
+      expect(restored.slotOfId(restored.idAt(slot)), slot);
+    }
+
+    final fresh = await CatalogShelf.fromChannels(
+      [row(4, name: 'Inception')],
+      hidden: const {},
+      custom: const [],
+      order: const {},
+    );
+    addTearDown(fresh.close);
+    expect(fresh.hasIdIndex, isTrue);
+    expect(fresh.slotOfId(fresh.idAt(0)), 0);
+  });
+
+  test(
+    'names and kinds of slots come without reading on this isolate',
+    () async {
+      final shelf = await CatalogShelf.fromChannels(
+        [
+          row(1, name: 'Heat (1995)'),
+          row(2, name: 'Dark', type: ContentType.series),
+        ],
+        hidden: const {},
+        custom: const [],
+        order: const {},
+      );
+      addTearDown(shelf.close);
+      final slots = [for (var i = 0; i < shelf.length; i++) i];
+      CatalogShelf.diskReads = 0;
+      final names = await shelf.namesOf(slots);
+      expect(CatalogShelf.diskReads, 0);
+      expect(names.values.toSet(), {'Heat (1995)', 'Dark'});
+      for (final slot in slots) {
+        final kind = names[slot] == 'Dark'
+            ? ContentType.series
+            : ContentType.movie;
+        expect(shelf.typeIndexAt(slot), kind.index);
+      }
+    },
+  );
+
   test('kids warmup pairs facet keys without reading titles', () async {
     final shelf = await CatalogShelf.fromChannels(
       [row(1, name: 'Il Padrino'), row(2, name: 'Inception')],

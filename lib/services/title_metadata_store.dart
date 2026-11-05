@@ -53,6 +53,17 @@ class TitleMetadataStore<T> extends ChangeNotifier {
 
   /// Values with the device timestamp, for the local facet index.
   Map<String, (T, int)> timedSnapshot() => Map<String, (T, int)>.from(_values);
+
+  /// Values with the device timestamp for a pass sliced over frames. Only
+  /// the keys are copied up front: copying the whole map in one go held the
+  /// TV's UI thread for about 0.3 s at start.
+  Iterable<MapEntry<String, (T, int)>> timedEntries() sync* {
+    for (final key in _values.keys.toList(growable: false)) {
+      final value = _values[key];
+      if (value != null) yield MapEntry(key, value);
+    }
+  }
+
   bool isFresh(String key) {
     final entry = _values[key];
     if (entry == null) return false;

@@ -239,6 +239,9 @@ class AppProvider extends ChangeNotifier {
     _genreCountJobs.clear();
     _favoritesCache = null;
     _matchCache.clear();
+    _matchSlots.clear();
+    _matchQueue.clear();
+    _matchEpoch++;
     _versionCache.clear();
     _watchedMemos.clear();
   }
@@ -1277,7 +1280,91 @@ class AppProvider extends ChangeNotifier {
     return _shelf.readSlot(slot);
   }
 
-  bool isAvailable(TmdbItem item) => findChannelFor(item, wait: false) != null;
+  /// Slot of the playlist title matching each TMDB item (null: none),
+  /// resolved in batches with the names read off the UI isolate. The home
+  /// read every candidate title from disk in build, holding the TV's UI
+  /// thread for 250-560 ms after each launch.
+  final Map<String, int?> _matchSlots = {};
+  final Map<String, TmdbItem> _matchQueue = {};
+  int _matchEpoch = 0;
+  bool _matching = false;
+
+  /// Whether the playlist has [item]. Unknown items are matched in the
+  /// background: false until then, and listeners hear when it is known.
+  bool isAvailable(TmdbItem item) {
+    if (_matchCache.containsKey(item.key)) return _matchCache[item.key] != null;
+    if (_matchSlots.containsKey(item.key)) return _matchSlots[item.key] != null;
+    if (!_shelfReady) return false;
+    _matchQueue[item.key] = item;
+    if (!_matching) {
+      _matching = true;
+      unawaited(_drainMatches());
+    }
+    return false;
+  }
+
+  Future<void> _drainMatches() async {
+    try {
+      // Lets the build that queued the items finish first.
+      await Future<void>.delayed(Duration.zero);
+      while (_matchQueue.isNotEmpty) {
+        final epoch = _matchEpoch;
+        final shelf = _shelf;
+        final items = _matchQueue.values.toList(growable: false);
+        _matchQueue.clear();
+        final candidates = {
+          for (final item in items) item.key: _matchCandidates(item),
+        };
+        final wanted = {for (final slots in candidates.values) ...slots};
+        final names = await shelf.namesOf(wanted.toList(growable: false));
+        if (epoch != _matchEpoch) continue;
+        for (final item in items) {
+          final slots = candidates[item.key]!;
+          _matchSlots[item.key] = pickMatchSlot(item.year, [
+            for (final slot in slots) (slot: slot, name: names[slot] ?? ''),
+          ]);
+        }
+        notifyListeners();
+      }
+    } catch (_) {
+    } finally {
+      _matching = false;
+    }
+  }
+
+  /// Visible slots whose title key and kind match [item], from memory.
+  List<int> _matchCandidates(TmdbItem item) {
+    final target = _titleKey(item.title);
+    if (target.isEmpty) return const [];
+    final isMovie = item.contentType == ContentType.movie;
+    final movie = ContentType.movie.index;
+    return [
+      for (final slot in _shelf.exactSlots(target))
+        if (slot < _visibleMask.length &&
+            _visibleMask[slot] != 0 &&
+            (_shelf.typeIndexAt(slot) == movie) == isMovie)
+          slot,
+    ];
+  }
+
+  /// The title to play among [candidates] (playlist order): the first one
+  /// of the same [year], else the first without a year; with no [year],
+  /// the first.
+  @visibleForTesting
+  static int? pickMatchSlot(
+    String year,
+    List<({int slot, String name})> candidates,
+  ) {
+    if (candidates.isEmpty) return null;
+    if (year.isEmpty) return candidates.first.slot;
+    int? noYear;
+    for (final candidate in candidates) {
+      final found = _yearOf(candidate.name);
+      if (found == year) return candidate.slot;
+      if (found == null) noYear ??= candidate.slot;
+    }
+    return noYear;
+  }
 
   bool isTmdbAllowed(TmdbItem item) {
     if (!_kidsMode) return true;
@@ -1289,42 +1376,26 @@ class AppProvider extends ChangeNotifier {
         );
   }
 
-  Channel? findChannelFor(TmdbItem item, {bool wait = true}) {
+  Channel? findChannelFor(TmdbItem item) {
     if (_matchCache.containsKey(item.key)) return _matchCache[item.key];
     if (!_shelfReady) return null;
-    final result = _findChannelFor(item);
+    final Channel? result;
+    if (_matchSlots.containsKey(item.key)) {
+      final slot = _matchSlots[item.key];
+      result = slot == null ? null : _shelf.readSlot(slot);
+    } else {
+      result = _findChannelFor(item);
+    }
     _matchCache[item.key] = result;
     return result;
   }
 
   Channel? _findChannelFor(TmdbItem item) {
-    final target = _titleKey(item.title);
-    if (target.isEmpty) return null;
-    final isMovie = item.contentType == ContentType.movie;
-    final candidates = <Channel>[];
-    for (final slot in _shelf.exactSlots(target)) {
-      if (slot >= _visibleMask.length || _visibleMask[slot] == 0) continue;
-      final channel = _shelf.readSlot(slot);
-      final movie = channel.type == ContentType.movie;
-      if (isMovie == movie) candidates.add(channel);
-    }
-    if (candidates.isEmpty) return null;
-    final year = item.year;
-    if (year.isNotEmpty) {
-      Channel? sameYear;
-      final noYear = <Channel>[];
-      for (final channel in candidates) {
-        final found = _yearOf(channel.name);
-        if (found == year) {
-          sameYear ??= channel;
-        } else if (found == null) {
-          noYear.add(channel);
-        }
-      }
-      if (sameYear != null) return sameYear;
-      return noYear.firstOrNull;
-    }
-    return candidates.first;
+    final slot = pickMatchSlot(item.year, [
+      for (final slot in _matchCandidates(item))
+        (slot: slot, name: _shelf.readSlot(slot).name),
+    ]);
+    return slot == null ? null : _shelf.readSlot(slot);
   }
 
   static final _yearPattern = RegExp(r'\b(19|20)\d{2}\b');

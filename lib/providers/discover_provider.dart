@@ -4,12 +4,11 @@ import '../services/title_facet_index.dart';
 import '../services/title_logo_cache.dart';
 import '../services/segment_library.dart';
 import '../services/platform_catalog_service.dart';
+import '../services/device_json_file.dart';
 
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/channel.dart';
 import '../models/content_type.dart';
@@ -60,7 +59,7 @@ class DiscoverProvider extends ChangeNotifier {
       TitleFacetIndex.instance.load(),
     ]);
     final index = TitleFacetIndex.instance;
-    await index.mergeImdbStore(ImdbRatingService.instance.store.timedSnapshot);
+    await index.mergeImdbStore(ImdbRatingService.instance.store.timedEntries);
     index.beginBulk();
     await TitleLogoCache.importResolved();
     index.endBulk();
@@ -89,7 +88,12 @@ class DiscoverProvider extends ChangeNotifier {
     return pool.isEmpty ? null : pool.first;
   }
 
-  static const _cacheKey = 'discover_cache_v1';
+  /// Top lists saved on the device, out of the preferences: there the
+  /// 450 KB were decoded again at every launch and every reload.
+  static const _cache = DeviceJsonFile(
+    'discover_cache_v1',
+    legacyKey: 'discover_cache_v1',
+  );
   static const _cacheTtl = Duration(hours: 6);
   bool _cacheRead = false;
   Future<void>? _inFlight;
@@ -117,10 +121,8 @@ class DiscoverProvider extends ChangeNotifier {
     if (_cacheRead) return _isFresh;
     _cacheRead = true;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_cacheKey);
-      if (raw == null) return false;
-      final m = jsonDecode(raw) as Map<String, dynamic>;
+      final m = await _cache.read();
+      if (m is! Map) return false;
       _topMovies = _dec(m['movies']);
       _topSeries = _dec(m['series']);
       final plat = (m['platforms'] as Map?) ?? const {};
@@ -148,19 +150,15 @@ class DiscoverProvider extends ChangeNotifier {
 
   Future<void> _writeCache() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _cacheKey,
-        jsonEncode({
-          'at': _freshAt?.toIso8601String(),
-          'movies': _enc(_topMovies),
-          'series': _enc(_topSeries),
-          'platforms': {
-            for (final e in _platformTops.entries)
-              e.key: {'m': _enc(e.value.movies), 's': _enc(e.value.series)},
-          },
-        }),
-      );
+      await _cache.write({
+        'at': _freshAt?.toIso8601String(),
+        'movies': _enc(_topMovies),
+        'series': _enc(_topSeries),
+        'platforms': {
+          for (final e in _platformTops.entries)
+            e.key: {'m': _enc(e.value.movies), 's': _enc(e.value.series)},
+        },
+      });
     } catch (_) {}
   }
 

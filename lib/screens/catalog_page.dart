@@ -1239,7 +1239,7 @@ class _CatalogPageState extends State<CatalogPage> {
     for (final match in _personMatches) {
       for (final item in match.items) {
         if (item.isMovie != movies || !app.isTmdbAllowed(item)) continue;
-        final channel = app.findChannelFor(item, wait: false);
+        final channel = app.findChannelFor(item);
         if (channel == null || channel.type != widget.type) continue;
         if (group != null && channel.group != group) continue;
         if (!seen.add(channel.id)) continue;

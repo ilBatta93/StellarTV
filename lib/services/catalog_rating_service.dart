@@ -295,14 +295,14 @@ class CatalogRatingService extends ChangeNotifier {
       // score and identity held the TV's UI thread for seconds at start.
       try {
         await index.mergeImdbStore(
-          ImdbRatingService.instance.store.timedSnapshot,
+          ImdbRatingService.instance.store.timedEntries,
         );
         final slice = WorkSlicer();
         for (final entry in data.entries) {
           index.putTmdb(entry.key, entry.value, at: stamp, quiet: true);
           await slice.pause();
         }
-        for (final entry in identities.timedSnapshot().entries) {
+        for (final entry in identities.timedEntries()) {
           index.link(
             titleKey: entry.key,
             mediaKey: ImdbRatingService.keyOf(entry.value.$1),

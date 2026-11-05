@@ -1,11 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/channel.dart';
 import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
+import 'device_json_file.dart';
 import 'playback_work_policy.dart';
 import 'title_metadata_store.dart';
 import 'tmdb_service.dart';
@@ -29,6 +27,14 @@ class PlatformCatalogService extends ChangeNotifier {
 
   static String _key(StreamingPlatform p, bool movies) =>
       '${p.name}:${movies ? 'movie' : 'tv'}';
+
+  /// Saved copy of one catalog. It used to live in the preferences, where
+  /// every catalog was decoded again at each launch.
+  @visibleForTesting
+  static DeviceJsonFile fileOf(String key) => DeviceJsonFile(
+    'platform_catalog_v1_${key.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}',
+    legacyKey: '$_prefix$key',
+  );
 
   List<TmdbItem>? itemsOf(StreamingPlatform p, {required bool movies}) =>
       _items[_key(p, movies)];
@@ -71,10 +77,9 @@ class PlatformCatalogService extends ChangeNotifier {
     if (_items.containsKey(key)) return Future.value();
     return _loading[key] ??= () async {
       try {
-        final prefs = await SharedPreferences.getInstance();
-        final raw = prefs.getString('$_prefix$key');
-        if (raw != null) {
-          final m = jsonDecode(raw) as Map<String, dynamic>;
+        final file = fileOf(key);
+        final m = await file.read();
+        if (m is Map) {
           final at = DateTime.tryParse('${m['at']}');
           if (at != null) {
             _items[key] = [
@@ -94,13 +99,10 @@ class PlatformCatalogService extends ChangeNotifier {
         _items[key] = items;
         _titleIds[key] = items.map((i) => i.id).toSet();
         if (items.isNotEmpty) {
-          await prefs.setString(
-            '$_prefix$key',
-            jsonEncode({
-              'at': DateTime.now().toIso8601String(),
-              'items': [for (final i in items) i.toJson()],
-            }),
-          );
+          await file.write({
+            'at': DateTime.now().toIso8601String(),
+            'items': [for (final i in items) i.toJson()],
+          });
         }
       } catch (_) {
         // Offline: the local name tags still filter the catalog.

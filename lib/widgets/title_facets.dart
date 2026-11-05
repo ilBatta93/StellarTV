@@ -69,9 +69,7 @@ class TitleFacets {
     Channel? channel,
     bool includeCategories = true,
   }) {
-    final c =
-        channel ??
-        (item == null ? null : app.findChannelFor(item, wait: false));
+    final c = channel ?? (item == null ? null : app.findChannelFor(item));
     final movie = item?.isMovie ?? c?.type == ContentType.movie;
     final names = movie ? movieGenreNames : tvGenreNames;
     final genres = <String>[

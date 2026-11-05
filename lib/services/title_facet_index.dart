@@ -72,7 +72,7 @@ class TitleFacetIndex extends ChangeNotifier {
   static const genreTtl = Duration(days: 180);
   static const _fileName = 'title_facets_v1.json';
 
-  final Map<String, _Facet> _rows = {};
+  Map<String, _Facet> _rows = {};
   final Map<String, Set<String>> _titleKeysByMedia = {};
   final Map<ContentType, _Subject> _subjects = {};
   final Map<ContentType, List<String>> _ranked = {};
@@ -279,22 +279,27 @@ class TitleFacetIndex extends ChangeNotifier {
   Future<void> _read() async {
     if (TitleMetadataStore.disabled) return;
     try {
-      final path = (await _file()).path;
-      final raw = await Isolate.run(() => _readFacetFile(path));
-      if (raw == null) return;
-      // Rows read from the file are already saved: only rows changed while
-      // the file was loading still need writing.
-      final pending = Set<String>.of(_changed);
-      beginBulk();
-      try {
-        await _mergeDecoded(raw);
-      } finally {
-        _changed
-          ..clear()
-          ..addAll(pending);
-        endBulk();
-      }
+      await readFile((await _file()).path);
     } catch (_) {}
+  }
+
+  /// Merges the saved index at [path]; [load] calls it once per run.
+  @visibleForTesting
+  Future<void> readFile(String path) async {
+    final raw = await Isolate.run(() => _readFacetFile(path));
+    if (raw == null) return;
+    // Rows read from the file are already saved: only rows changed while
+    // the file was loading still need writing.
+    final pending = Set<String>.of(_changed);
+    beginBulk();
+    try {
+      await _mergeDecoded(raw);
+    } finally {
+      _changed
+        ..clear()
+        ..addAll(pending);
+      endBulk();
+    }
   }
 
   void beginBulk() => _bulk++;
@@ -314,24 +319,25 @@ class TitleFacetIndex extends ChangeNotifier {
 
   /// The device IMDb store joins the index once per run, in slices.
   /// Discover and the catalog scores each merged all of it, in one go.
-  Future<void> mergeImdbStore(Map<String, (ImdbScore, int)> Function() rows) =>
-      _imdbStoreMerge ??= () async {
-        final slice = WorkSlicer();
-        beginBulk();
-        try {
-          for (final entry in rows().entries) {
-            putImdb(
-              mediaKey: entry.key,
-              score: entry.value.$1,
-              at: entry.value.$2,
-              quiet: true,
-            );
-            await slice.pause();
-          }
-        } finally {
-          endBulk();
-        }
-      }();
+  Future<void> mergeImdbStore(
+    Iterable<MapEntry<String, (ImdbScore, int)>> Function() rows,
+  ) => _imdbStoreMerge ??= () async {
+    final slice = WorkSlicer();
+    beginBulk();
+    try {
+      for (final entry in rows()) {
+        putImdb(
+          mediaKey: entry.key,
+          score: entry.value.$1,
+          at: entry.value.$2,
+          quiet: true,
+        );
+        await slice.pause();
+      }
+    } finally {
+      endBulk();
+    }
+  }();
 
   void putImdb({
     required String mediaKey,
@@ -591,6 +597,15 @@ class TitleFacetIndex extends ChangeNotifier {
   /// the decoded row as is; the rest merge field by field, in slices.
   Future<void> _mergeDecoded(Map<String, _Facet> raw) async {
     final slice = WorkSlicer();
+    if (_rows.isEmpty) {
+      // Nothing to merge into (the usual launch): the map built by the
+      // isolate is taken as is. Inserting its rows one by one, rehashing as
+      // the map grew, held the TV's UI thread for 150-400 ms.
+      _rows = raw;
+      await _relink(slice);
+      _dirty = true;
+      return;
+    }
     for (final MapEntry(:key, value: incoming) in raw.entries) {
       await slice.pause();
       final current = _rows[key];
@@ -634,27 +649,31 @@ class TitleFacetIndex extends ChangeNotifier {
   }
 
   Future<void> _relink(WorkSlicer slice) async {
-    final snapshot = Map<String, _Facet>.from(_rows);
+    // Only the keys are copied: a copy of the whole map, in one go, held
+    // the TV's UI thread for about 0.3 s.
+    final keys = _rows.keys.toList(growable: false);
     // Not cleared: links made between slices must stay readable.
-    for (final entry in snapshot.entries) {
+    for (final key in keys) {
       await slice.pause();
-      final media = entry.value.mediaKey;
-      final id = entry.value.tmdbId;
+      final row = _rows[key];
+      if (row == null) continue;
+      final media = row.mediaKey;
+      final id = row.tmdbId;
       if (media == null || id == null) continue;
-      (_titleKeysByMedia[media] ??= <String>{}).add(entry.key);
+      (_titleKeysByMedia[media] ??= <String>{}).add(key);
       final mediaRow = _row(media);
-      if (entry.value.imdbKnown &&
-          (!mediaRow.imdbKnown || entry.value.imdbAt >= mediaRow.imdbAt)) {
-        if (!mediaRow.sameImdbAs(entry.value)) {
-          mediaRow.copyImdbFrom(entry.value);
+      if (row.imdbKnown &&
+          (!mediaRow.imdbKnown || row.imdbAt >= mediaRow.imdbAt)) {
+        if (!mediaRow.sameImdbAs(row)) {
+          mediaRow.copyImdbFrom(row);
           _mark(media);
         }
-      } else if (mediaRow.imdbKnown && !entry.value.sameImdbAs(mediaRow)) {
-        entry.value.copyImdbFrom(mediaRow);
-        _mark(entry.key);
+      } else if (mediaRow.imdbKnown && !row.sameImdbAs(mediaRow)) {
+        row.copyImdbFrom(mediaRow);
+        _mark(key);
       }
-      if (entry.value.imdbId != null && mediaRow.imdbId == null) {
-        mediaRow.imdbId = entry.value.imdbId;
+      if (row.imdbId != null && mediaRow.imdbId == null) {
+        mediaRow.imdbId = row.imdbId;
         _mark(media);
       }
     }

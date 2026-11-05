@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show gzip;
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data' show BytesBuilder;
 
@@ -479,7 +480,39 @@ class PersonalVault {
       secretKey: SecretKey(keyBytes(recovery)),
       aad: _aad(version as int, account, e['keyId'] as String),
     );
-    final bytes = version == 2 ? _gunzip(plain) : plain;
+    final compressed = version == 2;
+    // Unzipping, decoding and cleaning a full history held the TV's UI
+    // thread for about 0.4 s at each pull; the map comes back without a copy.
+    return plain.length < 16 * 1024
+        ? _openPlain(plain, compressed)
+        : Isolate.run(() => _openPlain(plain, compressed));
+  }
+
+  /// Vaults with fewer history rows than this are merged on the calling
+  /// isolate: a small one is done before an isolate would start.
+  static const offUiRows = 300;
+
+  /// History rows in [vault], every lane included, without copying it.
+  static int historyRows(dynamic vault) {
+    if (vault is! Map) return 0;
+    final history = vault['history'];
+    var rows = history is Map ? history.length : 0;
+    final lanes = vault['profile_histories'];
+    if (lanes is Map) {
+      for (final lane in lanes.values) {
+        if (lane is Map) rows += lane.length;
+      }
+    }
+    return rows;
+  }
+
+  /// Runs [work] off the UI isolate when it covers [rows] history rows or
+  /// more. [work] must be built where only its own inputs are in scope.
+  static Future<R> offUiWhenLarge<R>(int rows, R Function() work) =>
+      rows < offUiRows ? Future.sync(work) : Isolate.run(work);
+
+  static Map<String, dynamic> _openPlain(List<int> plain, bool compressed) {
+    final bytes = compressed ? _gunzip(plain) : plain;
     return clean(jsonDecode(utf8.decode(bytes)));
   }
 

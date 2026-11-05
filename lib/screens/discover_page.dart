@@ -207,7 +207,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       ],
     };
     bool inHistory(TmdbItem item) {
-      final c = app.findChannelFor(item, wait: false);
+      final c = app.findChannelFor(item);
       return c != null &&
           (historyIds.contains(c.id) ||
               (c.seriesKey != null && historyIds.contains(c.seriesKey)));

@@ -391,16 +391,8 @@ class SyncService {
         throw StateError('Account cambiato');
       }
       final existing = prefs.getString(key);
-      final raw = jsonDecode(existing ?? '{}');
-      final controls = <String, dynamic>{
-        for (final e in PersonalVault.object(raw).entries)
-          if (PersonalVault.object(e.value)['type'] == '__stellar_seen_v1')
-            e.key: e.value,
-      };
-      // Late playback snapshots must never erase a newer manual choice.
-      final merged = PersonalVault.mergeHistory(controls, pending.snapshot);
-      final encoded = jsonEncode(merged);
-      if (existing != encoded && !await prefs.setString(key, encoded)) {
+      final encoded = await encodeHistoryOffUi(existing, pending.snapshot);
+      if (encoded != null && !await prefs.setString(key, encoded)) {
         throw StateError('Salvataggio non riuscito');
       }
       if (!pending.done.isCompleted) pending.done.complete();
@@ -411,6 +403,31 @@ class SyncService {
       Error.throwWithStackTrace(error, stack);
     }
   }
+
+  /// The stored history [existing] with [snapshot] written over it, encoded;
+  /// null when that changes nothing. A large history is done off the UI
+  /// isolate: decoding, merging and encoding it held the TV's UI thread for
+  /// 250-420 ms.
+  @visibleForTesting
+  static Future<String?> encodeHistoryOffUi(
+    String? existing,
+    Map<String, dynamic> snapshot,
+  ) => PersonalVault.offUiWhenLarge(
+    snapshot.length + (existing?.length ?? 0) ~/ 200,
+    () {
+      final raw = jsonDecode(existing ?? '{}');
+      final controls = <String, dynamic>{
+        for (final e in PersonalVault.object(raw).entries)
+          if (PersonalVault.object(e.value)['type'] == '__stellar_seen_v1')
+            e.key: e.value,
+      };
+      // Late playback snapshots must never erase a newer manual choice.
+      final encoded = jsonEncode(
+        PersonalVault.mergeHistory(controls, snapshot),
+      );
+      return encoded == existing ? null : encoded;
+    },
+  );
 
   /// Every per-profile history stored on this device.
   Future<Map<String, dynamic>> loadAllProfileHistories() async {
@@ -648,6 +665,38 @@ class SyncService {
     return out;
   }
 
+  // Static, so the closure sent to the isolate holds only [json]: one made
+  // inside [_push] would carry the service along with its context.
+  static Future<Map<String, dynamic>> _cleanOffUi(Map<String, dynamic> json) =>
+      PersonalVault.offUiWhenLarge(
+        PersonalVault.historyRows(json),
+        () => PersonalVault.merge(PersonalVault.clean({}), json),
+      );
+
+  /// The cloud copy merged with this device's [local] one, and whether that
+  /// leaves the cloud copy as it is. Large vaults are done off the UI
+  /// isolate: merging and comparing full histories held the TV's UI thread
+  /// for about 0.6 s.
+  @visibleForTesting
+  static Future<({Map<String, dynamic> merged, bool unchanged})> mergeForPush(
+    Map<String, dynamic> remote,
+    Map<String, dynamic> local,
+    Map<String, dynamic>? base,
+  ) => PersonalVault.offUiWhenLarge(
+    PersonalVault.historyRows(remote) + PersonalVault.historyRows(local),
+    () {
+      final merged = PersonalVault.merge(remote, {
+        ...local,
+        'settings': resolveSettings(
+          local: PersonalVault.object(local['settings']),
+          remote: PersonalVault.object(remote['settings']),
+          base: base,
+        ),
+      });
+      return (merged: merged, unchanged: _same(remote, merged));
+    },
+  );
+
   /// Overwrites local storage with cloud credentials (used when the local
   /// device has no playlist configured yet).
   Future<void> applyCredentials(Map<String, dynamic> settings) async {}
@@ -685,10 +734,7 @@ class SyncService {
       }
       final prefs = await SharedPreferences.getInstance();
       if (code != currentUserId) return null;
-      final local = PersonalVault.merge(
-        PersonalVault.clean({}),
-        payload.toJson(),
-      );
+      final local = await _cleanOffUi(payload.toJson());
       // The base keeps device (plain) keys; local and remote use the vault
       // keys, so the base is translated for the comparison.
       final localSettings = PersonalVault.object(local['settings']);
@@ -720,20 +766,9 @@ class SyncService {
         // when the cloud still holds exactly that revision.
         final read = await _readRemote(code, recovery);
         final remote = read.data;
-        final merged = PersonalVault.merge(remote, {
-          ...local,
-          'settings': resolveSettings(
-            local: localSettings,
-            remote: PersonalVault.object(remote['settings']),
-            base: base,
-          ),
-        });
+        final (:merged, :unchanged) = await mergeForPush(remote, local, base);
         if (code != currentUserId) return null;
-        if (read.revision != null &&
-            PersonalVault.canonical(remote) ==
-                PersonalVault.canonical(merged)) {
-          return await done();
-        }
+        if (read.revision != null && unchanged) return await done();
         if (PlaybackWorkPolicy.instance.blocksCloud) return null;
         final envelope = await PersonalVault.encrypt(merged, recovery, code);
         if (code != currentUserId || PlaybackWorkPolicy.instance.blocksCloud) {
