@@ -7,9 +7,9 @@ import '../providers/profile_provider.dart';
 import '../providers/sync_provider.dart';
 import '../providers/ui_settings.dart';
 import '../services/device_type_service.dart';
+import '../services/startup_gate.dart';
 import '../services/tv_render_policy.dart';
 import '../widgets/brand_intro.dart';
-import '../widgets/brand_logo.dart';
 import 'account_screen.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
@@ -32,6 +32,8 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
+    // The one-pass sky is used from the first frame it is ready.
+    BrandIntroBackdrop.preload();
     _animController = AnimationController(
       duration: const Duration(milliseconds: 3200),
       vsync: this,
@@ -124,15 +126,18 @@ class _SplashScreenState extends State<SplashScreen>
           animations: context.read<UiSettings>().animations,
         ) &&
         !MediaQuery.disableAnimationsOf(context);
+    final fade = animate ? const Duration(milliseconds: 300) : Duration.zero;
+    // Ratings and metadata held during the intro load once the first screen
+    // has faded in (static: this screen is gone by then).
+    Future<void>.delayed(
+      fade + const Duration(milliseconds: 100),
+      StartupGate.open,
+    );
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (_, _, _) => target,
-        transitionDuration: animate
-            ? const Duration(milliseconds: 300)
-            : Duration.zero,
-        reverseTransitionDuration: animate
-            ? const Duration(milliseconds: 300)
-            : Duration.zero,
+        transitionDuration: fade,
+        reverseTransitionDuration: fade,
         transitionsBuilder: (_, anim, _, child) {
           if (!animate) return child;
           return FadeTransition(opacity: anim, child: child);
@@ -179,7 +184,9 @@ class _SplashScreenState extends State<SplashScreen>
       _animController.value = 1;
     }
     return Scaffold(
-      backgroundColor: kBrandCanvas,
+      // The sky paints the canvas colour: a scaffold fill under it was one
+      // more full-screen pass per intro frame on the TV.
+      backgroundColor: Colors.transparent,
       body: Stack(
         fit: StackFit.expand,
         children: [

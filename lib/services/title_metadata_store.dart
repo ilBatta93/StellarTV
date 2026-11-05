@@ -6,6 +6,8 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'startup_gate.dart';
+
 /// Small persistent per-title store (IMDb ratings, streaming providers).
 /// Decoded off the UI thread, written debounced and atomically. Entries
 /// stay valid for [ttl]; expired entries keep being shown until refreshed,
@@ -77,6 +79,9 @@ class TitleMetadataStore<T> extends ChangeNotifier {
 
   Future<void> load() => _loading ??= () async {
     if (disabled) return;
+    // Ratings and identities are many MB of JSON: decoded during the intro
+    // they made it stutter on the TV.
+    await StartupGate.wait();
     try {
       final path = (await _file()).path;
       // Values are decoded in the isolate too: tens of thousands of title

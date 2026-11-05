@@ -60,6 +60,8 @@ flutter:
     - assets/branding/stellartv_scritta.svg
     - assets/platforms/
     - assets/images/audiobook_cover.jpg
+  shaders:
+    - shaders/brand_sky.frag
   fonts:
     - family: Sora
       fonts:

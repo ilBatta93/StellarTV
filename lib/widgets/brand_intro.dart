@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -215,15 +216,37 @@ class _IntroFxPainter extends CustomPainter {
 }
 
 /// Full-screen deep sky behind the intro: a warm nebula and twinkling
-/// stars drifting slowly towards the viewer.
+/// stars drifting slowly towards the viewer. Opaque: it paints the canvas
+/// colour itself.
 class BrandIntroBackdrop extends StatelessWidget {
-  const BrandIntroBackdrop({super.key, required this.progress});
+  const BrandIntroBackdrop({
+    super.key,
+    required this.progress,
+    @visibleForTesting this.onePass = true,
+  });
   final double progress;
+
+  /// False draws the gradient sky even when the one-pass sky is ready, so a
+  /// test can compare the two.
+  final bool onePass;
+
+  static const _skyAsset = 'shaders/brand_sky.frag';
+  static Future<void>? _loading;
+  static ui.FragmentShader? _sky;
+
+  /// Loads the one-pass sky. Until it is ready, or if it cannot load, the
+  /// sky draws the same nebulas as three gradient circles.
+  static Future<void> preload() => _loading ??= ui.FragmentProgram.fromAsset(
+    _skyAsset,
+  ).then<void>((program) => _sky = program.fragmentShader(), onError: (_) {});
+
+  @visibleForTesting
+  static bool get skyReady => _sky != null;
 
   @override
   Widget build(BuildContext context) => RepaintBoundary(
     child: CustomPaint(
-      painter: _SkyPainter(progress),
+      painter: _SkyPainter(progress, onePass ? _sky : null),
       child: const SizedBox.expand(),
     ),
   );
@@ -249,43 +272,68 @@ final List<_Star> _stars = () {
 }();
 
 class _SkyPainter extends CustomPainter {
-  _SkyPainter(this.t);
+  _SkyPainter(this.t, this.sky);
   final double t;
+  final ui.FragmentShader? sky;
+
+  static const _violet = Color(0xFF6E5BFF);
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = kBrandCanvas);
     final fade = Curves.easeOut.transform((t / 0.35).clamp(0.0, 1.0));
     final shortest = size.shortestSide;
-
-    void nebula(Offset at, double r, Color color, double alpha) {
-      canvas.drawCircle(
-        at,
-        r,
-        Paint()
-          ..shader = RadialGradient(
-            colors: [
-              color.withValues(alpha: alpha * fade),
-              color.withValues(alpha: 0),
-            ],
-          ).createShader(Rect.fromCircle(center: at, radius: r)),
-      );
-    }
-
     final c = size.center(Offset.zero);
-    nebula(c, shortest * 0.75, _gold, 0.10);
-    nebula(
-      Offset(size.width * (0.18 + 0.04 * t), size.height * 0.82),
-      shortest * 0.9,
-      _ember,
-      0.14,
-    );
-    nebula(
-      Offset(size.width * (0.86 - 0.04 * t), size.height * 0.16),
-      shortest * 0.7,
-      const Color(0xFF6E5BFF),
-      0.10,
-    );
+    final nebulas = [
+      (c, shortest * 0.75, _gold, 0.10),
+      (
+        Offset(size.width * (0.18 + 0.04 * t), size.height * 0.82),
+        shortest * 0.9,
+        _ember,
+        0.14,
+      ),
+      (
+        Offset(size.width * (0.86 - 0.04 * t), size.height * 0.16),
+        shortest * 0.7,
+        _violet,
+        0.10,
+      ),
+    ];
+
+    final shader = sky;
+    if (shader != null) {
+      // Canvas and nebulas in a single pass: three blended full-screen
+      // gradients were half of each intro frame on the TV's GPU.
+      var i = 0;
+      for (final (at, r, _, alpha) in nebulas) {
+        shader
+          ..setFloat(i++, at.dx)
+          ..setFloat(i++, at.dy)
+          ..setFloat(i++, r)
+          ..setFloat(i++, alpha * fade);
+      }
+      for (final color in [for (final n in nebulas) n.$3, kBrandCanvas]) {
+        shader
+          ..setFloat(i++, color.r)
+          ..setFloat(i++, color.g)
+          ..setFloat(i++, color.b);
+      }
+      canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
+    } else {
+      canvas.drawRect(Offset.zero & size, Paint()..color = kBrandCanvas);
+      for (final (at, r, color, alpha) in nebulas) {
+        canvas.drawCircle(
+          at,
+          r,
+          Paint()
+            ..shader = RadialGradient(
+              colors: [
+                color.withValues(alpha: alpha * fade),
+                color.withValues(alpha: 0),
+              ],
+            ).createShader(Rect.fromCircle(center: at, radius: r)),
+        );
+      }
+    }
 
     final zoom = 1 + 0.08 * t;
     final paint = Paint();
@@ -299,5 +347,5 @@ class _SkyPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SkyPainter old) => old.t != t;
+  bool shouldRepaint(_SkyPainter old) => old.t != t || old.sky != sky;
 }

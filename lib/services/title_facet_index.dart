@@ -12,6 +12,7 @@ import 'catalog_sort.dart';
 import 'title_logo_cache.dart';
 import 'title_metadata_store.dart';
 import 'frame_telemetry_service.dart';
+import 'startup_gate.dart';
 import 'work_slicer.dart';
 
 /// One compact row of title metadata kept in memory.
@@ -278,6 +279,7 @@ class TitleFacetIndex extends ChangeNotifier {
 
   Future<void> _read() async {
     if (TitleMetadataStore.disabled) return;
+    await StartupGate.wait();
     try {
       await readFile((await _file()).path);
     } catch (_) {}
