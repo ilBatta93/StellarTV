@@ -1625,7 +1625,7 @@ class _CatalogListTile extends StatelessWidget {
           child: Row(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: posterRadius(context, scale: 0.8),
                 child: SizedBox(
                   width: 56,
                   height: 84,

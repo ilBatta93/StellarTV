@@ -45,6 +45,27 @@ extension CatalogViewModeInfo on CatalogViewMode {
       CatalogViewMode.values[(index + 1) % CatalogViewMode.values.length];
 }
 
+/// Corner style of every poster and cover (catalogs, Home, favorites).
+enum PosterCorners { square, standard, rounded }
+
+extension PosterCornersInfo on PosterCorners {
+  String get label => switch (this) {
+    PosterCorners.square => 'Squadrati',
+    PosterCorners.standard => 'Normali',
+    PosterCorners.rounded => 'Arrotondati',
+  };
+
+  /// Radius of a standard poster; wide covers scale it up a little.
+  double get radius => switch (this) {
+    PosterCorners.square => 3,
+    PosterCorners.standard => 10,
+    PosterCorners.rounded => 20,
+  };
+
+  static PosterCorners parse(Object? value) =>
+      PosterCorners.values.asNameMap()[value] ?? PosterCorners.standard;
+}
+
 extension AppSectionInfo on AppSection {
   String get id => name;
   String get label => switch (this) {
@@ -75,6 +96,7 @@ class UiSettings extends ChangeNotifier {
   static const _favoriteHeartKey = 'ui_show_favorite_heart';
   static const _liveNumbersKey = 'ui_live_numbers';
   static const _livePreviewKey = 'ui_live_preview';
+  static const posterCornersKey = 'ui_poster_corners';
 
   static const homeKeys = {
     'ui_home_shape',
@@ -293,6 +315,7 @@ class UiSettings extends ChangeNotifier {
   bool _favoriteHeart = true;
   bool _liveNumbers = false;
   bool _livePreview = true;
+  PosterCorners _posterCorners = PosterCorners.standard;
   bool _loaded = false;
   List<AppSection> _sectionOrder = List.of(AppSection.values);
   AppSection _startSection = AppSection.home;
@@ -329,6 +352,8 @@ class UiSettings extends ChangeNotifier {
   /// Diretta: the selected channel plays muted beside the guide.
   bool get livePreview => _livePreview;
 
+  PosterCorners get posterCorners => _posterCorners;
+
   /// Changes whenever any saved look-and-feel preference changes: used to
   /// push the new values to the cloud at once.
   String get signature => [
@@ -352,6 +377,7 @@ class UiSettings extends ChangeNotifier {
     _favoriteHeart,
     _liveNumbers,
     _livePreview,
+    _posterCorners.name,
     homePosterShape.name,
     homeRecentShape.name,
     homePosterDensity.name,
@@ -402,6 +428,7 @@ class UiSettings extends ChangeNotifier {
     _favoriteHeart = prefs.getBool(_favoriteHeartKey) ?? true;
     _liveNumbers = prefs.getBool(_liveNumbersKey) ?? false;
     _livePreview = prefs.getBool(_livePreviewKey) ?? true;
+    _posterCorners = PosterCornersInfo.parse(prefs.get(posterCornersKey));
     homePosterShape =
         HomePosterShape.values.asNameMap()[prefs.get('ui_home_shape')] ??
         HomePosterShape.portrait;
@@ -628,6 +655,13 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setPosterCorners(PosterCorners value) async {
+    if (value == _posterCorners) return;
+    _posterCorners = value;
+    await _save(posterCornersKey, value.name);
+    notifyListeners();
+  }
+
   Future<void> setFocusGlow(bool value) async {
     _focusGlow = value;
     await _save(_focusGlowKey, value);
@@ -654,6 +688,7 @@ class UiSettings extends ChangeNotifier {
       _favoriteHeartKey,
       _liveNumbersKey,
       _livePreviewKey,
+      posterCornersKey,
     ]) {
       await prefs.remove(key);
     }

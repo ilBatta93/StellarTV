@@ -375,6 +375,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ui.setGridSize,
               ),
             ),
+            SettingsValueTile(
+              icon: Icons.rounded_corner_rounded,
+              title: 'Angoli delle locandine',
+              value: ui.posterCorners.label,
+              onTap: () => pick<PosterCorners>(
+                'Angoli delle locandine',
+                PosterCorners.values,
+                ui.posterCorners,
+                (c) => c.label,
+                ui.setPosterCorners,
+              ),
+            ),
             SettingsSwitchTile(
               icon: Icons.title_rounded,
               title: 'Titoli sotto le locandine',

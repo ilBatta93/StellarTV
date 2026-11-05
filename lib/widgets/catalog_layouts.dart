@@ -35,8 +35,10 @@ class CatalogLandscapeCard extends StatelessWidget {
     final quality = ui.showQuality
         ? CatalogBuilder.qualityLabel(channel.name)
         : null;
+    // Wide covers: the standard style keeps its 14 px corners.
+    final radius = posterRadius(context, scale: 1.4);
     final content = ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: radius,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -118,13 +120,18 @@ class CatalogLandscapeCard extends StatelessWidget {
     );
     if (tv) {
       return TvFocusable(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: radius,
         onPressed: onTap,
         onLongPress: onFavoriteTap,
         child: content,
       );
     }
-    return Pressable(onTap: onTap, onLongPress: onFavoriteTap, child: content);
+    return Pressable(
+      onTap: onTap,
+      onLongPress: onFavoriteTap,
+      borderRadius: radius,
+      child: content,
+    );
   }
 }
 
@@ -180,7 +187,7 @@ class _SpotlightBody extends StatelessWidget {
             child: Row(
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: posterRadius(context),
                   child: AspectRatio(
                     aspectRatio: 2 / 3,
                     child: CatalogArtwork(channel: channel),

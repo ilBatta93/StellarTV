@@ -56,12 +56,14 @@ class ChannelCard extends StatelessWidget {
   }
 
   Widget _card(BuildContext context, double? rating) {
+    final radius = posterRadius(context);
     return Pressable(
       onTap: onTap,
       onLongPress: onFavoriteTap,
+      borderRadius: radius,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: radius,
           color: DeviceTypeService.isTv ? AppColors.surface : null,
           border: Border.all(
             color: DeviceTypeService.isTv ? AppColors.clear : AppColors.border,
@@ -72,7 +74,7 @@ class ChannelCard extends StatelessWidget {
           children: [
             Expanded(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: radius,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [

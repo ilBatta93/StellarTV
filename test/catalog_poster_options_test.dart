@@ -132,4 +132,43 @@ void main() {
     await tester.pump();
     expect(find.text('4K'), findsNothing);
   });
+
+  testWidgets('poster corners follow the chosen style and persist', (
+    tester,
+  ) async {
+    await device(tv: false);
+    final ui = await settings();
+    const item = TmdbItem(
+      id: 2,
+      mediaType: 'movie',
+      title: 'Angoli',
+      overview: '',
+      posterPath: null,
+      backdropPath: null,
+      voteAverage: 7,
+      popularity: 1,
+      releaseDate: '',
+    );
+    await tester.pumpWidget(
+      host(
+        ui,
+        TmdbPosterCard(item: item, width: double.infinity, onTap: () {}),
+      ),
+    );
+    BorderRadiusGeometry? clip() =>
+        tester.widget<ClipRRect>(find.byType(ClipRRect).first).borderRadius;
+    expect(clip(), BorderRadius.circular(10));
+    await ui.setPosterCorners(PosterCorners.rounded);
+    await tester.pump();
+    expect(clip(), BorderRadius.circular(20));
+    await ui.setPosterCorners(PosterCorners.square);
+    await tester.pump();
+    expect(clip(), BorderRadius.circular(3));
+
+    // A fresh load (another start, or settings from the cloud) keeps it.
+    final reloaded = UiSettings();
+    await reloaded.load();
+    expect(reloaded.posterCorners, PosterCorners.square);
+    expect(PosterCornersInfo.parse('unknown'), PosterCorners.standard);
+  });
 }

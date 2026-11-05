@@ -50,6 +50,7 @@ class PersonalVault {
     'ui_show_favorite_heart',
     'ui_live_numbers',
     'ui_live_preview',
+    'ui_poster_corners',
     'ui_compact',
     'ui_catalog_view',
     'ui_catalog_view_movie',

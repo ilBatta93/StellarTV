@@ -217,6 +217,13 @@ class _PressableState extends State<Pressable> {
   }
 }
 
+/// Poster corners chosen in Aspetto; [scale] widens them on wide covers.
+BorderRadius posterRadius(BuildContext context, {double scale = 1}) =>
+    BorderRadius.circular(
+      context.select<UiSettings, double>((ui) => ui.posterCorners.radius) *
+          scale,
+    );
+
 /// The image a TMDB card shows: Home landscape shape uses the backdrop.
 String? homePosterUrl(BuildContext context, TmdbItem item) {
   final home = HomePresentation.contains(context);
@@ -251,8 +258,9 @@ class TmdbPosterCard extends StatelessWidget {
     final catalogGrid = fillsCell && !home;
     final showTitles = home ? ui.homeTitles : (!catalogGrid || ui.showTitles);
     final showRating = !catalogGrid || ui.showRatings;
+    final radius = posterRadius(context);
     final poster = ClipRRect(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: radius,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -278,6 +286,7 @@ class TmdbPosterCard extends StatelessWidget {
     return Pressable(
       onTap: onTap,
       onFocus: onFocus,
+      borderRadius: radius,
       child: SizedBox(
         width: fillsCell ? null : effectiveWidth,
         child: Column(
@@ -388,7 +397,7 @@ class RankedPosterCard extends StatelessWidget {
               child: AspectRatio(
                 aspectRatio: ratio,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: posterRadius(context),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
