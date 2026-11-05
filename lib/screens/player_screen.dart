@@ -1448,7 +1448,11 @@ class _PlayerScreenState extends State<PlayerScreen>
       final runtime = _session?.value.duration;
       await _progressWriter.complete(() async {
         await _history.markWatched(_channel, duration: runtime);
-        await _settingsService.saveResumePosition(_channel.url, null);
+        await _settingsService.saveResumePosition(
+          _channel.url,
+          null,
+          profileId: _history.profileId,
+        );
       });
     } else {
       await _saveResume();
@@ -1636,9 +1640,15 @@ class _PlayerScreenState extends State<PlayerScreen>
         !_isLive &&
         !widget.archivePlayback &&
         settings.resumePlayback) {
-      startAt =
-          _history.entryFor(_channel.id)?.resumePosition ??
-          await _settingsService.getResumePosition(_channel.url);
+      // The history is the truth: the per-device point only covers a title
+      // the history does not know yet.
+      final entry = _history.entryFor(_channel.id);
+      startAt = entry != null
+          ? entry.resumePosition
+          : await _settingsService.getResumePosition(
+              _channel.url,
+              profileId: _history.profileId,
+            );
     }
     if (!mounted) return;
     if (startAt != null && startAt > Duration.zero) _pendingResume = startAt;
@@ -1748,8 +1758,8 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!_initialProgressSaved &&
         v.isReady &&
         v.duration > Duration.zero &&
-        (_pendingResume == null ||
-            (v.position - (_pendingResume ?? Duration.zero)).abs() <=
+        (_resumePending(session) == null ||
+            (v.position - (_resumePending(session) ?? Duration.zero)).abs() <=
                 const Duration(seconds: 10))) {
       _initialProgressSaved = true;
       unawaited(_saveResume(periodic: true));
@@ -1930,13 +1940,18 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
+  /// The saved point not yet reached: the one this screen opened at, or the
+  /// one a reopened stream is still seeking. Earlier samples are skipped.
+  Duration? _resumePending(PlaybackSession session) =>
+      _pendingResume ?? session.resumeTarget;
+
   Future<void> _saveResume({bool periodic = false, Duration? position}) async {
     final session = _session;
     if (session == null || _isLive || widget.archivePlayback) return;
     final v = session.value;
     if (!v.isReady || v.duration <= Duration.zero) return;
     final actualPosition = position ?? v.position;
-    final pending = _pendingResume;
+    final pending = _resumePending(session);
     if (pending != null && position == null) {
       switch (resumeSample(v.position, pending)) {
         case ResumeSample.skip:
@@ -1974,6 +1989,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       await _settingsService.saveResumePosition(
         _channel.url,
         keep ? saved : null,
+        profileId: _history.profileId,
       );
       _resumePrefsSynced = true;
       _resumePrefsMs = stored;

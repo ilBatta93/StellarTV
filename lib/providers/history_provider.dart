@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -374,11 +375,73 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       final entry = _entryFromLocal(value);
       if (entry != null) entries.add(entry);
     }
+    final recovered = await _applyCheckpoint(entries);
     entries.sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
     // Live TV channels are never kept in the history.
     _entries = entries.where((e) => e.type != ContentType.live).toList();
     _loaded = true;
     _notify();
+    if (recovered) {
+      _progressGeneration++;
+      _progressDirty = true;
+      await _persistLocal();
+    }
+  }
+
+  /// Small record of the latest playing sample, rewritten with every sample
+  /// while the full history is written at most once a minute. If the app is
+  /// closed abruptly (TV switched off, process killed) the next start still
+  /// finds the position of the last sample.
+  static const checkpointKey = 'history_progress_checkpoint_v1';
+
+  Future<void> _writeCheckpoint(HistoryEntry entry) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        checkpointKey,
+        jsonEncode({
+          'profile': _profileId ?? '',
+          'id': entry.contentId,
+          'pos': entry.position.inMilliseconds,
+          'dur': entry.duration.inMilliseconds,
+          'at': entry.lastWatchedAt.toUtc().toIso8601String(),
+        }),
+      );
+    } catch (_) {
+      /* The minute write still keeps the history. */
+    }
+  }
+
+  /// Applies a checkpoint newer than its saved entry. Returns true when an
+  /// entry changed and the history must be written again.
+  Future<bool> _applyCheckpoint(List<HistoryEntry> entries) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(checkpointKey);
+      if (raw == null) return false;
+      final value = jsonDecode(raw);
+      if (value is! Map || value['profile'] != (_profileId ?? '')) {
+        return false;
+      }
+      final at = DateTime.tryParse(value['at']?.toString() ?? '');
+      final pos = value['pos'];
+      final dur = value['dur'];
+      if (at == null || pos is! num || dur is! num || dur <= 0) return false;
+      final index = entries.indexWhere((e) => e.contentId == value['id']);
+      if (index < 0) return false;
+      final entry = entries[index];
+      final gone = _deleted[entry.contentId];
+      if (gone != null && !at.isAfter(gone)) return false;
+      if (!at.isAfter(entry.lastWatchedAt)) return false;
+      entries[index] = entry.copyWith(
+        position: Duration(milliseconds: pos.toInt()),
+        duration: Duration(milliseconds: dur.toInt()),
+        lastWatchedAt: at.toLocal(),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Records a deletion marker; returns true when [map] is one.
@@ -743,6 +806,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     final due =
         !periodic ||
         DateTime.now().difference(_lastProgressPush) >= progressCloudInterval;
+    if (!due && _progressDirty) await _writeCheckpoint(_entries[index]);
     if (!due || !_progressDirty) return false;
     await _persistLocal();
     return true;
@@ -754,7 +818,10 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _quietProgress = false;
 
   /// Tells listeners about playing samples kept quiet (the player closed).
+  /// Also writes samples still held in memory: the last save of a closing
+  /// player can be skipped (stream reconnecting) and must not lose them.
   void flushQuietProgress() {
+    if (_progressDirty) unawaited(_persistLocal());
     if (!_quietProgress) return;
     _quietProgress = false;
     _notify();
@@ -804,7 +871,11 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _persistLocal();
       final player = PlayerSettingsService();
       for (final e in removed) {
-        if (e.url.isNotEmpty) await player.saveResumePosition(e.url, null);
+        if (e.url.isEmpty) continue;
+        await player.saveResumePosition(e.url, null);
+        if (_profileId != null) {
+          await player.saveResumePosition(e.url, null, profileId: _profileId);
+        }
       }
       return true;
     } catch (_) {

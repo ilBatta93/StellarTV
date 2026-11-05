@@ -112,6 +112,59 @@ void main() {
     await client.dispose();
   });
 
+  test('an abrupt close keeps the last playing sample', () async {
+    final client = SupabaseClient(
+      'https://example.invalid',
+      'test',
+      authOptions: const AuthClientOptions(autoRefreshToken: false),
+    );
+    final sync = SyncService(client);
+    final history = HistoryProvider(sync);
+    await history.recordStart(episode());
+    const runtime = Duration(minutes: 20);
+    for (final s in [30, 40, 50]) {
+      await history.updatePosition(
+        'ep',
+        Duration(seconds: s),
+        runtime,
+        periodic: true,
+      );
+    }
+    // The full history still has the start: the process dies here.
+    expect((await sync.loadLocalHistory())['ep']['pos'], 0);
+    history.dispose();
+
+    final restarted = HistoryProvider(sync);
+    await restarted.recordStart(episode());
+    expect(restarted.entryFor('ep')?.position, const Duration(seconds: 50));
+    expect(restarted.entryFor('ep')?.resumePosition, isNotNull);
+    expect((await sync.loadLocalHistory())['ep']['pos'], 50);
+    restarted.dispose();
+    await client.dispose();
+  });
+
+  test('closing the player writes samples held in memory', () async {
+    final client = SupabaseClient(
+      'https://example.invalid',
+      'test',
+      authOptions: const AuthClientOptions(autoRefreshToken: false),
+    );
+    final sync = SyncService(client);
+    final history = HistoryProvider(sync);
+    await history.recordStart(episode());
+    await history.updatePosition(
+      'ep',
+      const Duration(seconds: 70),
+      const Duration(minutes: 20),
+      periodic: true,
+    );
+    history.flushQuietProgress();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect((await sync.loadLocalHistory())['ep']['pos'], 70);
+    history.dispose();
+    await client.dispose();
+  });
+
   test(
     'a burst keeps both partial snapshots in one preferences write',
     () async {

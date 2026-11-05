@@ -905,6 +905,74 @@ void main() {
     await session.released;
   });
 
+  test(
+    'una riapertura prima della ripresa riparte dal punto salvato',
+    () async {
+      // The stream drops while the source still refuses the resume seek: the
+      // reopen must seek the saved point, not where the stream started.
+      final engines = <_BusySeekEngine>[];
+      final session = PlaybackSession(
+        url: 'https://example.invalid/video.mp4',
+        isLive: false,
+        startAt: const Duration(minutes: 12),
+        settings: PlayerSettings(primaryEngine: PlayerEngineType.mediakit),
+        engineFactory: (type) {
+          final engine = _BusySeekEngine(
+            type,
+            refuseFor: engines.isEmpty
+                ? const Duration(minutes: 1)
+                : Duration.zero,
+          );
+          engines.add(engine);
+          return engine;
+        },
+      );
+      unawaited(session.start());
+      await Future<void>.delayed(const Duration(seconds: 2));
+      final first = engines.single;
+      first.emitSnapshot(
+        const PlaybackSnapshot(
+          isReady: true,
+          isPlaying: true,
+          position: Duration(seconds: 3),
+          duration: Duration(minutes: 24),
+        ),
+      );
+      first.emitError('connessione interrotta');
+      await Future<void>.delayed(const Duration(seconds: 8));
+      expect(engines.length, greaterThan(1));
+      expect(engines.last.sought, const Duration(minutes: 12));
+      session.dispose();
+      await session.released;
+    },
+  );
+
+  test(
+    'il punto di ripresa resta in attesa finché il seek non riesce',
+    () async {
+      final engine = _BusySeekEngine(
+        PlayerEngineType.mediakit,
+        refuseFor: const Duration(seconds: 3),
+      );
+      final session = PlaybackSession(
+        url: 'https://example.invalid/video.mp4',
+        isLive: false,
+        startAt: const Duration(minutes: 12),
+        settings: PlayerSettings(primaryEngine: PlayerEngineType.mediakit),
+        engineFactory: (_) => engine,
+      );
+      final started = session.start();
+      await Future<void>.delayed(const Duration(seconds: 1));
+      // The stream plays from its start: the player must not save this.
+      expect(session.resumeTarget, const Duration(minutes: 12));
+      await started;
+      expect(engine.value.position, const Duration(minutes: 12));
+      expect(session.resumeTarget, isNull);
+      session.dispose();
+      await session.released;
+    },
+  );
+
   test('un seek dello spettatore ferma i tentativi di ripresa', () async {
     final engine = _BusySeekEngine(
       PlayerEngineType.mediakit,

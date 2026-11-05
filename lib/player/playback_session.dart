@@ -467,7 +467,22 @@ class PlaybackSession extends ChangeNotifier {
   Duration? _resumePoint() {
     if (isLive) return null;
     final pos = _engine?.value.position ?? Duration.zero;
-    return pos > Duration.zero ? pos : startAt;
+    return _reopenAt(pos > Duration.zero ? pos : startAt);
+  }
+
+  /// Resume point sought on the current stream and not yet landed.
+  Duration? _resumeTarget;
+
+  /// The point this stream is still seeking after an open or a reopen.
+  /// Until it lands, the position is the stream starting over.
+  Duration? get resumeTarget => isLive ? null : _resumeTarget;
+
+  /// Where a reopen starts. Before the resume seek lands the stream still
+  /// plays near its start, and reopening there would lose the saved point.
+  Duration? _reopenAt(Duration? position) {
+    final pending = _resumeTarget;
+    if (isLive || pending == null) return position;
+    return position == null || position < pending ? pending : position;
   }
 
   PlaybackEngine _create(PlayerEngineType type, String address) =>
@@ -619,6 +634,11 @@ class PlaybackSession extends ChangeNotifier {
 
   Future<void> _openAttempt({Duration? resumeAt, int? generation}) async {
     final gen = generation ?? ++_generation;
+    // Known before the stream opens: samples taken while it starts over are
+    // not the viewer's progress.
+    if (!isLive && resumeAt != null && resumeAt > Duration.zero) {
+      _resumeTarget = resumeAt;
+    }
     final previous = _engine;
     if (previous != null && _allowsOverlap) {
       _handoff(previous);
@@ -727,7 +747,8 @@ class PlaybackSession extends ChangeNotifier {
     int gen,
   ) async {
     if (gen != _generation || _disposed) return;
-    if (resumeAt != null && resumeAt > Duration.zero) {
+    if (resumeAt != null && resumeAt > Duration.zero && !isLive) {
+      _resumeTarget = resumeAt;
       await _seekWhenReady(engine, resumeAt, gen);
     }
     if (gen != _generation || _disposed) return;
@@ -785,8 +806,13 @@ class PlaybackSession extends ChangeNotifier {
       if (gen != _generation || _disposed || revision != _seekRevision) {
         return;
       }
-      if (_atResume(engine, target)) return;
+      if (_atResume(engine, target)) {
+        _resumeTarget = null;
+        return;
+      }
     }
+    // Playback stays where the stream started: later reopens follow it.
+    if (gen == _generation && revision == _seekRevision) _resumeTarget = null;
     debugPrint('Resume seek did not land');
   }
 
@@ -843,7 +869,7 @@ class PlaybackSession extends ChangeNotifier {
     final engine = _engine;
     if (engine == null) return;
     if (engine.value.hasError && _status == SessionStatus.playing) {
-      final resumeAt = isLive ? null : engine.value.position;
+      final resumeAt = isLive ? null : _reopenAt(engine.value.position);
       _handleFailure(_generation, engine.value.error!, resumeAt, midPlay: true);
       return;
     }
@@ -952,7 +978,7 @@ class PlaybackSession extends ChangeNotifier {
             unawaited(
               _retryPhoneHardwareCopy(
                 gen,
-                v.position > Duration.zero ? v.position : startAt,
+                _reopenAt(v.position > Duration.zero ? v.position : startAt),
               ),
             );
             return;
@@ -972,7 +998,7 @@ class PlaybackSession extends ChangeNotifier {
           _handleFailure(
             gen,
             'Immagine ferma',
-            isLive ? null : v.position,
+            isLive ? null : _reopenAt(v.position),
             midPlay: true,
           ),
         );
@@ -1497,6 +1523,8 @@ class PlaybackSession extends ChangeNotifier {
     final revision = ++_seekRevision;
     final engine = _engine;
     if (engine == null || isLive) return;
+    // The viewer chose a position: it replaces the resume point.
+    _resumeTarget = null;
     _markTransport();
     final max = engine.value.duration;
     var target = position < Duration.zero ? Duration.zero : position;

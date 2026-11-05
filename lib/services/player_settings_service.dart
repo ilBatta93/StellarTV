@@ -225,15 +225,25 @@ class PlayerSettingsService {
     return {};
   }
 
-  Future<Duration?> getResumePosition(String key) async {
+  /// Each profile keeps its own resume points: a title watched by one
+  /// profile must not start mid-way for another.
+  static String resumeKey(String url, String? profileId) =>
+      profileId == null || profileId.isEmpty ? url : '$profileId|$url';
+
+  Future<Duration?> getResumePosition(String url, {String? profileId}) async {
     final prefs = await SharedPreferences.getInstance();
-    final ms = (await _resumeMap(prefs))[key];
+    final ms = (await _resumeMap(prefs))[resumeKey(url, profileId)];
     return ms == null ? null : Duration(milliseconds: ms);
   }
 
-  Future<void> saveResumePosition(String key, Duration? position) async {
+  Future<void> saveResumePosition(
+    String url,
+    Duration? position, {
+    String? profileId,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final map = await _resumeMap(prefs);
+    final key = resumeKey(url, profileId);
     map.remove(key);
     if (position != null) map[key] = position.inMilliseconds;
     while (map.length > _maxResumeEntries) {
