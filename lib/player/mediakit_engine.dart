@@ -13,6 +13,7 @@ import '../models/video_resolution_policy.dart';
 import '../services/audio_effects_service.dart';
 import '../services/device_type_service.dart';
 import '../services/display_resolution_service.dart';
+import '../services/dns_service.dart';
 import 'playback_engine.dart';
 
 /// mpv-backed engine (media_kit): subtitles and several audio tracks,
@@ -660,8 +661,12 @@ class MediaKitEngine extends PlaybackEngine {
   Future<void> _tuneNetwork(String ua) async {
     final platform = _player.platform;
     if (platform is! NativePlayer) return;
+    // mpv has no resolver hook: plain-http streams reach the server through
+    // a local proxy that resolves with the app DNS. Empty = direct.
+    final dnsProxy = await DnsService.instance.streamProxyUrl();
     final options = {
       'user-agent': ua,
+      'http-proxy': dnsProxy ?? '',
       'network-timeout': '20',
       'tls-verify': 'no',
       // Live: no reconnect_streamed. It resumed with a Range request that

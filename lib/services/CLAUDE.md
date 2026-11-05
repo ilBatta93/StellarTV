@@ -10,6 +10,7 @@ Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`
 - Profilo bambino: `kids_policy`, `kids_content_service`, `kids_pin_service`.
 - Primo piano e lavoro: `foreground_*`, `app_foreground_service`, `playback_work_policy`, `stream_slot_policy`, `tv_render_policy`.
 - Diagnostica: `live_diagnostics_*`, `vod_diagnostics_*`, `frame_telemetry_*`.
+- Rete: `dns_service` (scelta del DNS, `HttpOverrides` per tutto il traffico Dart), `doh_resolver` (DNS-over-HTTPS con cache), `dns_stream_proxy` (proxy locale in un isolate per i flussi http di mpv). Policy pura in `models/dns_resolver_policy.dart`.
 
 ## Invarianti
 - Credenziali e indirizzi dei flussi restano sul dispositivo, mai in righe cloud né in snapshot.
@@ -20,6 +21,7 @@ Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`
 - Profilo bambino: la cache sul dispositivo include le certificazioni; i verdetti in cloud si rivalutano; un vecchio consenso basato solo sul rating non basta; un verdetto sconosciuto resta nascosto.
 - Un episodio ha il suo voto, non quello della serie. Un voto IMDb non ancora arrivato non si mostra.
 - Le chiamate al sito passano dalle API pubbliche del sito (`src/routes/api/public/`): un formato cambiato qui va cambiato anche lì.
+- DNS: di base un resolver senza filtri; la scelta resta sul dispositivo. Un resolver che non risponde non blocca mai la rete: si torna al DNS di sistema (pausa di 30 s dopo un errore). I preset devono rispondere in HTTP/1.1, perché il client Dart non parla HTTP/2. Il proxy dei flussi non registra indirizzi.
 - La diagnostica parte solo da un invio esplicito dell'utente e non contiene credenziali o indirizzi.
 
 ## Policy pure

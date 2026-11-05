@@ -42,7 +42,19 @@ public abstract class VideoAsset {
       @NonNull StreamingFormat streamingFormat,
       @NonNull Map<String, String> httpHeaders,
       @Nullable String userAgent) {
-    return new HttpVideoAsset(remoteUrl, streamingFormat, new HashMap<>(httpHeaders), userAgent);
+    return fromRemoteUrl(remoteUrl, streamingFormat, httpHeaders, userAgent, null);
+  }
+
+  /** StellarTV: as above, resolving hosts with the app's DNS choice ({@link StreamDns}). */
+  @NonNull
+  static VideoAsset fromRemoteUrl(
+      @Nullable String remoteUrl,
+      @NonNull StreamingFormat streamingFormat,
+      @NonNull Map<String, String> httpHeaders,
+      @Nullable String userAgent,
+      @Nullable String dnsConfig) {
+    return new HttpVideoAsset(
+        remoteUrl, streamingFormat, new HashMap<>(httpHeaders), userAgent, dnsConfig);
   }
 
   /**

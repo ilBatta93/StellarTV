@@ -59,6 +59,9 @@ android {
         implementation("androidx.media3:media3-exoplayer-dash:${exoplayerVersion}")
         implementation("androidx.media3:media3-exoplayer-rtsp:${exoplayerVersion}")
         implementation("androidx.media3:media3-exoplayer-smoothstreaming:${exoplayerVersion}")
+        // StellarTV: stream requests resolve with the DNS chosen in the app (StreamDns).
+        implementation("androidx.media3:media3-datasource-okhttp:${exoplayerVersion}")
+        implementation("com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0")
         testImplementation("junit:junit:4.13.2")
         testImplementation("androidx.test:core:1.7.0")
         testImplementation("org.mockito:mockito-core:5.23.0")

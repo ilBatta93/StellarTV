@@ -26,6 +26,7 @@ import '../providers/sync_provider.dart';
 import '../services/settings_logout.dart';
 import 'history_settings_screen.dart';
 import 'hidden_categories_screen.dart';
+import 'dns_settings_screen.dart';
 import 'epg_settings_screen.dart';
 import 'player_settings_screen.dart';
 import 'profile_picker_screen.dart';
@@ -737,6 +738,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: 'Gestisci i contenuti visti e le posizioni di ripresa',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const HistorySettingsScreen()),
+            ),
+          ),
+          SettingsValueTile(
+            icon: Icons.dns_outlined,
+            title: 'DNS',
+            subtitle: 'Server che trova gli indirizzi, cifrato e senza filtri',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const DnsSettingsScreen()),
             ),
           ),
         ],

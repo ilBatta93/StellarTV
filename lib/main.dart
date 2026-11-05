@@ -39,11 +39,15 @@ import 'services/download_service.dart';
 import 'services/tmdb_service.dart';
 import 'services/app_update_service.dart';
 import 'services/app_migration_service.dart';
+import 'services/dns_service.dart';
 import 'services/sync_hooks.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Before any network client exists: every connection resolves with the DNS
+  // chosen in the app (system DNS when the resolver does not answer).
+  await DnsService.instance.install();
   final perf = FrameTelemetryService.instance;
   await perf.startIfAutoEnabled();
   await AppForegroundService.instance.initialize();

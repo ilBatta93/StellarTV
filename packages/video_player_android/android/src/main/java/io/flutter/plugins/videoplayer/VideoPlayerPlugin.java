@@ -184,6 +184,16 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
 
   private static final String AUDIO_SESSION_HEADER = "x-stellartv-audiosession";
 
+  /** The app's DNS choice ({@link StreamDns}), never sent to the stream. */
+  private static @Nullable String dnsFromHeaders(@NonNull Map<String, String> headers) {
+    for (Map.Entry<String, String> entry : headers.entrySet()) {
+      if (StreamDns.HEADER.equals(entry.getKey().toLowerCase(Locale.US))) {
+        return entry.getValue();
+      }
+    }
+    return null;
+  }
+
   private static @NonNull Map<String, String> headersWithoutLoadControl(
       @NonNull Map<String, String> headers) {
     if (headers.isEmpty()) {
@@ -194,7 +204,8 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
       String key = entry.getKey().toLowerCase(Locale.US);
       if (!"x-stellartv-loadcontrol".equals(key)
           && !AUDIO_SESSION_HEADER.equals(key)
-          && !MAX_VIDEO_HEADER.equals(key)) {
+          && !MAX_VIDEO_HEADER.equals(key)
+          && !StreamDns.HEADER.equals(key)) {
         copy.put(entry.getKey(), entry.getValue());
       }
     }
@@ -227,7 +238,8 @@ public class VideoPlayerPlugin implements FlutterPlugin, AndroidVideoPlayerApi {
           uri,
           streamingFormat,
           headersWithoutLoadControl(options.getHttpHeaders()),
-          options.getUserAgent());
+          options.getUserAgent(),
+          dnsFromHeaders(options.getHttpHeaders()));
     }
   }
 

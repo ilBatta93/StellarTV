@@ -15,6 +15,8 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.datasource.HttpDataSource;
+import androidx.media3.datasource.okhttp.OkHttpDataSource;
 import androidx.media3.exoplayer.hls.DefaultHlsExtractorFactory;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
@@ -24,21 +26,33 @@ import androidx.media3.extractor.DefaultExtractorsFactory;
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory;
 import androidx.media3.extractor.ts.TsExtractor;
 import java.util.Map;
+import okhttp3.OkHttpClient;
 
 final class HttpVideoAsset extends VideoAsset {
   @NonNull private final StreamingFormat streamingFormat;
   @NonNull private final Map<String, String> httpHeaders;
   @Nullable private final String userAgent;
+  @Nullable private final String dnsConfig;
 
   HttpVideoAsset(
       @Nullable String assetUrl,
       @NonNull StreamingFormat streamingFormat,
       @NonNull Map<String, String> httpHeaders,
       @Nullable String userAgent) {
+    this(assetUrl, streamingFormat, httpHeaders, userAgent, null);
+  }
+
+  HttpVideoAsset(
+      @Nullable String assetUrl,
+      @NonNull StreamingFormat streamingFormat,
+      @NonNull Map<String, String> httpHeaders,
+      @Nullable String userAgent,
+      @Nullable String dnsConfig) {
     super(assetUrl);
     this.streamingFormat = streamingFormat;
     this.httpHeaders = httpHeaders;
     this.userAgent = userAgent;
+    this.dnsConfig = dnsConfig;
   }
 
   @NonNull
@@ -65,7 +79,19 @@ final class HttpVideoAsset extends VideoAsset {
 
   @NonNull
   @Override
+  @OptIn(markerClass = UnstableApi.class)
   public MediaSource.Factory getMediaSourceFactory(@NonNull Context context) {
+    // StellarTV: with a DNS chosen in the app, requests go through OkHttp so stream hosts (and
+    // every redirect or segment host) resolve with it. Same timeouts and headers either way.
+    OkHttpClient client = StreamDns.clientFor(dnsConfig);
+    if (client != null) {
+      OkHttpDataSource.Factory factory = new OkHttpDataSource.Factory(client);
+      factory.setUserAgent(userAgent);
+      if (!httpHeaders.isEmpty()) {
+        factory.setDefaultRequestProperties(httpHeaders);
+      }
+      return mediaSourceFactory(context, factory);
+    }
     return getMediaSourceFactory(context, new DefaultHttpDataSource.Factory());
   }
 
@@ -83,7 +109,13 @@ final class HttpVideoAsset extends VideoAsset {
   MediaSource.Factory getMediaSourceFactory(
       Context context, DefaultHttpDataSource.Factory initialFactory) {
     unstableUpdateDataSourceFactory(initialFactory, httpHeaders, userAgent);
-    DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, initialFactory);
+    return mediaSourceFactory(context, initialFactory);
+  }
+
+  @OptIn(markerClass = UnstableApi.class)
+  private MediaSource.Factory mediaSourceFactory(
+      Context context, HttpDataSource.Factory httpFactory) {
+    DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, httpFactory);
     // Transient IPTV hiccups (a slow segment, a dropped socket) are retried in place instead of
     // surfacing as a fatal error that makes the app tear the player down and reconnect.
     DefaultLoadErrorHandlingPolicy retries = new DefaultLoadErrorHandlingPolicy(LOAD_RETRIES);
