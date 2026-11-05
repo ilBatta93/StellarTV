@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/channel.dart';
 import '../models/content_type.dart';
+import 'stream_address.dart';
 
 /// A video player app installed on the device (VLC, MX Player, ...).
 class ExternalPlayer {
@@ -82,7 +83,9 @@ class ExternalPlayerService extends ChangeNotifier {
   static bool canPlay(Channel channel) =>
       channel.type != ContentType.live &&
       !channel.isSeriesFolder &&
-      (channel.url.startsWith('http://') || channel.url.startsWith('https://'));
+      (channel.url.startsWith('http://') ||
+          channel.url.startsWith('https://') ||
+          StreamAddress.needsResolve(channel.url));
 
   Future<List<ExternalPlayer>> installed() async {
     if (!supported) return const [];
@@ -114,10 +117,11 @@ class ExternalPlayerService extends ChangeNotifier {
     if (player == null) {
       throw PlatformException(code: 'no_player');
     }
+    final url = await StreamAddress.resolve(channel.url);
     final raw = await _channel.invokeMapMethod<String, Object?>(
       'openExternal',
       {
-        'url': channel.url,
+        'url': url,
         'package': player.package,
         'title': channel.name,
         'positionMs': startAt?.inMilliseconds ?? 0,

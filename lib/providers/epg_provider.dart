@@ -15,6 +15,7 @@ import '../services/epg_timeline.dart';
 import '../services/playback_work_policy.dart';
 import '../services/frame_telemetry_service.dart';
 import 'app_provider.dart';
+import '../models/source_access.dart';
 
 /// TV guide for the live channels. The playlist guide (Xtream xmltv.php) is
 /// used automatically; extra XMLTV sources can be added in Settings. The
@@ -107,10 +108,13 @@ class EpgProvider extends ChangeNotifier {
   int get programmeCount => _data.programmeCount;
   int get channelCount => _data.guideIds.length;
 
-  /// XMLTV address provided by the Xtream account, when logged in.
+  /// Guide address that comes with the access: the account's XMLTV, or the
+  /// one announced in a single-address list header.
   String? get playlistSource {
     final c = _app.xtreamCredentials;
     if (_app.authMethod != AuthMethod.xtream || c == null) return null;
+    if (_app.sourceKind == SourceKind.link) return _app.linkGuideUrl;
+    if (_app.sourceKind != SourceKind.account) return null;
     var base = c['server']!.trim();
     if (!base.startsWith('http://') && !base.startsWith('https://')) {
       base = 'http://$base';
@@ -582,7 +586,11 @@ class EpgProvider extends ChangeNotifier {
       return;
     }
     final credentials = _app.xtreamCredentials;
-    if (_app.authMethod != AuthMethod.xtream || credentials == null) return;
+    if (_app.authMethod != AuthMethod.xtream ||
+        _app.sourceKind != SourceKind.account ||
+        credentials == null) {
+      return;
+    }
     if (_shortQueued.length + _shortActive >= 24) return;
     _shortQueued.add(channel.id);
     _shortQueue.add(channel);

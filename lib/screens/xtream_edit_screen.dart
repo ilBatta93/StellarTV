@@ -4,18 +4,18 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../models/content_type.dart';
 import '../models/catalog_load_state.dart';
+import '../models/source_access.dart';
 import '../providers/history_provider.dart';
 import '../providers/sync_provider.dart';
-import '../services/device_type_service.dart';
+import '../services/portal_source.dart';
 import '../services/settings_service.dart';
-import '../services/xtream_service.dart';
 import '../services/xtream_edit.dart';
 import '../widgets/apple_page_scaffold.dart';
 import '../widgets/auth_scaffold.dart';
-import '../widgets/tv_text_field.dart';
 import '../services/key_handoff.dart';
 import '../widgets/phone_handoff_panel.dart';
 import '../widgets/recovery_key_entry.dart';
+import '../widgets/source_access_form.dart';
 
 class XtreamEditScreen extends StatefulWidget {
   const XtreamEditScreen({super.key});
@@ -24,35 +24,27 @@ class XtreamEditScreen extends StatefulWidget {
 }
 
 class _XtreamEditScreenState extends State<XtreamEditScreen> {
-  final _server = TextEditingController();
-  final _user = TextEditingController();
-  final _password = TextEditingController();
+  late final SourceAccessController _access;
   final _key = TextEditingController();
-  final _userFocus = FocusNode();
-  final _passwordFocus = FocusNode();
   final _keyFocus = FocusNode();
   final _keyPanel = GlobalKey<RecoveryKeyPanelState>();
   bool _busy = false;
-  bool _obscure = true;
   bool _phone = false;
   bool _askForKey = false;
   @override
   void initState() {
     super.initState();
-    final credentials = context.read<AppProvider>().xtreamCredentials;
-    _server.text = credentials?['server'] ?? '';
-    _user.text = credentials?['username'] ?? '';
-    _password.text = credentials?['password'] ?? '';
+    _access = SourceAccessController(
+      SourceAccess.fromCredentials(
+        context.read<AppProvider>().xtreamCredentials,
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _server.dispose();
-    _user.dispose();
-    _password.dispose();
+    _access.dispose();
     _key.dispose();
-    _userFocus.dispose();
-    _passwordFocus.dispose();
     _keyFocus.dispose();
     super.dispose();
   }
@@ -64,11 +56,10 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
 
   Future<void> _save() async {
     if (_busy) return;
-    final server = _server.text.trim();
-    final username = _user.text.trim();
-    final password = _password.text;
-    if (username.isEmpty || password.isEmpty) {
-      _notice('Inserisci nome utente e password.');
+    final access = _access.access;
+    final problem = access.problem;
+    if (problem != null) {
+      _notice(problem);
       return;
     }
     final app = context.read<AppProvider>();
@@ -82,11 +73,7 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
     try {
       await _keyPanel.currentState?.ready;
       if (!mounted) return;
-      final auth = await XtreamService().authenticate(
-        server: server,
-        username: username,
-        password: password,
-      );
+      final auth = await AppProvider.checkSource(access);
       if (!mounted) return;
       if (!auth.ok) {
         _notice(auth.message);
@@ -114,16 +101,21 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
       }
       final result = await saveXtreamEdit(
         authenticate: () async => true,
-        persist: () => SettingsService().setXtreamCredentials(
-          server: server,
-          username: username,
-          password: password,
-        ),
+        persist: () async {
+          await SettingsService().setXtreamCredentials(
+            server: access.server,
+            username: access.username,
+            password: access.password,
+            kind: access.kind.name,
+          );
+          PortalSession.reset();
+        },
         sync: () => sync.pushNow(silent: true),
         reload: () => app.loadFromXtream(
-          server: server,
-          username: username,
-          password: password,
+          server: access.server,
+          username: access.username,
+          password: access.password,
+          kind: access.kind,
         ),
       );
       if (!mounted) return;
@@ -170,55 +162,10 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TvTextField(
-                  autofocus: DeviceTypeService.isTv,
-                  controller: _server,
-                  nextFocus: _userFocus,
-                  keyboardType: TextInputType.url,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: 'Server URL',
-                    prefixIcon: Icon(Icons.dns_outlined),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TvTextField(
-                  controller: _user,
-                  focusNode: _userFocus,
-                  nextFocus: _passwordFocus,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: 'Nome utente',
-                    prefixIcon: Icon(Icons.person_outline_rounded),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TvTextField(
-                  controller: _password,
-                  focusNode: _passwordFocus,
+                SourceAccessFields(
+                  controller: _access,
                   nextFocus: _askForKey ? _keyFocus : null,
-                  obscureText: _obscure,
-                  textInputAction: _askForKey
-                      ? TextInputAction.next
-                      : TextInputAction.done,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded),
-                    suffixIcon: AuthAction(
-                      onPressed: () => setState(() => _obscure = !_obscure),
-                      child: IconButton(
-                        tooltip: _obscure
-                            ? 'Mostra password'
-                            : 'Nascondi password',
-                        icon: Icon(
-                          _obscure
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                      ),
-                    ),
-                  ),
+                  onSubmitted: _save,
                 ),
                 const SizedBox(height: 16),
                 RecoveryKeyPanel(
@@ -234,12 +181,13 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
                 if (context.watch<SyncProvider>().isSignedIn) ...[
                   const SizedBox(height: 16),
                   if (_phone)
+                    // Edit mode: the phone sends only the fields to change.
                     PhoneHandoffPanel(
-                      mode: 'x',
+                      mode: 'e',
                       onReceived: (raw) {
-                        final x = XtreamHandoff.parse(raw);
+                        final patch = SourceHandoff.parse(raw);
                         setState(() => _phone = false);
-                        if (x == null) {
+                        if (patch == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
@@ -249,9 +197,7 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
                           );
                           return;
                         }
-                        _server.text = x.server;
-                        _user.text = x.username;
-                        _password.text = x.password;
+                        _access.apply(patch);
                         _save();
                       },
                       onClose: (m) {
@@ -268,7 +214,7 @@ class _XtreamEditScreenState extends State<XtreamEditScreen> {
                       child: OutlinedButton.icon(
                         onPressed: () => setState(() => _phone = true),
                         icon: const Icon(Icons.smartphone),
-                        label: const Text('Inserisci dal telefono'),
+                        label: const Text('Modifica dal telefono'),
                       ),
                     ),
                 ],

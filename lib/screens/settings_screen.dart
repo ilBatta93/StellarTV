@@ -42,6 +42,7 @@ import 'performance_diagnostics_screen.dart';
 
 import '../services/app_update_service.dart';
 import 'category_manager_screen.dart';
+import '../models/source_access.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -506,7 +507,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String _connectionLabel(AppProvider provider) =>
       switch (provider.authMethod.name) {
-        'xtream' => 'Connessione locale',
+        'xtream' => switch (provider.sourceKind) {
+          SourceKind.account => 'Nome utente e password',
+          SourceKind.link => 'Indirizzo unico',
+          SourceKind.portal => 'Portale con indirizzo MAC',
+        },
         _ => 'Non connesso',
       };
 
@@ -641,12 +646,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SettingsValueTile(
               icon: Icons.edit_outlined,
               title: 'Modifica connessione locale',
-              subtitle: 'Server URL, nome utente e password',
+              subtitle: switch (provider.sourceKind) {
+                SourceKind.account => 'Server URL, nome utente e password',
+                SourceKind.link => 'Indirizzo unico dei contenuti',
+                SourceKind.portal => 'Indirizzo del portale e MAC',
+              },
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const XtreamEditScreen()),
               ),
             ),
-          if (provider.authMethod.name == 'xtream')
+          if (provider.authMethod.name == 'xtream' &&
+              provider.sourceKind == SourceKind.account)
             SettingsValueTile(
               icon: Icons.badge_outlined,
               title: 'Connessione locale',
@@ -655,7 +665,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 MaterialPageRoute(builder: (_) => const XtreamAccountScreen()),
               ),
             ),
-          if (provider.authMethod.name == 'xtream')
+          if (provider.authMethod.name == 'xtream' &&
+              provider.sourceKind == SourceKind.account)
             SettingsValueTile(
               icon: Icons.notifications_active_outlined,
               title: 'Promemoria scadenza',

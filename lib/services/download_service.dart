@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/channel.dart';
 import '../models/content_type.dart';
+import 'stream_address.dart';
 
 enum DownloadStatus { queued, running, paused, completed, failed }
 
@@ -88,6 +89,7 @@ class DownloadService extends ChangeNotifier {
   /// Pure eligibility rule, also used by tests.
   static bool canDownload(Channel c) {
     if (c.isSeriesFolder || c.type == ContentType.live) return false;
+    if (StreamAddress.needsResolve(c.url)) return true;
     final uri = Uri.tryParse(c.url);
     if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
       return false;
@@ -249,7 +251,9 @@ class DownloadService extends ChangeNotifier {
     final client = http.Client();
     _client = client;
     try {
-      final req = http.Request('GET', Uri.parse(item.channel.url));
+      final address = await StreamAddress.resolve(item.channel.url);
+      if (_activeId != item.id) return;
+      final req = http.Request('GET', Uri.parse(address));
       if (offset > 0) req.headers['Range'] = 'bytes=$offset-';
       final res = await client.send(req);
       if (_activeId != item.id) return;

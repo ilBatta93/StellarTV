@@ -9,6 +9,7 @@ import '../models/content_type.dart';
 import '../models/history_entry.dart';
 import '../models/catalog_load_state.dart';
 import '../models/series_details.dart';
+import '../models/source_access.dart';
 import '../models/tmdb_item.dart';
 import '../services/catalog_rating_service.dart';
 import '../services/catalog_builder.dart';
@@ -18,6 +19,8 @@ import '../services/playlist_refresh_service.dart';
 import '../services/playback_work_policy.dart';
 import '../services/foreground_policy.dart';
 import '../services/source_login_result.dart';
+import '../services/link_source.dart';
+import '../services/portal_source.dart';
 import '../services/xtream_service.dart';
 import '../services/favorites_service.dart';
 import '../services/settings_service.dart';
@@ -143,6 +146,20 @@ class AppProvider extends ChangeNotifier {
   AuthMethod get authMethod => _authMethod;
   Map<String, String>? get xtreamCredentials => _xtreamCredentials;
   bool get isAuthenticated => _isAuthenticated;
+
+  /// Kind of the stored access; old saved data reads as an account.
+  SourceKind get sourceKind => SourceAccess.kindOf(_xtreamCredentials);
+
+  static const _linkGuideKey = 'link_guide_url';
+  String? _linkGuideUrl;
+
+  /// Guide address announced by a single-address list, if any.
+  String? get linkGuideUrl =>
+      sourceKind == SourceKind.link ? _linkGuideUrl : null;
+
+  // One download of a single-address list serves the three sections.
+  Future<LinkCatalog>? _linkLoad;
+  String? _linkLoadUrl;
 
   // Derived lists are cached: rebuilding them on every notify (e.g. when a
   // favorite changes) froze the UI with large playlists.
@@ -1445,6 +1462,18 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<SeriesDetails> loadSeriesDetails(Channel series) async {
+    final credentials = _xtreamCredentials;
+    if (sourceKind == SourceKind.portal &&
+        credentials != null &&
+        series.isSeriesFolder &&
+        (series.seriesKey ?? '').startsWith('portal:')) {
+      final details = await PortalSession.of(
+        credentials['server']!,
+        credentials['username']!,
+      ).seriesDetails(series);
+      indexEpisodes(details.allEpisodes.map((e) => e.channel).toList());
+      return _safeSeriesDetails(details);
+    }
     if (_authMethod == AuthMethod.xtream &&
         _xtreamCredentials != null &&
         series.isSeriesFolder &&
@@ -1558,7 +1587,8 @@ class AppProvider extends ChangeNotifier {
         (_xtreamCredentials == null ||
             creds['server'] != _xtreamCredentials!['server'] ||
             creds['username'] != _xtreamCredentials!['username'] ||
-            creds['password'] != _xtreamCredentials!['password']);
+            creds['password'] != _xtreamCredentials!['password'] ||
+            creds['kind'] != _xtreamCredentials!['kind']);
     _applyAdultFilter();
     notifyListeners();
     if (credsChanged) {
@@ -1585,6 +1615,7 @@ class AppProvider extends ChangeNotifier {
         server: _xtreamCredentials!['server']!,
         username: _xtreamCredentials!['username']!,
         password: _xtreamCredentials!['password']!,
+        kind: sourceKind,
       );
     }
   }
@@ -1598,6 +1629,7 @@ class AppProvider extends ChangeNotifier {
     _tmdbFavorites = await _favoritesService.getTmdbFavorites();
     final prefs = await SharedPreferences.getInstance();
     _showAdult = prefs.getBool(_showAdultKey) ?? false;
+    _linkGuideUrl = prefs.getString(_linkGuideKey);
     _hiddenCategories = await _settingsService.getHiddenCategories();
     _categoryOrder = await _settingsService.getCategoryOrder();
     _customCategories = await _settingsService.getCustomCategories();
@@ -1656,6 +1688,7 @@ class AppProvider extends ChangeNotifier {
             server: credentials['server']!,
             username: credentials['username']!,
             password: credentials['password']!,
+            kind: SourceAccess.kindOf(credentials),
           );
         } else if (missing.isNotEmpty) {
           // Only the sections never saved are downloaded; the others open
@@ -1714,7 +1747,25 @@ class AppProvider extends ChangeNotifier {
     required String username,
     required String password,
     SourceLoginResult? verified,
+  }) => loginWithSource(
+    SourceAccess(
+      kind: SourceKind.account,
+      server: server,
+      username: username,
+      password: password,
+    ),
+    verified: verified,
+  );
+
+  /// Checks [access] (unless already [verified]), stores it on the device
+  /// and starts the first download.
+  Future<bool> loginWithSource(
+    SourceAccess access, {
+    SourceLoginResult? verified,
   }) async {
+    final server = access.server;
+    final username = access.username;
+    final password = access.password;
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -1722,11 +1773,13 @@ class AppProvider extends ChangeNotifier {
     try {
       final result = verified != null && verified.ok
           ? verified
-          : await _xtreamService.authenticate(
+          : access.kind == SourceKind.account
+          ? await _xtreamService.authenticate(
               server: server,
               username: username,
               password: password,
-            );
+            )
+          : await checkSource(access);
       if (!result.ok) {
         _error = result.message;
         _isLoading = false;
@@ -1738,18 +1791,21 @@ class AppProvider extends ChangeNotifier {
         server: server,
         username: username,
         password: password,
+        kind: access.kind.name,
       );
+      PortalSession.reset();
       _authMethod = AuthMethod.xtream;
-      _xtreamCredentials = {
-        'server': server,
-        'username': username,
-        'password': password,
-      };
+      _xtreamCredentials = access.toCredentials();
       // Like a configured start: Home opens and sections fill in as they
       // arrive. Awaiting here kept the access form on screen for the whole
       // first download, minutes on a TV box.
       unawaited(
-        loadFromXtream(server: server, username: username, password: password),
+        loadFromXtream(
+          server: server,
+          username: username,
+          password: password,
+          kind: access.kind,
+        ),
       );
       _isAuthenticated = true;
       notifyListeners();
@@ -1890,26 +1946,29 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
     void onProgress(CatalogProgress p) => _progress[type]!.value = p;
     try {
-      final channels = await switch (type) {
-        ContentType.live => _xtreamService.getLiveChannels(
-          server: server,
-          username: username,
-          password: password,
-          onProgress: onProgress,
-        ),
-        ContentType.movie => _xtreamService.getVodChannels(
-          server: server,
-          username: username,
-          password: password,
-          onProgress: onProgress,
-        ),
-        _ => _xtreamService.getSeriesChannels(
-          server: server,
-          username: username,
-          password: password,
-          onProgress: onProgress,
-        ),
-      };
+      final kind = SourceAccess.kindOf(credentials);
+      final channels = kind != SourceKind.account
+          ? await _fetchOtherSection(kind, type, credentials, onProgress)
+          : await switch (type) {
+              ContentType.live => _xtreamService.getLiveChannels(
+                server: server,
+                username: username,
+                password: password,
+                onProgress: onProgress,
+              ),
+              ContentType.movie => _xtreamService.getVodChannels(
+                server: server,
+                username: username,
+                password: password,
+                onProgress: onProgress,
+              ),
+              _ => _xtreamService.getSeriesChannels(
+                server: server,
+                username: username,
+                password: password,
+                onProgress: onProgress,
+              ),
+            };
       if (_disposed || key != _currentKey) return;
       FrameTelemetryService.instance.mark(
         'catalogo: risposta pronta ${type.name}',
@@ -1964,8 +2023,59 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  /// Sections of a single-address list or of a portal.
+  Future<List<Channel>> _fetchOtherSection(
+    SourceKind kind,
+    ContentType type,
+    Map<String, String> credentials,
+    void Function(CatalogProgress progress) onProgress,
+  ) async {
+    final server = credentials['server']!;
+    if (kind == SourceKind.portal) {
+      return PortalSession.of(
+        server,
+        credentials['username']!,
+      ).section(type, onProgress: onProgress);
+    }
+    if (_linkLoad == null || _linkLoadUrl != server) {
+      _linkLoadUrl = server;
+      _linkLoad = LinkSource.load(server, onProgress: onProgress);
+    }
+    final load = _linkLoad!;
+    try {
+      final catalog = await load;
+      if (catalog.guideUrl != _linkGuideUrl) {
+        _linkGuideUrl = catalog.guideUrl;
+        final prefs = await SharedPreferences.getInstance();
+        if (_linkGuideUrl == null) {
+          await prefs.remove(_linkGuideKey);
+        } else {
+          await prefs.setString(_linkGuideKey, _linkGuideUrl!);
+        }
+      }
+      return catalog.section(type);
+    } catch (_) {
+      if (identical(_linkLoad, load)) _linkLoad = null;
+      rethrow;
+    }
+  }
+
+  /// Checks any kind of access before it is stored.
+  static Future<SourceLoginResult> checkSource(SourceAccess access) =>
+      switch (access.kind) {
+        SourceKind.link => LinkSource.check(access.server),
+        SourceKind.portal => PortalSource.check(access.server, access.mac),
+        SourceKind.account => XtreamService().authenticate(
+          server: access.server,
+          username: access.username,
+          password: access.password,
+        ),
+      };
+
   void _finishIfIdle() {
     if (_anyPending) return;
+    // The list copy is no longer needed once every section is installed.
+    _linkLoad = null;
     _isLoading = false;
     _error = _shelf.isEmpty && _loadFailures.isNotEmpty
         ? _loadFailures.first
@@ -1978,6 +2088,7 @@ class AppProvider extends ChangeNotifier {
     required String server,
     required String username,
     required String password,
+    SourceKind kind = SourceKind.account,
   }) async {
     final requestedKey = _cacheKey({'server': server, 'username': username});
     if (_fullLoadActive || (_anyPending && requestedKey == _activeLoadKey)) {
@@ -1989,9 +2100,17 @@ class AppProvider extends ChangeNotifier {
     final credentials =
         current != null &&
             _cacheKey(current) == requestedKey &&
-            current['password'] == password
+            current['password'] == password &&
+            SourceAccess.kindOf(current) == kind
         ? current
-        : {'server': server, 'username': username, 'password': password};
+        : SourceAccess(
+            kind: kind,
+            server: server,
+            username: username,
+            password: password,
+          ).toCredentials();
+    // A changed address must be downloaded again, not read from memory.
+    _linkLoad = null;
     _xtreamCredentials = credentials;
     _isLoading = true;
     _error = null;
@@ -2026,6 +2145,8 @@ class AppProvider extends ChangeNotifier {
       '${credentials['server'] ?? ''}|${credentials['username'] ?? ''}';
 
   Future<void> logout() async {
+    PortalSession.reset();
+    _linkLoad = null;
     _xtreamCredentials = null;
     _authMethod = AuthMethod.none;
     _activeLoadKey = null;

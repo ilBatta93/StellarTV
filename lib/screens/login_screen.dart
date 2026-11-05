@@ -5,9 +5,8 @@ import '../providers/app_provider.dart';
 import '../providers/history_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/auth_scaffold.dart';
-import '../services/device_type_service.dart';
-import '../services/xtream_service.dart';
-import '../widgets/tv_text_field.dart';
+import '../models/source_access.dart';
+import '../widgets/source_access_form.dart';
 import '../providers/sync_provider.dart';
 import '../services/key_handoff.dart';
 import '../widgets/phone_handoff_panel.dart';
@@ -17,24 +16,19 @@ import 'profile_picker_screen.dart';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, this.initial});
 
-  /// List details already received from the phone (QR login): filled in and
-  /// submitted automatically.
-  final XtreamHandoff? initial;
+  /// Access details already received from the phone (QR login): filled in
+  /// and submitted automatically.
+  final SourcePatch? initial;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _xtreamServerController = TextEditingController();
-  final _xtreamUserController = TextEditingController();
-  final _xtreamPassController = TextEditingController();
+  final _access = SourceAccessController();
   final _keyController = TextEditingController();
-  final _xtreamUserFocus = FocusNode();
-  final _xtreamPassFocus = FocusNode();
   final _keyFocus = FocusNode();
   final _keyPanel = GlobalKey<RecoveryKeyPanelState>();
-  bool _obscurePassword = true;
   bool _isLoading = false;
   bool _phone = false;
   bool _askForKey = false;
@@ -44,9 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     final x = widget.initial;
     if (x != null) {
-      _xtreamServerController.text = x.server;
-      _xtreamUserController.text = x.username;
-      _xtreamPassController.text = x.password;
+      _access.apply(x);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _handleXtreamLogin();
       });
@@ -55,12 +47,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _xtreamServerController.dispose();
-    _xtreamUserController.dispose();
-    _xtreamPassController.dispose();
+    _access.dispose();
     _keyController.dispose();
-    _xtreamUserFocus.dispose();
-    _xtreamPassFocus.dispose();
     _keyFocus.dispose();
     super.dispose();
   }
@@ -78,60 +66,11 @@ class _LoginScreenState extends State<LoginScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildFieldLabel('Server URL'),
-        const SizedBox(height: 6),
-        TvTextField(
-          autofocus: DeviceTypeService.isTv,
-          controller: _xtreamServerController,
-          nextFocus: _xtreamUserFocus,
-          textInputAction: TextInputAction.next,
-          keyboardType: TextInputType.url,
-          decoration: const InputDecoration(
-            hintText: 'http://tuo-server.com:8080',
-            prefixIcon: Icon(Icons.dns, size: 20),
-          ),
-        ),
-        const SizedBox(height: 16),
-        _buildFieldLabel('Nome utente'),
-        const SizedBox(height: 6),
-        TvTextField(
-          controller: _xtreamUserController,
-          focusNode: _xtreamUserFocus,
-          nextFocus: _xtreamPassFocus,
-          textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            hintText: 'Inserisci il nome utente',
-            prefixIcon: Icon(Icons.person, size: 20),
-          ),
-        ),
-        const SizedBox(height: 16),
-        _buildFieldLabel('Password'),
-        const SizedBox(height: 6),
-        TvTextField(
-          controller: _xtreamPassController,
-          focusNode: _xtreamPassFocus,
+        SourceAccessFields(
+          controller: _access,
+          labelsAbove: true,
           nextFocus: _askForKey ? _keyFocus : null,
-          textInputAction: _askForKey
-              ? TextInputAction.next
-              : TextInputAction.done,
-          obscureText: _obscurePassword,
-          decoration: InputDecoration(
-            hintText: 'Inserisci la password',
-            prefixIcon: const Icon(Icons.lock, size: 20),
-            suffixIcon: AuthAction(
-              onPressed: () =>
-                  setState(() => _obscurePassword = !_obscurePassword),
-              child: IconButton(
-                icon: Icon(
-                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                  size: 20,
-                  color: AppColors.textSecondary,
-                ),
-                onPressed: () =>
-                    setState(() => _obscurePassword = !_obscurePassword),
-              ),
-            ),
-          ),
+          onSubmitted: _handleXtreamLogin,
         ),
         const SizedBox(height: 16),
         RecoveryKeyPanel(
@@ -150,9 +89,9 @@ class _LoginScreenState extends State<LoginScreen> {
             PhoneHandoffPanel(
               mode: 'x',
               onReceived: (raw) {
-                final x = XtreamHandoff.parse(raw);
+                final patch = SourceHandoff.parse(raw);
                 setState(() => _phone = false);
-                if (x == null) {
+                if (patch == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Dati ricevuti non validi. Riprova.'),
@@ -160,9 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   );
                   return;
                 }
-                _xtreamServerController.text = x.server;
-                _xtreamUserController.text = x.username;
-                _xtreamPassController.text = x.password;
+                _access.apply(patch);
                 _handleXtreamLogin();
               },
               onClose: (m) {
@@ -217,24 +154,12 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Widget _buildFieldLabel(String label) {
-    return Text(
-      label,
-      style: const TextStyle(
-        color: AppColors.textSecondary,
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
-      ),
-    );
-  }
-
   Future<void> _handleXtreamLogin() async {
-    final server = _xtreamServerController.text.trim();
-    final username = _xtreamUserController.text.trim();
-    final password = _xtreamPassController.text.trim();
-
-    if (server.isEmpty || username.isEmpty || password.isEmpty) {
-      _showError('Compila tutti i campi');
+    if (_isLoading) return;
+    final access = _access.access;
+    final problem = access.problem;
+    if (problem != null) {
+      _showError(problem);
       return;
     }
 
@@ -242,11 +167,7 @@ class _LoginScreenState extends State<LoginScreen> {
     await _keyPanel.currentState?.ready;
     if (!mounted) return;
 
-    final auth = await XtreamService().authenticate(
-      server: server,
-      username: username,
-      password: password,
-    );
+    final auth = await AppProvider.checkSource(access);
     if (!mounted) return;
     if (!auth.ok) {
       setState(() => _isLoading = false);
@@ -271,12 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     final provider = context.read<AppProvider>();
-    final success = await provider.loginWithXtream(
-      server: server,
-      username: username,
-      password: password,
-      verified: auth,
-    );
+    final success = await provider.loginWithSource(access, verified: auth);
 
     if (mounted) {
       setState(() => _isLoading = false);

@@ -15,6 +15,10 @@ class SettingsService {
   static const _xtreamUserKey = 'xtream_username';
   static const _xtreamPassKey = 'xtream_password';
 
+  /// Kind of access ('link', 'portal'); absent for server, user and password.
+  /// Not secret, so it stays in preferences even when the Keychain is used.
+  static const _sourceKindKey = 'source_kind';
+
   /// Called after every credential change so the account sync can upload
   /// the new state. Set at app startup; kept as a loose hook to avoid a
   /// circular dependency between settings and sync.
@@ -58,6 +62,14 @@ class SettingsService {
   ];
 
   Future<Map<String, String>?> getXtreamCredentials() async {
+    final stored = await _getStoredCredentials();
+    if (stored == null) return null;
+    final prefs = await SharedPreferences.getInstance();
+    final kind = prefs.getString(_sourceKindKey);
+    return kind == null ? stored : {...stored, 'kind': kind};
+  }
+
+  Future<Map<String, String>?> _getStoredCredentials() async {
     final prefs = await SharedPreferences.getInstance();
     if (useKeychain) {
       try {
@@ -124,8 +136,14 @@ class SettingsService {
     required String server,
     required String username,
     required String password,
+    String? kind,
   }) async {
     final prefs = await SharedPreferences.getInstance();
+    if (kind == null || kind == 'account') {
+      await prefs.remove(_sourceKindKey);
+    } else {
+      await prefs.setString(_sourceKindKey, kind);
+    }
     final saved =
         useKeychain &&
         await _writeKeychain({
@@ -150,6 +168,7 @@ class SettingsService {
   Future<void> clearCredentials() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_authMethodKey);
+    await prefs.remove(_sourceKindKey);
     for (final key in _credentialKeys) {
       await prefs.remove(key);
     }

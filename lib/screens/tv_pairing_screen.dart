@@ -334,7 +334,7 @@ class _TvPairingScreenState extends State<TvPairingScreen> {
     } catch (_) {}
     if (!mounted) return;
     final app = context.read<AppProvider>();
-    final x = bundle?.xtream;
+    final x = bundle?.access;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (_) => x != null

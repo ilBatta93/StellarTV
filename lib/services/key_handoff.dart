@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'foreground_policy.dart';
+import '../models/source_access.dart';
 
 import 'dart:convert';
 import 'dart:math';
@@ -67,7 +68,8 @@ class KeyHandoff {
   final SupabaseClient _client;
   KeyHandoff(this._client, {this.mode = ''});
 
-  /// '' = recovery key, 'x' = Xtream list details.
+  /// '' = recovery key, 'x' = access details for a login, 'e' = access
+  /// details for an edit (only the fields to change).
   final String mode;
   SimpleKeyPair? _pair;
   String? _id;
@@ -181,9 +183,25 @@ class XtreamHandoff {
 
 /// QR-login bundle sent from the phone: optional list details and/or key.
 class BundleHandoff {
-  const BundleHandoff(this.xtream, this.key);
+  const BundleHandoff(this.xtream, this.key, [this.source]);
   final XtreamHandoff? xtream;
   final String? key;
+
+  /// Access of any kind (newer phone pages); the account field above stays
+  /// for older ones.
+  final SourcePatch? source;
+
+  /// Access data to fill in on the TV, whichever form the phone used.
+  SourcePatch? get access =>
+      source ??
+      (xtream == null
+          ? null
+          : SourcePatch(
+              kind: SourceKind.account,
+              server: xtream!.server,
+              username: xtream!.username,
+              password: xtream!.password,
+            ));
   static BundleHandoff? parse(String raw) {
     try {
       final j = jsonDecode(raw);
@@ -199,10 +217,87 @@ class BundleHandoff {
               RegExp(r'^STV1-', caseSensitive: false).hasMatch(k.trim())
           ? k.trim()
           : null;
-      if (x == null && key == null) return null;
-      return BundleHandoff(x, key);
+      final source = j['source'] is Map
+          ? SourceHandoff.fromMap({...j['source'] as Map, 'kind': 'source'})
+          : null;
+      if (x == null && key == null && source == null) return null;
+      return BundleHandoff(x, key, source);
     } catch (_) {
       return null;
     }
+  }
+}
+
+/// Access data sent from the phone: the old complete account message, or a
+/// `source` message with its kind and only the fields the user filled in
+/// (when editing, an empty field keeps the stored value).
+class SourceHandoff {
+  SourceHandoff._();
+
+  static SourcePatch? parse(String raw) {
+    try {
+      final j = jsonDecode(raw);
+      return j is Map ? fromMap(j) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static SourcePatch? fromMap(Map j) {
+    if (j['kind'] == 'xtream') {
+      final x = XtreamHandoff.parse(jsonEncode(j));
+      return x == null
+          ? null
+          : SourcePatch(
+              kind: SourceKind.account,
+              server: x.server,
+              username: x.username,
+              password: x.password,
+            );
+    }
+    if (j['kind'] != 'source') return null;
+    final kind = switch (j['type']) {
+      'account' => SourceKind.account,
+      'link' => SourceKind.link,
+      'portal' => SourceKind.portal,
+      _ => null,
+    };
+    if (kind == null) return null;
+    String? text(String key) {
+      final v = j[key];
+      return v is String && v.trim().isNotEmpty ? v.trim() : null;
+    }
+
+    final host = text('host');
+    if (host != null) {
+      final uri = Uri.tryParse(host);
+      if (uri == null ||
+          !['http', 'https'].contains(uri.scheme) ||
+          uri.host.isEmpty) {
+        return null;
+      }
+    }
+    final rawPass = j['password'];
+    String? user, pass;
+    switch (kind) {
+      case SourceKind.account:
+        user = text('username');
+        pass = rawPass is String && rawPass.isNotEmpty ? rawPass : null;
+      case SourceKind.portal:
+        final mac = text('mac');
+        if (mac != null) {
+          user = SourceAccess.normalizeMac(mac);
+          if (user == null) return null;
+        }
+      case SourceKind.link:
+        break;
+    }
+    final patch = SourcePatch(
+      kind: kind,
+      server: host,
+      username: user,
+      password: pass,
+    );
+    return patch.isEmpty ? null : patch;
   }
 }

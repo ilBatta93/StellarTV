@@ -8,6 +8,7 @@ import '../models/player_settings.dart';
 import 'buffer_memory.dart';
 import 'decoder_memory.dart';
 import '../services/playback_work_policy.dart';
+import '../services/stream_address.dart';
 import '../services/stream_probe.dart';
 import '../services/frame_telemetry_service.dart';
 import '../services/live_diagnostics_service.dart';
@@ -415,6 +416,7 @@ class PlaybackSession extends ChangeNotifier {
     final target = _plan.isEmpty ? nextUrl : _plan.first.url;
     if (engine != null &&
         _plan.isNotEmpty &&
+        !StreamAddress.needsResolve(target) &&
         engine.type == _plan.first.engine &&
         identical(engine, _engine)) {
       _status = SessionStatus.switching;
@@ -648,8 +650,20 @@ class PlaybackSession extends ChangeNotifier {
       userAgent: _uaLabel,
     );
 
+    var address = attempt.url;
+    if (StreamAddress.needsResolve(address)) {
+      // Portal items get a fresh tokenized link for every attempt.
+      try {
+        address = await StreamAddress.resolve(address);
+      } catch (e) {
+        if (gen != _generation || _disposed) return;
+        await _handleFailure(gen, e.toString(), resumeAt, midPlay: false);
+        return;
+      }
+      if (gen != _generation || _disposed || _plan.isEmpty) return;
+    }
     _currentUrl = attempt.url;
-    final engine = _create(attempt.engine, attempt.url);
+    final engine = _create(attempt.engine, address);
     _engine = engine;
     _nativeOutstanding++;
     _lastVideoSize = Size.zero;

@@ -9,6 +9,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'xtream_service.dart';
 import 'stream_slot_policy.dart';
+import '../models/source_access.dart';
 
 /// User choices for subscription-expiry reminders (synced with the cloud as a
 /// regular setting under [ExpiryReminderService.settingsKey]).
@@ -233,7 +234,9 @@ class ExpiryReminderService extends ChangeNotifier {
     Map<String, String>? credentials, {
     bool force = false,
   }) async {
-    if (credentials == null) {
+    // Only an account login reports its expiry.
+    if (credentials == null ||
+        SourceAccess.kindOf(credentials) != SourceKind.account) {
       if (_expiry != null || _account.isNotEmpty) {
         _expiry = null;
         _account = '';

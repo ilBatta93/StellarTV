@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'settings_service.dart';
 import 'foreground_policy.dart';
+import '../models/source_access.dart';
 
 enum ProviderCondition {
   online,
@@ -120,7 +121,9 @@ class ProviderDiagnosisService {
         );
       }
       final credentials = await SettingsService().getXtreamCredentials();
-      if (credentials == null) {
+      // Only an account login exposes the service state.
+      if (credentials == null ||
+          SourceAccess.kindOf(credentials) != SourceKind.account) {
         return const ProviderDiagnosis(
           ProviderCondition.unsupported,
           'Questo accesso non espone informazioni sullo stato del servizio.',
