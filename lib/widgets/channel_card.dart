@@ -12,7 +12,9 @@ import '../providers/ui_settings.dart';
 import 'package:provider/provider.dart';
 
 import '../services/catalog_rating_service.dart';
+import '../models/title_credits.dart' show formatRuntime;
 import '../services/title_matching.dart';
+import '../services/title_runtime_store.dart';
 
 class ChannelCard extends StatelessWidget {
   final Channel channel;
@@ -45,7 +47,7 @@ class ChannelCard extends StatelessWidget {
     context.select<UiSettings, String>(
       (ui) =>
           '${ui.showRatings}${ui.showTitles}${ui.showQuality}'
-          '${ui.favoriteHeart}${ui.posterCorners.name}',
+          '${ui.favoriteHeart}${ui.posterCorners.name}${ui.posterDetails}',
     );
     if (DeviceTypeService.isTv && !_isLive) {
       return _TvRatedPoster(
@@ -131,30 +133,103 @@ class ChannelCard extends StatelessWidget {
                 padding: DeviceTypeService.isTv
                     ? const EdgeInsets.fromLTRB(9, 8, 9, 9)
                     : const EdgeInsets.only(top: 8),
-                child: DeviceTypeService.isTv
+                child: !_isLive && context.read<UiSettings>().posterDetails
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          DeviceTypeService.isTv
+                              ? TvPosterTitle(_title)
+                              : _titleText(maxLines: 1),
+                          PosterDetailsLine(channel),
+                        ],
+                      )
+                    : DeviceTypeService.isTv
                     ? TvPosterTitle(_title)
-                    : Text(
-                        _title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: DeviceTypeService.isTv ? 15 : 12,
-                          fontWeight: DeviceTypeService.isTv
-                              ? FontWeight.w700
-                              : FontWeight.w600,
-                          height: DeviceTypeService.isTv ? 1.2 : 1.1,
-                          shadows: [
-                            Shadow(
-                              color: AppColors.overlay,
-                              offset: const Offset(0, 1),
-                              blurRadius: 2,
-                            ),
-                          ],
-                        ),
-                      ),
+                    : _titleText(maxLines: 2),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _titleText({required int maxLines}) => Text(
+    _title,
+    maxLines: maxLines,
+    overflow: TextOverflow.ellipsis,
+    style: TextStyle(
+      color: AppColors.textPrimary,
+      fontSize: DeviceTypeService.isTv ? 15 : 12,
+      fontWeight: DeviceTypeService.isTv ? FontWeight.w700 : FontWeight.w600,
+      height: DeviceTypeService.isTv ? 1.2 : 1.1,
+      shadows: [
+        Shadow(
+          color: AppColors.overlay,
+          offset: const Offset(0, 1),
+          blurRadius: 2,
+        ),
+      ],
+    ),
+  );
+}
+
+/// "2019 · 1 h 47 min", "2021 · ep. 52 min", or what is known of the two.
+String posterDetailsLabel({int? year, int? minutes, bool series = false}) {
+  final parts = [
+    if (year != null && year > 0) '$year',
+    if (minutes != null && minutes > 0)
+      series ? 'ep. ${formatRuntime(minutes)}' : formatRuntime(minutes),
+  ];
+  return parts.join(' · ');
+}
+
+/// Release year of a catalog title: provider date or year in the name,
+/// then the TMDB identity already stored. No network.
+int? posterYearOf(Channel channel) {
+  final key = channel.releaseKey;
+  if (key > 0) return key ~/ 10000;
+  final date = CatalogRatingService.instance.itemOf(channel)?.releaseDate;
+  if (date == null || date.length < 4) return null;
+  final year = int.tryParse(date.substring(0, 4));
+  return year != null && year > 1900 ? year : null;
+}
+
+/// Year and length under a catalog title ("Anno e durata sotto il titolo").
+/// Always one line high, so posters in a row stay aligned while lengths
+/// are still unknown.
+class PosterDetailsLine extends StatelessWidget {
+  const PosterDetailsLine(this.channel, {super.key});
+  final Channel channel;
+
+  @override
+  Widget build(BuildContext context) {
+    final tv = DeviceTypeService.isTv;
+    final size = tv ? 12.5 : 10.5;
+    final height = MediaQuery.textScalerOf(context).scale(size) * 1.25;
+    final store = TitleRuntimeStore.instance.store;
+    return SizedBox(
+      height: height + (tv ? 2 : 1),
+      width: double.infinity,
+      child: ListenableBuilder(
+        listenable: store,
+        builder: (context, _) => Padding(
+          padding: EdgeInsets.only(top: tv ? 2 : 1),
+          child: Text(
+            posterDetailsLabel(
+              year: posterYearOf(channel),
+              minutes: TitleRuntimeStore.instance.minutesOf(channel),
+              series: channel.type != ContentType.movie,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: size,
+              height: 1.25,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSecondary,
+            ),
+          ),
         ),
       ),
     );

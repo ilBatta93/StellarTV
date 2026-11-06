@@ -80,12 +80,14 @@ String catalogEntryIdentity(AppProvider app, CatalogEntry entry) {
 
 /// [showTitles] off ("Titoli sotto le locandine"): the cell is exactly a
 /// poster, so the cover is neither stretched nor cropped. Live channels
-/// always keep their name.
+/// always keep their name. [showDetails] ("Anno e durata sotto il titolo")
+/// makes the cell one short line taller.
 SliverGridDelegateWithMaxCrossAxisExtent channelGridDelegate(
   ContentType type, {
   double maxExtent = 140,
   bool compact = false,
   bool showTitles = true,
+  bool showDetails = false,
 }) {
   final isLive = type == ContentType.live;
   const posterOnly = 2 / 3;
@@ -99,6 +101,8 @@ SliverGridDelegateWithMaxCrossAxisExtent channelGridDelegate(
           ? 1.05
           : !showTitles
           ? posterOnly
+          : showDetails
+          ? (compact ? 0.58 : 0.56)
           : (compact ? 0.62 : 0.6),
       crossAxisSpacing: compact ? 10 : 16,
       mainAxisSpacing: compact ? 10 : 16,
@@ -110,6 +114,8 @@ SliverGridDelegateWithMaxCrossAxisExtent channelGridDelegate(
         ? 0.9
         : !showTitles
         ? posterOnly
+        : showDetails
+        ? (compact ? 0.58 : 0.545)
         : (compact ? 0.62 : 0.58),
     crossAxisSpacing: compact ? 8 : 12,
     mainAxisSpacing: compact ? 10 : 16,
@@ -253,6 +259,7 @@ class ChannelGrid extends StatelessWidget {
       maxExtent: ui.gridMaxExtent,
       compact: ui.compact,
       showTitles: ui.showTitles,
+      showDetails: ui.posterDetails,
     );
     return GridView.builder(
       padding: padding,
@@ -1555,6 +1562,7 @@ class _CatalogPageState extends State<CatalogPage> {
           mode == CatalogViewMode.compact ||
           mode == CatalogViewMode.spotlight,
       showTitles: ui.showTitles,
+      showDetails: ui.posterDetails,
     );
   }
 

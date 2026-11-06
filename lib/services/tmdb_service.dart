@@ -13,6 +13,7 @@ import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
 import '../models/rating_policy.dart';
 import 'title_matching.dart';
+import 'title_runtime_store.dart';
 import '../models/episode_metadata.dart';
 import '../models/title_trailer.dart';
 import '../models/tmdb_person.dart';
@@ -482,7 +483,9 @@ class TmdbService {
   Future<TitleInfo> details(TmdbItem item) async {
     if (item.id <= 0) return TitleInfo.empty;
     try {
-      return TitleInfo.parse(await _get('${item.mediaType}/${item.id}'));
+      final info = TitleInfo.parse(await _get('${item.mediaType}/${item.id}'));
+      TitleRuntimeStore.instance.remember(item, info.runtime);
+      return info;
     } catch (_) {
       return TitleInfo.empty;
     }

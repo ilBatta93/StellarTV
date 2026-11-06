@@ -98,6 +98,7 @@ class UiSettings extends ChangeNotifier {
   static const _livePreviewKey = 'ui_live_preview';
   static const posterCornersKey = 'ui_poster_corners';
   static const posterProgressKey = 'ui_poster_progress';
+  static const posterDetailsKey = 'ui_poster_details';
 
   static const homeKeys = {
     'ui_home_shape',
@@ -318,6 +319,7 @@ class UiSettings extends ChangeNotifier {
   bool _livePreview = true;
   PosterCorners _posterCorners = PosterCorners.standard;
   bool _posterProgress = true;
+  bool _posterDetails = false;
   bool _loaded = false;
   List<AppSection> _sectionOrder = List.of(AppSection.values);
   AppSection _startSection = AppSection.home;
@@ -359,6 +361,9 @@ class UiSettings extends ChangeNotifier {
   /// Catalog posters show how far a title was watched and a watched mark.
   bool get posterProgress => _posterProgress;
 
+  /// Year and length under the catalog titles.
+  bool get posterDetails => _posterDetails;
+
   /// Changes whenever any saved look-and-feel preference changes: used to
   /// push the new values to the cloud at once.
   String get signature => [
@@ -384,6 +389,7 @@ class UiSettings extends ChangeNotifier {
     _livePreview,
     _posterCorners.name,
     _posterProgress,
+    _posterDetails,
     homePosterShape.name,
     homeRecentShape.name,
     homePosterDensity.name,
@@ -438,6 +444,7 @@ class UiSettings extends ChangeNotifier {
     _posterProgress = prefs.get(posterProgressKey) is bool
         ? prefs.get(posterProgressKey) as bool
         : true;
+    _posterDetails = prefs.get(posterDetailsKey) == true;
     homePosterShape =
         HomePosterShape.values.asNameMap()[prefs.get('ui_home_shape')] ??
         HomePosterShape.portrait;
@@ -677,6 +684,12 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setPosterDetails(bool value) async {
+    _posterDetails = value;
+    await _save(posterDetailsKey, value);
+    notifyListeners();
+  }
+
   Future<void> setFocusGlow(bool value) async {
     _focusGlow = value;
     await _save(_focusGlowKey, value);
@@ -705,6 +718,7 @@ class UiSettings extends ChangeNotifier {
       _livePreviewKey,
       posterCornersKey,
       posterProgressKey,
+      posterDetailsKey,
     ]) {
       await prefs.remove(key);
     }

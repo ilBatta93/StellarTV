@@ -52,6 +52,7 @@ class PersonalVault {
     'ui_live_preview',
     'ui_poster_corners',
     'ui_poster_progress',
+    'ui_poster_details',
     'ui_compact',
     'ui_catalog_view',
     'ui_catalog_view_movie',

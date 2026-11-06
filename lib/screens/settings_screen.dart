@@ -408,6 +408,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: ui.setPosterProgress,
             ),
             SettingsSwitchTile(
+              icon: Icons.event_note_outlined,
+              title: 'Anno e durata sotto il titolo',
+              subtitle: 'La durata compare dopo aver aperto la scheda',
+              value: ui.posterDetails,
+              onChanged: ui.setPosterDetails,
+            ),
+            SettingsSwitchTile(
               icon: Icons.hd_outlined,
               title: 'Etichette qualità',
               subtitle: '4K, FHD, HD sulle copertine',

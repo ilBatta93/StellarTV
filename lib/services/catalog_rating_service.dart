@@ -19,6 +19,7 @@ import 'title_matching.dart';
 import 'imdb_rating_service.dart';
 import 'title_facet_index.dart';
 import 'title_metadata_store.dart';
+import 'title_runtime_store.dart';
 import 'work_slicer.dart';
 import '../models/tmdb_item.dart';
 
@@ -275,6 +276,7 @@ class CatalogRatingService extends ChangeNotifier {
       identities.load(),
       ImdbRatingService.instance.store.load(),
       TitleFacetIndex.instance.load(),
+      TitleRuntimeStore.instance.load(),
     ]);
     try {
       final path = await _path();
