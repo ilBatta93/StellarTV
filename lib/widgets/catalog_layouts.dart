@@ -105,6 +105,7 @@ class CatalogLandscapeCard extends StatelessWidget {
               ),
             ],
           ),
+          PosterProgressMark(channel),
           if (isFavorite)
             Positioned(
               top: 8,

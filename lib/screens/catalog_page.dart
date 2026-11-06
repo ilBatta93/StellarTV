@@ -1629,7 +1629,13 @@ class _CatalogListTile extends StatelessWidget {
                 child: SizedBox(
                   width: 56,
                   height: 84,
-                  child: CatalogArtwork(channel: channel),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CatalogArtwork(channel: channel),
+                      PosterProgressMark(channel),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 12),

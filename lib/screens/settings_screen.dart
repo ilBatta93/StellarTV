@@ -401,6 +401,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: ui.setShowRatings,
             ),
             SettingsSwitchTile(
+              icon: Icons.task_alt_rounded,
+              title: 'Avanzamento sulle locandine',
+              subtitle: 'Barra dei titoli iniziati e segno sui titoli visti',
+              value: ui.posterProgress,
+              onChanged: ui.setPosterProgress,
+            ),
+            SettingsSwitchTile(
               icon: Icons.hd_outlined,
               title: 'Etichette qualità',
               subtitle: '4K, FHD, HD sulle copertine',

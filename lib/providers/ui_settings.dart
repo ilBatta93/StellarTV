@@ -97,6 +97,7 @@ class UiSettings extends ChangeNotifier {
   static const _liveNumbersKey = 'ui_live_numbers';
   static const _livePreviewKey = 'ui_live_preview';
   static const posterCornersKey = 'ui_poster_corners';
+  static const posterProgressKey = 'ui_poster_progress';
 
   static const homeKeys = {
     'ui_home_shape',
@@ -316,6 +317,7 @@ class UiSettings extends ChangeNotifier {
   bool _liveNumbers = false;
   bool _livePreview = true;
   PosterCorners _posterCorners = PosterCorners.standard;
+  bool _posterProgress = true;
   bool _loaded = false;
   List<AppSection> _sectionOrder = List.of(AppSection.values);
   AppSection _startSection = AppSection.home;
@@ -354,6 +356,9 @@ class UiSettings extends ChangeNotifier {
 
   PosterCorners get posterCorners => _posterCorners;
 
+  /// Catalog posters show how far a title was watched and a watched mark.
+  bool get posterProgress => _posterProgress;
+
   /// Changes whenever any saved look-and-feel preference changes: used to
   /// push the new values to the cloud at once.
   String get signature => [
@@ -378,6 +383,7 @@ class UiSettings extends ChangeNotifier {
     _liveNumbers,
     _livePreview,
     _posterCorners.name,
+    _posterProgress,
     homePosterShape.name,
     homeRecentShape.name,
     homePosterDensity.name,
@@ -429,6 +435,9 @@ class UiSettings extends ChangeNotifier {
     _liveNumbers = prefs.getBool(_liveNumbersKey) ?? false;
     _livePreview = prefs.getBool(_livePreviewKey) ?? true;
     _posterCorners = PosterCornersInfo.parse(prefs.get(posterCornersKey));
+    _posterProgress = prefs.get(posterProgressKey) is bool
+        ? prefs.get(posterProgressKey) as bool
+        : true;
     homePosterShape =
         HomePosterShape.values.asNameMap()[prefs.get('ui_home_shape')] ??
         HomePosterShape.portrait;
@@ -662,6 +671,12 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setPosterProgress(bool value) async {
+    _posterProgress = value;
+    await _save(posterProgressKey, value);
+    notifyListeners();
+  }
+
   Future<void> setFocusGlow(bool value) async {
     _focusGlow = value;
     await _save(_focusGlowKey, value);
@@ -689,6 +704,7 @@ class UiSettings extends ChangeNotifier {
       _liveNumbersKey,
       _livePreviewKey,
       posterCornersKey,
+      posterProgressKey,
     ]) {
       await prefs.remove(key);
     }

@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
 import 'poster_card.dart';
 import 'title_facets.dart';
+import '../providers/history_provider.dart';
 import '../providers/ui_settings.dart';
 
 import 'package:provider/provider.dart';
@@ -114,7 +115,9 @@ class ChannelCard extends StatelessWidget {
                         child: _QualityBadge(qualityLabel!),
                       ),
                     if (_isLive)
-                      const Positioned(left: 6, bottom: 6, child: LiveBadge()),
+                      const Positioned(left: 6, bottom: 6, child: LiveBadge())
+                    else
+                      PosterProgressMark(channel),
                   ],
                 ),
               ),
@@ -321,4 +324,70 @@ class _TvRatedPosterState extends State<_TvRatedPoster> {
 
   @override
   Widget build(BuildContext context) => widget.builder(_rating);
+}
+
+/// Progress bar of a started title and a mark on a watched one, drawn over
+/// the poster's bottom edge. Rebuilds only when this title's mark changes.
+class PosterProgressMark extends StatelessWidget {
+  const PosterProgressMark(this.channel, {super.key});
+  final Channel channel;
+
+  static PosterProgress? _of(BuildContext context, Channel channel) {
+    if (channel.type == ContentType.live ||
+        !context.select<UiSettings, bool>((ui) => ui.posterProgress)) {
+      return null;
+    }
+    try {
+      return context.select<HistoryProvider, PosterProgress?>(
+        (h) => h.posterProgressFor(channel),
+      );
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mark = _of(context, channel);
+    if (mark == null) return const SizedBox.shrink();
+    final tv = DeviceTypeService.isTv;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (!mark.watched)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: tv ? 5 : 4,
+            child: ColoredBox(
+              color: AppColors.overlayControl,
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: mark.progress.clamp(0.04, 1.0),
+                child: ColoredBox(color: AppColors.primary),
+              ),
+            ),
+          )
+        else
+          Positioned(
+            right: 6,
+            bottom: 6,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check_rounded,
+                size: tv ? 16 : 14,
+                color: AppColors.textPrimary,
+                semanticLabel: 'Visto',
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }

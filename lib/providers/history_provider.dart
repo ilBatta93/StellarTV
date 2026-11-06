@@ -939,7 +939,49 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _notify() {
+    _posterIndex = null;
     if (!_disposed) notifyListeners();
+  }
+
+  /// contentId and `s:<seriesKey>` → entry; rebuilt lazily after a change so
+  /// catalog grids look progress up in constant time.
+  Map<String, HistoryEntry>? _posterIndex;
+  List<HistoryEntry>? _posterIndexOf;
+
+  /// What a catalog poster shows about [channel]: how far it was watched
+  /// and whether it counts as watched. A series folder shows its latest
+  /// episode, only while that episode is unfinished. Null: nothing to show.
+  PosterProgress? posterProgressFor(Channel channel) {
+    if (channel.type == ContentType.live) return null;
+    // Quiet progress samples replace the list without notifying.
+    if (!identical(_posterIndexOf, _entries)) _posterIndex = null;
+    final index = _posterIndex ??= _buildPosterIndex();
+    if (channel.isSeriesFolder) {
+      final key = channel.seriesKey ?? channel.id;
+      final e = index['s:$key'];
+      final p = e?.progress;
+      if (e == null || p == null || e.isWatched) return null;
+      return PosterProgress(progress: p, watched: false);
+    }
+    final e = index[channel.id];
+    if (e == null) return null;
+    if (e.isWatched) return const PosterProgress(progress: 1, watched: true);
+    final p = e.progress;
+    return p == null ? null : PosterProgress(progress: p, watched: false);
+  }
+
+  Map<String, HistoryEntry> _buildPosterIndex() {
+    _posterIndexOf = _entries;
+    final out = <String, HistoryEntry>{};
+    for (final e in entries) {
+      out[e.contentId] = e;
+      if (e.seriesKey.isEmpty) continue;
+      final previous = out['s:${e.seriesKey}'];
+      if (previous == null || e.lastWatchedAt.isAfter(previous.lastWatchedAt)) {
+        out['s:${e.seriesKey}'] = e;
+      }
+    }
+    return out;
   }
 
   @override
@@ -951,4 +993,25 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     ForegroundPolicy.instance.removeListener(_onForegroundChanged);
     super.dispose();
   }
+}
+
+/// Progress mark of a catalog poster (see [HistoryProvider.posterProgressFor]).
+@immutable
+class PosterProgress {
+  const PosterProgress({required this.progress, required this.watched});
+
+  /// 0–1, rounded to 2% so small playback steps do not redraw grids.
+  final double progress;
+  final bool watched;
+
+  double get _step => (progress * 50).round() / 50;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PosterProgress &&
+      other._step == _step &&
+      other.watched == watched;
+
+  @override
+  int get hashCode => Object.hash(_step, watched);
 }
