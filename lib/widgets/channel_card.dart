@@ -45,7 +45,7 @@ class ChannelCard extends StatelessWidget {
     context.select<UiSettings, String>(
       (ui) =>
           '${ui.showRatings}${ui.showTitles}${ui.showQuality}'
-          '${ui.favoriteHeart}',
+          '${ui.favoriteHeart}${ui.posterCorners.name}',
     );
     if (DeviceTypeService.isTv && !_isLive) {
       return _TvRatedPoster(
@@ -57,7 +57,11 @@ class ChannelCard extends StatelessWidget {
   }
 
   Widget _card(BuildContext context, double? rating) {
-    final radius = posterRadius(context);
+    // Read, not selected: on TV this runs inside _TvRatedPoster's build;
+    // [build] already subscribes to the corners.
+    final radius = BorderRadius.circular(
+      context.read<UiSettings>().posterCorners.radius,
+    );
     return Pressable(
       onTap: onTap,
       onLongPress: onFavoriteTap,
