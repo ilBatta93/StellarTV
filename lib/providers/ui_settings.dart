@@ -84,6 +84,12 @@ extension AppSectionInfo on AppSection {
 }
 
 class UiSettings extends ChangeNotifier {
+  UiSettings({this.persist = true});
+
+  /// False on a preview copy ([previewCopy]): setters change the values on
+  /// screen only, never the device storage, the cloud or the app colors.
+  final bool persist;
+
   static const _accentKey = 'ui_accent';
   static const _gridSizeKey = 'ui_grid_size';
   static const _postersKey = 'ui_show_posters';
@@ -638,6 +644,7 @@ class UiSettings extends ChangeNotifier {
       value is List ? value.whereType<String>().toList() : const [];
 
   Future<void> _save(String key, Object value) async {
+    if (!persist) return;
     final prefs = await SharedPreferences.getInstance();
     if (value is List<String>) await prefs.setStringList(key, value);
     if (value is String) await prefs.setString(key, value);
@@ -648,7 +655,7 @@ class UiSettings extends ChangeNotifier {
   Future<void> setAccent(String name) async {
     if (!accents.containsKey(name)) return;
     _accent = accents[name]!;
-    AppColors.primary = _accent;
+    if (persist) AppColors.primary = _accent;
     await _save(_accentKey, name);
     notifyListeners();
   }
@@ -690,8 +697,13 @@ class UiSettings extends ChangeNotifier {
       return;
     }
     _sectionOrder = List.of(value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(sectionOrderKey, value.map((e) => e.id).toList());
+    if (persist) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        sectionOrderKey,
+        value.map((e) => e.id).toList(),
+      );
+    }
     notifyListeners();
   }
 
@@ -718,9 +730,11 @@ class UiSettings extends ChangeNotifier {
   Future<void> resetSectionLayout() async {
     _sectionOrder = List.of(AppSection.values);
     _startSection = AppSection.home;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(sectionOrderKey);
-    await prefs.remove(startSectionKey);
+    if (persist) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(sectionOrderKey);
+      await prefs.remove(startSectionKey);
+    }
     notifyListeners();
   }
 
@@ -945,8 +959,73 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Copy that never saves: the settings preview applies an option to it
+  /// before the user confirms, and keeps the values the page opened with.
+  /// Every field in [signature] must be copied here (see the test).
+  UiSettings previewCopy() {
+    final copy = UiSettings(persist: false)
+      ..watchedPercent = watchedPercent
+      .._accent = _accent
+      .._gridSize = _gridSize
+      .._showPosters = _showPosters
+      .._animations = _animations
+      .._compact = _compact
+      .._viewMode = _viewMode
+      .._viewModeMovie = _viewModeMovie
+      .._viewModeSeries = _viewModeSeries
+      .._sectionOrder = List.of(_sectionOrder)
+      .._startSection = _startSection
+      .._multiViewLayout = _multiViewLayout
+      .._textScale = _textScale
+      .._showRatings = _showRatings
+      .._showQuality = _showQuality
+      .._showTitles = _showTitles
+      .._focusGlow = _focusGlow
+      .._favoriteHeart = _favoriteHeart
+      .._liveNumbers = _liveNumbers
+      .._livePreview = _livePreview
+      .._posterCorners = _posterCorners
+      .._posterProgress = _posterProgress
+      .._posterDetails = _posterDetails
+      .._sceneArt = _sceneArt
+      .._titleLogos = _titleLogos
+      .._focusZoom = _focusZoom
+      .._focusRing = _focusRing
+      .._focusScene = _focusScene
+      .._focusSceneLogo = _focusSceneLogo
+      .._focusSceneDetails = _focusSceneDetails
+      .._focusSceneEpisode = _focusSceneEpisode
+      .._focusSceneBadges = _focusSceneBadges
+      .._bannerTrailer = _bannerTrailer
+      .._bannerTrailerAudio = _bannerTrailerAudio
+      .._bannerTrailerDelay = _bannerTrailerDelay
+      .._ratingSource = _ratingSource
+      .._badgeNew = _badgeNew
+      .._badgePlatform = _badgePlatform
+      .._titlesOverlay = _titlesOverlay
+      .._gridColumns = _gridColumns
+      ..homePosterShape = homePosterShape
+      ..homeRecentShape = homeRecentShape
+      ..homePosterDensity = homePosterDensity
+      ..homeRecentDensity = homeRecentDensity
+      ..homeRecommendationLimit = homeRecommendationLimit
+      ..homeRecentLimit = homeRecentLimit
+      ..homeBannerSize = homeBannerSize
+      ..homeBannerSource = homeBannerSource
+      ..homeOverview = homeOverview
+      ..homeTitles = homeTitles
+      ..homeRecentTitles = homeRecentTitles
+      ..uiScalePercent = uiScalePercent
+      ..homeRowOrder = homeRowOrder
+      ..homeHiddenRows = homeHiddenRows
+      .._loaded = _loaded;
+    assert(copy.signature == signature, 'previewCopy misses a setting');
+    return copy;
+  }
+
   /// Restores every look-and-feel preference to its default value.
   Future<void> resetAppearance() async {
+    if (!persist) return;
     final prefs = await SharedPreferences.getInstance();
     for (final key in [
       _accentKey,

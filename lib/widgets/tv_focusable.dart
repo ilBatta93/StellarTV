@@ -67,6 +67,16 @@ class PosterFocusCap extends InheritedWidget {
   bool updateShouldNotify(PosterFocusCap oldWidget) => scale != oldWidget.scale;
 }
 
+/// Draws the TV focus look on the [TvFocusable]s inside without any real
+/// focus: the settings preview shows zoom and ring on a sample poster.
+class PreviewFocused extends InheritedWidget {
+  const PreviewFocused({super.key, required super.child});
+  static bool of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<PreviewFocused>() != null;
+  @override
+  bool updateShouldNotify(PreviewFocused oldWidget) => false;
+}
+
 class TvFocusable extends StatefulWidget {
   final Widget child;
   final FocusNode? focusNode;
@@ -219,6 +229,7 @@ class _TvFocusableState extends State<TvFocusable> {
         : effect.$2;
     final motion = ui && !MediaQuery.disableAnimationsOf(context);
     final duration = motion ? const Duration(milliseconds: 150) : Duration.zero;
+    final focused = _focused || PreviewFocused.of(context);
     return Focus(
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
@@ -247,7 +258,7 @@ class _TvFocusableState extends State<TvFocusable> {
           // A static lift and accent ring preserve focus visibility without
           // rasterising blurred shadows on every frame of remote movement.
           child: Transform.scale(
-            scale: _focused && motion ? focusedScale : 1,
+            scale: focused && motion ? focusedScale : 1,
             child: Container(
               foregroundDecoration: ShapeDecoration(
                 shape: _ringShape().copyWith(
@@ -255,7 +266,7 @@ class _TvFocusableState extends State<TvFocusable> {
                   side: ringWidth <= 0
                       ? BorderSide.none
                       : BorderSide(
-                          color: _focused
+                          color: focused
                               ? (glow && !_filled
                                     ? AppColors.primary
                                     : AppColors.textPrimary)

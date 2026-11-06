@@ -488,6 +488,26 @@ class _TvRatedPosterState extends State<_TvRatedPoster> {
 /// on the bottom edge and the watched mark in the bottom-right corner.
 enum PosterProgressPart { all, bar, check }
 
+/// Progress the settings preview shows on its sample posters, so the bar
+/// and the watched check can be seen without any history on the device.
+class PosterProgressSample extends InheritedWidget {
+  const PosterProgressSample({
+    super.key,
+    required this.progress,
+    required super.child,
+  });
+
+  final Map<String, PosterProgress> progress;
+
+  static Map<String, PosterProgress>? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<PosterProgressSample>()
+      ?.progress;
+
+  @override
+  bool updateShouldNotify(PosterProgressSample oldWidget) =>
+      progress != oldWidget.progress;
+}
+
 class PosterProgressMark extends StatelessWidget {
   const PosterProgressMark(
     this.channel, {
@@ -502,6 +522,8 @@ class PosterProgressMark extends StatelessWidget {
         !context.select<UiSettings, bool>((ui) => ui.posterProgress)) {
       return null;
     }
+    final sample = PosterProgressSample.maybeOf(context);
+    if (sample != null) return sample[channel.id];
     try {
       return context.select<HistoryProvider, PosterProgress?>(
         (h) => h.posterProgressFor(channel),

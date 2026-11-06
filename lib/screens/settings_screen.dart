@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -42,6 +40,8 @@ import 'poster_badges_screen.dart';
 import '../models/poster_badges.dart';
 import '../models/banner_trailer.dart';
 import '../models/poster_focus.dart';
+import '../models/settings_preview_zone.dart';
+import 'settings_preview.dart';
 import 'downloads_screen.dart';
 import 'multiview_settings_screen.dart';
 import 'live_diagnostics_screen.dart';
@@ -118,8 +118,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return '${diff.inDays} g fa';
   }
 
+  /// "Aspetto e Home": the live preview and the values it opened with.
+  SettingsPreviewController? _preview;
+
   @override
   void dispose() {
+    _preview?.dispose();
     _detailNode.dispose();
     for (final node in _categoryNodes) {
       node.dispose();
@@ -129,24 +133,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildUiCustomization(BuildContext context) {
     final ui = context.watch<UiSettings>();
+    _preview ??= SettingsPreviewController(ui);
     Future<void> pick<T>(
       String title,
       List<T> options,
       T current,
       String Function(T) label,
-      Future<void> Function(T) apply, {
+      Future<void> Function(UiSettings, T) apply, {
       String? Function(T)? detail,
-    }) async {
-      final chosen = await pickOption<T>(
-        context,
-        title: title,
-        options: options,
-        current: current,
-        label: label,
-        detail: detail,
-      );
-      if (chosen != null) await apply(chosen);
-    }
+    }) => pickWithPreview<T>(
+      context,
+      controller: _preview,
+      title: title,
+      options: options,
+      current: current,
+      label: label,
+      apply: apply,
+      detail: detail,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -156,306 +160,390 @@ class _SettingsScreenState extends State<SettingsScreen> {
           description:
               'Colori, testo ed effetti. Tutto viene salvato nel cloud.',
           children: [
-            _AccentPalette(
-              current: ui.accentName,
-              label: _accentLabel,
-              onSelected: ui.setAccent,
-            ),
-            SettingsValueTile(
-              icon: Icons.text_fields_rounded,
-              title: 'Dimensione testo',
-              subtitle: 'Utile sulle TV lontane dal divano',
-              value: _textScaleLabel(ui.textScale),
-              onTap: () => pick<String>(
-                'Dimensione testo',
-                UiSettings.textScales.keys.toList(),
-                ui.textScale,
-                _textScaleLabel,
-                ui.setTextScale,
+            PreviewTarget(
+              zone: PreviewZone.homePage,
+              child: _AccentPalette(
+                current: ui.accentName,
+                label: _accentLabel,
+                onSelected: ui.setAccent,
               ),
             ),
-            SettingsSwitchTile(
-              icon: Icons.auto_awesome_outlined,
-              title: 'Bagliore di selezione',
-              subtitle: 'Alone colorato attorno all\'elemento selezionato col telecomando',
-              value: ui.focusGlow,
-              onChanged: ui.setFocusGlow,
+            PreviewTarget(
+              zone: PreviewZone.homePage,
+              child: SettingsValueTile(
+                icon: Icons.text_fields_rounded,
+                title: 'Dimensione testo',
+                subtitle: 'Utile sulle TV lontane dal divano',
+                value: _textScaleLabel(ui.textScale),
+                onTap: () => pick<String>(
+                  'Dimensione testo',
+                  UiSettings.textScales.keys.toList(),
+                  ui.textScale,
+                  _textScaleLabel,
+                  (s, v) => s.setTextScale(v),
+                ),
+              ),
+            ),
+            PreviewTarget(
+              zone: PreviewZone.focus,
+              child: SettingsSwitchTile(
+                icon: Icons.auto_awesome_outlined,
+                title: 'Bagliore di selezione',
+                subtitle: 'Alone colorato attorno all\'elemento selezionato col telecomando',
+                value: ui.focusGlow,
+                onChanged: ui.setFocusGlow,
+              ),
             ),
             if (DeviceTypeService.isTv) ...[
-              SettingsValueTile(
-                icon: Icons.zoom_in_rounded,
-                title: 'Ingrandimento della selezione',
-                subtitle: 'Quanto cresce la locandina selezionata',
-                value: ui.focusZoom.label,
-                onTap: () => pick<PosterFocusZoom>(
-                  'Ingrandimento della selezione',
-                  PosterFocusZoom.values,
-                  ui.focusZoom,
-                  (z) => z.label,
-                  ui.setFocusZoom,
+              PreviewTarget(
+                zone: PreviewZone.focus,
+                child: SettingsValueTile(
+                  icon: Icons.zoom_in_rounded,
+                  title: 'Ingrandimento della selezione',
+                  subtitle: 'Quanto cresce la locandina selezionata',
+                  value: ui.focusZoom.label,
+                  onTap: () => pick<PosterFocusZoom>(
+                    'Ingrandimento della selezione',
+                    PosterFocusZoom.values,
+                    ui.focusZoom,
+                    (z) => z.label,
+                    (s, v) => s.setFocusZoom(v),
+                  ),
                 ),
               ),
-              SettingsValueTile(
-                icon: Icons.crop_square_rounded,
-                title: 'Contorno della selezione',
-                subtitle: 'Senza ingrandimento il contorno resta sempre',
-                value: ui.focusRing.label,
-                onTap: () => pick<PosterFocusRing>(
-                  'Contorno della selezione',
-                  PosterFocusRing.values,
-                  ui.focusRing,
-                  (r) => r.label,
-                  ui.setFocusRing,
+              PreviewTarget(
+                zone: PreviewZone.focus,
+                child: SettingsValueTile(
+                  icon: Icons.crop_square_rounded,
+                  title: 'Contorno della selezione',
+                  subtitle: 'Senza ingrandimento il contorno resta sempre',
+                  value: ui.focusRing.label,
+                  onTap: () => pick<PosterFocusRing>(
+                    'Contorno della selezione',
+                    PosterFocusRing.values,
+                    ui.focusRing,
+                    (r) => r.label,
+                    (s, v) => s.setFocusRing(v),
+                  ),
                 ),
               ),
-              SettingsSwitchTile(
-                icon: Icons.panorama_wide_angle_outlined,
-                title: 'Scena sulla locandina selezionata',
-                subtitle:
-                    'Nelle righe della Home, fermandoti su una locandina '
-                    "diventa un'immagine di scena",
-                value: ui.focusScene,
-                onChanged: ui.setFocusScene,
+              PreviewTarget(
+                zone: PreviewZone.focus,
+                child: SettingsSwitchTile(
+                  icon: Icons.panorama_wide_angle_outlined,
+                  title: 'Scena sulla locandina selezionata',
+                  subtitle:
+                      'Nelle righe della Home, fermandoti su una locandina '
+                      "diventa un'immagine di scena",
+                  value: ui.focusScene,
+                  onChanged: ui.setFocusScene,
+                ),
               ),
               if (ui.focusScene) ...[
-                SettingsSwitchTile(
-                  icon: Icons.branding_watermark_outlined,
-                  title: 'Scena: logo del titolo',
-                  subtitle: "Il nome scritto finché il logo non c'è",
-                  value: ui.focusSceneLogo,
-                  onChanged: ui.setFocusSceneLogo,
+                PreviewTarget(
+                  zone: PreviewZone.focus,
+                  child: SettingsSwitchTile(
+                    icon: Icons.branding_watermark_outlined,
+                    title: 'Scena: logo del titolo',
+                    subtitle: "Il nome scritto finché il logo non c'è",
+                    value: ui.focusSceneLogo,
+                    onChanged: ui.setFocusSceneLogo,
+                  ),
                 ),
-                SettingsSwitchTile(
-                  icon: Icons.info_outline_rounded,
-                  title: 'Scena: anno, durata e voto',
-                  value: ui.focusSceneDetails,
-                  onChanged: ui.setFocusSceneDetails,
+                PreviewTarget(
+                  zone: PreviewZone.focus,
+                  child: SettingsSwitchTile(
+                    icon: Icons.info_outline_rounded,
+                    title: 'Scena: anno, durata e voto',
+                    value: ui.focusSceneDetails,
+                    onChanged: ui.setFocusSceneDetails,
+                  ),
                 ),
-                SettingsSwitchTile(
-                  icon: Icons.video_library_outlined,
-                  title: 'Scena: episodio',
-                  subtitle: "Stagione, numero e titolo dell'episodio mostrato",
-                  value: ui.focusSceneEpisode,
-                  onChanged: ui.setFocusSceneEpisode,
+                PreviewTarget(
+                  zone: PreviewZone.focus,
+                  child: SettingsSwitchTile(
+                    icon: Icons.video_library_outlined,
+                    title: 'Scena: episodio',
+                    subtitle:
+                        "Stagione, numero e titolo dell'episodio mostrato",
+                    value: ui.focusSceneEpisode,
+                    onChanged: ui.setFocusSceneEpisode,
+                  ),
                 ),
-                SettingsSwitchTile(
-                  icon: Icons.sell_outlined,
-                  title: 'Scena: avanzamento e badge',
-                  subtitle:
-                      'Barra di avanzamento e badge scelti per le locandine',
-                  value: ui.focusSceneBadges,
-                  onChanged: ui.setFocusSceneBadges,
+                PreviewTarget(
+                  zone: PreviewZone.focus,
+                  child: SettingsSwitchTile(
+                    icon: Icons.sell_outlined,
+                    title: 'Scena: avanzamento e badge',
+                    subtitle:
+                        'Barra di avanzamento e badge scelti per le locandine',
+                    value: ui.focusSceneBadges,
+                    onChanged: ui.setFocusSceneBadges,
+                  ),
                 ),
               ],
             ],
-            SettingsSwitchTile(
-              icon: Icons.animation_outlined,
-              title: 'Animazioni',
-              subtitle: 'Transizioni ed effetti al tocco',
-              value: ui.animations,
-              onChanged: ui.setAnimations,
+            PreviewTarget(
+              zone: PreviewZone.homePage,
+              child: SettingsSwitchTile(
+                icon: Icons.animation_outlined,
+                title: 'Animazioni',
+                subtitle: 'Transizioni ed effetti al tocco',
+                value: ui.animations,
+                onChanged: ui.setAnimations,
+              ),
             ),
           ],
         ),
         SettingsSection(
           title: 'Home',
           children: [
-            _HomePosterPreview(ui: ui),
-            SettingsValueTile(
-              icon: Icons.view_day_outlined,
-              title: 'Righe della Home',
-              subtitle: 'Scegli quali righe vedere e in che ordine',
-              value: homeRowsSummary(ui),
-              onTap: () => Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const HomeRowsScreen())),
-            ),
-            SettingsValueTile(
-              icon: Icons.crop_portrait_rounded,
-              title: 'Forma locandine consigliati e Top',
-              value: ui.homePosterShape.label,
-              onTap: () => pick<HomePosterShape>(
-                'Forma locandine',
-                HomePosterShape.values,
-                ui.homePosterShape,
-                (v) => v.label,
-                ui.setHomePosterShape,
+            PreviewTarget(
+              zone: PreviewZone.homePage,
+              child: SettingsValueTile(
+                icon: Icons.view_day_outlined,
+                title: 'Righe della Home',
+                subtitle: 'Scegli quali righe vedere e in che ordine',
+                value: homeRowsSummary(ui),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const HomeRowsScreen()),
+                ),
               ),
             ),
-            SettingsValueTile(
-              icon: Icons.view_column_rounded,
-              title: 'Locandine visibili consigliati e Top',
-              value: ui.homePosterDensity.label,
-              onTap: () => pick<HomeDensity>(
-                'Locandine visibili',
-                HomeDensity.values,
-                ui.homePosterDensity,
-                (v) => v.label,
-                ui.setHomePosterDensity,
+            PreviewTarget(
+              zone: PreviewZone.recommended,
+              child: SettingsValueTile(
+                icon: Icons.crop_portrait_rounded,
+                title: 'Forma locandine consigliati e Top',
+                value: ui.homePosterShape.label,
+                onTap: () => pick<HomePosterShape>(
+                  'Forma locandine',
+                  HomePosterShape.values,
+                  ui.homePosterShape,
+                  (v) => v.label,
+                  (s, v) => s.setHomePosterShape(v),
+                ),
               ),
             ),
-            SettingsValueTile(
-              icon: Icons.format_list_numbered_rounded,
-              title: 'Numero titoli consigliati per riga',
-              value: '${ui.homeRecommendationLimit}',
-              onTap: () => pick<int>(
-                'Titoli consigliati',
-                HomeLayoutPolicy.recommendationLimits,
-                ui.homeRecommendationLimit,
-                (v) => '$v',
-                ui.setHomeRecommendationLimit,
+            PreviewTarget(
+              zone: PreviewZone.recommended,
+              child: SettingsValueTile(
+                icon: Icons.view_column_rounded,
+                title: 'Locandine visibili consigliati e Top',
+                value: ui.homePosterDensity.label,
+                onTap: () => pick<HomeDensity>(
+                  'Locandine visibili',
+                  HomeDensity.values,
+                  ui.homePosterDensity,
+                  (v) => v.label,
+                  (s, v) => s.setHomePosterDensity(v),
+                ),
               ),
             ),
-            SettingsValueTile(
-              icon: Icons.crop_landscape_rounded,
-              title: 'Forma locandine viste di recente',
-              value: ui.homeRecentShape.label,
-              onTap: () => pick<HomePosterShape>(
-                'Forma recenti',
-                HomePosterShape.values,
-                ui.homeRecentShape,
-                (v) => v.label,
-                ui.setHomeRecentShape,
+            PreviewTarget(
+              zone: PreviewZone.recommended,
+              child: SettingsValueTile(
+                icon: Icons.format_list_numbered_rounded,
+                title: 'Numero titoli consigliati per riga',
+                value: '${ui.homeRecommendationLimit}',
+                onTap: () => pick<int>(
+                  'Titoli consigliati',
+                  HomeLayoutPolicy.recommendationLimits,
+                  ui.homeRecommendationLimit,
+                  (v) => '$v',
+                  (s, v) => s.setHomeRecommendationLimit(v),
+                ),
               ),
             ),
-            SettingsValueTile(
-              icon: Icons.view_carousel_rounded,
-              title: 'Locandine visibili viste di recente',
-              value: ui.homeRecentDensity.label,
-              onTap: () => pick<HomeDensity>(
-                'Locandine recenti visibili',
-                HomeDensity.values,
-                ui.homeRecentDensity,
-                (v) => v.label,
-                ui.setHomeRecentDensity,
+            PreviewTarget(
+              zone: PreviewZone.recent,
+              child: SettingsValueTile(
+                icon: Icons.crop_landscape_rounded,
+                title: 'Forma locandine viste di recente',
+                value: ui.homeRecentShape.label,
+                onTap: () => pick<HomePosterShape>(
+                  'Forma recenti',
+                  HomePosterShape.values,
+                  ui.homeRecentShape,
+                  (v) => v.label,
+                  (s, v) => s.setHomeRecentShape(v),
+                ),
               ),
             ),
-            SettingsValueTile(
-              icon: Icons.history_rounded,
-              title: 'Numero titoli recenti per riga',
-              value: '${ui.homeRecentLimit}',
-              onTap: () => pick<int>(
-                'Titoli recenti',
-                HomeLayoutPolicy.itemLimits,
-                ui.homeRecentLimit,
-                (v) => '$v',
-                ui.setHomeRecentLimit,
+            PreviewTarget(
+              zone: PreviewZone.recent,
+              child: SettingsValueTile(
+                icon: Icons.view_carousel_rounded,
+                title: 'Locandine visibili viste di recente',
+                value: ui.homeRecentDensity.label,
+                onTap: () => pick<HomeDensity>(
+                  'Locandine recenti visibili',
+                  HomeDensity.values,
+                  ui.homeRecentDensity,
+                  (v) => v.label,
+                  (s, v) => s.setHomeRecentDensity(v),
+                ),
               ),
             ),
-            SettingsValueTile(
-              icon: Icons.panorama_outlined,
-              title: 'Dimensione banner',
-              value: ui.homeBannerSize.label,
-              onTap: () => pick<HomeBannerSize>(
-                'Dimensione banner',
-                HomeBannerSize.values,
-                ui.homeBannerSize,
-                (v) => v.label,
-                ui.setHomeBannerSize,
+            PreviewTarget(
+              zone: PreviewZone.recent,
+              child: SettingsValueTile(
+                icon: Icons.history_rounded,
+                title: 'Numero titoli recenti per riga',
+                value: '${ui.homeRecentLimit}',
+                onTap: () => pick<int>(
+                  'Titoli recenti',
+                  HomeLayoutPolicy.itemLimits,
+                  ui.homeRecentLimit,
+                  (v) => '$v',
+                  (s, v) => s.setHomeRecentLimit(v),
+                ),
               ),
             ),
-            SettingsValueTile(
-              icon: Icons.auto_awesome_motion_rounded,
-              title: 'Contenuto del banner',
-              value: ui.homeBannerSource
-                  .on(tv: DeviceTypeService.isTv)
-                  .label(tv: DeviceTypeService.isTv),
-              onTap: () => pick<HomeBannerSource>(
-                'Contenuto del banner',
-                HomeBannerSourceInfo.options(tv: DeviceTypeService.isTv),
-                ui.homeBannerSource.on(tv: DeviceTypeService.isTv),
-                (v) => v.label(tv: DeviceTypeService.isTv),
-                ui.setHomeBannerSource,
+            PreviewTarget(
+              zone: PreviewZone.banner,
+              child: SettingsValueTile(
+                icon: Icons.panorama_outlined,
+                title: 'Dimensione banner',
+                value: ui.homeBannerSize.label,
+                onTap: () => pick<HomeBannerSize>(
+                  'Dimensione banner',
+                  HomeBannerSize.values,
+                  ui.homeBannerSize,
+                  (v) => v.label,
+                  (s, v) => s.setHomeBannerSize(v),
+                ),
+              ),
+            ),
+            PreviewTarget(
+              zone: PreviewZone.banner,
+              child: SettingsValueTile(
+                icon: Icons.auto_awesome_motion_rounded,
+                title: 'Contenuto del banner',
+                value: ui.homeBannerSource
+                    .on(tv: DeviceTypeService.isTv)
+                    .label(tv: DeviceTypeService.isTv),
+                onTap: () => pick<HomeBannerSource>(
+                  'Contenuto del banner',
+                  HomeBannerSourceInfo.options(tv: DeviceTypeService.isTv),
+                  ui.homeBannerSource.on(tv: DeviceTypeService.isTv),
+                  (v) => v.label(tv: DeviceTypeService.isTv),
+                  (s, v) => s.setHomeBannerSource(v),
+                ),
               ),
             ),
             if (DeviceTypeService.isTv) ...[
-              SettingsValueTile(
-                icon: Icons.movie_filter_outlined,
-                title: 'Trailer nel banner',
-                subtitle: ui.bannerTrailer.description,
-                value: ui.bannerTrailer.label,
-                onTap: () => pick<BannerTrailerMode>(
-                  'Trailer nel banner',
-                  BannerTrailerMode.values,
-                  ui.bannerTrailer,
-                  (m) => m.label,
-                  ui.setBannerTrailer,
-                  detail: (m) => m.description,
+              PreviewTarget(
+                zone: PreviewZone.banner,
+                child: SettingsValueTile(
+                  icon: Icons.movie_filter_outlined,
+                  title: 'Trailer nel banner',
+                  subtitle: ui.bannerTrailer.description,
+                  value: ui.bannerTrailer.label,
+                  onTap: () => pick<BannerTrailerMode>(
+                    'Trailer nel banner',
+                    BannerTrailerMode.values,
+                    ui.bannerTrailer,
+                    (m) => m.label,
+                    (s, v) => s.setBannerTrailer(v),
+                    detail: (m) => m.description,
+                  ),
                 ),
               ),
               if (ui.bannerTrailer != BannerTrailerMode.off) ...[
-                SettingsValueTile(
-                  icon: Icons.timer_outlined,
-                  title: 'Partenza del trailer',
-                  subtitle: 'Secondi fermo sullo stesso titolo',
-                  value: '${ui.bannerTrailerDelay} secondi',
-                  onTap: () => pick<int>(
-                    'Partenza del trailer',
-                    bannerTrailerDelays,
-                    ui.bannerTrailerDelay,
-                    (s) => '$s secondi',
-                    ui.setBannerTrailerDelay,
+                PreviewTarget(
+                  zone: PreviewZone.banner,
+                  child: SettingsValueTile(
+                    icon: Icons.timer_outlined,
+                    title: 'Partenza del trailer',
+                    subtitle: 'Secondi fermo sullo stesso titolo',
+                    value: '${ui.bannerTrailerDelay} secondi',
+                    onTap: () => pick<int>(
+                      'Partenza del trailer',
+                      bannerTrailerDelays,
+                      ui.bannerTrailerDelay,
+                      (s) => '$s secondi',
+                      (s, v) => s.setBannerTrailerDelay(v),
+                    ),
                   ),
                 ),
-                SettingsValueTile(
-                  icon: Icons.volume_up_outlined,
-                  title: 'Audio del trailer',
-                  subtitle: ui.bannerTrailerAudio.description,
-                  value: ui.bannerTrailerAudio.label,
-                  onTap: () => pick<BannerTrailerAudio>(
-                    'Audio del trailer',
-                    BannerTrailerAudio.values,
-                    ui.bannerTrailerAudio,
-                    (a) => a.label,
-                    ui.setBannerTrailerAudio,
-                    detail: (a) => a.description,
+                PreviewTarget(
+                  zone: PreviewZone.banner,
+                  child: SettingsValueTile(
+                    icon: Icons.volume_up_outlined,
+                    title: 'Audio del trailer',
+                    subtitle: ui.bannerTrailerAudio.description,
+                    value: ui.bannerTrailerAudio.label,
+                    onTap: () => pick<BannerTrailerAudio>(
+                      'Audio del trailer',
+                      BannerTrailerAudio.values,
+                      ui.bannerTrailerAudio,
+                      (a) => a.label,
+                      (s, v) => s.setBannerTrailerAudio(v),
+                      detail: (a) => a.description,
+                    ),
                   ),
                 ),
               ],
             ],
-            SettingsSwitchTile(
-              icon: Icons.subject_rounded,
-              title: 'Trama nel banner',
-              value: ui.homeOverview,
-              onChanged: ui.setHomeOverview,
-            ),
-            SettingsSwitchTile(
-              icon: Icons.title_rounded,
-              title: 'Titoli sotto consigliati',
-              value: ui.homeTitles,
-              onChanged: ui.setHomeTitles,
-            ),
-            SettingsSwitchTile(
-              icon: Icons.short_text_rounded,
-              title: 'Titoli sotto viste di recente',
-              value: ui.homeRecentTitles,
-              onChanged: ui.setHomeRecentTitles,
-            ),
-            SettingsValueTile(
-              icon: Icons.zoom_in_rounded,
-              title: 'Scala interfaccia',
-              value: '${ui.uiScalePercent}%',
-              onTap: () => pick<int>(
-                'Scala interfaccia',
-                HomeLayoutPolicy.uiScales,
-                ui.uiScalePercent,
-                (v) => '$v%',
-                ui.setUiScale,
+            PreviewTarget(
+              zone: PreviewZone.banner,
+              child: SettingsSwitchTile(
+                icon: Icons.subject_rounded,
+                title: 'Trama nel banner',
+                value: ui.homeOverview,
+                onChanged: ui.setHomeOverview,
               ),
             ),
-            SettingsValueTile(
-              icon: Icons.restart_alt_rounded,
-              title: 'Ripristina Home e scala',
-              onTap: () async {
-                final ok = await pickOption<bool>(
-                  context,
-                  title: 'Ripristinare Home e scala?',
-                  options: const [false, true],
-                  current: false,
-                  label: (v) => v ? 'Ripristina' : 'Annulla',
-                );
-                if (ok == true) await ui.resetHomeLayout();
-              },
+            PreviewTarget(
+              zone: PreviewZone.recommended,
+              child: SettingsSwitchTile(
+                icon: Icons.title_rounded,
+                title: 'Titoli sotto consigliati',
+                value: ui.homeTitles,
+                onChanged: ui.setHomeTitles,
+              ),
+            ),
+            PreviewTarget(
+              zone: PreviewZone.recent,
+              child: SettingsSwitchTile(
+                icon: Icons.short_text_rounded,
+                title: 'Titoli sotto viste di recente',
+                value: ui.homeRecentTitles,
+                onChanged: ui.setHomeRecentTitles,
+              ),
+            ),
+            PreviewTarget(
+              zone: PreviewZone.homePage,
+              child: SettingsValueTile(
+                icon: Icons.zoom_in_rounded,
+                title: 'Scala interfaccia',
+                value: '${ui.uiScalePercent}%',
+                onTap: () => pick<int>(
+                  'Scala interfaccia',
+                  HomeLayoutPolicy.uiScales,
+                  ui.uiScalePercent,
+                  (v) => '$v%',
+                  (s, v) => s.setUiScale(v),
+                ),
+              ),
+            ),
+            PreviewTarget(
+              zone: PreviewZone.homePage,
+              child: SettingsValueTile(
+                icon: Icons.restart_alt_rounded,
+                title: 'Ripristina Home e scala',
+                onTap: () async {
+                  final ok = await pickOption<bool>(
+                    context,
+                    title: 'Ripristinare Home e scala?',
+                    options: const [false, true],
+                    current: false,
+                    label: (v) => v ? 'Ripristina' : 'Annulla',
+                  );
+                  if (ok == true) await ui.resetHomeLayout();
+                },
+              ),
             ),
           ],
         ),
@@ -467,120 +555,155 @@ class _SettingsScreenState extends State<SettingsScreen> {
               (ContentType.movie, 'Disposizione Film'),
               (ContentType.series, 'Disposizione Serie TV'),
             ])
-              SettingsValueTile(
-                icon: ui.viewModeFor(type).icon,
-                title: title,
-                subtitle: ui.viewModeFor(type).description,
-                value: ui.viewModeFor(type).label,
-                onTap: () => pick<CatalogViewMode>(
-                  title,
-                  CatalogViewMode.values,
-                  ui.viewModeFor(type),
-                  (m) => m.label,
-                  (m) => ui.setCatalogViewMode(m, type: type),
-                  detail: (m) => m.description,
+              PreviewTarget(
+                zone: type == ContentType.series
+                    ? PreviewZone.catalogSeries
+                    : PreviewZone.catalogPage,
+                child: SettingsValueTile(
+                  icon: ui.viewModeFor(type).icon,
+                  title: title,
+                  subtitle: ui.viewModeFor(type).description,
+                  value: ui.viewModeFor(type).label,
+                  onTap: () => pick<CatalogViewMode>(
+                    title,
+                    CatalogViewMode.values,
+                    ui.viewModeFor(type),
+                    (m) => m.label,
+                    (s, m) => s.setCatalogViewMode(m, type: type),
+                    detail: (m) => m.description,
+                  ),
                 ),
               ),
-            SettingsValueTile(
-              icon: Icons.photo_size_select_large_rounded,
-              title: 'Dimensione dei poster',
-              subtitle: ui.gridColumns > 0
-                  ? 'Con le colonne fisse conta per Diretta e vista orizzontale'
-                  : null,
-              value: _gridLabel(ui.gridSize),
-              onTap: () => pick<String>(
-                'Dimensione dei poster',
-                UiSettings.gridSizes.keys.toList(),
-                ui.gridSize,
-                _gridLabel,
-                ui.setGridSize,
+            PreviewTarget(
+              zone: PreviewZone.catalogPage,
+              child: SettingsValueTile(
+                icon: Icons.photo_size_select_large_rounded,
+                title: 'Dimensione dei poster',
+                subtitle: ui.gridColumns > 0
+                    ? 'Con le colonne fisse conta per Diretta e vista orizzontale'
+                    : null,
+                value: _gridLabel(ui.gridSize),
+                onTap: () => pick<String>(
+                  'Dimensione dei poster',
+                  UiSettings.gridSizes.keys.toList(),
+                  ui.gridSize,
+                  _gridLabel,
+                  (s, v) => s.setGridSize(v),
+                ),
               ),
             ),
-            SettingsValueTile(
-              icon: Icons.view_column_rounded,
-              title: 'Colonne della griglia',
-              subtitle: 'Locandine per riga in cataloghi e Preferiti',
-              value: _columnsLabel(ui.gridColumns),
-              onTap: () => pick<int>(
-                'Colonne della griglia',
-                [0, ...UiSettings.gridColumnChoices()],
-                ui.gridColumns,
-                _columnsLabel,
-                ui.setGridColumns,
+            PreviewTarget(
+              zone: PreviewZone.catalogPage,
+              child: SettingsValueTile(
+                icon: Icons.view_column_rounded,
+                title: 'Colonne della griglia',
+                subtitle: 'Locandine per riga in cataloghi e Preferiti',
+                value: _columnsLabel(ui.gridColumns),
+                onTap: () => pick<int>(
+                  'Colonne della griglia',
+                  [0, ...UiSettings.gridColumnChoices()],
+                  ui.gridColumns,
+                  _columnsLabel,
+                  (s, v) => s.setGridColumns(v),
+                ),
               ),
             ),
-            SettingsValueTile(
-              icon: Icons.rounded_corner_rounded,
-              title: 'Angoli delle locandine',
-              value: ui.posterCorners.label,
-              onTap: () => pick<PosterCorners>(
-                'Angoli delle locandine',
-                PosterCorners.values,
-                ui.posterCorners,
-                (c) => c.label,
-                ui.setPosterCorners,
+            PreviewTarget(
+              zone: PreviewZone.catalogPage,
+              child: SettingsValueTile(
+                icon: Icons.rounded_corner_rounded,
+                title: 'Angoli delle locandine',
+                value: ui.posterCorners.label,
+                onTap: () => pick<PosterCorners>(
+                  'Angoli delle locandine',
+                  PosterCorners.values,
+                  ui.posterCorners,
+                  (c) => c.label,
+                  (s, v) => s.setPosterCorners(v),
+                ),
               ),
             ),
-            SettingsValueTile(
-              icon: Icons.title_rounded,
-              title: 'Titoli delle locandine',
-              subtitle: ui.titlePlacement.description,
-              value: ui.titlePlacement.label,
-              onTap: () => pick<TitlePlacement>(
-                'Titoli delle locandine',
-                TitlePlacement.values,
-                ui.titlePlacement,
-                (p) => p.label,
-                ui.setTitlePlacement,
-                detail: (p) => p.description,
+            PreviewTarget(
+              zone: PreviewZone.catalogPage,
+              child: SettingsValueTile(
+                icon: Icons.title_rounded,
+                title: 'Titoli delle locandine',
+                subtitle: ui.titlePlacement.description,
+                value: ui.titlePlacement.label,
+                onTap: () => pick<TitlePlacement>(
+                  'Titoli delle locandine',
+                  TitlePlacement.values,
+                  ui.titlePlacement,
+                  (p) => p.label,
+                  (s, v) => s.setTitlePlacement(v),
+                  detail: (p) => p.description,
+                ),
               ),
             ),
-            SettingsSwitchTile(
-              icon: Icons.event_note_outlined,
-              title: 'Anno e durata sotto il titolo',
-              subtitle: 'La durata compare dopo aver aperto la scheda',
-              value: ui.posterDetails,
-              onChanged: ui.setPosterDetails,
-            ),
-            SettingsSwitchTile(
-              icon: Icons.landscape_outlined,
-              title: 'Immagine di scena',
-              subtitle:
-                  'In Panoramica e In evidenza, per i titoli che la hanno già',
-              value: ui.sceneArt,
-              onChanged: ui.setSceneArt,
-            ),
-            SettingsSwitchTile(
-              icon: Icons.branding_watermark_outlined,
-              title: 'Logo al posto del titolo',
-              subtitle:
-                  'In Panoramica, In evidenza, Muro e sulle copertine, '
-                  'quando il logo è già noto',
-              value: ui.titleLogos,
-              onChanged: ui.setTitleLogos,
-            ),
-            SettingsValueTile(
-              icon: Icons.sell_outlined,
-              title: 'Badge sulle locandine',
-              subtitle: 'Voto, Nuovo, qualità, piattaforma, cuore, avanzamento',
-              value: posterBadgesSummary(ui),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PosterBadgesScreen()),
+            PreviewTarget(
+              zone: PreviewZone.catalogPage,
+              child: SettingsSwitchTile(
+                icon: Icons.event_note_outlined,
+                title: 'Anno e durata sotto il titolo',
+                subtitle: 'La durata compare dopo aver aperto la scheda',
+                value: ui.posterDetails,
+                onChanged: ui.setPosterDetails,
               ),
             ),
-            SettingsSwitchTile(
-              icon: Icons.image_outlined,
-              title: 'Mostra anteprime',
-              subtitle: 'Locandine e loghi nei cataloghi',
-              value: ui.showPosters,
-              onChanged: ui.setShowPosters,
+            PreviewTarget(
+              zone: PreviewZone.catalogPage,
+              child: SettingsSwitchTile(
+                icon: Icons.landscape_outlined,
+                title: 'Immagine di scena',
+                subtitle: 'In Panoramica e In evidenza, per i titoli che la hanno già',
+                value: ui.sceneArt,
+                onChanged: ui.setSceneArt,
+              ),
             ),
-            SettingsSwitchTile(
-              icon: Icons.view_agenda_outlined,
-              title: 'Modalità compatta',
-              subtitle: 'Righe più fitte per vedere più contenuti',
-              value: ui.compact,
-              onChanged: ui.setCompact,
+            PreviewTarget(
+              zone: PreviewZone.catalogPage,
+              child: SettingsSwitchTile(
+                icon: Icons.branding_watermark_outlined,
+                title: 'Logo al posto del titolo',
+                subtitle:
+                    'In Panoramica, In evidenza, Muro e sulle copertine, '
+                    'quando il logo è già noto',
+                value: ui.titleLogos,
+                onChanged: ui.setTitleLogos,
+              ),
+            ),
+            PreviewTarget(
+              zone: PreviewZone.catalogPage,
+              child: SettingsValueTile(
+                icon: Icons.sell_outlined,
+                title: 'Badge sulle locandine',
+                subtitle:
+                    'Voto, Nuovo, qualità, piattaforma, cuore, avanzamento',
+                value: posterBadgesSummary(ui),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const PosterBadgesScreen()),
+                ),
+              ),
+            ),
+            PreviewTarget(
+              zone: PreviewZone.catalogPage,
+              child: SettingsSwitchTile(
+                icon: Icons.image_outlined,
+                title: 'Mostra anteprime',
+                subtitle: 'Locandine e loghi nei cataloghi',
+                value: ui.showPosters,
+                onChanged: ui.setShowPosters,
+              ),
+            ),
+            PreviewTarget(
+              zone: PreviewZone.catalogPage,
+              child: SettingsSwitchTile(
+                icon: Icons.view_agenda_outlined,
+                title: 'Modalità compatta',
+                subtitle: 'Righe più fitte per vedere più contenuti',
+                value: ui.compact,
+                onChanged: ui.setCompact,
+              ),
             ),
           ],
         ),
@@ -588,69 +711,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: 'Diretta',
           description: 'Guida dei canali sulla TV.',
           children: [
-            SettingsSwitchTile(
-              icon: Icons.pin_outlined,
-              title: 'Numeri dei canali',
-              subtitle: "Gli stessi dei tasti numerici, nell'ordine predefinito di una categoria",
-              value: ui.liveNumbers,
-              onChanged: ui.setLiveNumbers,
+            PreviewTarget(
+              zone: null,
+              child: SettingsSwitchTile(
+                icon: Icons.pin_outlined,
+                title: 'Numeri dei canali',
+                subtitle: "Gli stessi dei tasti numerici, nell'ordine predefinito di una categoria",
+                value: ui.liveNumbers,
+                onChanged: ui.setLiveNumbers,
+              ),
             ),
-            SettingsSwitchTile(
-              icon: Icons.smart_display_outlined,
-              title: 'Anteprima video',
-              subtitle:
-                  'Il canale selezionato parte accanto alla guida. Spenta, '
-                  'non usa connessioni finché non premi OK',
-              value: ui.livePreview,
-              onChanged: ui.setLivePreview,
+            PreviewTarget(
+              zone: null,
+              child: SettingsSwitchTile(
+                icon: Icons.smart_display_outlined,
+                title: 'Anteprima video',
+                subtitle:
+                    'Il canale selezionato parte accanto alla guida. Spenta, '
+                    'non usa connessioni finché non premi OK',
+                value: ui.livePreview,
+                onChanged: ui.setLivePreview,
+              ),
             ),
           ],
         ),
         SettingsSection(
           title: 'Navigazione',
           children: [
-            SettingsValueTile(
-              icon: Icons.view_week_outlined,
-              title: 'Ordine e sezione iniziale',
-              subtitle: 'Riordina le sezioni',
-              value: ui.startSection.label,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SectionLayoutScreen()),
-              ),
-            ),
-            SettingsValueTile(
-              icon: Icons.download_for_offline_outlined,
-              title: 'Download',
-              subtitle: 'Contenuti da guardare senza connessione',
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const DownloadsScreen()),
-              ),
-            ),
-            SettingsValueTile(
-              icon: Icons.restart_alt_rounded,
-              title: 'Ripristina aspetto predefinito',
-              subtitle: 'Colore, testo e cataloghi tornano come all\'inizio',
-              onTap: () async {
-                final ok = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Ripristinare l\'aspetto?'),
-                    content: const Text('Le altre impostazioni non cambiano.'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('Annulla'),
-                      ),
-                      TextButton(
-                        autofocus: true,
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('Ripristina'),
-                      ),
-                    ],
+            PreviewTarget(
+              zone: null,
+              child: SettingsValueTile(
+                icon: Icons.view_week_outlined,
+                title: 'Ordine e sezione iniziale',
+                subtitle: 'Riordina le sezioni',
+                value: ui.startSection.label,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SectionLayoutScreen(),
                   ),
-                );
-                if (ok == true) await ui.resetAppearance();
-              },
+                ),
+              ),
+            ),
+            PreviewTarget(
+              zone: null,
+              child: SettingsValueTile(
+                icon: Icons.download_for_offline_outlined,
+                title: 'Download',
+                subtitle: 'Contenuti da guardare senza connessione',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const DownloadsScreen()),
+                ),
+              ),
+            ),
+            PreviewTarget(
+              zone: PreviewZone.homePage,
+              child: SettingsValueTile(
+                icon: Icons.restart_alt_rounded,
+                title: 'Ripristina aspetto predefinito',
+                subtitle: 'Colore, testo e cataloghi tornano come all\'inizio',
+                onTap: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Ripristinare l\'aspetto?'),
+                      content: const Text(
+                        'Le altre impostazioni non cambiano.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Annulla'),
+                        ),
+                        TextButton(
+                          autofocus: true,
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Ripristina'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (ok == true) await ui.resetAppearance();
+                },
+              ),
             ),
           ],
         ),
@@ -1049,6 +1191,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ],
   };
 
+  /// "Aspetto e Home" keeps its preview in view while the list scrolls.
+  Widget _withPreview(Widget list) {
+    if (_category != 1) return list;
+    // Built with the list: the settings below report to this controller.
+    final controller = _preview ??= SettingsPreviewController(
+      context.read<UiSettings>(),
+    );
+    return SettingsPreviewLayout(controller: controller, list: list);
+  }
+
   Widget _categoryTile(int i, {required bool tv}) {
     final (icon, title, subtitle) = _categories[i];
     final selected = tv && i == _category;
@@ -1171,10 +1323,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   return KeyEventResult.ignored;
                 },
                 child: FocusTraversalGroup(
-                  child: ListView(
-                    key: ValueKey(_category),
-                    padding: const EdgeInsets.fromLTRB(12, 8, 32, 32),
-                    children: _sectionsFor(_category, provider),
+                  child: _withPreview(
+                    ListView(
+                      key: ValueKey(_category),
+                      padding: EdgeInsets.fromLTRB(
+                        12,
+                        8,
+                        _category == 1 ? 12 : 32,
+                        32,
+                      ),
+                      children: _sectionsFor(_category, provider),
+                    ),
                   ),
                 ),
               ),
@@ -1198,9 +1357,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: () => setState(() => _phoneDetail = false),
             ),
           ],
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-            children: _sectionsFor(_category, provider),
+          body: _withPreview(
+            ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              children: _sectionsFor(_category, provider),
+            ),
           ),
         ),
       );
@@ -1268,142 +1429,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 }
 
 /// Row of colour dots: pick the accent directly with the remote.
-/// Sketch of the two Home rows with the current shape, density and titles:
-/// the effect of each choice shows at once, without loading any image.
-class _HomePosterPreview extends StatelessWidget {
-  const _HomePosterPreview({required this.ui});
-
-  final UiSettings ui;
-
-  @override
-  Widget build(BuildContext context) => ExcludeSemantics(
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _strip(
-            'Consigliati e Top',
-            ui.homePosterShape,
-            ui.homePosterDensity,
-            ui.homeTitles,
-            progress: false,
-          ),
-          const SizedBox(height: 12),
-          _strip(
-            'Viste di recente',
-            ui.homeRecentShape,
-            ui.homeRecentDensity,
-            ui.homeRecentTitles,
-            progress: true,
-          ),
-        ],
-      ),
-    ),
-  );
-
-  Widget _strip(
-    String label,
-    HomePosterShape shape,
-    HomeDensity density,
-    bool titles, {
-    required bool progress,
-  }) {
-    final tv = DeviceTypeService.isTv;
-    final visible = density.visibleCards(tv);
-    final count = visible == 0 ? (tv ? 5.0 : 2.5) : visible;
-    const gap = 8.0;
-    const maxHeight = 72.0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-        ),
-        const SizedBox(height: 6),
-        LayoutBuilder(
-          builder: (context, box) {
-            final width = math.min(
-              (box.maxWidth - gap * (count - 1)) / count,
-              maxHeight * shape.aspectRatio,
-            );
-            final cards = math.max(1, (box.maxWidth / (width + gap)).ceil());
-            return ClipRect(
-              child: SizedBox(
-                height: width / shape.aspectRatio + (titles ? 14 : 0),
-                child: OverflowBox(
-                  alignment: Alignment.centerLeft,
-                  maxWidth: double.infinity,
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < cards; i++) ...[
-                        if (i > 0) const SizedBox(width: gap),
-                        _card(width, shape, titles, progress, i),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _card(
-    double width,
-    HomePosterShape shape,
-    bool titles,
-    bool progress,
-    int index,
-  ) => SizedBox(
-    width: width,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: width,
-          height: width / shape.aspectRatio,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppColors.primary.withValues(
-                  alpha: (0.35 - index * 0.04).clamp(0.08, 0.35),
-                ),
-                AppColors.card,
-              ],
-            ),
-          ),
-          alignment: Alignment.bottomLeft,
-          padding: const EdgeInsets.all(4),
-          child: progress
-              ? FractionallySizedBox(
-                  widthFactor: 0.25 + (index % 3) * 0.2,
-                  child: Container(height: 3, color: AppColors.primary),
-                )
-              : null,
-        ),
-        if (titles) ...[
-          const SizedBox(height: 6),
-          Container(
-            width: width * 0.7,
-            height: 6,
-            decoration: BoxDecoration(
-              color: AppColors.textMuted.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(3),
-            ),
-          ),
-        ],
-      ],
-    ),
-  );
-}
-
 class _AccentPalette extends StatelessWidget {
   const _AccentPalette({
     required this.current,

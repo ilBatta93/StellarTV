@@ -131,6 +131,53 @@ SliverGridDelegateWithMaxCrossAxisExtent channelGridDelegate(
   );
 }
 
+/// Poster grid of the layout chosen for [type] in a grid [width] wide: the
+/// catalog and the settings preview share it, so the preview never drifts.
+SliverGridDelegateWithMaxCrossAxisExtent catalogGridDelegate(
+  UiSettings ui,
+  ContentType type, {
+  required double width,
+}) {
+  final mode = ui.viewModeFor(type);
+  if (mode == CatalogViewMode.wall) {
+    return wallGridDelegate(
+      type,
+      width: width,
+      maxExtent: ui.gridMaxExtent,
+      compact: ui.compact,
+      columns: ui.gridColumns,
+    );
+  }
+  return channelGridDelegate(
+    type,
+    maxExtent: mode == CatalogViewMode.compact
+        ? ui.gridMaxExtent * 0.82
+        : ui.gridMaxExtent,
+    compact:
+        ui.compact ||
+        mode == CatalogViewMode.compact ||
+        mode == CatalogViewMode.spotlight,
+    showTitles: ui.titlesBelow,
+    showDetails: ui.posterDetails,
+    columns: ui.gridColumns,
+    width: width,
+    focusScale: ui.posterFocusScale,
+  );
+}
+
+/// Wide covers of the "Panoramica" layout.
+SliverGridDelegateWithMaxCrossAxisExtent catalogLandscapeDelegate(
+  UiSettings ui,
+) {
+  final tv = DeviceTypeService.isTv;
+  return SliverGridDelegateWithMaxCrossAxisExtent(
+    maxCrossAxisExtent: (tv ? 380 : 340) * (ui.gridMaxExtent / 140),
+    childAspectRatio: 16 / 9,
+    crossAxisSpacing: tv ? 18 : 12,
+    mainAxisSpacing: tv ? 18 : 12,
+  );
+}
+
 /// Gap between TV covers [extent] long that leaves room for the focus
 /// zoom [focusScale] of either neighbour, never below [base].
 double tvFocusGap(double base, double extent, double focusScale) =>
@@ -1266,7 +1313,7 @@ class _CatalogPageState extends State<CatalogPage> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         itemCount: entries.length,
         itemBuilder: (context, i) {
-          final tile = _CatalogListTile(
+          final tile = CatalogListTile(
             entry: entries[i],
             isFavorite: app.favoriteIds.contains(entries[i].primary.id),
             onTap: () => _openEntry(context, entries[i]),
@@ -1286,13 +1333,7 @@ class _CatalogPageState extends State<CatalogPage> {
       );
     }
     if (ui.viewModeFor(widget.type) == CatalogViewMode.landscape) {
-      final tv = DeviceTypeService.isTv;
-      final delegate = SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: (tv ? 380 : 340) * (ui.gridMaxExtent / 140),
-        childAspectRatio: 16 / 9,
-        crossAxisSpacing: tv ? 18 : 12,
-        mainAxisSpacing: tv ? 18 : 12,
-      );
+      final delegate = catalogLandscapeDelegate(ui);
       return GridView.builder(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         scrollCacheExtent: tvCatalogCacheExtent(delegate),
@@ -1725,33 +1766,12 @@ class _CatalogPageState extends State<CatalogPage> {
 
   /// Poster grid of the chosen layout. The remote's column count reads the
   /// same delegate, so Su/Giù land on the poster right above or below.
-  SliverGridDelegateWithMaxCrossAxisExtent _gridDelegate(UiSettings ui) {
-    final mode = ui.viewModeFor(widget.type);
-    if (mode == CatalogViewMode.wall) {
-      return wallGridDelegate(
+  SliverGridDelegateWithMaxCrossAxisExtent _gridDelegate(UiSettings ui) =>
+      catalogGridDelegate(
+        ui,
         widget.type,
         width: MediaQuery.sizeOf(context).width - 32,
-        maxExtent: ui.gridMaxExtent,
-        compact: ui.compact,
-        columns: ui.gridColumns,
       );
-    }
-    return channelGridDelegate(
-      widget.type,
-      maxExtent: mode == CatalogViewMode.compact
-          ? ui.gridMaxExtent * 0.82
-          : ui.gridMaxExtent,
-      compact:
-          ui.compact ||
-          mode == CatalogViewMode.compact ||
-          mode == CatalogViewMode.spotlight,
-      showTitles: ui.titlesBelow,
-      showDetails: ui.posterDetails,
-      columns: ui.gridColumns,
-      width: MediaQuery.sizeOf(context).width - 32,
-      focusScale: ui.posterFocusScale,
-    );
-  }
 
   int _columns() => gridColumnCount(
     _gridDelegate(context.read<UiSettings>()),
@@ -1785,13 +1805,14 @@ class _CatalogPageState extends State<CatalogPage> {
 
 /// One row of the "Lista" layout: small poster, title, category and rating,
 /// reachable with the remote like any grid poster.
-class _CatalogListTile extends StatelessWidget {
+class CatalogListTile extends StatelessWidget {
   final CatalogEntry entry;
   final bool isFavorite;
   final VoidCallback onTap;
   final VoidCallback onFavoriteTap;
 
-  const _CatalogListTile({
+  const CatalogListTile({
+    super.key,
     required this.entry,
     required this.isFavorite,
     required this.onTap,
