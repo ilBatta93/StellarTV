@@ -105,7 +105,26 @@ class CatalogRatingService extends ChangeNotifier {
     );
   }
 
-  /// The shared cloud cache has no scene stills: a later cloud identity of
+  /// Identity from the shared cloud cache: id, poster and scene still only.
+  @visibleForTesting
+  static TmdbItem cloudIdentity(Channel c, Map identity, double vote) =>
+      TmdbItem(
+        id: (identity['id'] as num).toInt(),
+        mediaType: c.type == ContentType.movie ? 'movie' : 'tv',
+        title: c.displaySeriesName,
+        overview: c.plot ?? '',
+        posterPath: identity['poster'] is String
+            ? identity['poster'] as String
+            : null,
+        backdropPath: identity['backdrop'] is String
+            ? identity['backdrop'] as String
+            : null,
+        voteAverage: vote,
+        popularity: 0,
+        releaseDate: '',
+      );
+
+  /// Older cloud cache rows have no scene still: a later cloud identity of
   /// the same title keeps the one a TMDB lookup or the detail page gave.
   @visibleForTesting
   static TmdbItem keepScene(TmdbItem? old, TmdbItem item) {
@@ -535,22 +554,7 @@ class CatalogRatingService extends ChangeNotifier {
             final identity = ids != null && i < ids.length ? ids[i] : null;
             if (identity is Map && identity['id'] is num) {
               final c = entries[i].value;
-              remember(
-                c,
-                TmdbItem(
-                  id: (identity['id'] as num).toInt(),
-                  mediaType: c.type == ContentType.movie ? 'movie' : 'tv',
-                  title: c.displaySeriesName,
-                  overview: c.plot ?? '',
-                  posterPath: identity['poster'] is String
-                      ? identity['poster'] as String
-                      : null,
-                  backdropPath: null,
-                  voteAverage: v.toDouble(),
-                  popularity: 0,
-                  releaseDate: '',
-                ),
-              );
+              remember(c, cloudIdentity(c, identity, v.toDouble()));
             }
           } else {
             _failed[entries[i].key] = DateTime.now();

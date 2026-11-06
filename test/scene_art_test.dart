@@ -57,6 +57,26 @@ void main() {
     );
   });
 
+  test('the shared cache brings the still with the identity', () {
+    final c = movie('n', 'Titolo dal cloud');
+    final full = CatalogRatingService.cloudIdentity(c, {
+      'type': 'movie',
+      'id': 42,
+      'poster': '/p.jpg',
+      'backdrop': '/s.jpg',
+    }, 7.1);
+    expect(full.key, 'movie_42');
+    expect(full.sceneUrl, 'https://image.tmdb.org/t/p/w780/s.jpg');
+    // Rows saved before the still column answer without it.
+    final old = CatalogRatingService.cloudIdentity(c, {
+      'type': 'movie',
+      'id': 42,
+      'poster': '/p.jpg',
+    }, 7.1);
+    expect(old.sceneUrl, isNull);
+    expect(old.posterPath, '/p.jpg');
+  });
+
   test('a later identity without still keeps the known one', () {
     final known = item(7, backdrop: '/s.jpg', poster: '/p.jpg');
     final cloud = item(7, poster: '/q.jpg');
