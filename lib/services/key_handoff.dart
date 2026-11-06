@@ -69,7 +69,8 @@ class KeyHandoff {
   KeyHandoff(this._client, {this.mode = ''});
 
   /// '' = recovery key, 'x' = access details for a login, 'e' = access
-  /// details for an edit (only the fields to change).
+  /// details for an edit (only the fields to change), 'v' = personal VPN
+  /// (NordVPN access key or WireGuard configuration).
   final String mode;
   SimpleKeyPair? _pair;
   String? _id;

@@ -13,6 +13,8 @@ import '../widgets/tv_text_field.dart';
 import 'login_screen.dart';
 import 'profile_picker_screen.dart';
 import 'tv_pairing_screen.dart';
+import 'vpn_settings_screen.dart';
+import '../widgets/vpn_login_button.dart';
 
 /// First screen for a signed-out device: sign in or create a StellarTV
 /// account (email + password). The account carries playlist, profiles,
@@ -246,6 +248,12 @@ class _AccountScreenState extends State<AccountScreen> {
               onPressed: guest,
               icon: const Icon(Icons.person_outline_rounded),
               label: const Text('Continua come ospite'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          VpnLoginButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const VpnSettingsScreen()),
             ),
           ),
           const SizedBox(height: 8),

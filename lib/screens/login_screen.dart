@@ -12,6 +12,8 @@ import '../services/key_handoff.dart';
 import '../widgets/phone_handoff_panel.dart';
 import '../widgets/recovery_key_entry.dart';
 import 'profile_picker_screen.dart';
+import 'vpn_settings_screen.dart';
+import '../widgets/vpn_login_button.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, this.initial});
@@ -140,6 +142,12 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: _isLoading ? null : _handleXtreamLogin,
             ),
           ),
+        ),
+        const SizedBox(height: 12),
+        VpnLoginButton(
+          onPressed: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const VpnSettingsScreen())),
         ),
       ],
     );

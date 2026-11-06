@@ -9,6 +9,8 @@ import '../providers/ui_settings.dart';
 import '../services/device_type_service.dart';
 import '../services/startup_gate.dart';
 import '../services/tv_render_policy.dart';
+import '../services/vpn_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/brand_intro.dart';
 import 'account_screen.dart';
 import 'home_screen.dart';
@@ -110,6 +112,8 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<void> _navigate(Widget target) async {
     _navigated = true;
+    await _confirmVpn();
+    if (!mounted) return;
     // Let the intro finish and hold the full logo briefly before leaving.
     if (_animController.isAnimating) {
       await _animController.forward().orCancel.catchError((_) {});
@@ -144,6 +148,41 @@ class _SplashScreenState extends State<SplashScreen>
         },
       ),
     );
+  }
+
+  /// The personal VPN is enabled but did not start: the user decides whether
+  /// to retry or to go on with the normal connection.
+  Future<void> _confirmVpn() async {
+    final vpn = VpnService.instance;
+    while (vpn.startupProblem != null) {
+      if (!mounted) return;
+      final retry = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text('VPN non connessa'),
+          content: Text(vpn.startupProblem ?? ''),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Continua senza VPN'),
+            ),
+            TextButton(
+              autofocus: true,
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Riprova'),
+            ),
+          ],
+        ),
+      );
+      if (retry != true) {
+        vpn.startupProblem = null;
+        return;
+      }
+      final ok = await vpn.connect();
+      if (!ok) vpn.startupProblem = vpn.problem ?? 'Connessione non riuscita';
+    }
   }
 
   Future<void> _restoreFromCloud(

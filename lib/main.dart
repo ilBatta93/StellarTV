@@ -40,6 +40,7 @@ import 'services/tmdb_service.dart';
 import 'services/app_update_service.dart';
 import 'services/app_migration_service.dart';
 import 'services/dns_service.dart';
+import 'services/vpn_service.dart';
 import 'services/sync_hooks.dart';
 import 'theme/app_theme.dart';
 
@@ -48,6 +49,9 @@ Future<void> main() async {
   // Before any network client exists: every connection resolves with the DNS
   // chosen in the app (system DNS when the resolver does not answer).
   await DnsService.instance.install();
+  // Optional personal VPN: when enabled it is up before the account or source
+  // login opens any connection.
+  await VpnService.instance.install();
   final perf = FrameTelemetryService.instance;
   await perf.startIfAutoEnabled();
   await AppForegroundService.instance.initialize();

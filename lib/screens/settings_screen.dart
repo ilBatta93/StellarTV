@@ -28,6 +28,8 @@ import '../services/settings_logout.dart';
 import 'history_settings_screen.dart';
 import 'hidden_categories_screen.dart';
 import 'dns_settings_screen.dart';
+import 'vpn_settings_screen.dart';
+import '../services/vpn_service.dart';
 import 'epg_settings_screen.dart';
 import 'player_settings_screen.dart';
 import 'profile_picker_screen.dart';
@@ -788,6 +790,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               MaterialPageRoute(builder: (_) => const DnsSettingsScreen()),
             ),
           ),
+          if (VpnService.supported)
+            SettingsValueTile(
+              icon: Icons.vpn_lock_outlined,
+              title: 'VPN personale',
+              subtitle: 'Il tuo servizio VPN, attivo già prima dell\'accesso',
+              value: VpnService.instance.enabled
+                  ? VpnService.instance.label
+                  : 'Spenta',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const VpnSettingsScreen()),
+              ),
+            ),
         ],
       ),
     ],

@@ -87,6 +87,7 @@ class MainActivity : FlutterActivity() {
             pendingSpeech = null
             return
         }
+        if (vpn?.onActivityResult(requestCode, resultCode) == true) return
         if (requestCode == externalPlayerRequest) {
             pendingExternal?.success(externalResult(resultCode, data))
             pendingExternal = null
@@ -97,6 +98,7 @@ class MainActivity : FlutterActivity() {
 
     private var channel: MethodChannel? = null
     private var audioEffects: AudioEffectsController? = null
+    private var vpn: VpnController? = null
     private var autoPip = false
     private var pipRatio = Rational(16, 9)
 
@@ -332,6 +334,10 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        val vpnController = VpnController(this)
+        vpn = vpnController
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "stellartv/vpn")
+            .setMethodCallHandler(vpnController)
         val effects = AudioEffectsController(applicationContext)
         audioEffects = effects
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "stellartv/audio")
