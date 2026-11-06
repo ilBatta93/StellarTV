@@ -11,6 +11,7 @@ import 'poster_card.dart';
 import 'section_row.dart';
 import 'settings_tiles.dart';
 import 'tv_focusable.dart';
+import 'tv_home_layout.dart';
 
 const _gold = Color(0xFFE5B64A);
 
@@ -172,12 +173,12 @@ class _AwardsRowState extends State<AwardsRow> {
               children: [
                 _bar(28),
                 const SizedBox(width: 14),
-                const Text(
+                Text(
                   'Oscar ed Emmy',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: 'Sora',
                     color: AppColors.textPrimary,
-                    fontSize: 26,
+                    fontSize: kTvRowTitleSize,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

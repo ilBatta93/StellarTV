@@ -21,10 +21,9 @@ class HomePresentation extends InheritedWidget {
     final layout = TvHomeLayout.maybeOf(context);
     final shape = recent ? ui.homeRecentShape : ui.homePosterShape;
     final maxHeight = ranked
-        ? (layout?.rankedHeight ?? 196) - 16
+        ? layout?.rankedImageHeight ?? 180
         : recent
-        ? (layout?.carouselHeight ?? 260) -
-              16 -
+        ? (layout?.cardHeight ?? 244) -
               10 -
               (ui.homeRecentTitles
                   ? 8 + MediaQuery.textScalerOf(context).scale(13) * 2.5
@@ -44,7 +43,7 @@ class HomePresentation extends InheritedWidget {
       density: recent ? ui.homeRecentDensity : ui.homePosterDensity,
       tv: tv,
       automaticWidth: ranked
-          ? ((layout?.rankedHeight ?? 196) - 16) * shape.aspectRatio
+          ? (layout?.rankedImageHeight ?? 180) * shape.aspectRatio
           : automatic,
       spacing: tv ? 20 : 12,
       rankSpace: ranked ? 72 : 0,

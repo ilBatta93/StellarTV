@@ -317,6 +317,9 @@ class TmdbPosterCard extends StatelessWidget {
       child: SizedBox(
         width: fillsCell ? null : sceneWidth ?? effectiveWidth,
         child: Column(
+          // In a row the card keeps its own height, so the focus ring
+          // follows the cover instead of the whole row.
+          mainAxisSize: fillsCell ? MainAxisSize.max : MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (fillsCell)
@@ -400,7 +403,7 @@ class RankedPosterCard extends StatelessWidget {
         : null;
     final imageHeight = imageWidth == null ? null : imageWidth / ratio;
     final homePosterWidth =
-        imageWidth ?? (home == null ? null : (home.rankedHeight - 16) * 2 / 3);
+        imageWidth ?? (home == null ? null : home.rankedImageHeight * 2 / 3);
     return Pressable(
       poster: true,
       onTap: onTap,

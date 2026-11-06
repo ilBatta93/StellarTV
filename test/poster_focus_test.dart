@@ -7,6 +7,7 @@ import 'package:stellar_tv/models/poster_focus.dart';
 import 'package:stellar_tv/providers/ui_settings.dart';
 import 'package:stellar_tv/services/device_type_service.dart';
 import 'package:stellar_tv/services/personal_vault.dart';
+import 'package:stellar_tv/widgets/section_row.dart';
 import 'package:stellar_tv/widgets/tv_focusable.dart';
 
 /// "Effetto di selezione" on TV: zoom and ring of posters and covers only.
@@ -146,5 +147,83 @@ void main() {
     final effect = await focused(tester, ui, poster: false);
     expect(effect.scale, closeTo(1.06, 1e-6));
     expect(effect.side.width, 2.5);
+  });
+
+  testWidgets('in a row the ring hugs the cover, not the whole row', (
+    tester,
+  ) async {
+    await device(tv: true);
+    final ui = await settings(PosterFocusZoom.wide, PosterFocusRing.thick);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: ui,
+        child: MaterialApp(
+          home: Scaffold(
+            body: HorizontalRow(
+              height: 300,
+              itemCount: 3,
+              itemBuilder: (_, i) => TvFocusable(
+                autofocus: i == 0,
+                poster: true,
+                onPressed: () {},
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [SizedBox(width: 120, height: 180)],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final ring = tester.getSize(
+      find
+          .descendant(
+            of: find.byType(TvFocusable).first,
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    expect(ring, const Size(120, 180));
+  });
+
+  testWidgets('"Muro" caps the zoom and keeps a ring', (tester) async {
+    await device(tv: true);
+    final ui = await settings(PosterFocusZoom.wide, PosterFocusRing.none);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: ui,
+        child: MaterialApp(
+          home: PosterFocusCap(
+            scale: 1,
+            child: Center(
+              child: TvFocusable(
+                autofocus: true,
+                poster: true,
+                onPressed: () {},
+                child: const SizedBox(width: 100, height: 150),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final transform = tester.widget<Transform>(
+      find.descendant(
+        of: find.byType(TvFocusable),
+        matching: find.byType(Transform),
+      ),
+    );
+    expect(transform.transform.getMaxScaleOnAxis(), closeTo(1, 1e-6));
+    final box = tester.widget<Container>(
+      find.descendant(
+        of: find.byType(TvFocusable),
+        matching: find.byType(Container),
+      ),
+    );
+    final shape = (box.foregroundDecoration! as ShapeDecoration).shape;
+    expect((shape as OutlinedBorder).side.width, PosterFocusRing.thin.width);
   });
 }

@@ -14,6 +14,8 @@ import '../services/title_matching.dart';
 import '../theme/app_theme.dart';
 import 'poster_card.dart';
 import 'poster_overlay.dart';
+import 'focus_scene_card.dart';
+import 'tv_focusable.dart';
 import 'tv_home_layout.dart';
 
 /// Same bounded presentation on TV and touch, no new focus stops.
@@ -161,6 +163,7 @@ class HomeLandscapeCard extends StatelessWidget {
     this.rating,
     this.progress,
     this.trailing,
+    this.sceneItem,
   });
   final String title;
   final String? image;
@@ -172,8 +175,39 @@ class HomeLandscapeCard extends StatelessWidget {
 
   /// Shared right-aligned metadata (episode coordinates or movie time left).
   final String? trailing;
+
+  /// TMDB identity of the card: with "Scena sulla locandina selezionata"
+  /// a vertical or square cover widens to the scene of what is in progress.
+  final TmdbItem? sceneItem;
+
   @override
   Widget build(BuildContext context) {
+    final ratio = HomePresentation.contains(context)
+        ? context.watch<UiSettings>().homeRecentShape.aspectRatio
+        : 16 / 9;
+    final item = sceneItem;
+    final sceneOnFocus =
+        item != null &&
+        ratio < 16 / 9 &&
+        DeviceTypeService.isTv &&
+        context.select<UiSettings, bool>((ui) => ui.focusScene) &&
+        HorizontalRowScope.of(context);
+    if (!sceneOnFocus) return _card(context, ratio, null, null);
+    final width = homeCardWidth(context);
+    return FocusSceneHost(
+      item: item,
+      posterHeight: width / ratio,
+      builder: (context, scene, sceneWidth) =>
+          _card(context, ratio, scene, sceneWidth),
+    );
+  }
+
+  Widget _card(
+    BuildContext context,
+    double ratio,
+    Widget? scene,
+    double? sceneWidth,
+  ) {
     final watched = progress?.clamp(0.0, 1.0);
     final label = trailing;
     final width = homeCardWidth(context);
@@ -185,73 +219,82 @@ class HomeLandscapeCard extends StatelessWidget {
       onTap: onTap,
       onFocus: onFocus,
       child: SizedBox(
-        width: width,
+        width: sceneWidth ?? width,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AspectRatio(
-              aspectRatio: HomePresentation.contains(context)
-                  ? context.watch<UiSettings>().homeRecentShape.aspectRatio
-                  : 16 / 9,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    PosterImage(url: image),
-                    if (rank != null || watched != null)
-                      const DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.center,
-                            end: Alignment.bottomCenter,
-                            colors: [Colors.transparent, AppColors.overlay],
+            if (scene != null)
+              SizedBox(
+                height: width / ratio,
+                width: double.infinity,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: scene,
+                ),
+              )
+            else
+              AspectRatio(
+                aspectRatio: ratio,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      PosterImage(url: image),
+                      if (rank != null || watched != null)
+                        const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.center,
+                              end: Alignment.bottomCenter,
+                              colors: [Colors.transparent, AppColors.overlay],
+                            ),
                           ),
                         ),
+                      PosterOverlay(
+                        topLeft: [
+                          if (rating != null && rating! > 0)
+                            RatingBadge(value: rating!),
+                          if (!showTitle && label != null) _InfoTag(label),
+                        ],
+                        bottomLeft: [
+                          if (rank != null)
+                            Text(
+                              '#$rank',
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 40,
+                                fontWeight: FontWeight.w800,
+                                height: 1,
+                              ),
+                            ),
+                        ],
+                        bottomRight: [
+                          if (watched != null)
+                            Text(
+                              '${(watched * 100).round()}%',
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                        ],
+                        edge: watched == null
+                            ? null
+                            : LinearProgressIndicator(
+                                value: watched,
+                                minHeight: 4,
+                                color: AppColors.primary,
+                                backgroundColor: AppColors.border,
+                              ),
+                        edgeHeight: watched == null ? 0 : 4,
                       ),
-                    PosterOverlay(
-                      topLeft: [
-                        if (rating != null && rating! > 0)
-                          RatingBadge(value: rating!),
-                        if (!showTitle && label != null) _InfoTag(label),
-                      ],
-                      bottomLeft: [
-                        if (rank != null)
-                          Text(
-                            '#$rank',
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 40,
-                              fontWeight: FontWeight.w800,
-                              height: 1,
-                            ),
-                          ),
-                      ],
-                      bottomRight: [
-                        if (watched != null)
-                          Text(
-                            '${(watched * 100).round()}%',
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                      ],
-                      edge: watched == null
-                          ? null
-                          : LinearProgressIndicator(
-                              value: watched,
-                              minHeight: 4,
-                              color: AppColors.primary,
-                              backgroundColor: AppColors.border,
-                            ),
-                      edgeHeight: watched == null ? 0 : 4,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
             if (showTitle)
               Padding(
                 padding: const EdgeInsets.fromLTRB(9, 8, 9, 0),
@@ -319,7 +362,9 @@ class HomeHistoryArtwork extends StatefulWidget {
   final String title;
   final bool isMovie;
   final String fallback;
-  final Widget Function(String?) builder;
+
+  /// [item] is the TMDB identity once known (null before or not found).
+  final Widget Function(String? image, TmdbItem? item) builder;
   @override
   State<HomeHistoryArtwork> createState() => _HomeHistoryArtworkState();
 }
@@ -358,6 +403,7 @@ class _HomeHistoryArtworkState extends State<HomeHistoryArtwork> {
                   HomePosterShape.landscape
           ? snapshot.data?.posterUrl ?? widget.fallback
           : snapshot.data?.backdropUrl ?? widget.fallback,
+      snapshot.data,
     ),
   );
 }

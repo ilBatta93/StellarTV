@@ -116,11 +116,28 @@ void main() {
     expect(tmdb.asked, isEmpty);
   });
 
-  testWidgets('covers never ask for an unknown logo', (tester) async {
+  testWidgets('covers ask together, once, never one request per card', (
+    tester,
+  ) async {
     final cards = [for (var i = 0; i < 6; i++) movie('g$i')];
     for (var i = 0; i < cards.length; i++) {
       CatalogRatingService.instance.remember(cards[i], item(9200 + i));
     }
+    final batches = <List<int>>[];
+    TmdbService.sharedArtworkOverride = (items) async {
+      batches.add([for (final i in items) i.id]);
+      return {
+        'results': [
+          for (final i in items)
+            i.id == 9200
+                ? {'tmdb_id': 9200, 'logo_path': '/logo.png'}
+                : i.id == 9201
+                ? {'tmdb_id': 9201, 'logo_path': null}
+                : null,
+        ],
+      };
+    };
+    addTearDown(() => TmdbService.sharedArtworkOverride = null);
     final tmdb = CountingTmdb();
     await tester.pumpWidget(
       host(
@@ -129,10 +146,34 @@ void main() {
         Column(children: [for (final c in cards) logoOf(c)]),
       ),
     );
-    expect(tmdb.asked, isEmpty);
+    // The written titles stay while the batch is gathered.
     for (final c in cards) {
       expect(find.text(c.name), findsOneWidget);
     }
+    await tester.pump(TmdbService.logoBatchDelay);
+    await tester.pump();
+    await tester.pump();
+    // One shared request for all six, no single lookup.
+    expect(batches, [
+      [9200, 9201, 9202, 9203, 9204, 9205],
+    ]);
+    expect(tmdb.asked, isEmpty);
+    // Only the title with a logo gets an image; the others keep the name.
+    expect(find.byType(CachedNetworkImage), findsOneWidget);
+    for (final c in cards.skip(1)) {
+      expect(find.text(c.name), findsOneWidget);
+    }
+    // Known answers are remembered: a rebuild asks nothing more.
+    await tester.pumpWidget(
+      host(
+        await settings(),
+        tmdb,
+        Column(children: [for (final c in cards.take(2)) logoOf(c)]),
+      ),
+    );
+    await tester.pump(TmdbService.logoBatchDelay);
+    expect(batches, hasLength(1));
+    await settle(tester);
   });
 
   testWidgets('one title at a time asks once, title until it arrives', (

@@ -26,7 +26,8 @@ bool isTitleLogoUrl(String url) =>
 /// Versioned because older metadata allowed untagged foreign-language logos.
 class TitleLogoCache {
   static const storageKey = 'title_logo_cache_it_en_v1';
-  static const limit = 240;
+  // Catalog covers ask for logos in batches: room for a few screens.
+  static const limit = 600;
   static Future<void> _writes = Future<void>.value();
   static Map<String, dynamic> _decode(String? raw) {
     try {
@@ -83,8 +84,16 @@ class TitleLogoCache {
     }
   }
 
-  static Future<void> write(String key, String? url, {DateTime? now}) {
-    if (!validUrl(url)) return Future<void>.value();
+  static Future<void> write(String key, String? url, {DateTime? now}) =>
+      writeAll({key: url}, now: now);
+
+  /// Saves several answers in one write (a batch of covers).
+  static Future<void> writeAll(Map<String, String?> urls, {DateTime? now}) {
+    final valid = {
+      for (final e in urls.entries)
+        if (validUrl(e.value)) e.key: e.value,
+    };
+    if (valid.isEmpty) return Future<void>.value();
     final at = now ?? DateTime.now();
     return _writes = _writes.then((_) async {
       try {
@@ -96,17 +105,19 @@ class TitleLogoCache {
               value['expires'] is! int ||
               value['expires'] <= at.millisecondsSinceEpoch,
         );
-        entries.remove(key);
-        entries[key] = {
-          'url': url,
-          'expires': at
-              .add(
-                url == null
-                    ? const Duration(hours: 6)
-                    : const Duration(days: 30),
-              )
-              .millisecondsSinceEpoch,
-        };
+        valid.forEach((key, url) {
+          entries.remove(key);
+          entries[key] = {
+            'url': url,
+            'expires': at
+                .add(
+                  url == null
+                      ? const Duration(hours: 6)
+                      : const Duration(days: 30),
+                )
+                .millisecondsSinceEpoch,
+          };
+        });
         while (entries.length > limit) {
           entries.remove(entries.keys.first);
         }

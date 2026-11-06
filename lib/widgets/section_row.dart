@@ -162,7 +162,11 @@ class HorizontalRow extends StatelessWidget {
                     }
                   });
                 },
-                child: HorizontalRowScope(child: child),
+                // Not stretched to the row height: the focus ring hugs the
+                // card, and the room left over takes the focus zoom.
+                child: HorizontalRowScope(
+                  child: Align(widthFactor: 1, child: child),
+                ),
               ),
             );
           },

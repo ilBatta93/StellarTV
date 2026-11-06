@@ -228,6 +228,14 @@ class TvImageMemoryGuard with WidgetsBindingObserver {
   static final _instance = TvImageMemoryGuard._();
   static bool _installed = false;
   static final reducedRendering = ValueNotifier<bool>(false);
+
+  /// The Home banner trailer (a web player) waits after memory pressure.
+  /// Unlike [reducedRendering] it comes back: 1 GB TV sticks report
+  /// pressure early and often, and a sticky flag kept it off for good.
+  static final trailerPaused = ValueNotifier<bool>(false);
+  static const trailerCooldown = Duration(seconds: 60);
+  static Timer? _trailerResume;
+
   static void install() {
     if (_installed) return;
     _installed = true;
@@ -236,7 +244,14 @@ class TvImageMemoryGuard with WidgetsBindingObserver {
 
   @override
   void didHaveMemoryPressure() {
-    if (DeviceTypeService.isTv) reducedRendering.value = true;
+    if (DeviceTypeService.isTv) {
+      reducedRendering.value = true;
+      trailerPaused.value = true;
+      _trailerResume?.cancel();
+      _trailerResume = Timer(trailerCooldown, () {
+        trailerPaused.value = false;
+      });
+    }
     final cache = PaintingBinding.instance.imageCache;
     cache.maximumSize = 80;
     cache.maximumSizeBytes = 24 << 20;

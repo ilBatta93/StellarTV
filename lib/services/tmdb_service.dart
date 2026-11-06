@@ -1,7 +1,9 @@
 import 'foreground_http_client.dart';
 
+import 'dart:async';
 import 'dart:convert';
 
+import 'image_warmup_service.dart';
 import 'title_logo_cache.dart';
 import 'title_facet_index.dart';
 
@@ -248,6 +250,96 @@ class TmdbService {
 
   // Only focused banners request logos; share in-flight and cached results.
   final Map<String, Future<String?>> _titleLogos = {};
+
+  /// Logos of covers shown together ("Logo al posto del titolo"): gathered
+  /// for a moment and asked to the site's shared cache in one request, only
+  /// while the remote is still. Titles the shared cache does not know keep
+  /// their written name: no TMDB request per cover.
+  Future<String?> batchedLogo(TmdbItem item) {
+    if (item.id <= 0) return Future<String?>.value(null);
+    final media = '${item.isMovie ? 'movie' : 'tv'}:${item.id}';
+    final indexed = TitleFacetIndex.instance.logoOf(media);
+    if (indexed != null) return Future<String?>.value(indexed.url);
+    final single = _titleLogos[item.key];
+    if (single != null) return single;
+    final waiting = _batchWaiting[item.key];
+    if (waiting != null) return waiting.future;
+    final completer = Completer<String?>();
+    _batchWaiting[item.key] = completer;
+    _batchPending[item.key] = item;
+    _batchTimer ??= Timer(logoBatchDelay, _flushLogoBatch);
+    return completer.future;
+  }
+
+  static const logoBatchDelay = Duration(milliseconds: 350);
+  static const logoBatchSize = 40;
+  final Map<String, TmdbItem> _batchPending = {};
+  final Map<String, Completer<String?>> _batchWaiting = {};
+  Timer? _batchTimer;
+
+  /// Test seam: replaces the shared-cache request of [batchedLogo].
+  static Future<Object?> Function(List<TmdbItem>)? sharedArtworkOverride;
+
+  Future<void> _flushLogoBatch() async {
+    try {
+      await RemoteNavigation.idle();
+      final batch = _batchPending.values.take(logoBatchSize).toList();
+      for (final item in batch) {
+        _batchPending.remove(item.key);
+      }
+      if (batch.isEmpty) return;
+      Object? body;
+      try {
+        body =
+            await (sharedArtworkOverride?.call(batch) ??
+                _postSharedArtwork(batch));
+      } catch (_) {
+        body = null;
+      }
+      final entries = parseSharedLogos(body);
+      final known = <String, String?>{};
+      for (var i = 0; i < batch.length; i++) {
+        final item = batch[i];
+        final entry = i < entries.length ? entries[i] : null;
+        if (entry != null) {
+          known[item.key] = entry.url;
+          TitleFacetIndex.instance.putLogo(
+            '${item.isMovie ? 'movie' : 'tv'}:${item.id}',
+            entry.url,
+            quiet: true,
+          );
+        }
+        _batchWaiting.remove(item.key)?.complete(entry?.url);
+      }
+      if (known.isNotEmpty) await TitleLogoCache.writeAll(known);
+    } finally {
+      _batchTimer = _batchPending.isEmpty
+          ? null
+          : Timer(logoBatchDelay, _flushLogoBatch);
+    }
+  }
+
+  Future<Object?> _postSharedArtwork(List<TmdbItem> items) async {
+    final res = await _foregroundHttp
+        .post(
+          Uri.parse('${SupabaseConfig.apiBase}/artwork'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'items': [
+              for (final item in items)
+                {
+                  'title': item.title,
+                  'type': item.mediaType,
+                  'tmdb_id': item.id,
+                },
+            ],
+          }),
+        )
+        .timeout(const Duration(seconds: 12));
+    if (res.statusCode != 200) return null;
+    return jsonDecode(res.body);
+  }
+
   Future<String?> titleLogo(TmdbItem item) {
     if (item.id <= 0) return Future<String?>.value(null);
     if (_titleLogos.length >= 160 && !_titleLogos.containsKey(item.key)) {
@@ -314,10 +406,19 @@ class TmdbService {
   }
 
   static TitleLogoEntry? parseSharedLogo(Object? body) {
-    if (body is! Map || body['results'] is! List) return null;
-    final list = body['results'] as List;
-    if (list.isEmpty || list.first is! Map) return null;
-    final row = list.first as Map;
+    final all = parseSharedLogos(body);
+    return all.isEmpty ? null : all.first;
+  }
+
+  /// One entry per requested title, in order: null when the shared cache
+  /// has no usable answer, a null url when it confirmed there is no logo.
+  static List<TitleLogoEntry?> parseSharedLogos(Object? body) {
+    if (body is! Map || body['results'] is! List) return const [];
+    return [for (final row in body['results'] as List) _sharedLogoRow(row)];
+  }
+
+  static TitleLogoEntry? _sharedLogoRow(Object? row) {
+    if (row is! Map) return null;
     if (row['tmdb_id'] is! int) return null;
     final path = row['logo_path'];
     if (path == null) return const TitleLogoEntry(null);

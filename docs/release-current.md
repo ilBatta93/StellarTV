@@ -1,14 +1,9 @@
 # Release Notes — Novità
 
-- Anno e durata sotto il titolo: nei cataloghi una riga sotto ogni locandina mostra l'anno e la durata. Si accende in Impostazioni › Aspetto e Home › Cataloghi; la durata compare dopo aver aperto la scheda del titolo almeno una volta.
-- Badge sulle locandine: una pagina in Impostazioni › Aspetto e Home › Cataloghi per scegliere voto, Nuovo, qualità, piattaforma di streaming, cuore e avanzamento, con la fonte del voto (Automatico, Solo IMDb, Solo TMDB).
-- Locandine più ordinate: ogni badge ha il suo angolo e nessuno ne copre un altro, anche nella Home e nella riga Oscar ed Emmy, dove il trofeo del vincitore ora sta sotto il voto.
-- Titoli sulla locandina: in Titoli delle locandine si possono scrivere sulla copertina, su una sfumatura scura più leggibile, oltre che sotto o per niente.
-- Immagine di scena: le copertine larghe della vista Panoramica possono mostrare un fotogramma del titolo al posto della locandina, e la scheda grande di In evidenza lo usa come sfondo. Si accende in Impostazioni › Aspetto e Home › Cataloghi L'immagine arriva insieme al voto: sui titoli già visti compare man mano che i voti si aggiornano, o subito dopo averne aperto la scheda.
-- Colonne della griglia: in Impostazioni › Aspetto e Home › Cataloghi si sceglie quante locandine stanno in ogni riga dei cataloghi e dei Preferiti (da 2 a 5 sul telefono, da 4 a 9 sulla TV), oppure Automatiche come prima.
-- VPN personale (facoltativa) su Android e Android TV: si configura con NordVPN o con un file WireGuard di qualsiasi servizio, in Impostazioni › Riproduzione › VPN personale o dalle schermate di accesso. Se è attiva parte all'avvio, prima dell'accesso, e di base vale solo per StellarTV. Sulla TV i dati della VPN si possono inviare dal telefono con il QR, cifrati.
-- Disposizione Muro: nei cataloghi una nuova disposizione con solo le copertine, quasi attaccate e più fitte; sulla TV una striscia in basso mostra titolo, anno e voto di quella selezionata. Si sceglie dal pulsante Disposizione o in Impostazioni.
-- Logo al posto del titolo: in Impostazioni › Aspetto e Home › Cataloghi si può mostrare il logo ufficiale al posto del nome scritto in In evidenza, nella striscia del Muro, in Panoramica e nei titoli sulla copertina.
-- Effetto di selezione sulla TV: in Impostazioni › Aspetto e Home si sceglie quanto si ingrandisce la locandina selezionata (Nessuno, Leggero, Normale, Ampio) e lo spessore del contorno (Sottile, Spesso, Nessuno).
-- Scena sulla locandina selezionata (TV): nelle righe della Home la locandina su cui ti fermi si allarga e diventa un'immagine di scena, con logo, anno, durata, voto, episodio in corso e avanzamento a scelta. Si accende in Impostazioni › Aspetto e Home.
-- Trailer nel banner (TV): fermandoti su un titolo della Home il suo trailer parte sullo sfondo o in una finestra sfumata a destra, con audio sempre muto, dopo qualche secondo o dai nuovi pulsanti Guarda/Riprendi e Trailer del banner. Si accende in Impostazioni › Aspetto e Home.
+- Home della TV più equilibrata: Dimensione banner (Compatto, Bilanciato, Grande) ora cambia davvero lo spazio del banner e delle locandine sotto. Il logo del titolo ha la precedenza ed è sempre leggibile da lontano, la trama si accorcia quando serve, e banner e righe partono dallo stesso margine.
+- Titoli delle righe, locandine e spazi della Home TV si adattano da soli alla dimensione del banner, ai titoli sotto le locandine e all'effetto di selezione.
+- Effetto di selezione corretto: il contorno segue la sola locandina e la locandina ingrandita non viene più tagliata né finisce sotto le vicine, nella Home e nei cataloghi. Nel Muro resta solo il contorno.
+- Scena sulla locandina selezionata anche nelle righe dei titoli visti di recente, con la scena dell'episodio in corso.
+- Trailer nel banner anche sulle TV con poca memoria: se la memoria scarseggia si ferma e riprende dopo circa un minuto, invece di spegnersi fino al riavvio.
+- Logo al posto del titolo anche sulle copertine dei cataloghi: i loghi delle copertine visibili arrivano tutti insieme con una sola richiesta, solo quando il telecomando è fermo.
+- Trailer nel banner: nuova scelta per l'audio, Insieme al trailer, che parte con il video e sale piano in dissolvenza.

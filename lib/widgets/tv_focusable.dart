@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -51,6 +53,18 @@ class HorizontalRowScope extends InheritedWidget {
       context.getInheritedWidgetOfExactType<HorizontalRowScope>() != null;
   @override
   bool updateShouldNotify(HorizontalRowScope oldWidget) => false;
+}
+
+/// Largest zoom a focused cover may take below this point: "Muro" covers
+/// sit 2 px apart, so a zoom would slide under the neighbours.
+class PosterFocusCap extends InheritedWidget {
+  const PosterFocusCap({super.key, required this.scale, required super.child});
+  final double scale;
+  static double of(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<PosterFocusCap>()?.scale ??
+      double.infinity;
+  @override
+  bool updateShouldNotify(PosterFocusCap oldWidget) => scale != oldWidget.scale;
 }
 
 class TvFocusable extends StatefulWidget {
@@ -194,8 +208,15 @@ class _TvFocusableState extends State<TvFocusable> {
             )
           : null,
     );
-    final focusedScale = effect?.$1 ?? widget.focusedScale;
-    final ringWidth = effect?.$2 ?? 2.5;
+    final focusedScale = effect == null
+        ? widget.focusedScale
+        : math.min(effect.$1, PosterFocusCap.of(context));
+    // A capped zoom must not leave a cover with no focus mark at all.
+    final ringWidth = effect == null
+        ? 2.5
+        : focusedScale <= 1 && effect.$2 <= 0
+        ? PosterFocusRing.thin.width
+        : effect.$2;
     final motion = ui && !MediaQuery.disableAnimationsOf(context);
     final duration = motion ? const Duration(milliseconds: 150) : Duration.zero;
     return Focus(

@@ -18,17 +18,20 @@ extension BannerTrailerModeInfo on BannerTrailerMode {
       BannerTrailerMode.values.asNameMap()[value] ?? BannerTrailerMode.off;
 }
 
-enum BannerTrailerAudio { muted, delayed, button }
+enum BannerTrailerAudio { muted, together, delayed, button }
 
 extension BannerTrailerAudioInfo on BannerTrailerAudio {
   String get label => switch (this) {
     BannerTrailerAudio.muted => 'Sempre muto',
+    BannerTrailerAudio.together => 'Insieme al trailer',
     BannerTrailerAudio.delayed => 'Dopo qualche secondo',
     BannerTrailerAudio.button => 'Col pulsante',
   };
 
   String get description => switch (this) {
     BannerTrailerAudio.muted => 'Solo immagini',
+    BannerTrailerAudio.together =>
+      "L'audio sale piano, in dissolvenza, appena parte il video",
     BannerTrailerAudio.delayed =>
       'Parte muto, l\'audio arriva dopo altri $bannerAudioDelaySeconds secondi',
     BannerTrailerAudio.button =>
@@ -68,7 +71,14 @@ bool bannerTrailerAudible({
   required bool onButton,
 }) => switch (audio) {
   BannerTrailerAudio.muted => false,
+  BannerTrailerAudio.together => true,
   BannerTrailerAudio.delayed =>
     onButton || playedFor >= const Duration(seconds: bannerAudioDelaySeconds),
   BannerTrailerAudio.button => onButton,
 };
+
+/// Volume step of the sound fade (every 90 ms, up to 100): with the sound
+/// starting together with the video the fade is slower, so it never bursts
+/// in at full volume.
+int bannerAudioFadeStep(BannerTrailerAudio audio) =>
+    audio == BannerTrailerAudio.together ? 4 : 8;

@@ -60,6 +60,16 @@ void main() {
       expect(audible(BannerTrailerAudio.delayed, onButton: true), isTrue);
       expect(audible(BannerTrailerAudio.button, seconds: 60), isFalse);
       expect(audible(BannerTrailerAudio.button, onButton: true), isTrue);
+      expect(audible(BannerTrailerAudio.together, seconds: 0), isTrue);
+      expect(
+        bannerAudioFadeStep(BannerTrailerAudio.together),
+        lessThan(bannerAudioFadeStep(BannerTrailerAudio.button)),
+      );
+      expect(
+        BannerTrailerAudioInfo.parse('together'),
+        BannerTrailerAudio.together,
+      );
+      expect(BannerTrailer.html('abc'), contains('v+=step||8'));
     });
 
     test('unknown values fall back to safe defaults', () {
@@ -73,7 +83,7 @@ void main() {
       final page = BannerTrailer.html('abcdefghijk');
       expect(page, contains("videoId:'abcdefghijk'"));
       expect(page, contains('mute:1'));
-      expect(page, contains('function audio(on)'));
+      expect(page, contains('function audio(on,step)'));
       expect(page, contains('youtube-nocookie.com'));
     });
   });

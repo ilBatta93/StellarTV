@@ -429,6 +429,9 @@ class UiSettings extends ChangeNotifier {
   PosterFocusZoom get focusZoom => _focusZoom;
   PosterFocusRing get focusRing => _focusRing;
 
+  /// Zoom a focused cover really gets: none with animations off.
+  double get posterFocusScale => _animations ? _focusZoom.scale : 1;
+
   /// "Scena sulla locandina selezionata" (TV Home rows) and what it shows.
   bool get focusScene => _focusScene;
   bool get focusSceneLogo => _focusSceneLogo;

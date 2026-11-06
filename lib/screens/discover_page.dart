@@ -1,5 +1,6 @@
 import '../providers/ui_settings.dart';
 import '../models/home_layout_preferences.dart';
+import '../models/poster_focus.dart';
 import '../widgets/home_presentation.dart';
 import '../widgets/awards_row.dart';
 import '../services/awards_service.dart';
@@ -982,7 +983,8 @@ class _HistoryCard extends StatelessWidget {
       title: seriesName ?? channel.name,
       isMovie: !isEpisode,
       fallback: poster,
-      builder: (image) => HomeLandscapeCard(
+      builder: (image, art) => HomeLandscapeCard(
+        sceneItem: art,
         title: title,
         image: image,
         // A finished episode is not progress on the next one.
@@ -1220,6 +1222,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
   @override
   void initState() {
     super.initState();
+    TvImageMemoryGuard.trailerPaused.addListener(_trailerPauseChanged);
     _hero = ValueNotifier(_firstHero());
     _seedInitialHistory();
     HardwareKeyboard.instance.addHandler(_anyKey);
@@ -1288,6 +1291,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
     _onBannerButton.dispose();
     _trailerPlaying.dispose();
     _dimInfo.dispose();
+    TvImageMemoryGuard.trailerPaused.removeListener(_trailerPauseChanged);
     super.dispose();
   }
 
@@ -1316,12 +1320,24 @@ class _TvDiscoverState extends State<_TvDiscover> {
     _undim();
   }
 
-  bool _trailerAllowed(UiSettings ui, bool pressure) => bannerTrailerAllowed(
-    mode: ui.bannerTrailer,
-    isTv: DeviceTypeService.isTv,
-    lowRam: DeviceTypeService.isLowRam,
-    memoryPressure: pressure,
-  );
+  bool _trailerAllowed(UiSettings ui, bool paused, TmdbItem? item) =>
+      bannerTrailerAllowed(
+        mode: ui.bannerTrailer,
+        isTv: DeviceTypeService.isTv,
+        lowRam: DeviceTypeService.isLowRam,
+        memoryPressure: paused,
+      ) &&
+      // A trailer cut short by memory pressure does not start over.
+      (item == null || item.key != _pressureStopped);
+
+  /// Title whose trailer memory pressure interrupted.
+  String? _pressureStopped;
+
+  void _trailerPauseChanged() {
+    if (TvImageMemoryGuard.trailerPaused.value && _trailerPlaying.value) {
+      _pressureStopped = _hero.value?.key;
+    }
+  }
 
   Widget _bannerTrailer(TmdbItem? item, UiSettings ui) => BannerTrailer(
     item: item,
@@ -1559,11 +1575,13 @@ class _TvDiscoverState extends State<_TvDiscover> {
         // Reserve the synopsis first, then size every carousel to the actual
         // remaining height. Fixed catalog sizes must not squeeze out the plot.
         final ui = context.watch<UiSettings>();
-        final heroHeight = c.maxHeight * ui.homeBannerSize.fraction;
+        final heroHeight = c.maxHeight * ui.homeBannerSize.tvFraction;
         return TvHomeLayout(
           rowHeight: c.maxHeight - heroHeight,
           captionHeight: MediaQuery.textScalerOf(context).scale(15) * 1.2,
-          showTitles: context.watch<UiSettings>().homeTitles,
+          showTitles: ui.homeTitles,
+          focusScale: ui.animations ? ui.focusZoom.scale : 1,
+          ringWidth: posterFocusRingWidth(ui.focusZoom, ui.focusRing),
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -1577,16 +1595,19 @@ class _TvDiscoverState extends State<_TvDiscover> {
                   valueListenable: _hero,
                   builder: (_, item, _) => ValueListenableBuilder<bool>(
                     valueListenable: TvImageMemoryGuard.reducedRendering,
-                    builder: (_, pressure, _) => _TvHeroBackdrop(
-                      item: item,
-                      decodeWidth: TvRenderPolicy.homeBackdropDecodeLimit(
-                        memoryPressure: pressure,
+                    builder: (_, pressure, _) => ValueListenableBuilder<bool>(
+                      valueListenable: TvImageMemoryGuard.trailerPaused,
+                      builder: (_, paused, _) => _TvHeroBackdrop(
+                        item: item,
+                        decodeWidth: TvRenderPolicy.homeBackdropDecodeLimit(
+                          memoryPressure: pressure,
+                        ),
+                        trailer:
+                            ui.bannerTrailer == BannerTrailerMode.background &&
+                                _trailerAllowed(ui, paused, item)
+                            ? _bannerTrailer(item, ui)
+                            : null,
                       ),
-                      trailer:
-                          ui.bannerTrailer == BannerTrailerMode.background &&
-                              _trailerAllowed(ui, pressure)
-                          ? _bannerTrailer(item, ui)
-                          : null,
                     ),
                   ),
                 ),
@@ -1619,9 +1640,9 @@ class _TvDiscoverState extends State<_TvDiscover> {
                                 if (ui.bannerTrailer == BannerTrailerMode.panel)
                                   ValueListenableBuilder<bool>(
                                     valueListenable:
-                                        TvImageMemoryGuard.reducedRendering,
-                                    builder: (_, pressure, _) =>
-                                        _trailerAllowed(ui, pressure)
+                                        TvImageMemoryGuard.trailerPaused,
+                                    builder: (_, paused, _) =>
+                                        _trailerAllowed(ui, paused, item)
                                         ? _TrailerPanel(
                                             child: _bannerTrailer(item, ui),
                                           )
@@ -1848,7 +1869,7 @@ class _TvTopRowState extends State<_TvTopRow> {
                         style: const TextStyle(
                           fontFamily: 'Sora',
                           color: AppColors.textPrimary,
-                          fontSize: 26,
+                          fontSize: kTvRowTitleSize,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -1990,7 +2011,7 @@ class _TvRowTitle extends StatelessWidget {
               style: const TextStyle(
                 fontFamily: 'Sora',
                 color: AppColors.textPrimary,
-                fontSize: 26,
+                fontSize: kTvRowTitleSize,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.2,
               ),
@@ -2105,7 +2126,7 @@ class _TvHeroInfo extends StatelessWidget {
         const vPad = 10.0;
         final scale = MediaQuery.textScalerOf(context);
         final overviewLineHeight = scale.scale(14) * 1.35;
-        final metaHeight = scale.scale(14) * 1.25;
+        final metaHeight = scale.scale(15) * 1.25;
         // The meta row also holds the 22 px platform logos: budget for
         // them, or the last plot line ends up clipped.
         final metaRowHeight = metaHeight > _metaBadgeHeight
@@ -2114,23 +2135,25 @@ class _TvHeroInfo extends StatelessWidget {
         final showOverview =
             context.watch<UiSettings>().homeOverview &&
             it.overview.trim().isNotEmpty;
-        final overviewLines = bounds.maxHeight >= 250 ? 3 : 2;
-        final textBlock =
-            6 +
-            metaRowHeight +
-            (note != null ? 6 + metaHeight : 0) +
-            (showOverview ? 8 + overviewLines * overviewLineHeight : 0) +
-            (buttons ? _HeroButtons.height + 12 : 0);
-        final logoH = (bounds.maxHeight - vPad * 2 - textBlock)
-            .clamp(0.0, 100.0)
-            .toDouble();
+        final layout = tvHeroLayout(
+          height: bounds.maxHeight - vPad * 2,
+          fixed:
+              6 +
+              metaRowHeight +
+              (note != null ? 6 + metaHeight : 0) +
+              (buttons ? _HeroButtons.height + 12 : 0),
+          overviewLineHeight: showOverview ? overviewLineHeight : null,
+        );
+        final logoH = layout.logo;
+        final overviewLines = layout.overviewLines;
         return Container(
           width: double.infinity,
           alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.fromLTRB(16, vPad, 24, vPad),
+          // Same left edge as the row titles and covers below.
+          padding: const EdgeInsets.fromLTRB(32, vPad, 24, vPad),
           child: FractionallySizedBox(
             alignment: Alignment.centerLeft,
-            widthFactor: 0.60,
+            widthFactor: 0.58,
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2166,7 +2189,7 @@ class _TvHeroInfo extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: AppColors.textSecondary,
-                                      fontSize: 14,
+                                      fontSize: 15,
                                       height: 1.25,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -2188,13 +2211,13 @@ class _TvHeroInfo extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: AppColors.primary,
-                              fontSize: 14,
+                              fontSize: 15,
                               height: 1.25,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
-                        if (showOverview) ...[
+                        if (showOverview && overviewLines > 0) ...[
                           const SizedBox(height: 8),
                           Text(
                             it.overview,
@@ -2252,7 +2275,7 @@ class _Dimmable extends StatelessWidget {
 class _HeroButtons extends StatelessWidget {
   const _HeroButtons({required this.item, this.onButton});
 
-  static const height = 44.0;
+  static const height = 40.0;
 
   final TmdbItem item;
   final ValueNotifier<bool>? onButton;

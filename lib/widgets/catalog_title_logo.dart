@@ -13,10 +13,11 @@ import '../services/title_facet_index.dart';
 /// "Logo al posto del titolo" in catalogs: the title's logo artwork where
 /// the name would be written, else [fallback].
 ///
-/// Places that show many covers at once leave [fetch] off and only use a
-/// logo the device already knows (no request per card). Places that show
-/// one title at a time (In evidenza, the TV "Muro" strip) may ask for it,
-/// through the same shared cache as the Home banner.
+/// Places that show many covers at once leave [fetch] off: the covers on
+/// screen are asked together to the site's shared cache in one request
+/// (no request per card, none while the remote moves). Places that show
+/// one title at a time (In evidenza, the TV "Muro" strip) set [fetch] and
+/// get the full lookup of the Home banner.
 class CatalogTitleLogo extends StatefulWidget {
   const CatalogTitleLogo({
     super.key,
@@ -65,7 +66,9 @@ class _CatalogTitleLogoState extends State<CatalogTitleLogo> {
     final item = CatalogTitleLogo.itemOf(widget.channel);
     final discover = Provider.of<DiscoverProvider?>(context, listen: false);
     if (item != null && discover != null) {
-      _requested = discover.tmdb.titleLogo(item);
+      _requested = widget.fetch
+          ? discover.tmdb.titleLogo(item)
+          : discover.tmdb.batchedLogo(item);
     }
     return _requested;
   }
@@ -94,7 +97,7 @@ class _CatalogTitleLogoState extends State<CatalogTitleLogo> {
     if (!on) return widget.fallback;
     final known = CatalogTitleLogo.knownLogo(widget.channel);
     if (known != null) return _image(known);
-    final requested = widget.fetch ? _request() : null;
+    final requested = _request();
     if (requested == null) return widget.fallback;
     return FutureBuilder<String?>(
       future: requested,

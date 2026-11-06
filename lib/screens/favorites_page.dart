@@ -162,9 +162,10 @@ class _MyList extends StatelessWidget {
       showTitles: ui.titlesBelow,
       columns: ui.gridColumns,
       width: width,
+      focusScale: ui.posterFocusScale,
     );
     return GridView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: tvGridPadding(const EdgeInsets.all(16), delegate),
       gridDelegate: delegate,
       itemCount: items.length,
       itemBuilder: (context, i) {

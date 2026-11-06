@@ -46,6 +46,15 @@ extension HomeBannerSizeInfo on HomeBannerSize {
     HomeBannerSize.balanced => 0.43,
     HomeBannerSize.large => 0.48,
   };
+
+  /// Share of the TV Home (below the top bar) taken by the banner. The TV
+  /// shows one row under it, so the steps are wide enough to be seen:
+  /// Compatto favours big covers, Grande the picture and the plot.
+  double get tvFraction => switch (this) {
+    HomeBannerSize.compact => 0.36,
+    HomeBannerSize.balanced => 0.44,
+    HomeBannerSize.large => 0.52,
+  };
   String get label => switch (this) {
     HomeBannerSize.compact => 'Compatto',
     HomeBannerSize.balanced => 'Bilanciato',
@@ -187,4 +196,35 @@ class HomeRows {
     for (final id in order)
       if (!hidden.contains(id)) id,
   ];
+}
+
+/// Logo height and plot lines of the TV banner. The logo is what reads from
+/// the sofa, so the plot gives way first: the most lines that still leave
+/// [comfortableLogo], else the most that leave [minLogo], else none.
+/// [height] is the free banner height, [fixed] the meta row, note and
+/// buttons, [overviewLineHeight] null when the plot is off.
+({double logo, int overviewLines}) tvHeroLayout({
+  required double height,
+  required double fixed,
+  double? overviewLineHeight,
+  double minLogo = 40,
+  double comfortableLogo = 56,
+  double maxLogo = 88,
+}) {
+  final rest = height - fixed - 6;
+  int lines = 0;
+  final line = overviewLineHeight;
+  if (line != null && line > 0) {
+    double logoWith(int n) => rest - (8 + n * line);
+    for (final want in [comfortableLogo, minLogo]) {
+      final n = [3, 2, 1].where((n) => logoWith(n) >= want).firstOrNull;
+      if (n != null) {
+        lines = n;
+        break;
+      }
+    }
+  }
+  final used = lines == 0 ? 0.0 : 8 + lines * (line ?? 0);
+  final logo = (rest - used).clamp(0.0, maxLogo).toDouble();
+  return (logo: logo, overviewLines: lines);
 }

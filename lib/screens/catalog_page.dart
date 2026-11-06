@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import '../services/catalog_sort.dart';
 import '../services/catalog_view_memory.dart';
@@ -93,6 +94,7 @@ SliverGridDelegateWithMaxCrossAxisExtent channelGridDelegate(
   bool showDetails = false,
   int columns = 0,
   double? width,
+  double focusScale = 1,
 }) {
   final auto = _autoGridDelegate(
     type,
@@ -100,19 +102,47 @@ SliverGridDelegateWithMaxCrossAxisExtent channelGridDelegate(
     compact: compact,
     showTitles: showTitles,
     showDetails: showDetails,
+    focusScale: focusScale,
   );
   if (columns <= 0 || type == ContentType.live) return auto;
-  final spacing = auto.crossAxisSpacing;
+  double cell(double spacing) => width == null
+      ? auto.maxCrossAxisExtent
+      : ((width - spacing * (columns - 1)) / columns).clamp(1.0, 4000.0);
+  // Fixed columns can make covers wider than the automatic estimate: size
+  // the focus room on the real cell.
+  final first = cell(auto.crossAxisSpacing);
+  final tv = DeviceTypeService.isTv;
+  final cross = tv
+      ? tvFocusGap(auto.crossAxisSpacing, first, focusScale)
+      : auto.crossAxisSpacing;
+  final cellWidth = cell(cross);
   return FixedColumnsGridDelegate(
     columns: columns,
-    cellWidth: width == null
-        ? auto.maxCrossAxisExtent
-        : ((width - spacing * (columns - 1)) / columns).clamp(1.0, 4000.0),
+    cellWidth: cellWidth,
     childAspectRatio: auto.childAspectRatio,
-    crossAxisSpacing: spacing,
-    mainAxisSpacing: auto.mainAxisSpacing,
+    crossAxisSpacing: cross,
+    mainAxisSpacing: tv
+        ? tvFocusGap(
+            auto.mainAxisSpacing,
+            cellWidth / auto.childAspectRatio,
+            focusScale,
+          )
+        : auto.mainAxisSpacing,
   );
 }
+
+/// Gap between TV covers [extent] long that leaves room for the focus
+/// zoom [focusScale] of either neighbour, never below [base].
+double tvFocusGap(double base, double extent, double focusScale) =>
+    math.max(base, extent * (focusScale - 1) + 2);
+
+/// Top padding of a TV grid: the first row's zoom stays inside the page.
+EdgeInsets tvGridPadding(
+  EdgeInsets base,
+  SliverGridDelegateWithMaxCrossAxisExtent delegate,
+) => DeviceTypeService.isTv
+    ? base.copyWith(top: math.max(base.top, delegate.mainAxisSpacing / 2 + 1))
+    : base;
 
 /// Posters per row of [delegate] in a grid [width] wide: what the remote
 /// uses to move Su/Giù by one row.
@@ -201,6 +231,7 @@ SliverGridDelegateWithMaxCrossAxisExtent _autoGridDelegate(
   required bool compact,
   required bool showTitles,
   required bool showDetails,
+  double focusScale = 1,
 }) {
   final isLive = type == ContentType.live;
   const posterOnly = 2 / 3;
@@ -208,17 +239,21 @@ SliverGridDelegateWithMaxCrossAxisExtent _autoGridDelegate(
     // TV honours "Dimensione griglia" (relative to the 'media' size) and
     // "Modalità compatta" too, on top of its larger remote-friendly base.
     final scale = (maxExtent / 140) * (compact ? 0.86 : 1);
+    final extent = (isLive ? 180 : 132) * scale;
+    final ratio = isLive
+        ? 1.05
+        : !showTitles
+        ? posterOnly
+        : showDetails
+        ? (compact ? 0.58 : 0.56)
+        : (compact ? 0.62 : 0.6);
+    final base = compact ? 10.0 : 16.0;
+    // The focused cover grows into the gap: never under its neighbours.
     return SliverGridDelegateWithMaxCrossAxisExtent(
-      maxCrossAxisExtent: (isLive ? 180 : 132) * scale,
-      childAspectRatio: isLive
-          ? 1.05
-          : !showTitles
-          ? posterOnly
-          : showDetails
-          ? (compact ? 0.58 : 0.56)
-          : (compact ? 0.62 : 0.6),
-      crossAxisSpacing: compact ? 10 : 16,
-      mainAxisSpacing: compact ? 10 : 16,
+      maxCrossAxisExtent: extent,
+      childAspectRatio: ratio,
+      crossAxisSpacing: tvFocusGap(base, extent, focusScale),
+      mainAxisSpacing: tvFocusGap(base, extent / ratio, focusScale),
     );
   }
   return SliverGridDelegateWithMaxCrossAxisExtent(
@@ -381,9 +416,10 @@ class ChannelGrid extends StatelessWidget {
       showDetails: ui.posterDetails,
       columns: ui.gridColumns,
       width: usable,
+      focusScale: ui.posterFocusScale,
     );
     return GridView.builder(
-      padding: padding,
+      padding: tvGridPadding(padding, delegate),
       scrollCacheExtent: tvCatalogCacheExtent(delegate),
       gridDelegate: delegate,
       itemCount: channels.length,
@@ -1291,7 +1327,10 @@ class _CatalogPageState extends State<CatalogPage> {
         mode == CatalogViewMode.spotlight ||
         (mode == CatalogViewMode.wall && DeviceTypeService.isTv);
     final grid = GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: tvGridPadding(
+        const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        delegate,
+      ),
       scrollCacheExtent: tvCatalogCacheExtent(delegate),
       gridDelegate: delegate,
       itemCount: entries.length,
@@ -1324,7 +1363,9 @@ class _CatalogPageState extends State<CatalogPage> {
     if (mode == CatalogViewMode.wall) {
       return Column(
         children: [
-          Expanded(child: grid),
+          // Covers 2 px apart: the ring marks the focus, a zoom would
+          // slide under the neighbours.
+          Expanded(child: PosterFocusCap(scale: 1, child: grid)),
           ValueListenableBuilder<CatalogEntry?>(
             valueListenable: _spotlight,
             builder: (_, e, _) => CatalogWallStrip(entry: e),
@@ -1708,6 +1749,7 @@ class _CatalogPageState extends State<CatalogPage> {
       showDetails: ui.posterDetails,
       columns: ui.gridColumns,
       width: MediaQuery.sizeOf(context).width - 32,
+      focusScale: ui.posterFocusScale,
     );
   }
 

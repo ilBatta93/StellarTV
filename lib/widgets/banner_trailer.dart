@@ -59,10 +59,10 @@ function onYouTubeIframeAPIReady(){
       onError:function(e){send('error');}
     }});
 }
-function audio(on){if(!player)return;try{clearInterval(fade);
+function audio(on,step){if(!player)return;try{clearInterval(fade);
   if(!on){player.mute();return;}
   var v=0;player.setVolume(0);player.unMute();
-  fade=setInterval(function(){v+=8;player.setVolume(Math.min(v,100));if(v>=100)clearInterval(fade)},90);
+  fade=setInterval(function(){v+=step||8;player.setVolume(Math.min(v,100));if(v>=100)clearInterval(fade)},90);
 }catch(e){}}
 </script></body></html>''';
 
@@ -204,7 +204,9 @@ class _BannerTrailerState extends State<BannerTrailer> {
     );
     if (audible == _audible) return;
     _audible = audible;
-    web.runJavaScript('audio($audible)').catchError((_) {});
+    web
+        .runJavaScript('audio($audible,${bannerAudioFadeStep(widget.audio)})')
+        .catchError((_) {});
   }
 
   /// Releases the web player and its video decoder at once.
