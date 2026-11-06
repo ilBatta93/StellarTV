@@ -100,6 +100,7 @@ class UiSettings extends ChangeNotifier {
   static const posterCornersKey = 'ui_poster_corners';
   static const posterProgressKey = 'ui_poster_progress';
   static const posterDetailsKey = 'ui_poster_details';
+  static const sceneArtKey = 'ui_scene_art';
   static const ratingSourceKey = 'ui_rating_source';
   static const badgeNewKey = 'ui_badge_new';
   static const badgePlatformKey = 'ui_badge_platform';
@@ -325,6 +326,7 @@ class UiSettings extends ChangeNotifier {
   PosterCorners _posterCorners = PosterCorners.standard;
   bool _posterProgress = true;
   bool _posterDetails = false;
+  bool _sceneArt = false;
   RatingSource _ratingSource = RatingSource.auto;
   bool _badgeNew = false;
   bool _badgePlatform = false;
@@ -373,6 +375,10 @@ class UiSettings extends ChangeNotifier {
   /// Year and length under the catalog titles.
   bool get posterDetails => _posterDetails;
 
+  /// Scene still (TMDB backdrop) in the Panoramica cards and the
+  /// In evidenza header, when the title already has one on the device.
+  bool get sceneArt => _sceneArt;
+
   RatingSource get ratingSource => _ratingSource;
 
   /// «Nuovo» on titles the source added in the last days.
@@ -417,6 +423,7 @@ class UiSettings extends ChangeNotifier {
     _posterCorners.name,
     _posterProgress,
     _posterDetails,
+    _sceneArt,
     _ratingSource.name,
     _badgeNew,
     _badgePlatform,
@@ -476,6 +483,7 @@ class UiSettings extends ChangeNotifier {
         ? prefs.get(posterProgressKey) as bool
         : true;
     _posterDetails = prefs.get(posterDetailsKey) == true;
+    _sceneArt = prefs.get(sceneArtKey) == true;
     _ratingSource = RatingSource.parse(prefs.get(ratingSourceKey));
     _badgeNew = prefs.get(badgeNewKey) == true;
     _badgePlatform = prefs.get(badgePlatformKey) == true;
@@ -725,6 +733,12 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setSceneArt(bool value) async {
+    _sceneArt = value;
+    await _save(sceneArtKey, value);
+    notifyListeners();
+  }
+
   Future<void> setRatingSource(RatingSource value) async {
     _ratingSource = value;
     await _save(ratingSourceKey, value.name);
@@ -780,6 +794,7 @@ class UiSettings extends ChangeNotifier {
       posterCornersKey,
       posterProgressKey,
       posterDetailsKey,
+      sceneArtKey,
       ratingSourceKey,
       badgeNewKey,
       badgePlatformKey,

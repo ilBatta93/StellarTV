@@ -410,6 +410,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: ui.posterDetails,
               onChanged: ui.setPosterDetails,
             ),
+            SettingsSwitchTile(
+              icon: Icons.landscape_outlined,
+              title: 'Immagine di scena',
+              subtitle:
+                  'In Panoramica e In evidenza, per i titoli che la hanno già',
+              value: ui.sceneArt,
+              onChanged: ui.setSceneArt,
+            ),
             SettingsValueTile(
               icon: Icons.sell_outlined,
               title: 'Badge sulle locandine',

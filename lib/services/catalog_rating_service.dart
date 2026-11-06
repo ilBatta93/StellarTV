@@ -91,7 +91,7 @@ class CatalogRatingService extends ChangeNotifier {
 
   void remember(Channel c, TmdbItem item) {
     final key = _key(c);
-    identities.put(key, item);
+    identities.put(key, keepScene(identities.valueOf(key), item));
     _unprimed.add(item);
     TitleFacetIndex.instance.link(
       titleKey: key,
@@ -102,6 +102,29 @@ class CatalogRatingService extends ChangeNotifier {
           : item.voteAverage > 0
           ? item.voteAverage
           : null,
+    );
+  }
+
+  /// The shared cloud cache has no scene stills: a later cloud identity of
+  /// the same title keeps the one a TMDB lookup or the detail page gave.
+  @visibleForTesting
+  static TmdbItem keepScene(TmdbItem? old, TmdbItem item) {
+    final scene = old?.backdropPath;
+    if (item.backdropPath != null || scene == null || old!.key != item.key) {
+      return item;
+    }
+    return TmdbItem(
+      id: item.id,
+      mediaType: item.mediaType,
+      title: item.title,
+      overview: item.overview,
+      posterPath: item.posterPath ?? old.posterPath,
+      backdropPath: scene,
+      voteAverage: item.voteAverage,
+      popularity: item.popularity,
+      releaseDate: item.releaseDate.isEmpty
+          ? old.releaseDate
+          : item.releaseDate,
     );
   }
 

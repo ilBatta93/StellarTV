@@ -51,6 +51,7 @@ void main() {
       'ui_poster_corners',
       'ui_poster_progress',
       'ui_poster_details',
+      'ui_scene_art',
       'ui_rating_source',
       'ui_badge_new',
       'ui_badge_platform',

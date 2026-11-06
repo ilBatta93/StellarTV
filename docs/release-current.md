@@ -4,3 +4,4 @@
 - Badge sulle locandine: una pagina in Impostazioni › Aspetto e Home › Cataloghi per scegliere voto, Nuovo, qualità, piattaforma di streaming, cuore e avanzamento, con la fonte del voto (Automatico, Solo IMDb, Solo TMDB).
 - Locandine più ordinate: ogni badge ha il suo angolo e nessuno ne copre un altro, anche nella Home e nella riga Oscar ed Emmy, dove il trofeo del vincitore ora sta sotto il voto.
 - Titoli sulla locandina: in Titoli delle locandine si possono scrivere sulla copertina, su una sfumatura scura più leggibile, oltre che sotto o per niente.
+- Immagine di scena: le copertine larghe della vista Panoramica possono mostrare un fotogramma del titolo al posto della locandina, e la scheda grande di In evidenza lo usa come sfondo. Si accende in Impostazioni › Aspetto e Home › Cataloghi e compare per i titoli di cui l'app conosce già l'immagine, per esempio dopo averne aperto la scheda.

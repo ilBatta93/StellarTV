@@ -32,6 +32,11 @@ class TmdbItem {
 
   String? get posterUrl =>
       posterPath == null ? null : 'https://image.tmdb.org/t/p/w500$posterPath';
+
+  /// Scene still only, never the poster: null when TMDB gave no backdrop.
+  String? get sceneUrl => backdropPath == null
+      ? null
+      : 'https://image.tmdb.org/t/p/w780$backdropPath';
   String? get backdropUrl => backdropPath == null
       ? posterUrl
       : 'https://image.tmdb.org/t/p/w1280$backdropPath';

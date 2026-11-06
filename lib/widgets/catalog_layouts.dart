@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../providers/ui_settings.dart';
 
+import '../models/channel.dart';
 import '../services/catalog_builder.dart';
+import '../services/catalog_rating_service.dart';
 import 'title_facets.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
@@ -38,30 +40,47 @@ class CatalogLandscapeCard extends StatelessWidget {
         : null;
     // Wide covers: the standard style keeps its 14 px corners.
     final radius = posterRadius(context, scale: 1.4);
-    final content = ClipRRect(
+    Widget card(String? scene) => ClipRRect(
       borderRadius: radius,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Blurred-looking fill plus the full poster on the left: posters
-          // are vertical, so they are framed instead of cropped badly.
-          if (!tv)
-            Opacity(opacity: 0.35, child: CatalogArtwork(channel: channel)),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [AppColors.overlay, AppColors.background],
+          if (scene != null) ...[
+            // The scene still fills the wide tile; the text sits on a dark
+            // fade so it stays readable on bright frames.
+            CatalogSceneImage(url: scene),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerRight,
+                  end: Alignment.centerLeft,
+                  colors: [Colors.transparent, AppColors.overlay],
+                  stops: [0.25, 1],
+                ),
               ),
             ),
-          ),
+          ] else ...[
+            // Blurred-looking fill plus the full poster on the left: posters
+            // are vertical, so they are framed instead of cropped badly.
+            if (!tv)
+              Opacity(opacity: 0.35, child: CatalogArtwork(channel: channel)),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [AppColors.overlay, AppColors.background],
+                ),
+              ),
+            ),
+          ],
           Row(
             children: [
-              AspectRatio(
-                aspectRatio: 2 / 3,
-                child: CatalogArtwork(channel: channel),
-              ),
+              if (scene == null)
+                AspectRatio(
+                  aspectRatio: 2 / 3,
+                  child: CatalogArtwork(channel: channel),
+                ),
               Expanded(
                 child: Padding(
                   padding: EdgeInsets.all(tv ? 14 : 10),
@@ -122,6 +141,9 @@ class CatalogLandscapeCard extends StatelessWidget {
         ],
       ),
     );
+    final content = ui.sceneArt
+        ? CatalogScene(channel: channel, builder: card)
+        : card(null);
     if (tv) {
       return TvFocusable(
         borderRadius: radius,
@@ -173,6 +195,28 @@ class _SpotlightBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final channel = entry.primary;
     final quality = CatalogBuilder.qualityLabel(channel.name);
+    final sceneArt = context.select<UiSettings, bool>((ui) => ui.sceneArt);
+    // One header at a time, so the scene still is shown on TV as well.
+    Widget backdrop(String? scene) => scene != null
+        ? Stack(
+            fit: StackFit.expand,
+            children: [
+              CatalogSceneImage(url: scene),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerRight,
+                    end: Alignment.centerLeft,
+                    colors: [Colors.transparent, AppColors.overlay],
+                    stops: [0, 0.75],
+                  ),
+                ),
+              ),
+            ],
+          )
+        : tv
+        ? const SizedBox.shrink()
+        : Opacity(opacity: 0.18, child: CatalogArtwork(channel: channel));
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       decoration: BoxDecoration(
@@ -184,8 +228,10 @@ class _SpotlightBody extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (!tv)
-            Opacity(opacity: 0.18, child: CatalogArtwork(channel: channel)),
+          if (sceneArt)
+            CatalogScene(channel: channel, builder: backdrop)
+          else
+            backdrop(null),
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -286,5 +332,68 @@ class _Chip extends StatelessWidget {
         letterSpacing: 0.4,
       ),
     ),
+  );
+}
+
+/// Scene still of a catalog title from the identity already on the device:
+/// no request per card. Rebuilds only when this title's still changes.
+class CatalogScene extends StatefulWidget {
+  const CatalogScene({super.key, required this.channel, required this.builder});
+
+  final Channel channel;
+  final Widget Function(String? sceneUrl) builder;
+
+  static String? sceneOf(Channel channel) =>
+      CatalogRatingService.instance.itemOf(channel)?.sceneUrl;
+
+  @override
+  State<CatalogScene> createState() => _CatalogSceneState();
+}
+
+class _CatalogSceneState extends State<CatalogScene> {
+  final _identities = CatalogRatingService.instance.identities;
+  late String? _scene = CatalogScene.sceneOf(widget.channel);
+
+  @override
+  void initState() {
+    super.initState();
+    _identities.addListener(_changed);
+  }
+
+  @override
+  void didUpdateWidget(covariant CatalogScene oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.channel.id != widget.channel.id) {
+      _scene = CatalogScene.sceneOf(widget.channel);
+    }
+  }
+
+  void _changed() {
+    final value = CatalogScene.sceneOf(widget.channel);
+    if (!mounted || value == _scene) return;
+    setState(() => _scene = value);
+  }
+
+  @override
+  void dispose() {
+    _identities.removeListener(_changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(_scene);
+}
+
+/// Wide scene still, decoded at the tile size like the posters.
+class CatalogSceneImage extends StatelessWidget {
+  const CatalogSceneImage({super.key, required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) => PosterImage(
+    url: url,
+    fallbackIcon: Icons.movie_outlined,
+    maxDecodeWidth: 780,
   );
 }
