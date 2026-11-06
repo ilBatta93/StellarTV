@@ -105,6 +105,7 @@ void main() {
       HomeRows.forYouMovies,
       HomeRows.forYouSeries,
       HomeRows.topWeek,
+      HomeRows.awards,
       'top_netflix',
       'top_disney',
     ]);
@@ -129,6 +130,8 @@ void main() {
         'top_netflix',
         'top_disney',
         HomeRows.topWeek,
+        // New row of an older save: right after its default predecessor.
+        HomeRows.awards,
         HomeRows.recentSeries,
         HomeRows.recentMovies,
         HomeRows.forYouMovies,
@@ -140,6 +143,7 @@ void main() {
       HomeRows.recentMovies,
       HomeRows.forYouMovies,
       HomeRows.forYouSeries,
+      HomeRows.awards,
       'top_netflix',
     ]);
   });

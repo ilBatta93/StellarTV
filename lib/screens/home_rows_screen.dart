@@ -31,6 +31,8 @@ String homeRowLabel(String id) {
       return 'Serie consigliate per te';
     case HomeRows.topWeek:
       return 'Top 10 della settimana';
+    case HomeRows.awards:
+      return 'Oscar ed Emmy';
   }
   for (final p in StreamingPlatform.all) {
     if (HomeRows.top(p.name) == id) return 'Top 10 su ${p.name}';

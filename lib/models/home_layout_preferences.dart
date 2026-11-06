@@ -134,6 +134,7 @@ class HomeRows {
   static const forYouMovies = 'for_you_movies';
   static const forYouSeries = 'for_you_series';
   static const topWeek = 'top_week';
+  static const awards = 'awards';
   static String top(String platformName) =>
       'top_${platformName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')}';
 
@@ -153,6 +154,7 @@ class HomeRows {
     forYouMovies,
     forYouSeries,
     topWeek,
+    awards,
     for (final p in platforms) top(p),
   ];
 

@@ -1,6 +1,8 @@
 import '../providers/ui_settings.dart';
 import '../models/home_layout_preferences.dart';
 import '../widgets/home_presentation.dart';
+import '../widgets/awards_row.dart';
+import '../services/awards_service.dart';
 import '../widgets/home_art.dart';
 import '../widgets/tv_home_layout.dart';
 import '../services/history_episode_label.dart';
@@ -468,6 +470,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
               _PosterRow(items: forYouSeries),
             ],
           ];
+        case HomeRows.awards:
+          return [AwardsRow(onOpen: (item) => openTmdbItem(context, item))];
         case HomeRows.topWeek:
           return [
             _TopSection(
@@ -1207,6 +1211,12 @@ class _TvDiscoverState extends State<_TvDiscover> {
     super.initState();
     _hero = ValueNotifier(_firstHero());
     _seedInitialHistory();
+    if (!AwardsService.instance.hasCatalog &&
+        widget.rowOrder.contains(HomeRows.awards)) {
+      AwardsService.instance.catalog().then((_) {
+        if (mounted && AwardsService.instance.hasCatalog) setState(() {});
+      });
+    }
   }
 
   TmdbItem? _firstHero() {
@@ -1391,6 +1401,9 @@ class _TvDiscoverState extends State<_TvDiscover> {
           posters(widget.forYou);
         case HomeRows.forYouSeries:
           posters(widget.forYouSeries);
+        case HomeRows.awards:
+          // Loaded by the row itself; keeps row N warming row N + 1.
+          rows.add(const []);
         default:
           final top = widget.tops[id];
           if (top != null) posters(top.$4.isNotEmpty ? top.$4 : top.$5);
@@ -1607,6 +1620,19 @@ class _TvDiscoverState extends State<_TvDiscover> {
                                       : 'Perché hai guardato '
                                             '${displayTitle(widget.forYouSeriesSource ?? "")}',
                                   onSettled: () => _warmFollowing(rows, index),
+                                ),
+                              );
+                            case HomeRows.awards:
+                              add(
+                                AwardsService.instance.hasCatalog,
+                                (index) => AwardsRow(
+                                  tv: true,
+                                  onOpen: (item) => openTmdbItem(context, item),
+                                  onFocusItem: (item) {
+                                    _focus(item);
+                                    _warmFollowing(rows, index);
+                                  },
+                                  onRevealHeading: _revealHeading,
                                 ),
                               );
                             default:
