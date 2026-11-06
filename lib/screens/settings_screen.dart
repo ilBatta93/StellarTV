@@ -36,6 +36,8 @@ import 'expiry_reminder_screen.dart';
 import 'xtream_account_screen.dart';
 import 'section_layout_screen.dart';
 import 'home_rows_screen.dart';
+import 'poster_badges_screen.dart';
+import '../models/poster_badges.dart';
 import 'downloads_screen.dart';
 import 'multiview_settings_screen.dart';
 import 'live_diagnostics_screen.dart';
@@ -387,25 +389,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ui.setPosterCorners,
               ),
             ),
-            SettingsSwitchTile(
+            SettingsValueTile(
               icon: Icons.title_rounded,
-              title: 'Titoli sotto le locandine',
-              subtitle: 'Spegnili per un muro di sole copertine',
-              value: ui.showTitles,
-              onChanged: ui.setShowTitles,
-            ),
-            SettingsSwitchTile(
-              icon: Icons.star_outline_rounded,
-              title: 'Voti sulle locandine',
-              value: ui.showRatings,
-              onChanged: ui.setShowRatings,
-            ),
-            SettingsSwitchTile(
-              icon: Icons.task_alt_rounded,
-              title: 'Avanzamento sulle locandine',
-              subtitle: 'Barra dei titoli iniziati e segno sui titoli visti',
-              value: ui.posterProgress,
-              onChanged: ui.setPosterProgress,
+              title: 'Titoli delle locandine',
+              subtitle: ui.titlePlacement.description,
+              value: ui.titlePlacement.label,
+              onTap: () => pick<TitlePlacement>(
+                'Titoli delle locandine',
+                TitlePlacement.values,
+                ui.titlePlacement,
+                (p) => p.label,
+                ui.setTitlePlacement,
+                detail: (p) => p.description,
+              ),
             ),
             SettingsSwitchTile(
               icon: Icons.event_note_outlined,
@@ -414,19 +410,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: ui.posterDetails,
               onChanged: ui.setPosterDetails,
             ),
-            SettingsSwitchTile(
-              icon: Icons.hd_outlined,
-              title: 'Etichette qualità',
-              subtitle: '4K, FHD, HD sulle copertine',
-              value: ui.showQuality,
-              onChanged: ui.setShowQuality,
-            ),
-            SettingsSwitchTile(
-              icon: Icons.favorite_border_rounded,
-              title: 'Cuore su tutte le locandine',
-              subtitle: 'Spento, resta solo sui titoli già nei preferiti',
-              value: ui.favoriteHeart,
-              onChanged: ui.setFavoriteHeart,
+            SettingsValueTile(
+              icon: Icons.sell_outlined,
+              title: 'Badge sulle locandine',
+              subtitle: 'Voto, Nuovo, qualità, piattaforma, cuore, avanzamento',
+              value: posterBadgesSummary(ui),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PosterBadgesScreen()),
+              ),
             ),
             SettingsSwitchTile(
               icon: Icons.image_outlined,

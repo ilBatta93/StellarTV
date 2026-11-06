@@ -51,6 +51,10 @@ void main() {
       'ui_poster_corners',
       'ui_poster_progress',
       'ui_poster_details',
+      'ui_rating_source',
+      'ui_badge_new',
+      'ui_badge_platform',
+      'ui_titles_overlay',
       'ui_catalog_view_movie',
       'ui_catalog_view_series',
     ]) {

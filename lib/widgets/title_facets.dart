@@ -6,6 +6,8 @@ import '../models/content_type.dart';
 import '../models/streaming_platform.dart';
 import '../models/tmdb_item.dart';
 import '../models/rating_policy.dart';
+import '../models/poster_badges.dart';
+import '../providers/ui_settings.dart';
 import '../providers/app_provider.dart';
 import '../services/imdb_rating_service.dart';
 import '../services/catalog_rating_service.dart';
@@ -173,6 +175,9 @@ class RatingValue extends StatelessWidget {
 
   /// IMDb vote count shown after the rating (title pages); 0 hides it.
   final int votes;
+
+  /// Score picked in «Fonte del voto».
+  final RatingSource source;
   const RatingValue({
     super.key,
     this.imdb,
@@ -180,12 +185,13 @@ class RatingValue extends StatelessWidget {
     this.height = 20,
     this.framed = false,
     this.votes = 0,
+    this.source = RatingSource.auto,
   });
   @override
   Widget build(BuildContext context) {
-    final rating = imdb;
-    final hasImdb = rating != null && rating > 0;
-    final value = preferredRating(rating, fallback);
+    final picked = ratingFor(source, imdb, fallback);
+    final value = picked.value;
+    final hasImdb = picked.imdb;
     if (value <= 0) return const SizedBox.shrink();
     final showVotes = hasImdb && votes > 0;
     final badge = Semantics(
@@ -259,6 +265,16 @@ class RatingValue extends StatelessWidget {
   }
 }
 
+/// «Fonte del voto», or the automatic choice where the settings are not
+/// provided (tests, isolated previews).
+RatingSource ratingSourceOf(BuildContext context) {
+  try {
+    return context.select<UiSettings, RatingSource>((ui) => ui.ratingSource);
+  } on ProviderNotFoundException {
+    return RatingSource.auto;
+  }
+}
+
 class ImdbRatingBadge extends StatelessWidget {
   final TmdbItem item;
   final double height;
@@ -278,35 +294,39 @@ class ImdbRatingBadge extends StatelessWidget {
     this.framed = false,
   });
   @override
-  Widget build(BuildContext context) => _SelectedRating(
-    listenable: Listenable.merge([
-      ImdbRatingService.instance.store,
-      TitleFacetIndex.instance,
-    ]),
-    read: () {
-      if (priority) {
-        ImdbRatingService.instance.ratingOf(item, priority: true);
-      } else if (reveal) {
-        ImdbRatingService.instance.reveal(item);
-      }
-      final key = ImdbRatingService.keyOf(item);
-      return (
-        TitleFacetIndex.instance.imdbOfMedia(key) ??
-            ImdbRatingService.instance.peek(item),
-        item.voteAverage,
-      );
-    },
-    builder: (value) => RatingValue(
-      imdb: value.$1,
-      fallback: value.$2,
-      height: height,
-      framed: framed,
-      // Only the open title: posters stay compact.
-      votes: priority
-          ? ImdbRatingService.instance.votesOf(ImdbRatingService.keyOf(item))
-          : 0,
-    ),
-  );
+  Widget build(BuildContext context) {
+    final source = ratingSourceOf(context);
+    return _SelectedRating(
+      listenable: Listenable.merge([
+        ImdbRatingService.instance.store,
+        TitleFacetIndex.instance,
+      ]),
+      read: () {
+        if (priority) {
+          ImdbRatingService.instance.ratingOf(item, priority: true);
+        } else if (reveal) {
+          ImdbRatingService.instance.reveal(item);
+        }
+        final key = ImdbRatingService.keyOf(item);
+        return (
+          TitleFacetIndex.instance.imdbOfMedia(key) ??
+              ImdbRatingService.instance.peek(item),
+          item.voteAverage,
+        );
+      },
+      builder: (value) => RatingValue(
+        imdb: value.$1,
+        fallback: value.$2,
+        height: height,
+        framed: framed,
+        // Only the open title: posters stay compact.
+        votes: priority
+            ? ImdbRatingService.instance.votesOf(ImdbRatingService.keyOf(item))
+            : 0,
+        source: source,
+      ),
+    );
+  }
 }
 
 /// Rebuilds the badge only when its own value changes. The stores it
@@ -361,6 +381,64 @@ class _SelectedRatingState extends State<_SelectedRating> {
   Widget build(BuildContext context) => widget.builder(_value);
 }
 
+/// Streaming platform of a catalog title, from the device cache only.
+/// Rebuilds only when its own platform changes, like the rating badge.
+class PosterPlatformBadge extends StatefulWidget {
+  const PosterPlatformBadge(this.channel, {super.key, this.height = 18});
+  final Channel channel;
+  final double height;
+
+  @override
+  State<PosterPlatformBadge> createState() => _PosterPlatformBadgeState();
+}
+
+class _PosterPlatformBadgeState extends State<PosterPlatformBadge> {
+  static final _listenable = Listenable.merge([
+    CatalogRatingService.instance.identities,
+    TitleFacetIndex.instance,
+    TitleProvidersService.instance.store,
+  ]);
+  late StreamingPlatform? _platform = _read();
+
+  StreamingPlatform? _read() {
+    final item = CatalogRatingService.instance.itemOf(widget.channel);
+    return item == null
+        ? null
+        : TitleProvidersService.instance.peekPlatform(item);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _listenable.addListener(_changed);
+  }
+
+  @override
+  void didUpdateWidget(covariant PosterPlatformBadge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.channel.id != widget.channel.id) _platform = _read();
+  }
+
+  void _changed() {
+    final value = _read();
+    if (!mounted || value == _platform) return;
+    setState(() => _platform = value);
+  }
+
+  @override
+  void dispose() {
+    _listenable.removeListener(_changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final platform = _platform;
+    if (platform == null) return const SizedBox.shrink();
+    return PlatformBadge(platform, height: widget.height);
+  }
+}
+
 /// All catalog layouts resolve the same identity and update only this badge.
 class ChannelRatingBadge extends StatefulWidget {
   final Channel channel;
@@ -398,6 +476,7 @@ class _ChannelRatingBadgeState extends State<ChannelRatingBadge> {
   @override
   Widget build(BuildContext context) {
     final service = CatalogRatingService.instance;
+    final source = ratingSourceOf(context);
     return _SelectedRating(
       listenable: Listenable.merge([
         service,
@@ -426,6 +505,7 @@ class _ChannelRatingBadgeState extends State<ChannelRatingBadge> {
         fallback: value.$2,
         height: widget.height,
         framed: widget.framed,
+        source: source,
       ),
     );
   }

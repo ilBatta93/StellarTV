@@ -13,6 +13,7 @@ import '../services/image_cache_service.dart';
 import '../services/title_matching.dart';
 import '../theme/app_theme.dart';
 import 'poster_card.dart';
+import 'poster_overlay.dart';
 import 'tv_home_layout.dart';
 
 /// Same bounded presentation on TV and touch, no new focus stops.
@@ -207,79 +208,45 @@ class HomeLandscapeCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                    if (rank != null)
-                      Positioned(
-                        left: 14,
-                        bottom: 12,
-                        child: Text(
-                          '#$rank',
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 40,
-                            fontWeight: FontWeight.w800,
-                            height: 1,
-                          ),
-                        ),
-                      ),
-                    if (!showTitle && label != null)
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: AppColors.overlay,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 3,
-                            ),
-                            child: Text(
-                              label,
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
+                    PosterOverlay(
+                      topLeft: [
+                        if (rating != null && rating! > 0)
+                          RatingBadge(value: rating!),
+                        if (!showTitle && label != null) _InfoTag(label),
+                      ],
+                      bottomLeft: [
+                        if (rank != null)
+                          Text(
+                            '#$rank',
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 40,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
                             ),
                           ),
-                        ),
-                      ),
-                    if (rating != null && rating! > 0)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: RatingBadge(value: rating!),
-                      ),
-                    if (watched != null) ...[
-                      Positioned(
-                        right: 10,
-                        bottom: 14,
-                        child: Text(
-                          '${(watched * 100).round()}%',
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                      ],
+                      bottomRight: [
+                        if (watched != null)
+                          Text(
+                            '${(watched * 100).round()}%',
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 10,
-                        right: 10,
-                        bottom: 7,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(3),
-                          child: LinearProgressIndicator(
-                            value: watched,
-                            minHeight: 3,
-                            color: AppColors.primary,
-                            backgroundColor: AppColors.border,
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                      edge: watched == null
+                          ? null
+                          : LinearProgressIndicator(
+                              value: watched,
+                              minHeight: 4,
+                              color: AppColors.primary,
+                              backgroundColor: AppColors.border,
+                            ),
+                      edgeHeight: watched == null ? 0 : 4,
+                    ),
                   ],
                 ),
               ),
@@ -390,6 +357,31 @@ class _HomeHistoryArtworkState extends State<HomeHistoryArtwork> {
                   HomePosterShape.landscape
           ? snapshot.data?.posterUrl ?? widget.fallback
           : snapshot.data?.backdropUrl ?? widget.fallback,
+    ),
+  );
+}
+
+/// Episode or time left on a Home card whose title is hidden.
+class _InfoTag extends StatelessWidget {
+  const _InfoTag(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: AppColors.overlay,
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     ),
   );
 }

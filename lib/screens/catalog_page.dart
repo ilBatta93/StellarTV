@@ -258,7 +258,7 @@ class ChannelGrid extends StatelessWidget {
       type,
       maxExtent: ui.gridMaxExtent,
       compact: ui.compact,
-      showTitles: ui.showTitles,
+      showTitles: ui.titlesBelow,
       showDetails: ui.posterDetails,
     );
     return GridView.builder(
@@ -1561,7 +1561,7 @@ class _CatalogPageState extends State<CatalogPage> {
           ui.compact ||
           mode == CatalogViewMode.compact ||
           mode == CatalogViewMode.spotlight,
-      showTitles: ui.showTitles,
+      showTitles: ui.titlesBelow,
       showDetails: ui.posterDetails,
     );
   }

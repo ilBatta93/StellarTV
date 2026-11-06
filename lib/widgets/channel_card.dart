@@ -5,6 +5,8 @@ import '../models/content_type.dart';
 import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
 import 'poster_card.dart';
+import 'poster_overlay.dart';
+import '../models/poster_badges.dart';
 import 'title_facets.dart';
 import '../providers/history_provider.dart';
 import '../providers/ui_settings.dart';
@@ -36,9 +38,9 @@ class ChannelCard extends StatelessWidget {
 
   String get _title => _isLive ? channel.name : displayTitle(channel.name);
 
-  Widget _artwork() => CatalogArtwork(
+  Widget _artwork(bool overlayTitle) => CatalogArtwork(
     channel: channel,
-    fallbackLabel: DeviceTypeService.isTv ? _title : null,
+    fallbackLabel: DeviceTypeService.isTv && !overlayTitle ? _title : null,
   );
 
   @override
@@ -46,8 +48,9 @@ class ChannelCard extends StatelessWidget {
     // Subscribes to the poster preferences; [_card] reads them.
     context.select<UiSettings, String>(
       (ui) =>
-          '${ui.showRatings}${ui.showTitles}${ui.showQuality}'
-          '${ui.favoriteHeart}${ui.posterCorners.name}${ui.posterDetails}',
+          '${ui.showRatings}${ui.titlePlacement.name}${ui.showQuality}'
+          '${ui.favoriteHeart}${ui.posterCorners.name}${ui.posterDetails}'
+          '${ui.badgeNew}${ui.badgePlatform}',
     );
     if (DeviceTypeService.isTv && !_isLive) {
       return _TvRatedPoster(
@@ -58,12 +61,73 @@ class ChannelCard extends StatelessWidget {
     return _card(context, null);
   }
 
+  /// Badges in their fixed places (see [PosterSlot]).
+  Widget _overlay(UiSettings ui, {required bool overlayTitle}) {
+    final tv = DeviceTypeService.isTv;
+    if (_isLive) {
+      return PosterOverlay(
+        topRight: [
+          if (isFavorite || ui.favoriteHeart)
+            _FavoriteButton(isFavorite: isFavorite, onTap: onFavoriteTap),
+        ],
+        bottomLeft: const [LiveBadge()],
+      );
+    }
+    return PosterOverlay(
+      topLeft: [
+        if (ui.showRatings) ChannelRatingBadge(channel, framed: true),
+        if (ui.badgeNew) PosterNewBadge(channel),
+      ],
+      topRight: [
+        if (isFavorite || ui.favoriteHeart)
+          _FavoriteButton(isFavorite: isFavorite, onTap: onFavoriteTap),
+      ],
+      bottomLeft: [
+        if (qualityLabel != null && ui.showQuality)
+          _QualityBadge(qualityLabel!),
+        if (ui.badgePlatform)
+          PosterPlatformBadge(channel, height: tv ? 18 : 16),
+      ],
+      bottomRight: [
+        PosterProgressMark(channel, part: PosterProgressPart.check),
+      ],
+      edge: PosterProgressMark(channel, part: PosterProgressPart.bar),
+      edgeHeight: tv ? 5 : 4,
+      caption: overlayTitle ? _caption(ui) : null,
+    );
+  }
+
+  /// Title written on the poster ("Titoli: Sulla locandina").
+  Widget _caption(UiSettings ui) {
+    final tv = DeviceTypeService.isTv;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: tv ? 15 : 12.5,
+            fontWeight: FontWeight.w700,
+            height: 1.15,
+            shadows: const [Shadow(color: Color(0xCC000000), blurRadius: 4)],
+          ),
+        ),
+        if (ui.posterDetails) PosterDetailsLine(channel, onArt: true),
+      ],
+    );
+  }
+
   Widget _card(BuildContext context, double? rating) {
     // Read, not selected: on TV this runs inside _TvRatedPoster's build;
-    // [build] already subscribes to the corners.
-    final radius = BorderRadius.circular(
-      context.read<UiSettings>().posterCorners.radius,
-    );
+    // [build] already subscribes to the poster preferences.
+    final ui = context.read<UiSettings>();
+    final radius = BorderRadius.circular(ui.posterCorners.radius);
+    final placement = _isLive ? TitlePlacement.below : ui.titlePlacement;
+    final overlayTitle = placement == TitlePlacement.overlay;
     return Pressable(
       onTap: onTap,
       onLongPress: onFavoriteTap,
@@ -96,44 +160,18 @@ class ChannelCard extends StatelessWidget {
                         ),
                       )
                     else
-                      _artwork(),
-                    if (isFavorite || context.read<UiSettings>().favoriteHeart)
-                      Positioned(
-                        top: 6,
-                        right: 6,
-                        child: _FavoriteButton(
-                          isFavorite: isFavorite,
-                          onTap: onFavoriteTap,
-                        ),
-                      ),
-                    if (!_isLive && context.read<UiSettings>().showRatings)
-                      Positioned(
-                        left: 6,
-                        top: 6,
-                        child: ChannelRatingBadge(channel, framed: true),
-                      ),
-                    if (!_isLive &&
-                        qualityLabel != null &&
-                        context.read<UiSettings>().showQuality)
-                      Positioned(
-                        left: 6,
-                        bottom: 6,
-                        child: _QualityBadge(qualityLabel!),
-                      ),
-                    if (_isLive)
-                      const Positioned(left: 6, bottom: 6, child: LiveBadge())
-                    else
-                      PosterProgressMark(channel),
+                      _artwork(overlayTitle),
+                    _overlay(ui, overlayTitle: overlayTitle),
                   ],
                 ),
               ),
             ),
-            if (_isLive || context.read<UiSettings>().showTitles)
+            if (placement == TitlePlacement.below)
               Padding(
                 padding: DeviceTypeService.isTv
                     ? const EdgeInsets.fromLTRB(9, 8, 9, 9)
                     : const EdgeInsets.only(top: 8),
-                child: !_isLive && context.read<UiSettings>().posterDetails
+                child: !_isLive && ui.posterDetails
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
@@ -199,8 +237,11 @@ int? posterYearOf(Channel channel) {
 /// Always one line high, so posters in a row stay aligned while lengths
 /// are still unknown.
 class PosterDetailsLine extends StatelessWidget {
-  const PosterDetailsLine(this.channel, {super.key});
+  const PosterDetailsLine(this.channel, {super.key, this.onArt = false});
   final Channel channel;
+
+  /// Written over the poster's dark fade instead of the card background.
+  final bool onArt;
 
   @override
   Widget build(BuildContext context) {
@@ -227,7 +268,7 @@ class PosterDetailsLine extends StatelessWidget {
               fontSize: size,
               height: 1.25,
               fontWeight: FontWeight.w500,
-              color: AppColors.textSecondary,
+              color: onArt ? const Color(0xE6FFFFFF) : AppColors.textSecondary,
             ),
           ),
         ),
@@ -407,9 +448,18 @@ class _TvRatedPosterState extends State<_TvRatedPoster> {
 
 /// Progress bar of a started title and a mark on a watched one, drawn over
 /// the poster's bottom edge. Rebuilds only when this title's mark changes.
+/// Which piece of the progress mark to draw: [PosterOverlay] puts the bar
+/// on the bottom edge and the watched mark in the bottom-right corner.
+enum PosterProgressPart { all, bar, check }
+
 class PosterProgressMark extends StatelessWidget {
-  const PosterProgressMark(this.channel, {super.key});
+  const PosterProgressMark(
+    this.channel, {
+    super.key,
+    this.part = PosterProgressPart.all,
+  });
   final Channel channel;
+  final PosterProgressPart part;
 
   static PosterProgress? _of(BuildContext context, Channel channel) {
     if (channel.type == ContentType.live ||
@@ -430,6 +480,12 @@ class PosterProgressMark extends StatelessWidget {
     final mark = _of(context, channel);
     if (mark == null) return const SizedBox.shrink();
     final tv = DeviceTypeService.isTv;
+    if (part == PosterProgressPart.bar) {
+      return mark.watched ? const SizedBox.shrink() : _bar(mark, tv);
+    }
+    if (part == PosterProgressPart.check) {
+      return mark.watched ? _check(tv) : const SizedBox.shrink();
+    }
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -439,34 +495,31 @@ class PosterProgressMark extends StatelessWidget {
             right: 0,
             bottom: 0,
             height: tv ? 5 : 4,
-            child: ColoredBox(
-              color: AppColors.overlayControl,
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: mark.progress.clamp(0.04, 1.0),
-                child: ColoredBox(color: AppColors.primary),
-              ),
-            ),
+            child: _bar(mark, tv),
           )
         else
-          Positioned(
-            right: 6,
-            bottom: 6,
-            child: Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.check_rounded,
-                size: tv ? 16 : 14,
-                color: AppColors.textPrimary,
-                semanticLabel: 'Visto',
-              ),
-            ),
-          ),
+          Positioned(right: 6, bottom: 6, child: _check(tv)),
       ],
     );
   }
+
+  static Widget _bar(PosterProgress mark, bool tv) => ColoredBox(
+    color: AppColors.overlayControl,
+    child: FractionallySizedBox(
+      alignment: Alignment.centerLeft,
+      widthFactor: mark.progress.clamp(0.04, 1.0),
+      child: ColoredBox(color: AppColors.primary),
+    ),
+  );
+
+  static Widget _check(bool tv) => Container(
+    padding: const EdgeInsets.all(3),
+    decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+    child: Icon(
+      Icons.check_rounded,
+      size: tv ? 16 : 14,
+      color: AppColors.textPrimary,
+      semanticLabel: 'Visto',
+    ),
+  );
 }

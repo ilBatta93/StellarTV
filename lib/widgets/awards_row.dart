@@ -335,21 +335,13 @@ class _NomineeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final card = TmdbPosterCard(
+    // The trophy goes under the score, in the poster's own badge column:
+    // drawn in the opposite corner it covered the score on narrow posters.
+    return TmdbPosterCard(
       item: item,
       onFocus: onFocus,
       onTap: () => onOpen(item),
-    );
-    if (!winner) return card;
-    return Stack(
-      children: [
-        card,
-        const Positioned(
-          top: 6,
-          right: 6,
-          child: IgnorePointer(child: AwardWinnerBadge()),
-        ),
-      ],
+      badges: [if (winner) const AwardWinnerBadge()],
     );
   }
 }

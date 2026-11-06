@@ -9,6 +9,7 @@ import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
 import 'channel_card.dart';
 import 'poster_card.dart';
+import 'poster_overlay.dart';
 import 'tv_focusable.dart';
 
 /// Apple TV style wide card: the artwork fills a 16:9 tile with the title,
@@ -86,7 +87,9 @@ class CatalogLandscapeCard extends StatelessWidget {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           if (ui.showRatings) ChannelRatingBadge(channel),
+                          if (ui.badgeNew) PosterNewBadge(channel),
                           if (quality != null) _Chip(quality),
+                          if (ui.badgePlatform) PosterPlatformBadge(channel),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -218,7 +221,15 @@ class _SpotlightBody extends StatelessWidget {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           ChannelRatingBadge(channel),
+                          if (context.select<UiSettings, bool>(
+                            (ui) => ui.badgeNew,
+                          ))
+                            PosterNewBadge(channel),
                           if (quality != null) _Chip(quality),
+                          if (context.select<UiSettings, bool>(
+                            (ui) => ui.badgePlatform,
+                          ))
+                            PosterPlatformBadge(channel),
                           if (entry.variants.length > 1)
                             _Chip('${entry.variants.length} versioni'),
                         ],

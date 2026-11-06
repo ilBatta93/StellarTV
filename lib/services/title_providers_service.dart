@@ -40,6 +40,19 @@ class TitleProvidersService {
   static String keyOf(TmdbItem item) =>
       '${item.isMovie ? 'movie' : 'tv'}:${item.id}';
 
+  /// First platform already known on this device for [item]. Never asks
+  /// TMDB: catalog posters must not start one lookup per card.
+  StreamingPlatform? peekPlatform(TmdbItem item) {
+    final key = keyOf(item);
+    final names =
+        TitleFacetIndex.instance.platformsOf(key) ?? store.valueOf(key);
+    if (names == null || names.isEmpty) return null;
+    for (final p in StreamingPlatform.all) {
+      if (names.contains(p.name)) return p;
+    }
+    return null;
+  }
+
   /// Platforms that verifiably offer [item], or null while not checked yet.
   List<StreamingPlatform>? platformsOf(TmdbItem item) {
     final key = keyOf(item);

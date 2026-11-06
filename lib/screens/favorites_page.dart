@@ -160,7 +160,7 @@ class _MyList extends StatelessWidget {
         ContentType.movie,
         maxExtent: ui.gridMaxExtent,
         compact: ui.compact,
-        showTitles: ui.showTitles,
+        showTitles: ui.titlesBelow,
       ),
       itemCount: items.length,
       itemBuilder: (context, i) {
@@ -174,7 +174,7 @@ class _MyList extends StatelessWidget {
           ContentType.movie,
           maxExtent: ui.gridMaxExtent,
           compact: ui.compact,
-          showTitles: ui.showTitles,
+          showTitles: ui.titlesBelow,
         );
         final columns =
             ((MediaQuery.sizeOf(context).width - 32) /

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme/app_theme.dart';
 import '../models/content_type.dart';
+import '../models/poster_badges.dart';
 import '../models/multiview_layout.dart';
 import '../models/home_layout_preferences.dart';
 import '../models/watch_completion_policy.dart';
@@ -99,6 +100,10 @@ class UiSettings extends ChangeNotifier {
   static const posterCornersKey = 'ui_poster_corners';
   static const posterProgressKey = 'ui_poster_progress';
   static const posterDetailsKey = 'ui_poster_details';
+  static const ratingSourceKey = 'ui_rating_source';
+  static const badgeNewKey = 'ui_badge_new';
+  static const badgePlatformKey = 'ui_badge_platform';
+  static const titlesOverlayKey = 'ui_titles_overlay';
 
   static const homeKeys = {
     'ui_home_shape',
@@ -320,6 +325,10 @@ class UiSettings extends ChangeNotifier {
   PosterCorners _posterCorners = PosterCorners.standard;
   bool _posterProgress = true;
   bool _posterDetails = false;
+  RatingSource _ratingSource = RatingSource.auto;
+  bool _badgeNew = false;
+  bool _badgePlatform = false;
+  bool _titlesOverlay = false;
   bool _loaded = false;
   List<AppSection> _sectionOrder = List.of(AppSection.values);
   AppSection _startSection = AppSection.home;
@@ -364,6 +373,24 @@ class UiSettings extends ChangeNotifier {
   /// Year and length under the catalog titles.
   bool get posterDetails => _posterDetails;
 
+  RatingSource get ratingSource => _ratingSource;
+
+  /// «Nuovo» on titles the source added in the last days.
+  bool get badgeNew => _badgeNew;
+
+  /// Streaming platform logo, when already known on this device.
+  bool get badgePlatform => _badgePlatform;
+
+  /// Catalog titles under the poster, on it, or not at all.
+  TitlePlacement get titlePlacement => !_showTitles
+      ? TitlePlacement.hidden
+      : _titlesOverlay
+      ? TitlePlacement.overlay
+      : TitlePlacement.below;
+
+  /// Titles in their own line under the poster: the grid cell is taller.
+  bool get titlesBelow => titlePlacement == TitlePlacement.below;
+
   /// Changes whenever any saved look-and-feel preference changes: used to
   /// push the new values to the cloud at once.
   String get signature => [
@@ -390,6 +417,10 @@ class UiSettings extends ChangeNotifier {
     _posterCorners.name,
     _posterProgress,
     _posterDetails,
+    _ratingSource.name,
+    _badgeNew,
+    _badgePlatform,
+    _titlesOverlay,
     homePosterShape.name,
     homeRecentShape.name,
     homePosterDensity.name,
@@ -445,6 +476,10 @@ class UiSettings extends ChangeNotifier {
         ? prefs.get(posterProgressKey) as bool
         : true;
     _posterDetails = prefs.get(posterDetailsKey) == true;
+    _ratingSource = RatingSource.parse(prefs.get(ratingSourceKey));
+    _badgeNew = prefs.get(badgeNewKey) == true;
+    _badgePlatform = prefs.get(badgePlatformKey) == true;
+    _titlesOverlay = prefs.get(titlesOverlayKey) == true;
     homePosterShape =
         HomePosterShape.values.asNameMap()[prefs.get('ui_home_shape')] ??
         HomePosterShape.portrait;
@@ -690,6 +725,32 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setRatingSource(RatingSource value) async {
+    _ratingSource = value;
+    await _save(ratingSourceKey, value.name);
+    notifyListeners();
+  }
+
+  Future<void> setBadgeNew(bool value) async {
+    _badgeNew = value;
+    await _save(badgeNewKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setBadgePlatform(bool value) async {
+    _badgePlatform = value;
+    await _save(badgePlatformKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setTitlePlacement(TitlePlacement value) async {
+    _showTitles = value != TitlePlacement.hidden;
+    _titlesOverlay = value == TitlePlacement.overlay;
+    await _save(_titlesKey, _showTitles);
+    await _save(titlesOverlayKey, _titlesOverlay);
+    notifyListeners();
+  }
+
   Future<void> setFocusGlow(bool value) async {
     _focusGlow = value;
     await _save(_focusGlowKey, value);
@@ -719,6 +780,10 @@ class UiSettings extends ChangeNotifier {
       posterCornersKey,
       posterProgressKey,
       posterDetailsKey,
+      ratingSourceKey,
+      badgeNewKey,
+      badgePlatformKey,
+      titlesOverlayKey,
     ]) {
       await prefs.remove(key);
     }

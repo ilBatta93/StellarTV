@@ -7,6 +7,8 @@ import '../services/image_warmup_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import 'poster_overlay.dart';
+import '../models/poster_badges.dart';
 import 'title_facets.dart';
 
 import 'package:provider/provider.dart';
@@ -239,12 +241,16 @@ class TmdbPosterCard extends StatelessWidget {
   final double width;
   final VoidCallback? onFocus;
 
+  /// Extra marks stacked under the score (e.g. the award winner).
+  final List<Widget> badges;
+
   const TmdbPosterCard({
     super.key,
     required this.item,
     required this.onTap,
     this.width = 120,
     this.onFocus,
+    this.badges = const [],
   });
 
   @override
@@ -256,7 +262,9 @@ class TmdbPosterCard extends StatelessWidget {
     // Grids (Preferiti, ricerca) follow the catalog poster options; rows
     // keep their fixed layout and Home has its own titles option.
     final catalogGrid = fillsCell && !home;
-    final showTitles = home ? ui.homeTitles : (!catalogGrid || ui.showTitles);
+    final overlayTitle =
+        catalogGrid && ui.titlePlacement == TitlePlacement.overlay;
+    final showTitles = home ? ui.homeTitles : (!catalogGrid || ui.titlesBelow);
     final showRating = !catalogGrid || ui.showRatings;
     final radius = posterRadius(context);
     final poster = ClipRRect(
@@ -265,16 +273,26 @@ class TmdbPosterCard extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           PosterImage(url: homePosterUrl(context, item), rememberWidth: home),
-          if (showRating)
-            Positioned(
-              top: 6,
-              left: 6,
-              child: RatingBadge(
-                value: item.voteAverage,
-                item: item,
-                reveal: true,
-              ),
-            ),
+          PosterOverlay(
+            topLeft: [
+              if (showRating)
+                RatingBadge(value: item.voteAverage, item: item, reveal: true),
+              ...badges,
+            ],
+            caption: overlayTitle
+                ? Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: DeviceTypeService.isTv ? 15 : 12.5,
+                      fontWeight: FontWeight.w700,
+                      height: 1.15,
+                    ),
+                  )
+                : null,
+          ),
         ],
       ),
     );
@@ -408,10 +426,10 @@ class RankedPosterCard extends StatelessWidget {
                             ? item.backdropUrl ?? item.posterUrl
                             : item.posterUrl,
                       ),
-                      Positioned(
-                        top: 6,
-                        left: 6,
-                        child: RatingBadge(value: item.voteAverage, item: item),
+                      PosterOverlay(
+                        topLeft: [
+                          RatingBadge(value: item.voteAverage, item: item),
+                        ],
                       ),
                     ],
                   ),
