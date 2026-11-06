@@ -437,11 +437,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 zone: PreviewZone.banner,
                 child: SettingsValueTile(
                   icon: Icons.movie_filter_outlined,
-                  title: 'Trailer nel banner',
+                  title: 'Trailer nella Home',
                   subtitle: ui.bannerTrailer.description,
                   value: ui.bannerTrailer.label,
                   onTap: () => pick<BannerTrailerMode>(
-                    'Trailer nel banner',
+                    'Trailer nella Home',
                     BannerTrailerMode.values,
                     ui.bannerTrailer,
                     (m) => m.label,

@@ -1210,6 +1210,17 @@ class _TvDiscoverState extends State<_TvDiscover> {
   /// is playing, and the banner details are faded behind it.
   final _onBannerButton = ValueNotifier(false);
   final _trailerPlaying = ValueNotifier(false);
+
+  /// "Nell'immagine di scena": the open scene picture, and the title whose
+  /// trailer plays in it.
+  final _sceneSlot = ValueNotifier<SceneTrailerSlot?>(null);
+  final _scenePlaying = ValueNotifier<String?>(null);
+  static final _noButton = ValueNotifier(false);
+
+  /// Up from the first row lands on Guarda/Trailer; Down from there goes
+  /// back to the card the remote came from.
+  final _rows = TvHomeRowsController();
+  final _heroButtons = FocusNode(skipTraversal: true, canRequestFocus: false);
   final _dimInfo = ValueNotifier(false);
   Timer? _dimTimer;
   Timer? _debounce;
@@ -1222,7 +1233,6 @@ class _TvDiscoverState extends State<_TvDiscover> {
   @override
   void initState() {
     super.initState();
-    TvImageMemoryGuard.trailerPaused.addListener(_trailerPauseChanged);
     _hero = ValueNotifier(_firstHero());
     _seedInitialHistory();
     HardwareKeyboard.instance.addHandler(_anyKey);
@@ -1290,8 +1300,10 @@ class _TvDiscoverState extends State<_TvDiscover> {
     _heroNote.dispose();
     _onBannerButton.dispose();
     _trailerPlaying.dispose();
+    _sceneSlot.dispose();
+    _scenePlaying.dispose();
+    _heroButtons.dispose();
     _dimInfo.dispose();
-    TvImageMemoryGuard.trailerPaused.removeListener(_trailerPauseChanged);
     super.dispose();
   }
 
@@ -1320,32 +1332,56 @@ class _TvDiscoverState extends State<_TvDiscover> {
     _undim();
   }
 
-  bool _trailerAllowed(UiSettings ui, bool paused, TmdbItem? item) =>
+  BannerTrailerMode _trailerMode(UiSettings ui) =>
       bannerTrailerAllowed(
         mode: ui.bannerTrailer,
         isTv: DeviceTypeService.isTv,
         lowRam: DeviceTypeService.isLowRam,
-        memoryPressure: paused,
-      ) &&
-      // A trailer cut short by memory pressure does not start over.
-      (item == null || item.key != _pressureStopped);
+      )
+      ? ui.bannerTrailer
+      : BannerTrailerMode.off;
 
-  /// Title whose trailer memory pressure interrupted.
-  String? _pressureStopped;
+  Widget _bannerTrailer(TmdbItem? item, UiSettings ui, {bool cover = false}) =>
+      BannerTrailer(
+        item: item,
+        audio: ui.bannerTrailerAudio,
+        delaySeconds: ui.bannerTrailerDelay,
+        onButton: _onBannerButton,
+        onPlaying: _trailerChanged,
+        cover: cover,
+      );
 
-  void _trailerPauseChanged() {
-    if (TvImageMemoryGuard.trailerPaused.value && _trailerPlaying.value) {
-      _pressureStopped = _hero.value?.key;
-    }
-  }
-
-  Widget _bannerTrailer(TmdbItem? item, UiSettings ui) => BannerTrailer(
+  /// The trailer of the selected cover: Guarda/Trailer are not on screen
+  /// while a cover is selected, so "Col pulsante" stays muted.
+  Widget _sceneTrailer(TmdbItem? item, UiSettings ui) => BannerTrailer(
     item: item,
     audio: ui.bannerTrailerAudio,
     delaySeconds: ui.bannerTrailerDelay,
-    onButton: _onBannerButton,
-    onPlaying: _trailerChanged,
+    onButton: _noButton,
+    onPlaying: (playing) {
+      if (mounted) _scenePlaying.value = playing ? item?.key : null;
+    },
   );
+
+  /// Up from the first row: Guarda (or Trailer) in the banner, if shown.
+  bool _focusBannerButtons() {
+    final first = _heroButtons.traversalDescendants
+        .where((n) => n.canRequestFocus && n.context?.mounted == true)
+        .firstOrNull;
+    if (first == null) return false;
+    first.requestFocus();
+    return true;
+  }
+
+  KeyEventResult _bannerButtonsKey(FocusNode node, KeyEvent event) {
+    if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
+        event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      return _rows.focusCurrent()
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored;
+    }
+    return KeyEventResult.ignored;
+  }
 
   // Debounced so scrolling quickly with the remote does not load every
   // backdrop on the way.
@@ -1576,7 +1612,8 @@ class _TvDiscoverState extends State<_TvDiscover> {
         // remaining height. Fixed catalog sizes must not squeeze out the plot.
         final ui = context.watch<UiSettings>();
         final heroHeight = c.maxHeight * ui.homeBannerSize.tvFraction;
-        return TvHomeLayout(
+        final mode = _trailerMode(ui);
+        final layout = TvHomeLayout(
           rowHeight: c.maxHeight - heroHeight,
           captionHeight: MediaQuery.textScalerOf(context).scale(15) * 1.2,
           showTitles: ui.homeTitles,
@@ -1595,23 +1632,28 @@ class _TvDiscoverState extends State<_TvDiscover> {
                   valueListenable: _hero,
                   builder: (_, item, _) => ValueListenableBuilder<bool>(
                     valueListenable: TvImageMemoryGuard.reducedRendering,
-                    builder: (_, pressure, _) => ValueListenableBuilder<bool>(
-                      valueListenable: TvImageMemoryGuard.trailerPaused,
-                      builder: (_, paused, _) => _TvHeroBackdrop(
-                        item: item,
-                        decodeWidth: TvRenderPolicy.homeBackdropDecodeLimit(
-                          memoryPressure: pressure,
-                        ),
-                        trailer:
-                            ui.bannerTrailer == BannerTrailerMode.background &&
-                                _trailerAllowed(ui, paused, item)
-                            ? _bannerTrailer(item, ui)
-                            : null,
+                    builder: (_, pressure, _) => _TvHeroBackdrop(
+                      item: item,
+                      decodeWidth: TvRenderPolicy.homeBackdropDecodeLimit(
+                        memoryPressure: pressure,
                       ),
+                      trailer: mode == BannerTrailerMode.background
+                          ? _bannerTrailer(item, ui, cover: true)
+                          : null,
+                      playing: _trailerPlaying,
+                      trailerHeight: heroHeight + kTvTopBarHeight,
+                      dimmed: mode == BannerTrailerMode.panel,
                     ),
                   ),
                 ),
               ),
+              if (mode.inScene)
+                Positioned.fill(
+                  child: SceneTrailerLayer(
+                    slot: _sceneSlot,
+                    builder: (item) => _sceneTrailer(item, ui),
+                  ),
+                ),
               Column(
                 children: [
                   SizedBox(
@@ -1623,32 +1665,53 @@ class _TvDiscoverState extends State<_TvDiscover> {
                         Expanded(
                           child: ValueListenableBuilder<TmdbItem?>(
                             valueListenable: _hero,
-                            builder: (_, item, _) => Stack(
-                              children: [
-                                ValueListenableBuilder<String?>(
-                                  valueListenable: _heroNote,
-                                  builder: (_, note, _) => _TvHeroInfo(
-                                    item: item,
-                                    note: note,
-                                    buttons:
-                                        ui.bannerTrailer !=
-                                        BannerTrailerMode.off,
-                                    onButton: _onBannerButton,
-                                    dim: _dimInfo,
-                                  ),
-                                ),
-                                if (ui.bannerTrailer == BannerTrailerMode.panel)
-                                  ValueListenableBuilder<bool>(
-                                    valueListenable:
-                                        TvImageMemoryGuard.trailerPaused,
-                                    builder: (_, paused, _) =>
-                                        _trailerAllowed(ui, paused, item)
-                                        ? _TrailerPanel(
-                                            child: _bannerTrailer(item, ui),
-                                          )
-                                        : const SizedBox.shrink(),
-                                  ),
-                              ],
+                            builder: (_, item, _) => LayoutBuilder(
+                              builder: (context, box) {
+                                final panel = mode == BannerTrailerMode.panel
+                                    ? trailerPanelSize(
+                                        bannerWidth: box.maxWidth,
+                                        bannerHeight: box.maxHeight,
+                                      )
+                                    : null;
+                                return Stack(
+                                  children: [
+                                    // First, so the player keeps its place
+                                    // (and its web page) from title to title.
+                                    if (panel != null && panel.width >= 160)
+                                      Positioned(
+                                        right: _TrailerPanel.right,
+                                        top: (box.maxHeight - panel.height) / 2,
+                                        width: panel.width,
+                                        height: panel.height,
+                                        child: TrailerPanelFrame(
+                                          player: _bannerTrailer(item, ui),
+                                          still: _TrailerPanel.still(item),
+                                          playing: _trailerPlaying,
+                                        ),
+                                      ),
+                                    ValueListenableBuilder<String?>(
+                                      valueListenable: _heroNote,
+                                      builder: (_, note, _) => _TvHeroInfo(
+                                        item: item,
+                                        note: note,
+                                        buttons:
+                                            ui.bannerTrailer !=
+                                            BannerTrailerMode.off,
+                                        onButton: _onBannerButton,
+                                        buttonsNode: _heroButtons,
+                                        onButtonsKey: _bannerButtonsKey,
+                                        dim: _dimInfo,
+                                        reserveRight:
+                                            panel != null && panel.width >= 160
+                                            ? panel.width +
+                                                  _TrailerPanel.right +
+                                                  24
+                                            : 0,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
                           ),
                         ),
@@ -1755,7 +1818,11 @@ class _TvDiscoverState extends State<_TvDiscover> {
                               );
                           }
                         }
-                        return TvHomeRows(sections: sections);
+                        return TvHomeRows(
+                          sections: sections,
+                          controller: _rows,
+                          onExitTop: _focusBannerButtons,
+                        );
                       },
                     ),
                   ),
@@ -1763,6 +1830,12 @@ class _TvDiscoverState extends State<_TvDiscover> {
               ),
             ],
           ),
+        );
+        if (!mode.inScene) return layout;
+        return SceneTrailerScope(
+          slot: _sceneSlot,
+          playing: _scenePlaying,
+          child: layout,
         );
       },
     );
@@ -2044,39 +2117,78 @@ class _TvHeroBackdrop extends StatelessWidget {
 
   final int decodeWidth;
 
-  /// "Trailer nel banner: sullo sfondo", over the still.
+  /// "Trailer nel banner: sullo sfondo": the player, laid under the still
+  /// in the banner area right of the solid shade ([trailerHeight] tall).
   final Widget? trailer;
+  final ValueListenable<bool>? playing;
+  final double trailerHeight;
+
+  /// "Nel riquadro a destra": the picture steps back behind the window.
+  final bool dimmed;
+
   const _TvHeroBackdrop({
     required this.item,
     required this.decodeWidth,
     this.trailer,
+    this.playing,
+    this.trailerHeight = 0,
+    this.dimmed = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final it = item;
+    final player = trailer;
+    final source = playing;
+    Widget still = it == null
+        ? const SizedBox.expand()
+        : PosterImage(url: it.backdropUrl, maxDecodeWidth: decodeWidth);
+    if (dimmed) {
+      still = Stack(
+        fit: StackFit.expand,
+        children: [
+          still,
+          const ColoredBox(color: Color(0x99000000)),
+        ],
+      );
+    }
+    if (player != null && source != null) {
+      // The still fades out over the playing trailer.
+      still = ValueListenableBuilder<bool>(
+        valueListenable: source,
+        builder: (_, on, child) => AnimatedOpacity(
+          opacity: on ? 0 : 1,
+          duration: const Duration(milliseconds: 600),
+          child: child,
+        ),
+        child: still,
+      );
+    }
     // Full-screen artwork. One scrim: solid black on the text side, clear
     // past the middle so the picture stays readable from the sofa.
     return RepaintBoundary(
-      child: item == null
-          ? const SizedBox.expand()
-          : TvScrimmedArt(
-              key: ValueKey(item!.key),
-              picture: trailer == null
-                  ? PosterImage(
-                      url: item?.backdropUrl,
-                      maxDecodeWidth: decodeWidth,
-                    )
-                  : Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        PosterImage(
-                          url: item?.backdropUrl,
-                          maxDecodeWidth: decodeWidth,
-                        ),
-                        trailer!,
-                      ],
-                    ),
-            ),
+      child: LayoutBuilder(
+        builder: (context, box) => Stack(
+          fit: StackFit.expand,
+          children: [
+            // First and unkeyed: one player for every title.
+            if (player != null)
+              Positioned(
+                left: box.maxWidth * TvScrimmedArt.solid,
+                right: 0,
+                top: 0,
+                height: trailerHeight,
+                child: player,
+              ),
+            if (it != null)
+              TvScrimmedArt(
+                key: ValueKey(it.key),
+                picture: still,
+                trailerBottom: player == null ? null : trailerHeight,
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2092,15 +2204,25 @@ class _TvHeroInfo extends StatelessWidget {
   final bool buttons;
   final ValueNotifier<bool>? onButton;
 
+  /// Holds Guarda/Trailer: Up from the rows lands there, Down goes back.
+  final FocusNode? buttonsNode;
+  final FocusOnKeyEventCallback? onButtonsKey;
+
   /// Details and plot fade while a background trailer plays.
   final ValueListenable<bool>? dim;
+
+  /// Width kept free on the right for the trailer window.
+  final double reserveRight;
 
   const _TvHeroInfo({
     required this.item,
     this.note,
     this.buttons = false,
     this.onButton,
+    this.buttonsNode,
+    this.onButtonsKey,
     this.dim,
+    this.reserveRight = 0,
   });
 
   @override
@@ -2153,7 +2275,11 @@ class _TvHeroInfo extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(32, vPad, 24, vPad),
           child: FractionallySizedBox(
             alignment: Alignment.centerLeft,
-            widthFactor: 0.58,
+            widthFactor: reserveRight <= 0
+                ? 0.58
+                : ((bounds.maxWidth - 56 - reserveRight) /
+                          (bounds.maxWidth - 56))
+                      .clamp(0.3, 0.58),
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2235,7 +2361,12 @@ class _TvHeroInfo extends StatelessWidget {
                   ),
                   if (buttons) ...[
                     const SizedBox(height: 12),
-                    _HeroButtons(item: it, onButton: onButton),
+                    _HeroButtons(
+                      item: it,
+                      onButton: onButton,
+                      focusNode: buttonsNode,
+                      onKey: onButtonsKey,
+                    ),
                   ],
                 ],
               ),
@@ -2273,12 +2404,19 @@ class _Dimmable extends StatelessWidget {
 /// Guarda (or Riprendi) and Trailer in the TV banner. Resting on either
 /// tells the banner trailer to play its sound.
 class _HeroButtons extends StatelessWidget {
-  const _HeroButtons({required this.item, this.onButton});
+  const _HeroButtons({
+    required this.item,
+    this.onButton,
+    this.focusNode,
+    this.onKey,
+  });
 
   static const height = 40.0;
 
   final TmdbItem item;
   final ValueNotifier<bool>? onButton;
+  final FocusNode? focusNode;
+  final FocusOnKeyEventCallback? onKey;
 
   @override
   Widget build(BuildContext context) {
@@ -2304,8 +2442,10 @@ class _HeroButtons extends StatelessWidget {
     }
 
     return Focus(
+      focusNode: focusNode,
       canRequestFocus: false,
       skipTraversal: true,
+      onKeyEvent: onKey,
       onFocusChange: (focused) => onButton?.value = focused,
       child: SizedBox(
         height: height,
@@ -2322,7 +2462,8 @@ class _HeroButtons extends StatelessWidget {
               ),
               const SizedBox(width: 12),
             ],
-            TrailerButton(key: ValueKey(item.key), item: item),
+            // Unkeyed: a new banner title keeps the focus on the button.
+            TrailerButton(item: item),
           ],
         ),
       ),
@@ -2330,30 +2471,18 @@ class _HeroButtons extends StatelessWidget {
   }
 }
 
-/// "Trailer nel banner: nel riquadro a destra": a 16:9 window in the free
-/// right side of the banner, its edges fading into the picture.
-class _TrailerPanel extends StatelessWidget {
-  const _TrailerPanel({required this.child});
+/// "Trailer nel banner: nel riquadro a destra": a framed 16:9 window as
+/// tall as the banner, right of the details. The scene of the title shows
+/// in it until the trailer plays.
+abstract final class _TrailerPanel {
+  /// Same margin as the rows' right edge.
+  static const right = 32.0;
 
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, box) {
-      final height = box.maxHeight - 24;
-      if (height <= 40) return const SizedBox.shrink();
-      final width = (box.maxWidth * 0.36).clamp(0.0, height * 16 / 9);
-      return Align(
-        alignment: Alignment.centerRight,
-        child: Padding(
-          padding: const EdgeInsets.only(right: 40),
-          child: SizedBox(
-            width: width,
-            height: width * 9 / 16,
-            child: FeatheredTrailerWindow(child: child),
-          ),
-        ),
-      );
-    },
-  );
+  static Widget still(TmdbItem? item) => item == null
+      ? const ColoredBox(color: Colors.black)
+      : PosterImage(
+          key: ValueKey(item.key),
+          url: item.backdropUrl,
+          maxDecodeWidth: 780,
+        );
 }

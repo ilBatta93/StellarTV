@@ -21,7 +21,16 @@ class TvScrimmedArt extends StatelessWidget {
   /// Height fraction where the bottom fade to black starts; null for none.
   final double? bottomFadeFrom;
 
-  const TvScrimmedArt({super.key, required this.picture, this.bottomFadeFrom});
+  /// Bottom edge of a trailer playing under the picture: a short fade
+  /// there blends the video into the rows.
+  final double? trailerBottom;
+
+  const TvScrimmedArt({
+    super.key,
+    required this.picture,
+    this.bottomFadeFrom,
+    this.trailerBottom,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +38,7 @@ class TvScrimmedArt extends StatelessWidget {
       builder: (_, c) {
         final left = c.maxWidth * solid;
         final fadeFrom = bottomFadeFrom;
+        final trailer = trailerBottom;
         return Stack(
           fit: StackFit.expand,
           children: [
@@ -52,6 +62,22 @@ class TvScrimmedArt extends StatelessWidget {
                 right: 0,
                 top: c.maxHeight * fadeFrom,
                 bottom: 0,
+                child: const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [AppColors.clear, AppColors.background],
+                    ),
+                  ),
+                ),
+              ),
+            if (trailer != null && trailer > 48)
+              Positioned(
+                left: left,
+                right: 0,
+                top: trailer - 48,
+                height: 48,
                 child: const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(

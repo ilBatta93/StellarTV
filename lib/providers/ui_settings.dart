@@ -911,6 +911,11 @@ class UiSettings extends ChangeNotifier {
   Future<void> setBannerTrailer(BannerTrailerMode value) async {
     _bannerTrailer = value;
     await _save(bannerTrailerKey, value.name);
+    // The trailer in the scene picture needs the scene picture.
+    if (value.inScene && !_focusScene) {
+      _focusScene = true;
+      await _save(focusSceneKey, true);
+    }
     notifyListeners();
   }
 

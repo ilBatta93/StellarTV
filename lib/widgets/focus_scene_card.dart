@@ -18,6 +18,7 @@ import '../services/image_cache_service.dart';
 import '../services/series_grouping.dart';
 import '../services/title_runtime_store.dart';
 import '../theme/app_theme.dart';
+import 'banner_trailer.dart';
 import 'channel_card.dart';
 import 'poster_card.dart';
 import 'poster_overlay.dart';
@@ -132,6 +133,43 @@ class _FocusSceneArtState extends State<FocusSceneArt> {
   late final Future<FocusScene> _scene;
   Future<String?>? _logo;
 
+  /// "Trailer nell'immagine di scena" on the Home: this picture hosts it.
+  SceneTrailerScope? _trailer;
+  SceneTrailerSlot? _slot;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final scope = SceneTrailerScope.maybeOf(context);
+    if (identical(scope, _trailer)) return;
+    _leave();
+    _trailer = scope;
+    if (scope == null) return;
+    final slot = _slot = SceneTrailerSlot(widget.item, context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && identical(_slot, slot)) scope.slot.value = slot;
+    });
+  }
+
+  /// Hands the slot back, after the frame: the trailer layer rebuilds on
+  /// the change, which cannot happen while this picture is torn down.
+  void _leave() {
+    final scope = _trailer;
+    final slot = _slot;
+    _slot = null;
+    if (scope == null || slot == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (identical(scope.slot.value, slot)) scope.slot.value = null;
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  @override
+  void dispose() {
+    _leave();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -184,7 +222,7 @@ class _FocusSceneArtState extends State<FocusSceneArt> {
             ? item.sceneUrl
             : null;
         final episode = scene?.episode;
-        return Stack(
+        Widget picture = Stack(
           fit: StackFit.expand,
           children: [
             const ColoredBox(color: AppColors.surface),
@@ -197,6 +235,26 @@ class _FocusSceneArtState extends State<FocusSceneArt> {
             else if (scene != null)
               // No still at all: the poster, as before.
               PosterImage(url: item.posterUrl),
+          ],
+        );
+        final trailer = _trailer;
+        if (trailer != null) {
+          // The trailer plays under the picture, which fades out over it;
+          // logo and details stay on top.
+          picture = ValueListenableBuilder<String?>(
+            valueListenable: trailer.playing,
+            builder: (_, playing, child) => AnimatedOpacity(
+              opacity: playing == item.key ? 0 : 1,
+              duration: const Duration(milliseconds: 500),
+              child: child,
+            ),
+            child: picture,
+          );
+        }
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            picture,
             PosterOverlay(
               bottomLeft: [
                 if (ui.focusSceneBadges && match != null) ...[

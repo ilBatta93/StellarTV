@@ -99,7 +99,7 @@ void main() {
     });
   });
 
-  testWidgets('memory pressure pauses the banner trailer, then lets it back', (
+  testWidgets('memory pressure stops the trailer without switching it off', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -111,17 +111,11 @@ void main() {
     await DeviceTypeService.initialize();
     debugDefaultTargetPlatformOverride = null;
     TvImageMemoryGuard.install();
-    TvImageMemoryGuard.trailerPaused.value = false;
+    final before = TvImageMemoryGuard.trailerStops.value;
     tester.binding.handleMemoryPressure();
-    expect(TvImageMemoryGuard.trailerPaused.value, isTrue);
-    // A second warning restarts the wait.
-    await tester.pump(const Duration(seconds: 40));
     tester.binding.handleMemoryPressure();
-    await tester.pump(const Duration(seconds: 40));
-    expect(TvImageMemoryGuard.trailerPaused.value, isTrue);
-    await tester.pump(TvImageMemoryGuard.trailerCooldown);
-    expect(TvImageMemoryGuard.trailerPaused.value, isFalse);
-    // Images stay on the saving setting: only the trailer comes back.
+    // Each warning stops what plays; nothing waits or stays off.
+    expect(TvImageMemoryGuard.trailerStops.value, before + 2);
     expect(TvImageMemoryGuard.reducedRendering.value, isTrue);
   });
 }
