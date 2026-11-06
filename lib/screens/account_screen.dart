@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../widgets/auth_scaffold.dart';
 import '../services/device_type_service.dart';
 import '../widgets/tv_text_field.dart';
+import 'device_backup_screen.dart';
 import 'login_screen.dart';
 import 'profile_picker_screen.dart';
 import 'tv_pairing_screen.dart';
@@ -214,6 +215,16 @@ class _AccountScreenState extends State<AccountScreen> {
         .push(MaterialPageRoute(builder: (_) => const TvPairingScreen()));
   }
 
+  /// A backup made on the phone restores everything, account access
+  /// included, so it works before signing in.
+  void _openRestore() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const DeviceBackupScreen(restoreOnly: true),
+      ),
+    );
+  }
+
   Widget _action(VoidCallback? callback, Widget child) =>
       AuthAction(onPressed: callback, child: child);
 
@@ -222,6 +233,7 @@ class _AccountScreenState extends State<AccountScreen> {
     final submit = _loading ? null : _submit;
     final guest = _loading ? null : _continueAsGuest;
     final pair = _loading ? null : _openPairing;
+    final restore = _loading ? null : _openRestore;
     final toggle = _loading
         ? null
         : () => setState(() => _register = !_register);
@@ -239,6 +251,15 @@ class _AccountScreenState extends State<AccountScreen> {
               onPressed: pair,
               icon: const Icon(Icons.qr_code_rounded),
               label: const Text('Accedi con QR o codice'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _action(
+            restore,
+            OutlinedButton.icon(
+              onPressed: restore,
+              icon: const Icon(Icons.settings_backup_restore_rounded),
+              label: const Text('Ripristina da un backup'),
             ),
           ),
           const SizedBox(height: 12),

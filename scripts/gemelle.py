@@ -30,8 +30,10 @@ CONSTANTS = [
 # Files that change together. strict: shared format, the other side must follow.
 # contract: an app service and the route it calls, check only if the request or response changed.
 PAIRS = [
-    ('vault', 'strict', ['lib/services/personal_vault.dart', 'test/fixtures/'],
+    ('vault', 'strict', ['lib/services/personal_vault.dart', 'test/fixtures/web_vault'],
      ['src/lib/personalVault.ts', 'src/lib/personalVault.appV2.fixture.json']),
+    ('backup sul telefono', 'strict', ['lib/services/backup_transfer.dart', 'test/fixtures/backup_transfer.json'],
+     ['src/lib/backupTransfer.ts', 'src/lib/backupTransfer.fixture.json']),
     ('passaggio chiave', 'strict', ['lib/services/key_handoff.dart'], ['src/lib/keyHandoff.ts']),
     ('profilo bambino', 'strict', ['lib/services/kids_policy.dart'], ['src/lib/kidsPolicy.ts']),
     ('voti', 'contract', ['lib/models/rating_policy.dart'], ['src/lib/tmdbVotes.ts']),

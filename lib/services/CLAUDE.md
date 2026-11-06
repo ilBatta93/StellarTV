@@ -6,7 +6,7 @@ Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`
 - Sorgente e catalogo: `catalog_*`, `series_grouping`, `title_*`, `playlist_refresh_service`, `download_service` e i file legacy della sorgente.
 - Guida TV: `epg_*` (download, indice, archivio, timeline).
 - Metadati e voti: `tmdb_service`, `imdb_*`, `episode_metadata_service`, `introdb_service`, `segment_library`, `catalog_rating_service`.
-- Cloud e privacy: `sync_service`, `sync_hooks`, `personal_vault`, `key_handoff`, `tv_pairing_service`, `device_identity`.
+- Cloud e privacy: `sync_service`, `sync_hooks`, `personal_vault`, `key_handoff`, `tv_pairing_service`, `device_identity`, `device_backup` e `backup_transfer` (backup completo sul telefono).
 - Profilo bambino: `kids_policy`, `kids_content_service`, `kids_pin_service`.
 - Primo piano e lavoro: `foreground_*`, `app_foreground_service`, `playback_work_policy`, `stream_slot_policy`, `tv_render_policy`.
 - Diagnostica: `live_diagnostics_*`, `vod_diagnostics_*`, `frame_telemetry_*`.
@@ -22,6 +22,7 @@ Regole d'area per Claude e Grok. Valgono anche il master `C:\Progetti\AGENTS.md`
 - Un episodio ha il suo voto, non quello della serie. Un voto IMDb non ancora arrivato non si mostra.
 - Le chiamate al sito passano dalle API pubbliche del sito (`src/routes/api/public/`): un formato cambiato qui va cambiato anche lì.
 - DNS: di base un resolver senza filtri; la scelta resta sul dispositivo. Un resolver che non risponde non blocca mai la rete: si torna al DNS di sistema (pausa di 30 s dopo un errore). I preset devono rispondere in HTTP/1.1, perché il client Dart non parla HTTP/2. Il proxy dei flussi non registra indirizzi.
+- Backup sul telefono: comprende preferenze, storage sicuro e file di supporto; restano fuori download (file ed elenco), sessione dell'account e marcatori di sincronizzazione, perché una sessione copiata su due dispositivi si scollega al primo rinnovo. Regole in `models/device_backup_policy.dart`. Passa dal cloud solo cifrato end-to-end in `backup_transfers` (X25519+HKDF+AES-GCM, 20 minuti, cancellato appena letto), gemello di `src/lib/backupTransfer.ts` del sito con la fixture `test/fixtures/backup_transfer.json`. Il ripristino funziona anche senza accesso (RPC `backup_restore_*`): la TV ottiene una sessione sua tramite il collegamento TV approvato dal telefono. I file si decodificano tutti prima di sostituire qualcosa; poi l'app si chiude.
 - La diagnostica parte solo da un invio esplicito dell'utente e non contiene credenziali o indirizzi.
 
 ## Policy pure

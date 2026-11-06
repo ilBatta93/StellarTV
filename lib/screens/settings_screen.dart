@@ -25,6 +25,7 @@ import '../providers/sync_provider.dart';
 import '../services/settings_logout.dart';
 import 'history_settings_screen.dart';
 import 'hidden_categories_screen.dart';
+import 'device_backup_screen.dart';
 import 'dns_settings_screen.dart';
 import 'vpn_settings_screen.dart';
 import '../services/vpn_service.dart';
@@ -943,6 +944,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: 'Email, sincronizzazione e uscita dall\'account',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SyncSettingsScreen()),
+            ),
+          ),
+          SettingsValueTile(
+            icon: Icons.phone_android_rounded,
+            title: 'Backup sul telefono',
+            subtitle: 'Salva tutto in un file sul telefono o ripristinalo',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const DeviceBackupScreen()),
             ),
           ),
         ],

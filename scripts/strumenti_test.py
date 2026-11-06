@@ -148,6 +148,16 @@ class TwinsTest(unittest.TestCase):
         self.assertEqual([(n, k, s) for n, k, s, _ in sides], [('vault', 'strict', 'app'), ('voti', 'contract', 'sito')])
         self.assertEqual(gemelle.one_sided({'lib/services/key_handoff.dart'}, {'src/lib/keyHandoff.ts'}), [])
 
+    def test_fixtures_belong_to_their_own_pair(self):
+        # A backup fixture is not a vault change, and the backup twins move together.
+        backup = gemelle.one_sided({'test/fixtures/backup_transfer.json'}, set())
+        self.assertEqual([(n, s) for n, _, s, _ in backup], [('backup sul telefono', 'app')])
+        self.assertEqual(gemelle.one_sided(
+            {'lib/services/backup_transfer.dart', 'test/fixtures/backup_transfer.json'},
+            {'src/lib/backupTransfer.ts', 'src/lib/backupTransfer.fixture.json'}), [])
+        vault = gemelle.one_sided({'test/fixtures/web_vault_v2.json'}, set())
+        self.assertEqual([n for n, _, _, _ in vault], ['vault'])
+
 
 class StartTest(unittest.TestCase):
     def test_handoff_fields_and_next_steps(self):

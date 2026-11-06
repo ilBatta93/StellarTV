@@ -1,0 +1,15 @@
+{
+  "receiverSeed": 7,
+  "senderSeed": 9,
+  "nonceByte": 1,
+  "receiver": "E75P6uryBMf9M1j8nAByGIHRdCeBKCJ-xnTzf3_pe20",
+  "payload": "U3RlbGxhclRWIGJhY2t1cCBmaXh0dXJlIOKckw",
+  "restore": {
+    "code": "ABC234",
+    "sealed": "V9tLNZ8jrl4Ubk4lEgVnBHIlBjSMFQwUdT0Mkz0E1CEBAQEBAQEBAQEBAQE5O5xCHqwmePXY60cMbLW2fciIh_snrE6T-Og4W_ZH2DMyQpyxWhyVK5ABig"
+  },
+  "save": {
+    "code": "XYZ789",
+    "sealed": "V9tLNZ8jrl4Ubk4lEgVnBHIlBjSMFQwUdT0Mkz0E1CEBAQEBAQEBAQEBAQHl-coZw1Hx-Ouhq9_0J6FSJH587JEfj8MTRo7PFkm4LfsBNA1_PwzBG5Wt0A"
+  }
+}
