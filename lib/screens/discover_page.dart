@@ -19,10 +19,14 @@ import '../services/image_warmup_service.dart';
 import '../services/tv_render_policy.dart';
 
 import 'package:flutter/rendering.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../widgets/expiry_banner.dart';
+import '../widgets/banner_trailer.dart';
+import '../widgets/trailer_button.dart';
+import '../models/banner_trailer.dart';
 import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../models/history_entry.dart';
@@ -1199,6 +1203,13 @@ class _TvDiscover extends StatefulWidget {
 class _TvDiscoverState extends State<_TvDiscover> {
   late final ValueNotifier<TmdbItem?> _hero;
   final ValueNotifier<String?> _heroNote = ValueNotifier(null);
+
+  /// "Trailer nel banner": the remote rests on Guarda/Trailer, a trailer
+  /// is playing, and the banner details are faded behind it.
+  final _onBannerButton = ValueNotifier(false);
+  final _trailerPlaying = ValueNotifier(false);
+  final _dimInfo = ValueNotifier(false);
+  Timer? _dimTimer;
   Timer? _debounce;
   int _heroRequest = 0;
   bool _userFocused = false;
@@ -1211,6 +1222,7 @@ class _TvDiscoverState extends State<_TvDiscover> {
     super.initState();
     _hero = ValueNotifier(_firstHero());
     _seedInitialHistory();
+    HardwareKeyboard.instance.addHandler(_anyKey);
     if (!AwardsService.instance.hasCatalog &&
         widget.rowOrder.contains(HomeRows.awards)) {
       AwardsService.instance.catalog().then((_) {
@@ -1268,11 +1280,56 @@ class _TvDiscoverState extends State<_TvDiscover> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_anyKey);
+    _dimTimer?.cancel();
     _debounce?.cancel();
     _hero.dispose();
     _heroNote.dispose();
+    _onBannerButton.dispose();
+    _trailerPlaying.dispose();
+    _dimInfo.dispose();
     super.dispose();
   }
+
+  /// Any key brings the faded details back; they fade again after a while.
+  bool _anyKey(KeyEvent event) {
+    _undim();
+    return false;
+  }
+
+  void _undim() {
+    _dimTimer?.cancel();
+    if (!mounted) return;
+    _dimInfo.value = false;
+    final background =
+        context.read<UiSettings>().bannerTrailer ==
+        BannerTrailerMode.background;
+    if (!background || !_trailerPlaying.value) return;
+    _dimTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && _trailerPlaying.value) _dimInfo.value = true;
+    });
+  }
+
+  void _trailerChanged(bool playing) {
+    if (!mounted) return;
+    _trailerPlaying.value = playing;
+    _undim();
+  }
+
+  bool _trailerAllowed(UiSettings ui, bool pressure) => bannerTrailerAllowed(
+    mode: ui.bannerTrailer,
+    isTv: DeviceTypeService.isTv,
+    lowRam: DeviceTypeService.isLowRam,
+    memoryPressure: pressure,
+  );
+
+  Widget _bannerTrailer(TmdbItem? item, UiSettings ui) => BannerTrailer(
+    item: item,
+    audio: ui.bannerTrailerAudio,
+    delaySeconds: ui.bannerTrailerDelay,
+    onButton: _onBannerButton,
+    onPlaying: _trailerChanged,
+  );
 
   // Debounced so scrolling quickly with the remote does not load every
   // backdrop on the way.
@@ -1501,8 +1558,8 @@ class _TvDiscoverState extends State<_TvDiscover> {
       builder: (context, c) {
         // Reserve the synopsis first, then size every carousel to the actual
         // remaining height. Fixed catalog sizes must not squeeze out the plot.
-        final heroHeight =
-            c.maxHeight * context.watch<UiSettings>().homeBannerSize.fraction;
+        final ui = context.watch<UiSettings>();
+        final heroHeight = c.maxHeight * ui.homeBannerSize.fraction;
         return TvHomeLayout(
           rowHeight: c.maxHeight - heroHeight,
           captionHeight: MediaQuery.textScalerOf(context).scale(15) * 1.2,
@@ -1525,6 +1582,11 @@ class _TvDiscoverState extends State<_TvDiscover> {
                       decodeWidth: TvRenderPolicy.homeBackdropDecodeLimit(
                         memoryPressure: pressure,
                       ),
+                      trailer:
+                          ui.bannerTrailer == BannerTrailerMode.background &&
+                              _trailerAllowed(ui, pressure)
+                          ? _bannerTrailer(item, ui)
+                          : null,
                     ),
                   ),
                 ),
@@ -1540,12 +1602,33 @@ class _TvDiscoverState extends State<_TvDiscover> {
                         Expanded(
                           child: ValueListenableBuilder<TmdbItem?>(
                             valueListenable: _hero,
-                            builder: (_, item, _) =>
+                            builder: (_, item, _) => Stack(
+                              children: [
                                 ValueListenableBuilder<String?>(
                                   valueListenable: _heroNote,
-                                  builder: (_, note, _) =>
-                                      _TvHeroInfo(item: item, note: note),
+                                  builder: (_, note, _) => _TvHeroInfo(
+                                    item: item,
+                                    note: note,
+                                    buttons:
+                                        ui.bannerTrailer !=
+                                        BannerTrailerMode.off,
+                                    onButton: _onBannerButton,
+                                    dim: _dimInfo,
+                                  ),
                                 ),
+                                if (ui.bannerTrailer == BannerTrailerMode.panel)
+                                  ValueListenableBuilder<bool>(
+                                    valueListenable:
+                                        TvImageMemoryGuard.reducedRendering,
+                                    builder: (_, pressure, _) =>
+                                        _trailerAllowed(ui, pressure)
+                                        ? _TrailerPanel(
+                                            child: _bannerTrailer(item, ui),
+                                          )
+                                        : const SizedBox.shrink(),
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -1939,7 +2022,14 @@ class _TvHeroBackdrop extends StatelessWidget {
   final TmdbItem? item;
 
   final int decodeWidth;
-  const _TvHeroBackdrop({required this.item, required this.decodeWidth});
+
+  /// "Trailer nel banner: sullo sfondo", over the still.
+  final Widget? trailer;
+  const _TvHeroBackdrop({
+    required this.item,
+    required this.decodeWidth,
+    this.trailer,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1950,10 +2040,21 @@ class _TvHeroBackdrop extends StatelessWidget {
           ? const SizedBox.expand()
           : TvScrimmedArt(
               key: ValueKey(item!.key),
-              picture: PosterImage(
-                url: item?.backdropUrl,
-                maxDecodeWidth: decodeWidth,
-              ),
+              picture: trailer == null
+                  ? PosterImage(
+                      url: item?.backdropUrl,
+                      maxDecodeWidth: decodeWidth,
+                    )
+                  : Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        PosterImage(
+                          url: item?.backdropUrl,
+                          maxDecodeWidth: decodeWidth,
+                        ),
+                        trailer!,
+                      ],
+                    ),
             ),
     );
   }
@@ -1965,7 +2066,21 @@ class _TvHeroInfo extends StatelessWidget {
   final TmdbItem? item;
   final String? note;
 
-  const _TvHeroInfo({required this.item, this.note});
+  /// "Trailer nel banner": Guarda/Riprendi and Trailer, which also turn
+  /// the trailer's sound on while the remote rests on them.
+  final bool buttons;
+  final ValueNotifier<bool>? onButton;
+
+  /// Details and plot fade while a background trailer plays.
+  final ValueListenable<bool>? dim;
+
+  const _TvHeroInfo({
+    required this.item,
+    this.note,
+    this.buttons = false,
+    this.onButton,
+    this.dim,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2004,7 +2119,8 @@ class _TvHeroInfo extends StatelessWidget {
             6 +
             metaRowHeight +
             (note != null ? 6 + metaHeight : 0) +
-            (showOverview ? 8 + overviewLines * overviewLineHeight : 0);
+            (showOverview ? 8 + overviewLines * overviewLineHeight : 0) +
+            (buttons ? _HeroButtons.height + 12 : 0);
         final logoH = (bounds.maxHeight - vPad * 2 - textBlock)
             .clamp(0.0, 100.0)
             .toDouble();
@@ -2022,68 +2138,81 @@ class _TvHeroInfo extends StatelessWidget {
                 children: [
                   HomeTitleArt(item: it, height: logoH),
                   const SizedBox(height: 6),
-                  ListenableBuilder(
-                    listenable: Listenable.merge([
-                      TitleProvidersService.instance.store,
-                      PlatformCatalogService.instance,
-                    ]),
-                    builder: (context, _) {
-                      final facets = TitleFacets.of(
-                        context.read<AppProvider>(),
-                        item: it,
-                        includeCategories: false,
-                      );
-                      return Row(
-                        children: [
-                          ImdbRatingBadge(it, height: 18),
-                          const SizedBox(width: 10),
-                          Flexible(
-                            child: Text(
-                              metaText,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 14,
-                                height: 1.25,
-                                fontWeight: FontWeight.w600,
-                              ),
+                  _Dimmable(
+                    dim: dim,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListenableBuilder(
+                          listenable: Listenable.merge([
+                            TitleProvidersService.instance.store,
+                            PlatformCatalogService.instance,
+                          ]),
+                          builder: (context, _) {
+                            final facets = TitleFacets.of(
+                              context.read<AppProvider>(),
+                              item: it,
+                              includeCategories: false,
+                            );
+                            return Row(
+                              children: [
+                                ImdbRatingBadge(it, height: 18),
+                                const SizedBox(width: 10),
+                                Flexible(
+                                  child: Text(
+                                    metaText,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 14,
+                                      height: 1.25,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                for (final p in facets.platforms.take(3)) ...[
+                                  const SizedBox(width: 8),
+                                  PlatformBadge(p, height: _metaBadgeHeight),
+                                ],
+                              ],
+                            );
+                          },
+                        ),
+                        if (note != null) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            note!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 14,
+                              height: 1.25,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          for (final p in facets.platforms.take(3)) ...[
-                            const SizedBox(width: 8),
-                            PlatformBadge(p, height: _metaBadgeHeight),
-                          ],
                         ],
-                      );
-                    },
+                        if (showOverview) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            it.overview,
+                            maxLines: overviewLines,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 14,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                  if (note != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      note!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 14,
-                        height: 1.25,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                  if (showOverview) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      it.overview,
-                      maxLines: overviewLines,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                        height: 1.35,
-                      ),
-                    ),
+                  if (buttons) ...[
+                    const SizedBox(height: 12),
+                    _HeroButtons(item: it, onButton: onButton),
                   ],
                 ],
               ),
@@ -2093,4 +2222,115 @@ class _TvHeroInfo extends StatelessWidget {
       },
     );
   }
+}
+
+/// Fades the banner details while a background trailer plays.
+class _Dimmable extends StatelessWidget {
+  const _Dimmable({required this.dim, required this.child});
+
+  final ValueListenable<bool>? dim;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = dim;
+    if (source == null) return child;
+    return ValueListenableBuilder<bool>(
+      valueListenable: source,
+      builder: (_, dimmed, child) => AnimatedOpacity(
+        opacity: dimmed ? 0.12 : 1,
+        duration: const Duration(milliseconds: 600),
+        child: child,
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Guarda (or Riprendi) and Trailer in the TV banner. Resting on either
+/// tells the banner trailer to play its sound.
+class _HeroButtons extends StatelessWidget {
+  const _HeroButtons({required this.item, this.onButton});
+
+  static const height = 44.0;
+
+  final TmdbItem item;
+  final ValueNotifier<bool>? onButton;
+
+  @override
+  Widget build(BuildContext context) {
+    final match = context.read<AppProvider>().findChannelFor(item);
+    final history = context.watch<HistoryProvider>();
+    final started = match == null
+        ? false
+        : match.isSeriesFolder
+        ? history.lastOfSeries(match.seriesKey ?? match.id) != null
+        : (history.entryFor(match.id)?.resumePosition ?? Duration.zero) >
+              Duration.zero;
+    void watch() {
+      if (match == null) return;
+      if (match.isSeriesFolder) {
+        openSeries(context, match, item: item);
+      } else {
+        playChannel(
+          context,
+          match,
+          startAt: history.entryFor(match.id)?.resumePosition,
+        );
+      }
+    }
+
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (focused) => onButton?.value = focused,
+      child: SizedBox(
+        height: height,
+        child: Row(
+          children: [
+            if (match != null) ...[
+              TvFocusable(
+                onPressed: watch,
+                child: ElevatedButton.icon(
+                  onPressed: watch,
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: Text(started ? 'Riprendi' : 'Guarda'),
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+            TrailerButton(key: ValueKey(item.key), item: item),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Trailer nel banner: nel riquadro a destra": a 16:9 window in the free
+/// right side of the banner, its edges fading into the picture.
+class _TrailerPanel extends StatelessWidget {
+  const _TrailerPanel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      final height = box.maxHeight - 24;
+      if (height <= 40) return const SizedBox.shrink();
+      final width = (box.maxWidth * 0.36).clamp(0.0, height * 16 / 9);
+      return Align(
+        alignment: Alignment.centerRight,
+        child: Padding(
+          padding: const EdgeInsets.only(right: 40),
+          child: SizedBox(
+            width: width,
+            height: width * 9 / 16,
+            child: FeatheredTrailerWindow(child: child),
+          ),
+        ),
+      );
+    },
+  );
 }

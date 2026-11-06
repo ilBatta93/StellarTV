@@ -81,13 +81,126 @@ String catalogEntryIdentity(AppProvider app, CatalogEntry entry) {
 /// [showTitles] off ("Titoli sotto le locandine"): the cell is exactly a
 /// poster, so the cover is neither stretched nor cropped. Live channels
 /// always keep their name. [showDetails] ("Anno e durata sotto il titolo")
-/// makes the cell one short line taller.
+/// makes the cell one short line taller. [columns] ("Colonne della
+/// griglia", 0 = automatic) fixes the poster count per row; live channels
+/// keep the automatic grid. [width] is only an estimate of the grid's width,
+/// so the TV row prefetch knows how tall a fixed-column row is.
 SliverGridDelegateWithMaxCrossAxisExtent channelGridDelegate(
   ContentType type, {
   double maxExtent = 140,
   bool compact = false,
   bool showTitles = true,
   bool showDetails = false,
+  int columns = 0,
+  double? width,
+}) {
+  final auto = _autoGridDelegate(
+    type,
+    maxExtent: maxExtent,
+    compact: compact,
+    showTitles: showTitles,
+    showDetails: showDetails,
+  );
+  if (columns <= 0 || type == ContentType.live) return auto;
+  final spacing = auto.crossAxisSpacing;
+  return FixedColumnsGridDelegate(
+    columns: columns,
+    cellWidth: width == null
+        ? auto.maxCrossAxisExtent
+        : ((width - spacing * (columns - 1)) / columns).clamp(1.0, 4000.0),
+    childAspectRatio: auto.childAspectRatio,
+    crossAxisSpacing: spacing,
+    mainAxisSpacing: auto.mainAxisSpacing,
+  );
+}
+
+/// Posters per row of [delegate] in a grid [width] wide: what the remote
+/// uses to move Su/Giù by one row.
+int gridColumnCount(
+  SliverGridDelegateWithMaxCrossAxisExtent delegate,
+  double width,
+) {
+  if (delegate is FixedColumnsGridDelegate) return delegate.columns;
+  return (width / (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
+      .ceil()
+      .clamp(1, 100);
+}
+
+/// "Muro": covers only, 2 px apart. Automatic columns are one more than the
+/// "Poster" grid would show at this poster size; fixed ones are kept.
+FixedColumnsGridDelegate wallGridDelegate(
+  ContentType type, {
+  required double width,
+  double maxExtent = 140,
+  bool compact = false,
+  int columns = 0,
+}) {
+  const gap = 2.0;
+  final count = columns > 0
+      ? columns
+      : gridColumnCount(
+              channelGridDelegate(
+                type,
+                maxExtent: maxExtent,
+                compact: compact,
+                showTitles: false,
+              ),
+              width,
+            ) +
+            1;
+  return FixedColumnsGridDelegate(
+    columns: count,
+    cellWidth: ((width - gap * (count - 1)) / count).clamp(1.0, 4000.0),
+    childAspectRatio: 2 / 3,
+    crossAxisSpacing: gap,
+    mainAxisSpacing: gap,
+  );
+}
+
+/// A poster grid with exactly [columns] per row. It stays a max-extent
+/// delegate (with [maxCrossAxisExtent] as the estimated cell width) so the
+/// helpers that size rows from it keep working.
+class FixedColumnsGridDelegate
+    extends SliverGridDelegateWithMaxCrossAxisExtent {
+  const FixedColumnsGridDelegate({
+    required this.columns,
+    required double cellWidth,
+    super.childAspectRatio,
+    super.crossAxisSpacing,
+    super.mainAxisSpacing,
+  }) : super(maxCrossAxisExtent: cellWidth);
+
+  final int columns;
+
+  @override
+  SliverGridLayout getLayout(SliverConstraints constraints) {
+    final usable =
+        constraints.crossAxisExtent - crossAxisSpacing * (columns - 1);
+    final width = usable > 0 ? usable / columns : 0.0;
+    final height = width / childAspectRatio;
+    return SliverGridRegularTileLayout(
+      crossAxisCount: columns,
+      mainAxisStride: height + mainAxisSpacing,
+      crossAxisStride: width + crossAxisSpacing,
+      childMainAxisExtent: height,
+      childCrossAxisExtent: width,
+      reverseCrossAxis: axisDirectionIsReversed(constraints.crossAxisDirection),
+    );
+  }
+
+  @override
+  bool shouldRelayout(SliverGridDelegateWithMaxCrossAxisExtent oldDelegate) =>
+      super.shouldRelayout(oldDelegate) ||
+      oldDelegate is! FixedColumnsGridDelegate ||
+      oldDelegate.columns != columns;
+}
+
+SliverGridDelegateWithMaxCrossAxisExtent _autoGridDelegate(
+  ContentType type, {
+  required double maxExtent,
+  required bool compact,
+  required bool showTitles,
+  required bool showDetails,
 }) {
   final isLive = type == ContentType.live;
   const posterOnly = 2 / 3;
@@ -141,12 +254,16 @@ class CatalogEntryCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onFavoriteTap;
 
+  /// "Muro": cover only.
+  final bool bare;
+
   const CatalogEntryCard({
     super.key,
     required this.entry,
     required this.isFavorite,
     required this.onTap,
     required this.onFavoriteTap,
+    this.bare = false,
   });
 
   @override
@@ -159,6 +276,7 @@ class CatalogEntryCard extends StatelessWidget {
       onTap: onTap,
       onFavoriteTap: onFavoriteTap,
       qualityLabel: quality,
+      bare: bare,
     );
   }
 }
@@ -254,12 +372,15 @@ class ChannelGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppProvider>();
     final ui = context.watch<UiSettings>();
+    final usable = MediaQuery.sizeOf(context).width - padding.horizontal;
     final delegate = channelGridDelegate(
       type,
       maxExtent: ui.gridMaxExtent,
       compact: ui.compact,
       showTitles: ui.titlesBelow,
       showDetails: ui.posterDetails,
+      columns: ui.gridColumns,
+      width: usable,
     );
     return GridView.builder(
       padding: padding,
@@ -275,12 +396,11 @@ class ChannelGrid extends StatelessWidget {
           onFavoriteTap: () => app.toggleFavorite(c),
         );
         if (!DeviceTypeService.isTv) return card;
-        final usable = MediaQuery.sizeOf(context).width - padding.horizontal;
-        final columns =
-            (usable / (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
-                .ceil()
-                .clamp(1, 100);
-        return TvCatalogItem(index: i, columns: columns, child: card);
+        return TvCatalogItem(
+          index: i,
+          columns: gridColumnCount(delegate, usable),
+          child: card,
+        );
       },
     );
   }
@@ -1165,6 +1285,11 @@ class _CatalogPageState extends State<CatalogPage> {
       );
     }
     final delegate = _gridDelegate(ui);
+    final mode = ui.viewModeFor(widget.type);
+    // "In evidenza" header and the TV strip under "Muro" follow the focus.
+    final follows =
+        mode == CatalogViewMode.spotlight ||
+        (mode == CatalogViewMode.wall && DeviceTypeService.isTv);
     final grid = GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       scrollCacheExtent: tvCatalogCacheExtent(delegate),
@@ -1172,9 +1297,7 @@ class _CatalogPageState extends State<CatalogPage> {
       itemCount: entries.length,
       itemBuilder: (context, i) {
         final item = _gridItem(app, entries[i], i);
-        if (ui.viewModeFor(widget.type) != CatalogViewMode.spotlight) {
-          return item;
-        }
+        if (!follows) return item;
         // The header follows whichever poster has the remote focus.
         return Focus(
           canRequestFocus: false,
@@ -1188,7 +1311,7 @@ class _CatalogPageState extends State<CatalogPage> {
         );
       },
     );
-    if (ui.viewModeFor(widget.type) != CatalogViewMode.spotlight) return grid;
+    if (!follows) return grid;
     final current = _spotlight.value;
     if (current == null ||
         !entries.any(
@@ -1197,6 +1320,17 @@ class _CatalogPageState extends State<CatalogPage> {
               catalogEntryIdentity(app, current),
         )) {
       _spotlight.value = entries.first;
+    }
+    if (mode == CatalogViewMode.wall) {
+      return Column(
+        children: [
+          Expanded(child: grid),
+          ValueListenableBuilder<CatalogEntry?>(
+            valueListenable: _spotlight,
+            builder: (_, e, _) => CatalogWallStrip(entry: e),
+          ),
+        ],
+      );
     }
     return Column(
       children: [
@@ -1209,7 +1343,7 @@ class _CatalogPageState extends State<CatalogPage> {
     );
   }
 
-  /// Title shown in the "In evidenza" header.
+  /// Title shown in the "In evidenza" header and the TV "Muro" strip.
   final _spotlight = ValueNotifier<CatalogEntry?>(null);
 
   Widget _buildAllGrid(AppProvider app) {
@@ -1552,6 +1686,15 @@ class _CatalogPageState extends State<CatalogPage> {
   /// same delegate, so Su/Giù land on the poster right above or below.
   SliverGridDelegateWithMaxCrossAxisExtent _gridDelegate(UiSettings ui) {
     final mode = ui.viewModeFor(widget.type);
+    if (mode == CatalogViewMode.wall) {
+      return wallGridDelegate(
+        widget.type,
+        width: MediaQuery.sizeOf(context).width - 32,
+        maxExtent: ui.gridMaxExtent,
+        compact: ui.compact,
+        columns: ui.gridColumns,
+      );
+    }
     return channelGridDelegate(
       widget.type,
       maxExtent: mode == CatalogViewMode.compact
@@ -1563,16 +1706,15 @@ class _CatalogPageState extends State<CatalogPage> {
           mode == CatalogViewMode.spotlight,
       showTitles: ui.titlesBelow,
       showDetails: ui.posterDetails,
+      columns: ui.gridColumns,
+      width: MediaQuery.sizeOf(context).width - 32,
     );
   }
 
-  int _columns() {
-    final delegate = _gridDelegate(context.read<UiSettings>());
-    final width = MediaQuery.sizeOf(context).width - 32;
-    return (width / (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
-        .ceil()
-        .clamp(1, 100);
-  }
+  int _columns() => gridColumnCount(
+    _gridDelegate(context.read<UiSettings>()),
+    MediaQuery.sizeOf(context).width - 32,
+  );
 
   Widget _entryCard(AppProvider app, CatalogEntry entry) {
     final card = CatalogEntryCard(
@@ -1580,6 +1722,9 @@ class _CatalogPageState extends State<CatalogPage> {
       isFavorite: app.favoriteIds.contains(entry.primary.id),
       onTap: () => _openEntry(context, entry),
       onFavoriteTap: () => app.toggleFavorite(entry.primary),
+      bare:
+          context.read<UiSettings>().viewModeFor(widget.type) ==
+          CatalogViewMode.wall,
     );
     if (!DeviceTypeService.isTv) return card;
     return TvCategoryEdge(

@@ -9,6 +9,7 @@ import '../services/catalog_rating_service.dart';
 import 'title_facets.dart';
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
+import 'catalog_title_logo.dart';
 import 'channel_card.dart';
 import 'poster_card.dart';
 import 'poster_overlay.dart';
@@ -88,15 +89,19 @@ class CatalogLandscapeCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Text(
-                        channel.displaySeriesName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: tv ? 17 : 14,
-                          fontWeight: FontWeight.w700,
-                          height: 1.15,
+                      CatalogTitleLogo(
+                        channel: channel,
+                        height: tv ? 44 : 34,
+                        fallback: Text(
+                          channel.displaySeriesName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: tv ? 17 : 14,
+                            fontWeight: FontWeight.w700,
+                            height: 1.15,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -146,6 +151,7 @@ class CatalogLandscapeCard extends StatelessWidget {
         : card(null);
     if (tv) {
       return TvFocusable(
+        poster: true,
         borderRadius: radius,
         onPressed: onTap,
         onLongPress: onFavoriteTap,
@@ -249,15 +255,21 @@ class _SpotlightBody extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        channel.displaySeriesName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: tv ? 26 : 18,
-                          fontWeight: FontWeight.w800,
-                          height: 1.1,
+                      CatalogTitleLogo(
+                        channel: channel,
+                        fetch: true,
+                        height: tv ? 64 : 46,
+                        decodeWidth: 480,
+                        fallback: Text(
+                          channel.displaySeriesName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: tv ? 26 : 18,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -308,6 +320,71 @@ class _SpotlightBody extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// TV "Muro": the covers carry no title, so one fixed strip under the grid
+/// names the focused one. Always the same height: the grid never jumps.
+class CatalogWallStrip extends StatelessWidget {
+  const CatalogWallStrip({super.key, required this.entry});
+
+  final CatalogEntry? entry;
+
+  static const height = 52.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final channel = entry?.primary;
+    final year = channel == null ? null : posterYearOf(channel);
+    return Container(
+      height: height,
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.border)),
+      ),
+      child: channel == null
+          ? null
+          : Row(
+              children: [
+                Flexible(
+                  child: CatalogTitleLogo(
+                    key: ValueKey(channel.id),
+                    channel: channel,
+                    fetch: true,
+                    height: 34,
+                    fallback: Text(
+                      channel.displaySeriesName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                if (year != null) ...[
+                  const SizedBox(width: 14),
+                  Text(
+                    '$year',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 14),
+                ChannelRatingBadge(
+                  channel,
+                  key: ValueKey(channel.id),
+                  height: 18,
+                ),
+              ],
+            ),
     );
   }
 }

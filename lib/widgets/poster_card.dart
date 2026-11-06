@@ -7,6 +7,7 @@ import '../services/image_warmup_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import 'focus_scene_card.dart';
 import 'poster_overlay.dart';
 import '../models/poster_badges.dart';
 import 'title_facets.dart';
@@ -170,6 +171,9 @@ class Pressable extends StatefulWidget {
   /// TV focus ring corners.
   final BorderRadius borderRadius;
 
+  /// A poster or cover: TV focus follows "Effetto di selezione".
+  final bool poster;
+
   const Pressable({
     super.key,
     required this.child,
@@ -177,6 +181,7 @@ class Pressable extends StatefulWidget {
     this.onLongPress,
     this.onFocus,
     this.borderRadius = const BorderRadius.all(Radius.circular(10)),
+    this.poster = false,
   });
 
   @override
@@ -208,6 +213,7 @@ class _PressableState extends State<Pressable> {
       onPressed: widget.onTap,
       onLongPress: widget.onLongPress,
       borderRadius: widget.borderRadius,
+      poster: widget.poster,
       revealOnFocus: widget.onFocus == null,
       onFocusChange: widget.onFocus == null
           ? null
@@ -301,17 +307,26 @@ class TmdbPosterCard extends StatelessWidget {
         : DeviceTypeService.isTv && !fillsCell
         ? TvHomeLayout.maybeOf(context)?.posterWidth ?? 112.0
         : width;
-    return Pressable(
+    // [scene]: "Scena sulla locandina selezionata" turned this cover into
+    // a wider scene picture of the same height.
+    Widget card(Widget? scene, double? sceneWidth) => Pressable(
+      poster: true,
       onTap: onTap,
       onFocus: onFocus,
       borderRadius: radius,
       child: SizedBox(
-        width: fillsCell ? null : effectiveWidth,
+        width: fillsCell ? null : sceneWidth ?? effectiveWidth,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (fillsCell)
               Expanded(child: poster)
+            else if (scene != null)
+              SizedBox(
+                height: effectiveWidth / ratio,
+                width: double.infinity,
+                child: ClipRRect(borderRadius: radius, child: scene),
+              )
             else
               AspectRatio(aspectRatio: ratio, child: poster),
             if (showTitles)
@@ -346,6 +361,17 @@ class TmdbPosterCard extends StatelessWidget {
         ),
       ),
     );
+    final sceneOnFocus =
+        DeviceTypeService.isTv &&
+        !fillsCell &&
+        ui.focusScene &&
+        HorizontalRowScope.of(context);
+    if (!sceneOnFocus) return card(null, null);
+    return FocusSceneHost(
+      item: item,
+      posterHeight: effectiveWidth / ratio,
+      builder: (_, scene, sceneWidth) => card(scene, sceneWidth),
+    );
   }
 }
 
@@ -376,6 +402,7 @@ class RankedPosterCard extends StatelessWidget {
     final homePosterWidth =
         imageWidth ?? (home == null ? null : (home.rankedHeight - 16) * 2 / 3);
     return Pressable(
+      poster: true,
       onTap: onTap,
       onFocus: onFocus,
       child: SizedBox(

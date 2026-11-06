@@ -4,9 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../models/content_type.dart';
 import '../models/poster_badges.dart';
+import '../models/banner_trailer.dart';
+import '../models/poster_focus.dart';
 import '../models/multiview_layout.dart';
 import '../models/home_layout_preferences.dart';
 import '../models/watch_completion_policy.dart';
+import '../services/device_type_service.dart';
 
 enum AppSection { home, live, movies, series }
 
@@ -14,7 +17,7 @@ enum AppSection { home, live, movies, series }
 /// poster wall (Netflix), dense grid (TiviMate), detailed list (Plex),
 /// wide artwork (Apple TV) and a spotlight panel for the focused title
 /// (Infuse).
-enum CatalogViewMode { grid, compact, list, landscape, spotlight }
+enum CatalogViewMode { grid, compact, list, landscape, spotlight, wall }
 
 extension CatalogViewModeInfo on CatalogViewMode {
   String get label => switch (this) {
@@ -23,6 +26,7 @@ extension CatalogViewModeInfo on CatalogViewMode {
     CatalogViewMode.list => 'Lista dettagliata',
     CatalogViewMode.landscape => 'Panoramica',
     CatalogViewMode.spotlight => 'In evidenza',
+    CatalogViewMode.wall => 'Muro',
   };
 
   String get description => switch (this) {
@@ -32,6 +36,7 @@ extension CatalogViewModeInfo on CatalogViewMode {
     CatalogViewMode.landscape => 'Copertine larghe, come Apple TV',
     CatalogViewMode.spotlight =>
       'Scheda grande del titolo selezionato, come Infuse',
+    CatalogViewMode.wall => "Solo copertine, una accanto all'altra",
   };
 
   IconData get icon => switch (this) {
@@ -40,6 +45,7 @@ extension CatalogViewModeInfo on CatalogViewMode {
     CatalogViewMode.list => Icons.view_list_rounded,
     CatalogViewMode.landscape => Icons.view_carousel_rounded,
     CatalogViewMode.spotlight => Icons.featured_video_rounded,
+    CatalogViewMode.wall => Icons.view_comfy_rounded,
   };
 
   CatalogViewMode get next =>
@@ -101,10 +107,22 @@ class UiSettings extends ChangeNotifier {
   static const posterProgressKey = 'ui_poster_progress';
   static const posterDetailsKey = 'ui_poster_details';
   static const sceneArtKey = 'ui_scene_art';
+  static const titleLogosKey = 'ui_title_logos';
+  static const focusZoomKey = 'ui_focus_zoom';
+  static const focusRingKey = 'ui_focus_ring';
+  static const focusSceneKey = 'ui_focus_scene';
+  static const focusSceneLogoKey = 'ui_focus_scene_logo';
+  static const focusSceneDetailsKey = 'ui_focus_scene_details';
+  static const focusSceneEpisodeKey = 'ui_focus_scene_episode';
+  static const focusSceneBadgesKey = 'ui_focus_scene_badges';
+  static const bannerTrailerKey = 'ui_banner_trailer';
+  static const bannerTrailerAudioKey = 'ui_banner_trailer_audio';
+  static const bannerTrailerDelayKey = 'ui_banner_trailer_delay';
   static const ratingSourceKey = 'ui_rating_source';
   static const badgeNewKey = 'ui_badge_new';
   static const badgePlatformKey = 'ui_badge_platform';
   static const titlesOverlayKey = 'ui_titles_overlay';
+  static const gridColumnsKey = 'ui_grid_columns';
 
   static const homeKeys = {
     'ui_home_shape',
@@ -327,10 +345,22 @@ class UiSettings extends ChangeNotifier {
   bool _posterProgress = true;
   bool _posterDetails = false;
   bool _sceneArt = false;
+  bool _titleLogos = false;
+  PosterFocusZoom _focusZoom = PosterFocusZoom.normal;
+  PosterFocusRing _focusRing = PosterFocusRing.thin;
+  bool _focusScene = false;
+  bool _focusSceneLogo = true;
+  bool _focusSceneDetails = true;
+  bool _focusSceneEpisode = true;
+  bool _focusSceneBadges = true;
+  BannerTrailerMode _bannerTrailer = BannerTrailerMode.off;
+  BannerTrailerAudio _bannerTrailerAudio = BannerTrailerAudio.button;
+  int _bannerTrailerDelay = bannerTrailerDefaultDelay;
   RatingSource _ratingSource = RatingSource.auto;
   bool _badgeNew = false;
   bool _badgePlatform = false;
   bool _titlesOverlay = false;
+  int _gridColumns = 0;
   bool _loaded = false;
   List<AppSection> _sectionOrder = List.of(AppSection.values);
   AppSection _startSection = AppSection.home;
@@ -338,6 +368,19 @@ class UiSettings extends ChangeNotifier {
   Color get accent => _accent;
   String get gridSize => _gridSize;
   double get gridMaxExtent => gridSizes[_gridSize] ?? 140;
+
+  /// Fixed column counts offered for poster grids: a TV is viewed from the
+  /// sofa on a wide screen, a phone in the hand.
+  static List<int> gridColumnChoices({bool? tv}) =>
+      (tv ?? DeviceTypeService.isTv)
+      ? const [4, 5, 6, 7, 8, 9]
+      : const [2, 3, 4, 5];
+
+  /// Fixed number of poster columns, 0 = automatic (from the poster size).
+  /// Synced apart for TVs and phones, so a value outside this device's
+  /// choices also falls back to automatic.
+  int get gridColumns =>
+      gridColumnChoices().contains(_gridColumns) ? _gridColumns : 0;
   bool get showPosters => _showPosters;
   bool get animations => _animations;
   bool get compact => _compact;
@@ -378,6 +421,25 @@ class UiSettings extends ChangeNotifier {
   /// Scene still (TMDB backdrop) in the Panoramica cards and the
   /// In evidenza header, when the title already has one on the device.
   bool get sceneArt => _sceneArt;
+
+  /// "Logo al posto del titolo" in catalogs.
+  bool get titleLogos => _titleLogos;
+
+  /// TV focus effect of posters and covers.
+  PosterFocusZoom get focusZoom => _focusZoom;
+  PosterFocusRing get focusRing => _focusRing;
+
+  /// "Scena sulla locandina selezionata" (TV Home rows) and what it shows.
+  bool get focusScene => _focusScene;
+  bool get focusSceneLogo => _focusSceneLogo;
+  bool get focusSceneDetails => _focusSceneDetails;
+  bool get focusSceneEpisode => _focusSceneEpisode;
+  bool get focusSceneBadges => _focusSceneBadges;
+
+  /// "Trailer nel banner" of the TV Home.
+  BannerTrailerMode get bannerTrailer => _bannerTrailer;
+  BannerTrailerAudio get bannerTrailerAudio => _bannerTrailerAudio;
+  int get bannerTrailerDelay => _bannerTrailerDelay;
 
   RatingSource get ratingSource => _ratingSource;
 
@@ -424,10 +486,22 @@ class UiSettings extends ChangeNotifier {
     _posterProgress,
     _posterDetails,
     _sceneArt,
+    _titleLogos,
+    _focusZoom.name,
+    _focusRing.name,
+    _focusScene,
+    _focusSceneLogo,
+    _focusSceneDetails,
+    _focusSceneEpisode,
+    _focusSceneBadges,
+    _bannerTrailer.name,
+    _bannerTrailerAudio.name,
+    _bannerTrailerDelay,
     _ratingSource.name,
     _badgeNew,
     _badgePlatform,
     _titlesOverlay,
+    _gridColumns,
     homePosterShape.name,
     homeRecentShape.name,
     homePosterDensity.name,
@@ -484,10 +558,32 @@ class UiSettings extends ChangeNotifier {
         : true;
     _posterDetails = prefs.get(posterDetailsKey) == true;
     _sceneArt = prefs.get(sceneArtKey) == true;
+    _titleLogos = prefs.get(titleLogosKey) == true;
+    _focusZoom = PosterFocusZoomInfo.parse(prefs.get(focusZoomKey));
+    _focusRing = PosterFocusRingInfo.parse(prefs.get(focusRingKey));
+    bool flag(String key, bool fallback) {
+      final value = prefs.get(key);
+      return value is bool ? value : fallback;
+    }
+
+    _focusScene = flag(focusSceneKey, false);
+    _focusSceneLogo = flag(focusSceneLogoKey, true);
+    _focusSceneDetails = flag(focusSceneDetailsKey, true);
+    _focusSceneEpisode = flag(focusSceneEpisodeKey, true);
+    _focusSceneBadges = flag(focusSceneBadgesKey, true);
+    _bannerTrailer = BannerTrailerModeInfo.parse(prefs.get(bannerTrailerKey));
+    _bannerTrailerAudio = BannerTrailerAudioInfo.parse(
+      prefs.get(bannerTrailerAudioKey),
+    );
+    _bannerTrailerDelay = parseBannerTrailerDelay(
+      prefs.get(bannerTrailerDelayKey),
+    );
     _ratingSource = RatingSource.parse(prefs.get(ratingSourceKey));
     _badgeNew = prefs.get(badgeNewKey) == true;
     _badgePlatform = prefs.get(badgePlatformKey) == true;
     _titlesOverlay = prefs.get(titlesOverlayKey) == true;
+    final columns = prefs.get(gridColumnsKey);
+    _gridColumns = columns is int ? columns : 0;
     homePosterShape =
         HomePosterShape.values.asNameMap()[prefs.get('ui_home_shape')] ??
         HomePosterShape.portrait;
@@ -562,6 +658,14 @@ class UiSettings extends ChangeNotifier {
     if (!gridSizes.containsKey(size)) return;
     _gridSize = size;
     await _save(_gridSizeKey, size);
+    notifyListeners();
+  }
+
+  /// 0 restores the automatic column count.
+  Future<void> setGridColumns(int columns) async {
+    if (columns != 0 && !gridColumnChoices().contains(columns)) return;
+    _gridColumns = columns;
+    await _save(gridColumnsKey, columns);
     notifyListeners();
   }
 
@@ -739,6 +843,73 @@ class UiSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setTitleLogos(bool value) async {
+    _titleLogos = value;
+    await _save(titleLogosKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setFocusZoom(PosterFocusZoom value) async {
+    _focusZoom = value;
+    await _save(focusZoomKey, value.name);
+    notifyListeners();
+  }
+
+  Future<void> setFocusRing(PosterFocusRing value) async {
+    _focusRing = value;
+    await _save(focusRingKey, value.name);
+    notifyListeners();
+  }
+
+  Future<void> setFocusScene(bool value) async {
+    _focusScene = value;
+    await _save(focusSceneKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setFocusSceneLogo(bool value) async {
+    _focusSceneLogo = value;
+    await _save(focusSceneLogoKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setFocusSceneDetails(bool value) async {
+    _focusSceneDetails = value;
+    await _save(focusSceneDetailsKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setFocusSceneEpisode(bool value) async {
+    _focusSceneEpisode = value;
+    await _save(focusSceneEpisodeKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setFocusSceneBadges(bool value) async {
+    _focusSceneBadges = value;
+    await _save(focusSceneBadgesKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setBannerTrailer(BannerTrailerMode value) async {
+    _bannerTrailer = value;
+    await _save(bannerTrailerKey, value.name);
+    notifyListeners();
+  }
+
+  Future<void> setBannerTrailerAudio(BannerTrailerAudio value) async {
+    _bannerTrailerAudio = value;
+    await _save(bannerTrailerAudioKey, value.name);
+    notifyListeners();
+  }
+
+  Future<void> setBannerTrailerDelay(int seconds) async {
+    if (!bannerTrailerDelays.contains(seconds)) return;
+    _bannerTrailerDelay = seconds;
+    await _save(bannerTrailerDelayKey, seconds);
+    notifyListeners();
+  }
+
   Future<void> setRatingSource(RatingSource value) async {
     _ratingSource = value;
     await _save(ratingSourceKey, value.name);
@@ -795,10 +966,22 @@ class UiSettings extends ChangeNotifier {
       posterProgressKey,
       posterDetailsKey,
       sceneArtKey,
+      titleLogosKey,
+      focusZoomKey,
+      focusRingKey,
+      focusSceneKey,
+      focusSceneLogoKey,
+      focusSceneDetailsKey,
+      focusSceneEpisodeKey,
+      focusSceneBadgesKey,
+      bannerTrailerKey,
+      bannerTrailerAudioKey,
+      bannerTrailerDelayKey,
       ratingSourceKey,
       badgeNewKey,
       badgePlatformKey,
       titlesOverlayKey,
+      gridColumnsKey,
     ]) {
       await prefs.remove(key);
     }

@@ -970,6 +970,14 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     return p == null ? null : PosterProgress(progress: p, watched: false);
   }
 
+  /// Latest episode watched of a series, from the same index as the
+  /// poster marks. No I/O.
+  HistoryEntry? lastOfSeries(String seriesKey) {
+    if (!identical(_posterIndexOf, _entries)) _posterIndex = null;
+    final index = _posterIndex ??= _buildPosterIndex();
+    return index['s:$seriesKey'];
+  }
+
   Map<String, HistoryEntry> _buildPosterIndex() {
     _posterIndexOf = _entries;
     final out = <String, HistoryEntry>{};

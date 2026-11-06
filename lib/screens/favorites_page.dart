@@ -154,14 +154,18 @@ class _MyList extends StatelessWidget {
       );
     }
     final ui = context.watch<UiSettings>();
+    final width = MediaQuery.sizeOf(context).width - 32;
+    final delegate = channelGridDelegate(
+      ContentType.movie,
+      maxExtent: ui.gridMaxExtent,
+      compact: ui.compact,
+      showTitles: ui.titlesBelow,
+      columns: ui.gridColumns,
+      width: width,
+    );
     return GridView.builder(
       padding: const EdgeInsets.all(16),
-      gridDelegate: channelGridDelegate(
-        ContentType.movie,
-        maxExtent: ui.gridMaxExtent,
-        compact: ui.compact,
-        showTitles: ui.titlesBelow,
-      ),
+      gridDelegate: delegate,
       itemCount: items.length,
       itemBuilder: (context, i) {
         final card = TmdbPosterCard(
@@ -170,18 +174,11 @@ class _MyList extends StatelessWidget {
           onTap: () => openTmdbItem(context, items[i]),
         );
         if (!DeviceTypeService.isTv) return card;
-        final delegate = channelGridDelegate(
-          ContentType.movie,
-          maxExtent: ui.gridMaxExtent,
-          compact: ui.compact,
-          showTitles: ui.titlesBelow,
+        return TvCatalogItem(
+          index: i,
+          columns: gridColumnCount(delegate, width),
+          child: card,
         );
-        final columns =
-            ((MediaQuery.sizeOf(context).width - 32) /
-                    (delegate.maxCrossAxisExtent + delegate.crossAxisSpacing))
-                .ceil()
-                .clamp(1, 100);
-        return TvCatalogItem(index: i, columns: columns, child: card);
       },
     );
   }

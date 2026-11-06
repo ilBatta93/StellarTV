@@ -181,6 +181,7 @@ class HomeLandscapeCard extends StatelessWidget {
         !HomePresentation.contains(context) ||
         context.watch<UiSettings>().homeRecentTitles;
     return Pressable(
+      poster: true,
       onTap: onTap,
       onFocus: onFocus,
       child: SizedBox(

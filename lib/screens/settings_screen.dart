@@ -40,6 +40,8 @@ import 'section_layout_screen.dart';
 import 'home_rows_screen.dart';
 import 'poster_badges_screen.dart';
 import '../models/poster_badges.dart';
+import '../models/banner_trailer.dart';
+import '../models/poster_focus.dart';
 import 'downloads_screen.dart';
 import 'multiview_settings_screen.dart';
 import 'live_diagnostics_screen.dart';
@@ -179,6 +181,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: ui.focusGlow,
               onChanged: ui.setFocusGlow,
             ),
+            if (DeviceTypeService.isTv) ...[
+              SettingsValueTile(
+                icon: Icons.zoom_in_rounded,
+                title: 'Ingrandimento della selezione',
+                subtitle: 'Quanto cresce la locandina selezionata',
+                value: ui.focusZoom.label,
+                onTap: () => pick<PosterFocusZoom>(
+                  'Ingrandimento della selezione',
+                  PosterFocusZoom.values,
+                  ui.focusZoom,
+                  (z) => z.label,
+                  ui.setFocusZoom,
+                ),
+              ),
+              SettingsValueTile(
+                icon: Icons.crop_square_rounded,
+                title: 'Contorno della selezione',
+                subtitle: 'Senza ingrandimento il contorno resta sempre',
+                value: ui.focusRing.label,
+                onTap: () => pick<PosterFocusRing>(
+                  'Contorno della selezione',
+                  PosterFocusRing.values,
+                  ui.focusRing,
+                  (r) => r.label,
+                  ui.setFocusRing,
+                ),
+              ),
+              SettingsSwitchTile(
+                icon: Icons.panorama_wide_angle_outlined,
+                title: 'Scena sulla locandina selezionata',
+                subtitle:
+                    'Nelle righe della Home, fermandoti su una locandina '
+                    "diventa un'immagine di scena",
+                value: ui.focusScene,
+                onChanged: ui.setFocusScene,
+              ),
+              if (ui.focusScene) ...[
+                SettingsSwitchTile(
+                  icon: Icons.branding_watermark_outlined,
+                  title: 'Scena: logo del titolo',
+                  subtitle: "Il nome scritto finché il logo non c'è",
+                  value: ui.focusSceneLogo,
+                  onChanged: ui.setFocusSceneLogo,
+                ),
+                SettingsSwitchTile(
+                  icon: Icons.info_outline_rounded,
+                  title: 'Scena: anno, durata e voto',
+                  value: ui.focusSceneDetails,
+                  onChanged: ui.setFocusSceneDetails,
+                ),
+                SettingsSwitchTile(
+                  icon: Icons.video_library_outlined,
+                  title: 'Scena: episodio',
+                  subtitle: "Stagione, numero e titolo dell'episodio mostrato",
+                  value: ui.focusSceneEpisode,
+                  onChanged: ui.setFocusSceneEpisode,
+                ),
+                SettingsSwitchTile(
+                  icon: Icons.sell_outlined,
+                  title: 'Scena: avanzamento e badge',
+                  subtitle:
+                      'Barra di avanzamento e badge scelti per le locandine',
+                  value: ui.focusSceneBadges,
+                  onChanged: ui.setFocusSceneBadges,
+                ),
+              ],
+            ],
             SettingsSwitchTile(
               icon: Icons.animation_outlined,
               title: 'Animazioni',
@@ -299,6 +368,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ui.setHomeBannerSource,
               ),
             ),
+            if (DeviceTypeService.isTv) ...[
+              SettingsValueTile(
+                icon: Icons.movie_filter_outlined,
+                title: 'Trailer nel banner',
+                subtitle: ui.bannerTrailer.description,
+                value: ui.bannerTrailer.label,
+                onTap: () => pick<BannerTrailerMode>(
+                  'Trailer nel banner',
+                  BannerTrailerMode.values,
+                  ui.bannerTrailer,
+                  (m) => m.label,
+                  ui.setBannerTrailer,
+                  detail: (m) => m.description,
+                ),
+              ),
+              if (ui.bannerTrailer != BannerTrailerMode.off) ...[
+                SettingsValueTile(
+                  icon: Icons.timer_outlined,
+                  title: 'Partenza del trailer',
+                  subtitle: 'Secondi fermo sullo stesso titolo',
+                  value: '${ui.bannerTrailerDelay} secondi',
+                  onTap: () => pick<int>(
+                    'Partenza del trailer',
+                    bannerTrailerDelays,
+                    ui.bannerTrailerDelay,
+                    (s) => '$s secondi',
+                    ui.setBannerTrailerDelay,
+                  ),
+                ),
+                SettingsValueTile(
+                  icon: Icons.volume_up_outlined,
+                  title: 'Audio del trailer',
+                  subtitle: ui.bannerTrailerAudio.description,
+                  value: ui.bannerTrailerAudio.label,
+                  onTap: () => pick<BannerTrailerAudio>(
+                    'Audio del trailer',
+                    BannerTrailerAudio.values,
+                    ui.bannerTrailerAudio,
+                    (a) => a.label,
+                    ui.setBannerTrailerAudio,
+                    detail: (a) => a.description,
+                  ),
+                ),
+              ],
+            ],
             SettingsSwitchTile(
               icon: Icons.subject_rounded,
               title: 'Trama nel banner',
@@ -370,6 +484,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SettingsValueTile(
               icon: Icons.photo_size_select_large_rounded,
               title: 'Dimensione dei poster',
+              subtitle: ui.gridColumns > 0
+                  ? 'Con le colonne fisse conta per Diretta e vista orizzontale'
+                  : null,
               value: _gridLabel(ui.gridSize),
               onTap: () => pick<String>(
                 'Dimensione dei poster',
@@ -377,6 +494,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ui.gridSize,
                 _gridLabel,
                 ui.setGridSize,
+              ),
+            ),
+            SettingsValueTile(
+              icon: Icons.view_column_rounded,
+              title: 'Colonne della griglia',
+              subtitle: 'Locandine per riga in cataloghi e Preferiti',
+              value: _columnsLabel(ui.gridColumns),
+              onTap: () => pick<int>(
+                'Colonne della griglia',
+                [0, ...UiSettings.gridColumnChoices()],
+                ui.gridColumns,
+                _columnsLabel,
+                ui.setGridColumns,
               ),
             ),
             SettingsValueTile(
@@ -419,6 +549,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'In Panoramica e In evidenza, per i titoli che la hanno già',
               value: ui.sceneArt,
               onChanged: ui.setSceneArt,
+            ),
+            SettingsSwitchTile(
+              icon: Icons.branding_watermark_outlined,
+              title: 'Logo al posto del titolo',
+              subtitle:
+                  'In Panoramica, In evidenza, Muro e sulle copertine, '
+                  'quando il logo è già noto',
+              value: ui.titleLogos,
+              onChanged: ui.setTitleLogos,
             ),
             SettingsValueTile(
               icon: Icons.sell_outlined,
@@ -540,6 +679,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     'titanio' => 'Titanio',
     _ => key,
   };
+
+  String _columnsLabel(int columns) =>
+      columns == 0 ? 'Automatiche' : '$columns colonne';
 
   String _gridLabel(String key) => switch (key) {
     'piccola' => 'Piccola',

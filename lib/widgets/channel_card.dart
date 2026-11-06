@@ -4,6 +4,7 @@ import '../models/channel.dart';
 import '../models/content_type.dart';
 import '../theme/app_theme.dart';
 import '../services/device_type_service.dart';
+import 'catalog_title_logo.dart';
 import 'poster_card.dart';
 import 'poster_overlay.dart';
 import '../models/poster_badges.dart';
@@ -32,7 +33,11 @@ class ChannelCard extends StatelessWidget {
     required this.onTap,
     required this.onFavoriteTap,
     this.qualityLabel,
+    this.bare = false,
   });
+
+  /// "Muro": cover only, with just the progress bar and the watched check.
+  final bool bare;
 
   bool get _isLive => channel.type == ContentType.live;
 
@@ -40,7 +45,10 @@ class ChannelCard extends StatelessWidget {
 
   Widget _artwork(bool overlayTitle) => CatalogArtwork(
     channel: channel,
-    fallbackLabel: DeviceTypeService.isTv && !overlayTitle ? _title : null,
+    // Without a title anywhere a missing cover still says what it is.
+    fallbackLabel: (DeviceTypeService.isTv || bare) && !overlayTitle
+        ? _title
+        : null,
   );
 
   @override
@@ -71,6 +79,15 @@ class ChannelCard extends StatelessWidget {
             _FavoriteButton(isFavorite: isFavorite, onTap: onFavoriteTap),
         ],
         bottomLeft: const [LiveBadge()],
+      );
+    }
+    if (bare) {
+      return PosterOverlay(
+        bottomRight: [
+          PosterProgressMark(channel, part: PosterProgressPart.check),
+        ],
+        edge: PosterProgressMark(channel, part: PosterProgressPart.bar),
+        edgeHeight: tv ? 5 : 4,
       );
     }
     return PosterOverlay(
@@ -104,16 +121,21 @@ class ChannelCard extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          _title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: tv ? 15 : 12.5,
-            fontWeight: FontWeight.w700,
-            height: 1.15,
-            shadows: const [Shadow(color: Color(0xCC000000), blurRadius: 4)],
+        CatalogTitleLogo(
+          channel: channel,
+          height: tv ? 34 : 26,
+          decodeWidth: 240,
+          fallback: Text(
+            _title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: tv ? 15 : 12.5,
+              fontWeight: FontWeight.w700,
+              height: 1.15,
+              shadows: const [Shadow(color: Color(0xCC000000), blurRadius: 4)],
+            ),
           ),
         ),
         if (ui.posterDetails) PosterDetailsLine(channel, onArt: true),
@@ -126,9 +148,14 @@ class ChannelCard extends StatelessWidget {
     // [build] already subscribes to the poster preferences.
     final ui = context.read<UiSettings>();
     final radius = BorderRadius.circular(ui.posterCorners.radius);
-    final placement = _isLive ? TitlePlacement.below : ui.titlePlacement;
+    final placement = _isLive
+        ? TitlePlacement.below
+        : bare
+        ? TitlePlacement.hidden
+        : ui.titlePlacement;
     final overlayTitle = placement == TitlePlacement.overlay;
     return Pressable(
+      poster: true,
       onTap: onTap,
       onLongPress: onFavoriteTap,
       borderRadius: radius,
@@ -341,6 +368,15 @@ class _FavoriteButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The quality mark of catalog posters, for other covers of a title.
+class PosterQualityBadge extends StatelessWidget {
+  const PosterQualityBadge(this.label, {super.key});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => _QualityBadge(label);
 }
 
 class _QualityBadge extends StatelessWidget {

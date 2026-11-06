@@ -26,6 +26,21 @@ class EpisodeMetadataService {
       store.valueOf(_channels[channel.id] ?? '');
   EpisodeMetadata? get(int id, int season, int episode) =>
       store.valueOf('tv:$id:$season:$episode');
+
+  /// One episode of [item], from the device or with one season request.
+  /// Null when TMDB has no such episode (past the end of the season).
+  Future<EpisodeMetadata?> episode(
+    TmdbItem item,
+    int season,
+    int episode,
+  ) async {
+    final key = 'tv:${item.id}:$season:$episode';
+    await store.load();
+    if (store.isFresh(key)) return store.valueOf(key);
+    await prepare(item, season, const []);
+    return store.valueOf(key);
+  }
+
   Future<void> prepare(
     TmdbItem item,
     int season,

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../services/device_type_service.dart';
 import '../theme/app_theme.dart';
+import '../models/poster_focus.dart';
 import '../providers/ui_settings.dart';
 
 import 'package:provider/provider.dart';
@@ -71,6 +72,10 @@ class TvFocusable extends StatefulWidget {
   final ValueChanged<bool>? onFocusChange;
   final bool revealOnFocus;
 
+  /// A poster or cover: zoom and ring follow "Effetto di selezione"
+  /// instead of [focusedScale] and the standard ring.
+  final bool poster;
+
   const TvFocusable({
     super.key,
     required this.child,
@@ -84,6 +89,7 @@ class TvFocusable extends StatefulWidget {
     this.onAccent = false,
     this.onFocusChange,
     this.revealOnFocus = true,
+    this.poster = false,
   });
 
   @override
@@ -180,6 +186,16 @@ class _TvFocusableState extends State<TvFocusable> {
     final glow = context.select<UiSettings?, bool>(
       (settings) => settings?.focusGlow ?? true,
     );
+    final effect = context.select<UiSettings?, (double, double)?>(
+      (settings) => widget.poster && settings != null
+          ? (
+              settings.focusZoom.scale,
+              posterFocusRingWidth(settings.focusZoom, settings.focusRing),
+            )
+          : null,
+    );
+    final focusedScale = effect?.$1 ?? widget.focusedScale;
+    final ringWidth = effect?.$2 ?? 2.5;
     final motion = ui && !MediaQuery.disableAnimationsOf(context);
     final duration = motion ? const Duration(milliseconds: 150) : Duration.zero;
     return Focus(
@@ -210,18 +226,21 @@ class _TvFocusableState extends State<TvFocusable> {
           // A static lift and accent ring preserve focus visibility without
           // rasterising blurred shadows on every frame of remote movement.
           child: Transform.scale(
-            scale: _focused && motion ? widget.focusedScale : 1,
+            scale: _focused && motion ? focusedScale : 1,
             child: Container(
               foregroundDecoration: ShapeDecoration(
                 shape: _ringShape().copyWith(
-                  side: BorderSide(
-                    color: _focused
-                        ? (glow && !_filled
-                              ? AppColors.primary
-                              : AppColors.textPrimary)
-                        : AppColors.clear,
-                    width: 2.5,
-                  ),
+                  // Width 0 would still draw a hairline: no ring is none.
+                  side: ringWidth <= 0
+                      ? BorderSide.none
+                      : BorderSide(
+                          color: _focused
+                              ? (glow && !_filled
+                                    ? AppColors.primary
+                                    : AppColors.textPrimary)
+                              : AppColors.clear,
+                          width: ringWidth,
+                        ),
                 ),
               ),
               child: widget.child,
