@@ -14,6 +14,10 @@ class NotesTest(unittest.TestCase):
         self.assertEqual(series_version('4.0.0', 178), '3.9.9')
         self.assertEqual(series_version('4.0.0', 179), '4.0.0')
         self.assertEqual(series_version('4.0.0', 180), '4.0.1')
+    def test_series_41_starts_at_build_203(self):
+        self.assertEqual(series_version('4.1.0', 202), '4.0.23')
+        self.assertEqual(series_version('4.1.0', 203), '4.1.0')
+        self.assertEqual(series_version('4.1.0', 204), '4.1.1')
     def test_notes_list_every_new_change_once(self):
         output = render('3.8.10', ['Ordine per voto aggiornato', 'Risoluzione separata dal voto'])
         self.assertNotIn('## Modifiche', output)

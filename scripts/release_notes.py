@@ -57,8 +57,9 @@ def render(version, lines):
 def git(*args):
     return subprocess.check_output(['git', *args], text=True).strip()
 
-# (first run, series): run 110 publishes 3.8.0, run 169 3.9.0, run 179 4.0.0.
-SERIES = [(179, '4.0'), (169, '3.9'), (110, '3.8')]
+# (first run, series): run 110 publishes 3.8.0, run 169 3.9.0, run 179 4.0.0,
+# run 203 4.1.0.
+SERIES = [(203, '4.1'), (179, '4.0'), (169, '3.9'), (110, '3.8')]
 
 def series_version(version, run_number):
     """Series version from the run number; older runs keep their version."""
