@@ -10,6 +10,8 @@
 ///   would sign one or both out. The restored device gets a session of its
 ///   own instead, approved from the phone (TV pairing), and rebuilds the
 ///   sync markers against the cloud;
+/// - the Trakt sign-in of each profile and its sync markers, for the same
+///   reason: Trakt rotates the sign-in at every renewal;
 /// - files caught mid-write. Files past the size limits are listed as
 ///   skipped, largest first.
 class DeviceBackupPolicy {
@@ -44,7 +46,14 @@ class DeviceBackupPolicy {
       key.isNotEmpty &&
       !key.startsWith('sb-') &&
       !key.startsWith('supabase') &&
+      !key.startsWith('trakt_') &&
       !_localPrefs.contains(key);
+
+  /// True when the secure-storage entry [key] is saved in and restored from
+  /// a backup: everything except the Trakt sign-ins. The user's own service
+  /// keys are kept.
+  static bool keepsSecret(String key) =>
+      key.isNotEmpty && !key.startsWith('trakt_session');
 
   /// True when the support-folder file at [relativePath] ('/' separators)
   /// belongs in a backup: anything inside the folder except downloads and

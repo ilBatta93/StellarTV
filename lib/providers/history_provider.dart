@@ -18,6 +18,7 @@ import '../services/recent_live_channels.dart';
 import '../services/playback_work_policy.dart';
 import '../services/foreground_policy.dart';
 import '../models/episode_watch_event.dart';
+import '../services/history_signals.dart';
 
 /// Local-first watch history. A playing sample stays in memory; preferences
 /// are rewritten on pause, seek, exit and at most once a minute. Other edits
@@ -207,6 +208,32 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool isWatched(String contentId) =>
       _eventFor(contentId)?.watched ?? entryFor(contentId)?.isWatched ?? false;
   bool? manualWatched(String id) => _eventFor(id)?.watched;
+
+  /// When the watched state of [id] was last chosen by hand (or applied from
+  /// Trakt), null when never.
+  DateTime? manualChoiceAt(String id) => _eventFor(id)?.at;
+
+  /// When [id] was removed from the history, null when it never was.
+  DateTime? removedAt(String id) => _deleted[id];
+  int get watchedPercent => _watchedPercent;
+
+  void _signal(
+    HistorySignalKind kind,
+    String id, {
+    Channel? channel,
+    Duration position = Duration.zero,
+    Duration duration = Duration.zero,
+  }) => HistorySignals.emit(
+    HistorySignal(
+      kind: kind,
+      contentId: id,
+      profileId: _profileId,
+      at: DateTime.now().toUtc(),
+      channel: channel,
+      position: position,
+      duration: duration,
+    ),
+  );
   bool suggestionDismissed(String seriesId) =>
       _eventFor(seriesId, suggestion: true)?.value == 2;
 
@@ -238,6 +265,96 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
   );
   Future<void> setSuggestionDismissed(String id, bool dismissed) =>
       _writeEvents([id], dismissed ? 2 : 3, suggestion: true);
+
+  /// Views found on Trakt: each title is marked watched at the time of that
+  /// view, unless it already counts as watched here or a later choice was
+  /// made here. Not sent back to Trakt.
+  /// [views] maps content ids to the time of their last view on Trakt.
+  /// One local save for the whole batch.
+  Future<void> applyRemoteWatched(
+    Map<String, DateTime> views, {
+    String? seriesId,
+  }) {
+    if (views.isEmpty) return Future<void>.value();
+    final profile = _profileId,
+        epoch = _profileEpoch,
+        account = _sync.currentUserId;
+    final next = _manualWrites.then((_) async {
+      await _loadFuture;
+      if (_disposed ||
+          epoch != _profileEpoch ||
+          account != _sync.currentUserId) {
+        return;
+      }
+      final before = Map<String, EpisodeWatchEvent>.from(_watchEvents);
+      var changed = false;
+      for (final view in views.entries) {
+        final id = view.key, at = view.value.toUtc();
+        if (id.isEmpty || isWatched(id)) continue;
+        final previous = _eventFor(id);
+        if (previous != null && !at.isAfter(previous.at)) continue;
+        final event = EpisodeWatchEvent(
+          id,
+          1,
+          at,
+          seriesId: seriesId ?? previous?.seriesId,
+        );
+        _watchEvents[event.key] = event;
+        changed = true;
+      }
+      if (!changed) return;
+      try {
+        await _sync.saveLocalHistory(_localMap(), profileId: profile);
+        if (_disposed || epoch != _profileEpoch) return;
+        _notify();
+        _scheduleCloudPush();
+      } catch (_) {
+        if (epoch == _profileEpoch) {
+          _watchEvents
+            ..clear()
+            ..addAll(before);
+          _notify();
+        }
+      }
+    });
+    _manualWrites = next.catchError((Object _) {});
+    return next;
+  }
+
+  /// A pause point found on Trakt becomes the resume point of [channel].
+  /// Callers check [TraktPolicy.applyRemoteProgress] first. Not sent back.
+  Future<void> applyRemoteProgress(
+    Channel channel,
+    Duration position,
+    Duration duration,
+    DateTime at,
+  ) async {
+    if (channel.type == ContentType.live || duration <= Duration.zero) return;
+    await _manualWrites;
+    await _loadFuture;
+    final previous = entryFor(channel.id);
+    final local = at.toLocal();
+    if (previous != null && !local.isAfter(previous.lastWatchedAt)) return;
+    final entry = HistoryEntry(
+      contentId: channel.id,
+      type: channel.type,
+      title: channel.name,
+      posterUrl: channel.logo,
+      group: channel.group,
+      url: channel.url,
+      position: position > duration ? duration : position,
+      duration: duration,
+      lastWatchedAt: local,
+      seriesKey: channel.seriesKey ?? previous?.seriesKey ?? '',
+      seriesName: channel.seriesName ?? previous?.seriesName ?? '',
+      seriesPoster: _seriesPosterFor(channel) ?? previous?.seriesPoster ?? '',
+    );
+    _entries = [entry, ..._entries.where((e) => e.contentId != channel.id)]
+      ..sort((a, b) => b.lastWatchedAt.compareTo(a.lastWatchedAt));
+    _notify();
+    await _persistLocal();
+  }
+
   Future<void> _writeEvents(
     Iterable<String> ids,
     int value, {
@@ -281,6 +398,16 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
         }
         _notify();
         _scheduleCloudPush();
+        if (!suggestion && (value == 0 || value == 1)) {
+          for (final id in targets) {
+            _signal(
+              value == 1
+                  ? HistorySignalKind.markedWatched
+                  : HistorySignalKind.markedUnwatched,
+              id,
+            );
+          }
+        }
       } catch (_) {
         if (epoch == _profileEpoch) {
           _watchEvents
@@ -331,6 +458,13 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     _entries = [entry, ..._entries.where((e) => e.contentId != channel.id)];
     _notify();
     await _persistLocal();
+    _signal(
+      HistorySignalKind.completed,
+      channel.id,
+      channel: channel,
+      position: total,
+      duration: total,
+    );
   }
 
   /// Clears the watched mark and the resume point.
@@ -754,6 +888,13 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     _progressDirty = true;
     _notify();
     await _persistLocal();
+    _signal(
+      HistorySignalKind.started,
+      channel.id,
+      channel: channel,
+      position: entry.position,
+      duration: entry.duration,
+    );
   }
 
   /// Updates the in-memory position. Returns true when that position was
@@ -772,6 +913,7 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
     final index = _entries.indexWhere((e) => e.contentId == contentId);
     if (index < 0) return false;
     final current = _entries[index];
+    final wasWatched = _present(current).isAutomaticallyWatched;
     position = position < Duration.zero
         ? Duration.zero
         : position > duration
@@ -803,6 +945,22 @@ class HistoryProvider extends ChangeNotifier with WidgetsBindingObserver {
       _notify();
     }
     if (!periodic) _quietProgress = false;
+    final now = _present(_entries[index]);
+    if (!wasWatched && now.isAutomaticallyWatched) {
+      _signal(
+        HistorySignalKind.completed,
+        contentId,
+        position: position,
+        duration: duration,
+      );
+    } else if (!periodic && !now.isAutomaticallyWatched) {
+      _signal(
+        HistorySignalKind.paused,
+        contentId,
+        position: position,
+        duration: duration,
+      );
+    }
     final due =
         !periodic ||
         DateTime.now().difference(_lastProgressPush) >= progressCloudInterval;

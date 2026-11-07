@@ -27,6 +27,8 @@ import 'history_settings_screen.dart';
 import 'hidden_categories_screen.dart';
 import 'device_backup_screen.dart';
 import 'dns_settings_screen.dart';
+import 'trakt_settings_screen.dart';
+import '../providers/trakt_provider.dart';
 import 'vpn_settings_screen.dart';
 import '../services/vpn_service.dart';
 import 'epg_settings_screen.dart';
@@ -1076,6 +1078,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           SettingsValueTile(
+            icon: Icons.swap_horiz_rounded,
+            title: 'Trakt',
+            subtitle: 'Visti e punti di ripresa in comune con il tuo account',
+            value: _traktConnected(context) ? 'Collegato' : null,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const TraktSettingsScreen()),
+            ),
+          ),
+          SettingsValueTile(
             icon: Icons.dns_outlined,
             title: 'DNS',
             subtitle: 'Server che trova gli indirizzi, cifrato e senza filtri',
@@ -1506,5 +1517,15 @@ class _AccentPalette extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Trakt state for the settings tile; screens mounted without the Trakt
+/// link (tests, previews) show the tile without it.
+bool _traktConnected(BuildContext context) {
+  try {
+    return context.watch<TraktProvider>().connected;
+  } on ProviderNotFoundException {
+    return false;
   }
 }

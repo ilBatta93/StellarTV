@@ -1,6 +1,7 @@
 import '../providers/ui_settings.dart';
 import '../models/home_layout_preferences.dart';
 import '../models/poster_focus.dart';
+import '../widgets/home_loading_skeleton.dart';
 import '../widgets/home_presentation.dart';
 import '../widgets/awards_row.dart';
 import '../services/awards_service.dart';
@@ -338,7 +339,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
       );
     }
 
-    if (!discover.hasData) return const _DiscoverSkeleton();
+    if (!discover.hasData) {
+      return HomeLoadingSkeleton(tv: DeviceTypeService.isTv);
+    }
 
     // Only titles that can actually be watched with the playlist.
     List<TmdbItem> available(List<TmdbItem> items) => items
@@ -383,35 +386,37 @@ class _DiscoverPageState extends State<DiscoverPage> {
     if (DeviceTypeService.isTv) {
       // Same sections as the phone Home (Top 10 with Film / Serie TV switch,
       // per-platform Top 10, recommendations), laid out for the remote.
-      return _TvDiscover(
-        profileId: context.watch<ProfileProvider>().selected?.id,
-        bannerSource: bannerSource,
-        banner: banner,
-        initialHistory: latestHistoryResume(entries, app),
-        startedMovies: startedMovies,
-        startedSeries: startedSeries,
-        forYou: forYou,
-        forYouSource: discover.forYouSource,
-        forYouSeries: forYouSeries,
-        forYouSeriesSource: discover.forYouSeriesSource,
-        rowOrder: rowOrder,
-        tops: {
-          HomeRows.topWeek: (
-            'Top 10 della settimana',
-            'In tendenza e disponibili sul dispositivo',
-            AppColors.primary,
-            topMovies,
-            topSeries,
-          ),
-          for (final p in StreamingPlatform.all)
-            HomeRows.top(p.name): (
-              'Top 10 su ${p.name}',
-              null,
-              p.color,
-              available(discover.platformTop(p).movies),
-              available(discover.platformTop(p).series),
+      return HomeEntrance(
+        child: _TvDiscover(
+          profileId: context.watch<ProfileProvider>().selected?.id,
+          bannerSource: bannerSource,
+          banner: banner,
+          initialHistory: latestHistoryResume(entries, app),
+          startedMovies: startedMovies,
+          startedSeries: startedSeries,
+          forYou: forYou,
+          forYouSource: discover.forYouSource,
+          forYouSeries: forYouSeries,
+          forYouSeriesSource: discover.forYouSeriesSource,
+          rowOrder: rowOrder,
+          tops: {
+            HomeRows.topWeek: (
+              'Top 10 della settimana',
+              'In tendenza e disponibili sul dispositivo',
+              AppColors.primary,
+              topMovies,
+              topSeries,
             ),
-        },
+            for (final p in StreamingPlatform.all)
+              HomeRows.top(p.name): (
+                'Top 10 su ${p.name}',
+                null,
+                p.color,
+                available(discover.platformTop(p).movies),
+                available(discover.platformTop(p).series),
+              ),
+          },
+        ),
       );
     }
 
@@ -502,30 +507,32 @@ class _DiscoverPageState extends State<DiscoverPage> {
       return const [];
     }
 
-    return RefreshIndicator(
-      color: AppColors.primary,
-      onRefresh: () => discover.load(force: true),
-      child: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
-        children: [
-          const ExpiryBanner(),
-          ..._phoneBanner(bannerSource, banner, forYou, forYouSeries),
-          for (final id in rowOrder) ...phoneRow(id),
-          if (discover.isLoading)
-            Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.primary,
+    return HomeEntrance(
+      child: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () => discover.load(force: true),
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 32),
+          children: [
+            const ExpiryBanner(),
+            ..._phoneBanner(bannerSource, banner, forYou, forYouSeries),
+            for (final id in rowOrder) ...phoneRow(id),
+            if (discover.isLoading)
+              Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1094,42 +1101,6 @@ class _RankedRow extends StatelessWidget {
         rank: i + 1,
         onTap: () => openTmdbItem(context, items[i]),
       ),
-    );
-  }
-}
-
-class _DiscoverSkeleton extends StatelessWidget {
-  const _DiscoverSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    Widget block(double w, double h) => Container(
-      width: w,
-      height: h,
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(10),
-      ),
-    );
-    return ListView(
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      children: [
-        block(double.infinity, 260),
-        for (var r = 0; r < 2; r++) ...[
-          const SizedBox(height: 24),
-          block(140, 16),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              for (var i = 0; i < 3; i++) ...[
-                Expanded(child: block(double.infinity, 170)),
-                if (i < 2) const SizedBox(width: 12),
-              ],
-            ],
-          ),
-        ],
-      ],
     );
   }
 }

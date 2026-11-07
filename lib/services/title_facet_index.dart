@@ -139,6 +139,11 @@ class TitleFacetIndex extends ChangeNotifier {
     return id;
   }
 
+  /// Catalog title keys already joined to [mediaKey] (`movie:<id>`,
+  /// `tv:<id>`).
+  Set<String> titleKeysForMedia(String mediaKey) =>
+      Set.unmodifiable(_titleKeysByMedia[mediaKey] ?? const <String>{});
+
   /// TMDB id already joined to a catalog title.
   ({int tmdbId, String mediaKey})? linkOf(String titleKey) {
     final row = _rows[titleKey];

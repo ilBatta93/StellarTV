@@ -23,6 +23,12 @@ void main() {
     p('xtream_server') && p('kids_pin') && p('vpn_enabled_v1'),
     'source, child PIN and VPN choices are part of the backup',
   );
+  check(
+    !DeviceBackupPolicy.keepsSecret('trakt_session_v1:p1') &&
+        !p('trakt_outbox_v1:p1') &&
+        DeviceBackupPolicy.keepsSecret('xtream_username'),
+    'a Trakt sign-in is never copied: Trakt rotates it at every renewal',
+  );
   const f = DeviceBackupPolicy.keepsFile;
   check(!f('downloads/x.mp4'), 'downloaded videos stay out of the backup');
   check(

@@ -42,6 +42,8 @@ import 'services/app_migration_service.dart';
 import 'services/dns_service.dart';
 import 'services/vpn_service.dart';
 import 'services/sync_hooks.dart';
+import 'services/user_activity.dart';
+import 'providers/trakt_provider.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -171,6 +173,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
   late final SyncProvider _syncProvider;
   late final HistoryProvider _historyProvider;
   late final ProfileProvider _profileProvider;
+  late final TraktProvider _trakt;
   final ReactionsProvider _reactions = ReactionsProvider();
   final UiSettings _uiSettings = UiSettings()..load();
 
@@ -178,6 +181,8 @@ class _StellarTvAppState extends State<StellarTvApp> {
   void initState() {
     super.initState();
     AppUpdateService.scheduleStartupCheck();
+    // Background catalog updates wait for a quiet moment to swap in.
+    UserActivity.instance.attach();
     final syncService = SyncService(Supabase.instance.client);
     final profileService = ProfileService(Supabase.instance.client);
     _appProvider = AppProvider()
@@ -190,6 +195,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
       _syncProvider,
     );
     _historyProvider.setWatchedPercent(_uiSettings.watchedPercent);
+    _trakt = TraktProvider(_appProvider, _historyProvider)..init();
     _profileProvider = ProfileProvider(profileService, syncService);
     // Load profiles at startup so the top-bar avatar and the splash routing
     // know which profile is active on this device.
@@ -200,8 +206,11 @@ class _StellarTvAppState extends State<StellarTvApp> {
     _reactions.reload();
     _profileProvider.onSelectionChanged = (profile) {
       _reactions.switchProfile(profile?.id);
-      _historyProvider.switchProfile(profile?.id);
       _appProvider.setKidsMode(profile?.isKids ?? false);
+      // Each profile links its own Trakt account, once its history is in.
+      _historyProvider
+          .switchProfile(profile?.id)
+          .then((_) => _trakt.switchProfile(profile?.id));
     };
     _profileProvider.load();
     // The sync needs favorites from the app state and must reload the app
@@ -238,6 +247,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
       await _appProvider.logout();
       await _appProvider.reloadFromStorage();
       await _historyProvider.switchProfile(null, force: true);
+      await _trakt.switchProfile(null);
       await _reactions.switchProfile(null);
       await _profileProvider.load(silent: true);
     };
@@ -302,6 +312,7 @@ class _StellarTvAppState extends State<StellarTvApp> {
         ChangeNotifierProvider.value(value: _appProvider),
         ChangeNotifierProvider.value(value: _syncProvider),
         ChangeNotifierProvider.value(value: _historyProvider),
+        ChangeNotifierProvider.value(value: _trakt),
         ChangeNotifierProvider.value(value: _profileProvider),
         ChangeNotifierProvider(create: (_) => DiscoverProvider(TmdbService())),
         ChangeNotifierProvider(create: (_) => EpgProvider(_appProvider)),

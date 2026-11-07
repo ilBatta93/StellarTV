@@ -52,7 +52,10 @@ class DeviceBackup {
     final secure = <String, Map<String, String>>{};
     for (final e in stores.entries) {
       try {
-        secure[e.key] = await e.value.readAll();
+        secure[e.key] = {
+          for (final s in (await e.value.readAll()).entries)
+            if (DeviceBackupPolicy.keepsSecret(s.key)) s.key: s.value,
+        };
       } catch (_) {
         // An unreadable store (keystore reset) is skipped, not fatal.
         secure[e.key] = const {};
@@ -129,6 +132,7 @@ class DeviceBackup {
         if (entries is! Map) continue;
         for (final s in entries.entries) {
           if (s.key is! String || s.value is! String) continue;
+          if (!DeviceBackupPolicy.keepsSecret(s.key as String)) continue;
           try {
             await e.value.write(key: s.key as String, value: s.value as String);
           } catch (_) {

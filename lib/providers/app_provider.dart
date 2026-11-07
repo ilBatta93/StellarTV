@@ -16,6 +16,7 @@ import '../services/catalog_builder.dart';
 import '../services/catalog_preparation.dart';
 import '../services/catalog_index_builder.dart';
 import '../services/playlist_refresh_service.dart';
+import '../services/user_activity.dart';
 import '../services/playback_work_policy.dart';
 import '../services/foreground_policy.dart';
 import '../services/source_login_result.dart';
@@ -81,6 +82,10 @@ class AppProvider extends ChangeNotifier {
   late final PlaylistRefreshService _refreshService = PlaylistRefreshService(
     refreshPlaylist,
   );
+
+  /// True while an automatic update runs: no wait screen, and the new
+  /// catalog is swapped in only when the user is not pressing anything.
+  bool _quietLoad = false;
 
   CatalogShelf _shelf = CatalogShelf.empty();
   int _shelfEpoch = 0;
@@ -1501,8 +1506,15 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
+  /// Called with every series page loaded (episodes known): Trakt applies
+  /// the views it holds for them.
+  void Function(SeriesDetails details)? onSeriesDetails;
+
   SeriesDetails _safeSeriesDetails(SeriesDetails details) {
-    if (!_kidsMode) return details;
+    if (!_kidsMode) {
+      onSeriesDetails?.call(details);
+      return details;
+    }
     if (!isKidsContent(details.series)) {
       return SeriesDetails(
         series: details.series,
@@ -1604,6 +1616,9 @@ class AppProvider extends ChangeNotifier {
 
   /// Reloads the playlist with the stored credentials or URL, without
   /// touching auth state. Used by the automatic refresh scheduler.
+  /// Automatic update (timer, or one deferred by playback). It runs truly in
+  /// the background: no wait screen, downloads and indexes off the UI
+  /// thread, and the refreshed catalog swaps in during a quiet moment.
   Future<void> refreshPlaylist() async {
     // Never start a playlist update while a video is playing.
     if (_playbackActive || !ForegroundPolicy.instance.active) {
@@ -1616,6 +1631,7 @@ class AppProvider extends ChangeNotifier {
         username: _xtreamCredentials!['username']!,
         password: _xtreamCredentials!['password']!,
         kind: sourceKind,
+        quiet: true,
       );
     }
   }
@@ -1891,7 +1907,10 @@ class AppProvider extends ChangeNotifier {
 
   /// Never true during playback, so the wait screen cannot cover a video.
   bool get isRefreshingAny =>
-      _anyPending && !_playbackActive && (!_startupLoading || _shelf.isEmpty);
+      _anyPending &&
+      !_playbackActive &&
+      !(_quietLoad && !_shelf.isEmpty) &&
+      (!_startupLoading || _shelf.isEmpty);
 
   Future<void> _enqueue(ContentType type, Map<String, String> credentials) {
     final run = _sectionQueue.then((_) => _loadSection(type, credentials));
@@ -1975,6 +1994,12 @@ class AppProvider extends ChangeNotifier {
       );
       final saved = await _persistSectionCopy(key, type, channels);
       if (_disposed || key != _currentKey) return;
+      if (_quietLoad && _hasSection(type)) {
+        // Background update: the swap rebuilds the visible pages, so it
+        // waits until nothing was pressed for a few seconds.
+        await UserActivity.instance.waitIdle();
+        if (_disposed || key != _currentKey) return;
+      }
       if (_playbackActive || !ForegroundPolicy.instance.active) {
         // A video is playing: swapping the catalog now re-filters and
         // rebuilds every page under the player. Keep the section aside.
@@ -2089,12 +2114,14 @@ class AppProvider extends ChangeNotifier {
     required String username,
     required String password,
     SourceKind kind = SourceKind.account,
+    bool quiet = false,
   }) async {
     final requestedKey = _cacheKey({'server': server, 'username': username});
     if (_fullLoadActive || (_anyPending && requestedKey == _activeLoadKey)) {
       return;
     }
     _fullLoadActive = true;
+    _quietLoad = quiet;
     _activeLoadKey = requestedKey;
     final current = _xtreamCredentials;
     final credentials =
@@ -2137,6 +2164,7 @@ class AppProvider extends ChangeNotifier {
       }
     } finally {
       _fullLoadActive = false;
+      _quietLoad = false;
       _finishIfIdle();
     }
   }
